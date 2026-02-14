@@ -42,8 +42,10 @@ type subscriptionContext struct {
 func getSubscriptionSiteConfig() (siteURL, supportContact string) {
 	db := database.GetDB()
 	var configs []models.SystemConfig
-	db.Where("(`key` IN (?, ?, ?)) AND (category = '' OR category IS NULL OR category = 'general')",
-		"domain_name", "support_qq", "support_contact").Find(&configs)
+	db.Where("`key` IN ?",
+		[]string{"domain_name", "support_qq", "support_telegram", "support_email"}).Find(&configs)
+
+	var contacts []string
 	for _, c := range configs {
 		switch c.Key {
 		case "domain_name":
@@ -51,12 +53,21 @@ func getSubscriptionSiteConfig() (siteURL, supportContact string) {
 			if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
 				siteURL = "https://" + siteURL
 			}
-		case "support_qq", "support_contact":
+		case "support_qq":
 			if c.Value != "" {
-				supportContact = c.Value
+				contacts = append(contacts, "QQ:"+c.Value)
+			}
+		case "support_telegram":
+			if c.Value != "" {
+				contacts = append(contacts, "TG:@"+c.Value)
+			}
+		case "support_email":
+			if c.Value != "" {
+				contacts = append(contacts, c.Value)
 			}
 		}
 	}
+	supportContact = strings.Join(contacts, " | ")
 	return
 }
 
@@ -280,7 +291,7 @@ func GetSubscription(c *gin.Context) {
 	}
 
 	if useClash {
-		yaml := services.GenerateClashYAML(nodes)
+		yaml := services.GenerateClashYAMLWithDomain(nodes, ctx.SiteURL)
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s.yaml", subType))
 		setSubscriptionHeaders(c, ctx)
 		c.Data(http.StatusOK, "text/yaml; charset=utf-8", []byte(yaml))

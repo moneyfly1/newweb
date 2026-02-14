@@ -205,22 +205,4 @@ onMounted(() => {
   .history-page { padding: 0; }
   .stat-card { padding: 14px 16px; }
 }
-
-.mobile-card {
-  background: #fff; border-radius: 14px; border: 1px solid #e0e7ff;
-  padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(66, 165, 245, 0.08);
-}
-.mobile-card:nth-child(odd) { background: linear-gradient(135deg, #fff 0%, #f8faff 100%); }
-.mobile-card:nth-child(even) { background: linear-gradient(135deg, #fff 0%, #fef3ff 100%); border-color: #f3e8ff; }
-.card-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 0; border-bottom: 1px solid rgba(224, 231, 255, 0.4); min-height: 44px;
-}
-.card-row:last-child { border-bottom: none; }
-.card-row .label {
-  font-weight: 600; color: #64748b; font-size: 13px; min-width: 50px; flex-shrink: 0;
-  padding: 4px 10px; background: rgba(66, 165, 245, 0.08); border-radius: 6px;
-}
-.card-row .value { flex: 1; text-align: right; font-size: 14px; color: #1e293b; word-break: break-word; }
-.mobile-empty { text-align: center; padding: 40px 20px; color: #999; }
 </style>

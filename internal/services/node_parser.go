@@ -413,8 +413,15 @@ func NodeConfigToClashMap(nodeType string, configLink string, nodeName string) (
 
 // GenerateClashYAML generates a proper Clash YAML config from nodes.
 func GenerateClashYAML(nodes []models.Node) string {
+	return GenerateClashYAMLWithDomain(nodes, "")
+}
+
+// GenerateClashYAMLWithDomain generates Clash YAML with full proxy-groups and rules.
+func GenerateClashYAMLWithDomain(nodes []models.Node, siteDomain string) string {
 	var proxies []map[string]interface{}
 	var proxyNames []string
+	// Separate info nodes (fake SS) from real proxy nodes
+	var infoNames []string
 	usedNames := make(map[string]bool)
 
 	for _, n := range nodes {
@@ -436,31 +443,124 @@ func GenerateClashYAML(nodes []models.Node) string {
 		}
 		proxies = append(proxies, m)
 		proxyNames = append(proxyNames, name)
+
+		// Info nodes use baidu.com:1234 as server
+		if server, ok := m["server"].(string); ok && server == "baidu.com" {
+			infoNames = append(infoNames, name)
+		}
+	}
+
+	// Real proxy names (exclude info nodes) for auto-select groups
+	var realNames []string
+	infoSet := make(map[string]bool)
+	for _, n := range infoNames {
+		infoSet[n] = true
+	}
+	for _, n := range proxyNames {
+		if !infoSet[n] {
+			realNames = append(realNames, n)
+		}
 	}
 
 	var sb strings.Builder
-	sb.WriteString("mixed-port: 7890\n")
-	sb.WriteString("allow-lan: false\n")
-	sb.WriteString("mode: rule\n")
-	sb.WriteString("log-level: info\n\n")
 
+	// Head: basic config + DNS
+	sb.WriteString("port: 7890\n")
+	sb.WriteString("socks-port: 7891\n")
+	sb.WriteString("allow-lan: true\n")
+	sb.WriteString("mode: rule\n")
+	sb.WriteString("log-level: info\n")
+	sb.WriteString("external-controller: :9090\n\n")
+	sb.WriteString("dns:\n")
+	sb.WriteString("  enable: true\n")
+	sb.WriteString("  nameserver:\n")
+	sb.WriteString("    - 119.29.29.29\n")
+	sb.WriteString("    - 223.5.5.5\n")
+	sb.WriteString("  fallback:\n")
+	sb.WriteString("    - 8.8.8.8\n")
+	sb.WriteString("    - 8.8.4.4\n\n")
+
+	// Proxies
 	sb.WriteString("proxies:\n")
 	for _, p := range proxies {
 		writeClashProxy(&sb, p)
 	}
 
+	// Proxy groups
 	sb.WriteString("\nproxy-groups:\n")
-	sb.WriteString("  - name: PROXY\n")
+
+	grpSelect := "\U0001F680 节点选择"
+	grpAuto := "\u267B\uFE0F 自动选择"
+	grpDirect := "\U0001F3AF 全球直连"
+	grpBlock := "\U0001F6D1 全球拦截"
+	grpFallback := "\U0001F41F 漏网之鱼"
+
+	// 🚀 节点选择 - manual select, includes auto-select + DIRECT + all real nodes
+	sb.WriteString("  - name: " + escapeYAML(grpSelect) + "\n")
 	sb.WriteString("    type: select\n")
 	sb.WriteString("    proxies:\n")
-	for _, name := range proxyNames {
+	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+	sb.WriteString("      - DIRECT\n")
+	for _, name := range realNames {
 		sb.WriteString("      - ")
 		sb.WriteString(escapeYAML(name))
 		sb.WriteString("\n")
 	}
 
+	// ♻️ 自动选择 - url-test with all real nodes
+	sb.WriteString("  - name: " + escapeYAML(grpAuto) + "\n")
+	sb.WriteString("    type: url-test\n")
+	sb.WriteString("    url: http://www.gstatic.com/generate_204\n")
+	sb.WriteString("    interval: 300\n")
+	sb.WriteString("    tolerance: 50\n")
+	sb.WriteString("    proxies:\n")
+	for _, name := range realNames {
+		sb.WriteString("      - ")
+		sb.WriteString(escapeYAML(name))
+		sb.WriteString("\n")
+	}
+
+	// 🎯 全球直连
+	sb.WriteString("  - name: " + escapeYAML(grpDirect) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - DIRECT\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+
+	// 🛑 全球拦截
+	sb.WriteString("  - name: " + escapeYAML(grpBlock) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - REJECT\n")
+	sb.WriteString("      - DIRECT\n")
+
+	// 🐟 漏网之鱼
+	sb.WriteString("  - name: " + escapeYAML(grpFallback) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpDirect) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+
+	// Rules
 	sb.WriteString("\nrules:\n")
-	sb.WriteString("  - MATCH,PROXY\n")
+	if siteDomain != "" {
+		// Strip protocol prefix for domain rule
+		d := siteDomain
+		for _, prefix := range []string{"https://", "http://"} {
+			d = strings.TrimPrefix(d, prefix)
+		}
+		d = strings.TrimRight(d, "/")
+		sb.WriteString("  - DOMAIN-SUFFIX," + d + "," + grpDirect + "\n")
+	}
+	sb.WriteString("  - IP-CIDR,127.0.0.0/8," + grpDirect + ",no-resolve\n")
+	sb.WriteString("  - IP-CIDR,172.16.0.0/12," + grpDirect + ",no-resolve\n")
+	sb.WriteString("  - IP-CIDR,192.168.0.0/16," + grpDirect + ",no-resolve\n")
+	sb.WriteString("  - IP-CIDR,10.0.0.0/8," + grpDirect + ",no-resolve\n")
+	sb.WriteString("  - GEOIP,CN," + grpDirect + "\n")
+	sb.WriteString("  - MATCH," + grpFallback + "\n")
+
 	return sb.String()
 }
 

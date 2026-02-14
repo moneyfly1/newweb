@@ -44,6 +44,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'help', name: 'Help', component: () => import('@/views/help/Index.vue') },
       { path: 'payment/return', name: 'PaymentReturn', component: () => import('@/views/payment/Return.vue') },
       { path: 'login-history', name: 'LoginHistory', component: () => import('@/views/history/Index.vue') },
+      { path: 'recharge', name: 'Recharge', component: () => import('@/views/recharge/Index.vue') },
     ],
   },
   {

@@ -63,19 +63,19 @@
         <span class="section-title-text">订阅信息</span>
       </template>
       <n-spin :show="subscriptionLoading">
-        <div v-if="subscription.subscription_url" class="subscription-content">
+        <div v-if="subscription.clash_url || subscription.subscription_url" class="subscription-content">
           <div class="subscription-row">
             <div class="subscription-item">
               <div class="sub-label">订阅地址</div>
               <div class="sub-value-row">
                 <n-input
-                  :value="subscription.subscription_url"
+                  :value="subscription.clash_url || subscription.subscription_url"
                   readonly
                   size="small"
                   placeholder="暂无订阅"
                   style="flex: 1; max-width: 400px;"
                 />
-                <n-button size="small" @click="copyText(subscription.subscription_url, '订阅地址')">
+                <n-button size="small" @click="copyText(subscription.clash_url || subscription.subscription_url, '订阅地址')">
                   <template #icon>
                     <n-icon :component="CopyOutline" />
                   </template>
@@ -119,14 +119,14 @@
       <template #header>
         <span class="section-title-text">快速订阅</span>
       </template>
-      <div v-if="subscription.subscription_url" class="quick-sub-links">
+      <div v-if="subscription.clash_url || subscription.subscription_url" class="quick-sub-links">
         <div class="quick-sub-item">
           <div class="quick-sub-info">
             <n-icon size="24" :component="LinkOutline" color="#667eea" />
             <span class="quick-sub-name">Clash 订阅</span>
           </div>
           <div class="quick-sub-actions">
-            <n-button size="small" @click="copyText(subscription.subscription_url, 'Clash 订阅地址')">
+            <n-button size="small" @click="copyText(subscription.clash_url || subscription.subscription_url, 'Clash 订阅地址')">
               <template #icon>
                 <n-icon :component="CopyOutline" />
               </template>
@@ -146,7 +146,7 @@
             <span class="quick-sub-name">V2Ray 通用订阅</span>
           </div>
           <div class="quick-sub-actions">
-            <n-button size="small" @click="copyText(subscription.subscription_url, 'V2Ray 订阅地址')">
+            <n-button size="small" @click="copyText(subscription.universal_url || subscription.subscription_url, 'V2Ray 订阅地址')">
               <template #icon>
                 <n-icon :component="CopyOutline" />
               </template>
@@ -217,7 +217,7 @@
           <template #header>
             <div class="section-header-row">
               <span class="section-title-text">最近订单</span>
-              <n-button text type="primary" @click="$router.push('/order')">查看全部</n-button>
+              <n-button text type="primary" @click="$router.push('/orders')">查看全部</n-button>
             </div>
           </template>
           <n-spin :show="ordersLoading">
@@ -333,11 +333,12 @@ async function copyText(text: string, label: string) {
 }
 
 function importClash() {
-  if (!subscription.value.subscription_url) {
+  const clashSubUrl = subscription.value.clash_url || subscription.value.subscription_url
+  if (!clashSubUrl) {
     message.warning('暂无订阅地址')
     return
   }
-  const clashUrl = `clash://install-config?url=${encodeURIComponent(subscription.value.subscription_url)}`
+  const clashUrl = `clash://install-config?url=${encodeURIComponent(clashSubUrl)}`
   window.location.href = clashUrl
   message.info('正在打开 Clash 客户端...')
 }

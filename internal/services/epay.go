@@ -20,10 +20,11 @@ type EpayConfig struct {
 	SecretKey  string
 }
 
-// GetEpayConfig reads EasyPay settings from system_configs
+// GetEpayConfig reads EasyPay gateway settings from system_configs.
+// Only returns config when the epay gateway is fully configured (gateway URL + merchant ID + secret key).
 func GetEpayConfig() (*EpayConfig, error) {
 	db := database.GetDB()
-	keys := []string{"pay_epay_gateway", "pay_epay_merchant_id", "pay_epay_secret_key", "pay_epay_enabled"}
+	keys := []string{"pay_epay_gateway", "pay_epay_merchant_id", "pay_epay_secret_key"}
 	var configs []models.SystemConfig
 	db.Where("`key` IN ?", keys).Find(&configs)
 
@@ -32,11 +33,8 @@ func GetEpayConfig() (*EpayConfig, error) {
 		m[c.Key] = c.Value
 	}
 
-	if m["pay_epay_enabled"] != "true" && m["pay_epay_enabled"] != "1" {
-		return nil, fmt.Errorf("易支付未启用")
-	}
 	if m["pay_epay_gateway"] == "" || m["pay_epay_merchant_id"] == "" || m["pay_epay_secret_key"] == "" {
-		return nil, fmt.Errorf("易支付配置不完整")
+		return nil, fmt.Errorf("易支付网关未配置")
 	}
 
 	return &EpayConfig{

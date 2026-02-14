@@ -15,8 +15,12 @@ func GetCurrentUser(c *gin.Context) {
 func UpdateCurrentUser(c *gin.Context) {
 	user := c.MustGet("user").(*models.User)
 	var req struct {
+		Username string `json:"username"`
 		Nickname string `json:"nickname"`
 		Avatar   string `json:"avatar"`
+		Theme    string `json:"theme"`
+		Language string `json:"language"`
+		Timezone string `json:"timezone"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -24,13 +28,34 @@ func UpdateCurrentUser(c *gin.Context) {
 	}
 	db := database.GetDB()
 	updates := map[string]interface{}{}
+	if req.Username != "" && req.Username != user.Username {
+		var count int64
+		db.Model(&models.User{}).Where("username = ? AND id != ?", req.Username, user.ID).Count(&count)
+		if count > 0 {
+			utils.BadRequest(c, "用户名已被使用")
+			return
+		}
+		updates["username"] = req.Username
+	}
 	if req.Nickname != "" {
 		updates["nickname"] = &req.Nickname
 	}
 	if req.Avatar != "" {
 		updates["avatar"] = &req.Avatar
 	}
-	db.Model(user).Updates(updates)
+	if req.Theme != "" {
+		updates["theme"] = req.Theme
+	}
+	if req.Language != "" {
+		updates["language"] = req.Language
+	}
+	if req.Timezone != "" {
+		updates["timezone"] = req.Timezone
+	}
+	if len(updates) > 0 {
+		db.Model(user).Updates(updates)
+	}
+	db.First(user, user.ID)
 	utils.Success(c, user)
 }
 
@@ -46,6 +71,10 @@ func ChangePassword(c *gin.Context) {
 	}
 	if !utils.CheckPassword(req.OldPassword, user.Password) {
 		utils.BadRequest(c, "原密码错误")
+		return
+	}
+	if err := utils.ValidatePasswordStrength(req.NewPassword); err != nil {
+		utils.BadRequest(c, err.Error())
 		return
 	}
 	hashed, _ := utils.HashPassword(req.NewPassword)
@@ -137,13 +166,13 @@ func GetMyLevel(c *gin.Context) {
 }
 
 func GetLoginHistory(c *gin.Context) {
-	userID := c.MustGet("user_id").(uint)
+	userID := c.GetUint("user_id")
 	p := utils.GetPagination(c)
 	var items []models.LoginHistory
 	var total int64
 	db := database.GetDB().Model(&models.LoginHistory{}).Where("user_id = ?", userID)
 	db.Count(&total)
-	db.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&items)
+	db.Order("login_time DESC").Offset(p.Offset()).Limit(p.PageSize).Find(&items)
 	utils.SuccessPage(c, items, total, p.Page, p.PageSize)
 }
 

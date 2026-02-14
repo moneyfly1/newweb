@@ -107,6 +107,71 @@
       </template>
     </n-modal>
 
+    <!-- User Detail Drawer -->
+    <n-drawer v-model:show="showDetailDrawer" :width="780" placement="right">
+      <n-drawer-content :title="'用户详情 - ' + (userDetail.username || userDetail.email || '')">
+        <n-descriptions bordered :column="2" label-placement="left" size="small">
+          <n-descriptions-item label="ID">{{ userDetail.id }}</n-descriptions-item>
+          <n-descriptions-item label="用户名">{{ userDetail.username || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="邮箱">{{ userDetail.email || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="余额">¥{{ (userDetail.balance ?? 0).toFixed(2) }}</n-descriptions-item>
+          <n-descriptions-item label="状态">
+            <n-tag :type="userDetail.is_active ? 'success' : 'error'" size="small">{{ userDetail.is_active ? '激活' : '禁用' }}</n-tag>
+            <n-tag v-if="userDetail.is_admin" type="warning" size="small" style="margin-left:4px">管理员</n-tag>
+          </n-descriptions-item>
+          <n-descriptions-item label="等级">{{ userDetail.level_name || '无' }}</n-descriptions-item>
+          <n-descriptions-item label="注册时间">{{ fmtDate(userDetail.created_at) }}</n-descriptions-item>
+          <n-descriptions-item label="最后登录">{{ fmtDate(userDetail.last_login) }}</n-descriptions-item>
+        </n-descriptions>
+
+        <!-- Subscription -->
+        <n-divider>订阅信息</n-divider>
+        <template v-if="userDetail.subscription">
+          <n-descriptions bordered :column="2" label-placement="left" size="small">
+            <n-descriptions-item label="套餐">{{ userDetail.package_name || '-' }}</n-descriptions-item>
+            <n-descriptions-item label="状态">
+              <n-tag :type="subStatusType(userDetail.subscription.status)" size="small">{{ subStatusText(userDetail.subscription.status) }}</n-tag>
+            </n-descriptions-item>
+            <n-descriptions-item label="设备">{{ userDetail.subscription.current_devices || 0 }} / {{ userDetail.subscription.device_limit || 0 }}</n-descriptions-item>
+            <n-descriptions-item label="到期时间">{{ fmtDate(userDetail.subscription.expire_time) }}</n-descriptions-item>
+          </n-descriptions>
+          <div v-if="userDetail.subscription_urls" style="margin-top:8px">
+            <div class="url-row"><span class="url-label">通用</span><code class="url-text">{{ userDetail.subscription_urls.universal_url }}</code></div>
+            <div class="url-row"><span class="url-label">Clash</span><code class="url-text">{{ userDetail.subscription_urls.clash_url }}</code></div>
+          </div>
+        </template>
+        <n-empty v-else description="暂无订阅" size="small" />
+
+        <!-- Tabs for records -->
+        <n-tabs type="line" style="margin-top:16px" animated>
+          <n-tab-pane name="orders" tab="订单记录">
+            <n-data-table v-if="(userDetail.recent_orders||[]).length" :columns="orderCols" :data="userDetail.recent_orders" :bordered="false" size="small" :max-height="240" />
+            <n-empty v-else description="暂无订单" size="small" />
+          </n-tab-pane>
+          <n-tab-pane name="devices" tab="设备记录">
+            <n-data-table v-if="(userDetail.devices||[]).length" :columns="deviceCols" :data="userDetail.devices" :bordered="false" size="small" :max-height="240" />
+            <n-empty v-else description="暂无设备" size="small" />
+          </n-tab-pane>
+          <n-tab-pane name="logins" tab="登录历史">
+            <n-data-table v-if="(userDetail.login_history||[]).length" :columns="loginCols" :data="userDetail.login_history" :bordered="false" size="small" :max-height="240" />
+            <n-empty v-else description="暂无记录" size="small" />
+          </n-tab-pane>
+          <n-tab-pane name="resets" tab="重置记录">
+            <n-data-table v-if="(userDetail.resets||[]).length" :columns="resetCols" :data="userDetail.resets" :bordered="false" size="small" :max-height="240" />
+            <n-empty v-else description="暂无记录" size="small" />
+          </n-tab-pane>
+          <n-tab-pane name="balance" tab="余额变动">
+            <n-data-table v-if="(userDetail.balance_logs||[]).length" :columns="balanceCols" :data="userDetail.balance_logs" :bordered="false" size="small" :max-height="240" />
+            <n-empty v-else description="暂无记录" size="small" />
+          </n-tab-pane>
+          <n-tab-pane name="recharge" tab="充值记录">
+            <n-data-table v-if="(userDetail.recharge_records||[]).length" :columns="rechargeCols" :data="userDetail.recharge_records" :bordered="false" size="small" :max-height="240" />
+            <n-empty v-else description="暂无记录" size="small" />
+          </n-tab-pane>
+        </n-tabs>
+      </n-drawer-content>
+    </n-drawer>
+
     <!-- Reset Password Modal -->
     <n-modal v-model:show="showResetPwdModal" preset="card" title="重置密码" style="width: 420px">
       <n-form ref="resetPwdFormRef" :model="resetPwdForm" :rules="resetPwdRules" label-placement="left" label-width="80">
@@ -151,10 +216,12 @@ const checkedRowKeys = ref([])
 // Modals
 const showEditModal = ref(false)
 const showResetPwdModal = ref(false)
+const showDetailDrawer = ref(false)
 const isCreate = ref(false)
 const formRef = ref(null)
 const resetPwdFormRef = ref(null)
 const resetPwdTargetId = ref(null)
+const userDetail = ref({})
 
 const editForm = reactive({
   id: null,
@@ -202,6 +269,7 @@ const formRulesComputed = computed(() => {
 
 // Action dropdown options builder
 const actionOptions = (row) => [
+  { label: '查看详情', key: 'detail' },
   { label: '编辑', key: 'edit' },
   { label: row.is_active ? '禁用' : '启用', key: 'toggle' },
   { label: '重置密码', key: 'resetPwd' },
@@ -295,6 +363,7 @@ const handleCheck = (keys) => { checkedRowKeys.value = keys }
 // Action dispatcher
 const handleAction = (key, row) => {
   switch (key) {
+    case 'detail': handleViewDetail(row); break
     case 'edit': handleEdit(row); break
     case 'toggle': handleToggleActive(row); break
     case 'resetPwd': openResetPwdModal(row); break
@@ -491,6 +560,56 @@ const handleBatchDelete = () => {
   })
 }
 
+// View detail
+const handleViewDetail = async (row) => {
+  try {
+    const res = await getUser(row.id)
+    userDetail.value = res.data
+    showDetailDrawer.value = true
+  } catch (e) {
+    message.error('获取用户详情失败')
+  }
+}
+
+const fmtDate = (d) => d ? new Date(d).toLocaleString('zh-CN') : '-'
+const subStatusType = (s) => ({ active: 'success', expiring: 'warning', expired: 'error' }[s] || 'default')
+const subStatusText = (s) => ({ active: '活跃', expiring: '即将到期', expired: '已过期', disabled: '已禁用' }[s] || s || '-')
+
+const orderCols = [
+  { title: '订单号', key: 'order_no', width: 180, ellipsis: { tooltip: true } },
+  { title: '金额', key: 'final_amount', width: 90, render: (r) => `¥${(r.final_amount ?? r.amount ?? 0).toFixed(2)}` },
+  { title: '状态', key: 'status', width: 80 },
+  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
+]
+const deviceCols = [
+  { title: '设备名', key: 'device_name', ellipsis: { tooltip: true } },
+  { title: 'IP', key: 'ip_address', width: 130 },
+  { title: '最后活跃', key: 'last_active', width: 160, render: (r) => fmtDate(r.last_active || r.updated_at) }
+]
+const loginCols = [
+  { title: 'IP', key: 'ip', width: 130 },
+  { title: 'UA', key: 'user_agent', ellipsis: { tooltip: true } },
+  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
+]
+const resetCols = [
+  { title: '操作者', key: 'reset_by', width: 100 },
+  { title: '原因', key: 'reason', ellipsis: { tooltip: true } },
+  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
+]
+const balanceCols = [
+  { title: '类型', key: 'type', width: 80 },
+  { title: '金额', key: 'amount', width: 90, render: (r) => `¥${(r.amount ?? 0).toFixed(2)}` },
+  { title: '余额', key: 'balance_after', width: 90, render: (r) => `¥${(r.balance_after ?? 0).toFixed(2)}` },
+  { title: '备注', key: 'remark', ellipsis: { tooltip: true } },
+  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
+]
+const rechargeCols = [
+  { title: '金额', key: 'amount', width: 90, render: (r) => `¥${(r.amount ?? 0).toFixed(2)}` },
+  { title: '方式', key: 'payment_method', width: 100 },
+  { title: '状态', key: 'status', width: 80 },
+  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
+]
+
 onMounted(() => { fetchUsers() })
 </script>
 
@@ -515,4 +634,7 @@ onMounted(() => { fetchUsers() })
 @media (max-width: 767px) {
   .admin-users-page { padding: 8px; }
 }
+.url-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.url-label { font-size: 12px; color: #666; min-width: 40px; }
+.url-text { font-size: 12px; word-break: break-all; color: #333; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
 </style>

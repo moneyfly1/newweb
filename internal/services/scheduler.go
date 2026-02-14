@@ -45,6 +45,7 @@ func (s *Scheduler) Start() {
 	s.startLoop("DeactivateExpired", 5*time.Minute, deactivateExpiredTask)
 	s.startLoop("ExpiryCheck", 10*time.Minute, checkExpiryStatusTask)
 	s.startLoop("ExpiryReminder", 1*time.Hour, sendExpiryRemindersTask)
+	s.startLoop("UnpaidOrderReminder", 15*time.Minute, sendUnpaidOrderRemindersTask)
 	s.startLoop("CleanCodes", 30*time.Minute, cleanExpiredCodesTask)
 }
 
@@ -120,11 +121,6 @@ func checkExpiryStatusTask() {
 // sendExpiryRemindersTask sends reminder emails for expiring subscriptions.
 func sendExpiryRemindersTask() {
 	db := database.GetDB()
-	var cfg models.SystemConfig
-	siteName := "CBoard"
-	if db.Where("`key` = ?", "site_name").First(&cfg).Error == nil && cfg.Value != "" {
-		siteName = cfg.Value
-	}
 
 	type subUser struct {
 		Email      string
@@ -140,11 +136,10 @@ func sendExpiryRemindersTask() {
 			true, time.Now().Add(72*time.Hour), time.Now().Add(73*time.Hour), true).
 		Scan(&remind3)
 	for _, r := range remind3 {
-		QueueEmail(r.Email,
-			fmt.Sprintf("%s - 订阅即将到期提醒", siteName),
-			fmt.Sprintf(`<h3>订阅到期提醒</h3><p>您好，您的 %s 订阅将在 <strong>3 天</strong>后到期。</p><p>到期时间: %s</p><p>请及时续费以免服务中断。</p>`,
-				siteName, r.ExpireTime.Format("2006-01-02 15:04")),
-			"expiry_reminder")
+		subject, body := RenderEmail("expiry_reminder", map[string]string{
+			"days": "3", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+		})
+		QueueEmail(r.Email, subject, body, "expiry_reminder")
 	}
 
 	// 1-day reminder
@@ -156,11 +151,10 @@ func sendExpiryRemindersTask() {
 			true, time.Now().Add(24*time.Hour), time.Now().Add(25*time.Hour), true).
 		Scan(&remind1)
 	for _, r := range remind1 {
-		QueueEmail(r.Email,
-			fmt.Sprintf("%s - 订阅明天到期", siteName),
-			fmt.Sprintf(`<h3>订阅即将到期</h3><p>您好，您的 %s 订阅将在 <strong>1 天</strong>后到期。</p><p>到期时间: %s</p><p>请尽快续费！</p>`,
-				siteName, r.ExpireTime.Format("2006-01-02 15:04")),
-			"expiry_reminder")
+		subject, body := RenderEmail("expiry_reminder", map[string]string{
+			"days": "1", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+		})
+		QueueEmail(r.Email, subject, body, "expiry_reminder")
 	}
 
 	// Expired notice (within last hour)
@@ -172,11 +166,10 @@ func sendExpiryRemindersTask() {
 			"expired", time.Now().Add(-1*time.Hour), time.Now(), true).
 		Scan(&expired)
 	for _, r := range expired {
-		QueueEmail(r.Email,
-			fmt.Sprintf("%s - 订阅已过期", siteName),
-			fmt.Sprintf(`<h3>订阅已过期</h3><p>您好，您的 %s 订阅已于 %s 过期。</p><p>请续费以恢复服务。</p>`,
-				siteName, r.ExpireTime.Format("2006-01-02 15:04")),
-			"expiry_notice")
+		subject, body := RenderEmail("expiry_notice", map[string]string{
+			"expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+		})
+		QueueEmail(r.Email, subject, body, "expiry_notice")
 	}
 
 	total := len(remind3) + len(remind1) + len(expired)
@@ -192,5 +185,48 @@ func cleanExpiredCodesTask() {
 		Delete(&models.VerificationCode{})
 	if result.RowsAffected > 0 {
 		log.Printf("[Scheduler] 已清理 %d 条过期验证码", result.RowsAffected)
+	}
+}
+
+// sendUnpaidOrderRemindersTask sends reminders for orders pending 15+ minutes.
+func sendUnpaidOrderRemindersTask() {
+	db := database.GetDB()
+
+	type orderUser struct {
+		OrderNo     string
+		UserID      uint
+		Email       string
+		Amount      float64
+		FinalAmount *float64
+		PackageID   uint
+	}
+
+	var orders []orderUser
+	db.Model(&models.Order{}).
+		Select("orders.order_no, orders.user_id, users.email, orders.amount, orders.final_amount, orders.package_id").
+		Joins("JOIN users ON users.id = orders.user_id").
+		Where("orders.status = ? AND orders.created_at BETWEEN ? AND ? AND users.email_notifications = ?",
+			"pending", time.Now().Add(-20*time.Minute), time.Now().Add(-15*time.Minute), true).
+		Scan(&orders)
+
+	for _, o := range orders {
+		amount := o.Amount
+		if o.FinalAmount != nil {
+			amount = *o.FinalAmount
+		}
+		var pkgName string
+		db.Model(&models.Package{}).Where("id = ?", o.PackageID).Pluck("name", &pkgName)
+		if pkgName == "" {
+			pkgName = "未知套餐"
+		}
+		subject, body := RenderEmail("unpaid_order", map[string]string{
+			"order_no": o.OrderNo, "package_name": pkgName,
+			"amount": fmt.Sprintf("%.2f", amount),
+		})
+		QueueEmail(o.Email, subject, body, "unpaid_order")
+	}
+
+	if len(orders) > 0 {
+		log.Printf("[Scheduler] 未付款订单提醒: %d 条", len(orders))
 	}
 }

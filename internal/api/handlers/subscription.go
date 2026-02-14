@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"fmt"
+	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -43,15 +45,20 @@ func getSubscriptionSiteConfig() (siteURL, supportContact string) {
 	db := database.GetDB()
 	var configs []models.SystemConfig
 	db.Where("`key` IN ?",
-		[]string{"domain_name", "support_qq", "support_telegram", "support_email"}).Find(&configs)
+		[]string{"site_url", "domain_name", "support_qq", "support_telegram", "support_email"}).Find(&configs)
 
 	var contacts []string
 	for _, c := range configs {
 		switch c.Key {
+		case "site_url":
+			// site_url takes priority over domain_name
+			if c.Value != "" {
+				siteURL = c.Value
+			}
 		case "domain_name":
-			siteURL = c.Value
-			if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
-				siteURL = "https://" + siteURL
+			// fallback if site_url is not set
+			if siteURL == "" && c.Value != "" {
+				siteURL = c.Value
 			}
 		case "support_qq":
 			if c.Value != "" {
@@ -68,6 +75,10 @@ func getSubscriptionSiteConfig() (siteURL, supportContact string) {
 		}
 	}
 	supportContact = strings.Join(contacts, " | ")
+	if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
+		siteURL = "https://" + siteURL
+	}
+	siteURL = strings.TrimRight(siteURL, "/")
 	return
 }
 
@@ -118,13 +129,14 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	if clientInfo.IsBrowser {
 		var nodes []models.Node
 		db.Where("is_active = ? AND status = ?", true, "online").Order("order_index ASC").Find(&nodes)
+		nodes = append(nodes, fetchUserCustomNodes(db, sub.UserID)...)
 		ctx.Nodes = nodes
 		ctx.Status = subStatusOK
 		return ctx
 	}
 
 	// Device fingerprint tracking using feature-based hash
-	ip := c.ClientIP()
+	ip := utils.GetRealClientIP(c)
 	fingerprint := services.GenerateDeviceFingerprint(ua, ip)
 
 	var device models.Device
@@ -180,9 +192,49 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 	var nodes []models.Node
 	db.Where("is_active = ? AND status = ?", true, "online").Order("order_index ASC").Find(&nodes)
+	nodes = append(nodes, fetchUserCustomNodes(db, sub.UserID)...)
 	ctx.Nodes = nodes
 	ctx.Status = subStatusOK
 	return ctx
+}
+
+// fetchUserCustomNodes returns custom nodes assigned to a user, converted to models.Node format.
+func fetchUserCustomNodes(db *gorm.DB, userID uint) []models.Node {
+	var assignments []models.UserCustomNode
+	db.Where("user_id = ?", userID).Find(&assignments)
+	if len(assignments) == 0 {
+		return nil
+	}
+
+	var customNodeIDs []uint
+	for _, a := range assignments {
+		customNodeIDs = append(customNodeIDs, a.CustomNodeID)
+	}
+
+	var customNodes []models.CustomNode
+	db.Where("id IN ? AND is_active = ?", customNodeIDs, true).Find(&customNodes)
+
+	now := time.Now()
+	var nodes []models.Node
+	for _, cn := range customNodes {
+		// Check custom node expiry
+		if cn.ExpireTime != nil && cn.ExpireTime.Before(now) {
+			continue
+		}
+		config := cn.Config
+		displayName := cn.DisplayName
+		if displayName == "" {
+			displayName = cn.Name
+		}
+		nodes = append(nodes, models.Node{
+			Name:     "⭐ " + displayName,
+			Type:     cn.Protocol,
+			Status:   "online",
+			Config:   &config,
+			IsActive: true,
+		})
+	}
+	return nodes
 }
 
 func buildDeviceName(info *services.ClientInfo) string {
@@ -266,35 +318,82 @@ func getErrorNodes(ctx *subscriptionContext) []models.Node {
 	return nodes
 }
 
+// generateSubscriptionName generates the subscription display name for Clash clients.
+func generateSubscriptionName(ctx *subscriptionContext) string {
+	if ctx.Status != subStatusOK {
+		switch ctx.Status {
+		case subStatusExpired:
+			return "订阅已过期"
+		case subStatusInactive:
+			return "订阅已失效"
+		case subStatusDeviceOverLimit:
+			return "设备超限"
+		case subStatusNotFound:
+			return "订阅不存在"
+		default:
+			return "订阅异常"
+		}
+	}
+	if ctx.Sub != nil && !ctx.Sub.ExpireTime.IsZero() {
+		return fmt.Sprintf("到期: %s", ctx.Sub.ExpireTime.Format("2006-01-02"))
+	}
+	return "无限期"
+}
+
 // GetSubscription serves subscription content, auto-detecting client type from User-Agent.
-// For explicit Clash format, use /subscribe/clash/:url
-// For explicit universal format, use /subscribe/universal/:url
+// For explicit Clash format, use /sub/clash/:url
+// For explicit universal format, use /sub/:url
 func GetSubscription(c *gin.Context) {
 	ctx := buildSubscriptionContext(c)
 
-	// Auto-detect format from client info
-	subType := "clash" // default
-	if ctx.ClientInfo != nil {
-		subType = ctx.ClientInfo.SubscriptionType
+	// Check explicit format parameter first, then auto-detect from client info
+	subType := c.Query("format")
+	if subType == "" {
+		subType = "clash" // default
+		if ctx.ClientInfo != nil {
+			subType = ctx.ClientInfo.SubscriptionType
+		}
 	}
 
-	// Clash-compatible clients get YAML, others get base64
-	useClash := subType == "clash" || subType == "surge" || subType == "loon"
+	// Determine output format
+	useClash := subType == "clash" || subType == "stash"
+	useSurge := subType == "surge"
+	useQuantumultX := subType == "quantumult" || subType == "quantumultx"
 
 	var nodes []models.Node
 	if ctx.Status != subStatusOK {
 		nodes = getErrorNodes(ctx)
 	} else {
 		nodes = append(getInfoNodes(ctx), ctx.Nodes...)
-		// Increment the correct counter
 		incrementSubscriptionCounter(ctx.Sub, subType)
 	}
 
+	subscriptionName := generateSubscriptionName(ctx)
+
 	if useClash {
-		yaml := services.GenerateClashYAMLWithDomain(nodes, ctx.SiteURL)
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s.yaml", subType))
+		yamlContent := services.GenerateClashYAMLWithDomain(nodes, ctx.SiteURL, subscriptionName)
+		fileName := subscriptionName
+		if strings.HasPrefix(subscriptionName, "到期: ") {
+			fileName = "到期时间" + strings.TrimPrefix(subscriptionName, "到期: ")
+		}
+		encodedName := url.QueryEscape(fileName)
+		c.Header("Content-Type", "text/yaml; charset=utf-8")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.yaml", encodedName))
+		c.Header("Subscription-Title", subscriptionName)
+		c.Header("Profile-Title", subscriptionName)
 		setSubscriptionHeaders(c, ctx)
-		c.Data(http.StatusOK, "text/yaml; charset=utf-8", []byte(yaml))
+		c.Data(http.StatusOK, "text/yaml; charset=utf-8", []byte(yamlContent))
+	} else if useSurge {
+		surgeContent := services.GenerateSurgeConfig(nodes, ctx.SiteURL)
+		c.Header("Content-Type", "text/plain; charset=utf-8")
+		c.Header("Subscription-Title", subscriptionName)
+		setSubscriptionHeaders(c, ctx)
+		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(surgeContent))
+	} else if useQuantumultX {
+		qxContent := services.GenerateQuantumultXConfig(nodes)
+		c.Header("Content-Type", "text/plain; charset=utf-8")
+		setSubscriptionHeaders(c, ctx)
+		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(qxContent))
 	} else {
 		encoded := services.GenerateUniversalBase64(nodes)
 		setSubscriptionHeaders(c, ctx)
@@ -322,16 +421,13 @@ func GetUniversalSubscription(c *gin.Context) {
 // setSubscriptionHeaders sets common subscription response headers
 func setSubscriptionHeaders(c *gin.Context, ctx *subscriptionContext) {
 	if ctx.Sub != nil {
-		// subscription-userinfo: upload=0; download=0; total=<traffic_limit>; expire=<unix>
-		total := int64(0)
-		if ctx.Sub.PackageID != nil {
-			var pkg models.Package
-			if err := database.GetDB().First(&pkg, *ctx.Sub.PackageID).Error; err == nil {
-				total = pkg.TrafficLimit
-			}
+		// subscription-userinfo: upload=0; download=0; total=0; expire=<unix>
+		// Traffic is always 0 (unlimited) — this system is device-count-based, not traffic-based
+		userinfoParts := []string{"upload=0", "download=0", "total=0"}
+		if !ctx.Sub.ExpireTime.IsZero() {
+			userinfoParts = append(userinfoParts, fmt.Sprintf("expire=%d", ctx.Sub.ExpireTime.Unix()))
 		}
-		c.Header("subscription-userinfo",
-			fmt.Sprintf("upload=0; download=0; total=%d; expire=%d", total, ctx.Sub.ExpireTime.Unix()))
+		c.Header("Subscription-Userinfo", strings.Join(userinfoParts, "; "))
 	}
 	c.Header("Profile-Update-Interval", "24")
 }
@@ -366,14 +462,22 @@ func GetSubscriptionByFormat(c *gin.Context) {
 	}
 }
 
-// getSubscriptionBaseURL reads domain_name from system_configs and constructs the base URL.
+// getSubscriptionBaseURL reads site_url (or domain_name as fallback) from system_configs and constructs the base URL.
 func getSubscriptionBaseURL() string {
 	db := database.GetDB()
-	var cfg models.SystemConfig
-	if err := db.Where("`key` = ? AND (category = '' OR category IS NULL OR category = 'general')", "domain_name").First(&cfg).Error; err != nil {
-		return ""
+	var configs []models.SystemConfig
+	db.Where("`key` IN ?", []string{"site_url", "domain_name"}).Find(&configs)
+
+	var domain string
+	for _, c := range configs {
+		if c.Key == "site_url" && c.Value != "" {
+			domain = c.Value
+			break
+		}
+		if c.Key == "domain_name" && c.Value != "" && domain == "" {
+			domain = c.Value
+		}
 	}
-	domain := cfg.Value
 	if domain == "" {
 		return ""
 	}
@@ -394,8 +498,8 @@ func GetUserSubscription(c *gin.Context) {
 	baseURL := getSubscriptionBaseURL()
 	var universalURL, clashURL string
 	if baseURL != "" && sub.SubscriptionURL != "" {
-		universalURL = fmt.Sprintf("%s/api/v1/subscribe/universal/%s", baseURL, sub.SubscriptionURL)
-		clashURL = fmt.Sprintf("%s/api/v1/subscribe/%s", baseURL, sub.SubscriptionURL)
+		universalURL = fmt.Sprintf("%s/api/v1/sub/%s", baseURL, sub.SubscriptionURL)
+		clashURL = fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, sub.SubscriptionURL)
 	}
 
 	// Get package name
@@ -466,7 +570,10 @@ func ResetSubscription(c *gin.Context) {
 		NewSubscriptionURL: &newURL, DeviceCountBefore: devicesBefore,
 		DeviceCountAfter: 0, ResetBy: &resetBy,
 	})
+	// 通知用户订阅已重置
+	go services.NotifyUser(userID, "subscription_reset", map[string]string{"reset_by": "您自己"})
 	utils.Success(c, gin.H{"new_url": newURL})
+	utils.CreateSubscriptionLog(sub.ID, userID, "reset", "user", &userID, "用户自助重置订阅", nil, nil)
 }
 
 func ConvertToBalance(c *gin.Context) {
@@ -496,10 +603,24 @@ func ConvertToBalance(c *gin.Context) {
 		utils.BadRequest(c, "套餐天数配置异常")
 		return
 	}
-	value := pkg.Price / float64(pkg.DurationDays) * remaining
+	value := math.Round(pkg.Price/float64(pkg.DurationDays)*remaining*100) / 100
+	now := time.Now()
 	db.Model(user).Update("balance", user.Balance+value)
-	db.Model(&sub).Updates(map[string]interface{}{"status": "disabled", "is_active": false})
-	utils.Success(c, gin.H{"converted_amount": value, "new_balance": user.Balance + value})
+	utils.CreateBalanceLogEntry(userID, "refund", value, user.Balance, user.Balance+value, nil, fmt.Sprintf("订阅转余额 (剩余%d天)", int(math.Ceil(remaining))), c)
+	db.Model(&sub).Updates(map[string]interface{}{
+		"status":       "disabled",
+		"is_active":    false,
+		"expire_time":  now,
+		"package_id":   nil,
+		"traffic_limit": 0,
+		"traffic_used":  0,
+	})
+	utils.CreateSubscriptionLog(sub.ID, userID, "deactivate", "user", &userID, fmt.Sprintf("订阅转余额: %.2f元", value), nil, nil)
+	utils.Success(c, gin.H{
+		"converted_amount": value,
+		"new_balance":      user.Balance + value,
+		"remaining_days":   int(math.Ceil(remaining)),
+	})
 }
 
 func SendSubscriptionEmail(c *gin.Context) {
@@ -524,17 +645,16 @@ func SendSubscriptionEmail(c *gin.Context) {
 		return
 	}
 
-	universalURL := fmt.Sprintf("%s/api/v1/subscribe/universal/%s", baseURL, sub.SubscriptionURL)
-	clashURL := fmt.Sprintf("%s/api/v1/subscribe/%s", baseURL, sub.SubscriptionURL)
+	universalURL := fmt.Sprintf("%s/api/v1/sub/%s", baseURL, sub.SubscriptionURL)
+	clashURL := fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, sub.SubscriptionURL)
 
-	body := fmt.Sprintf(`<h3>您的订阅信息</h3>
-<p><strong>Clash 订阅链接:</strong><br><code>%s</code></p>
-<p><strong>通用订阅链接:</strong><br><code>%s</code></p>
-<p>到期时间: %s</p>
-<p>请妥善保管，不要泄露给他人。</p>`,
-		clashURL, universalURL, sub.ExpireTime.Format("2006-01-02 15:04"))
+	subject, body := services.RenderEmail("subscription", map[string]string{
+		"clash_url":    clashURL,
+		"universal_url": universalURL,
+		"expire_time":  sub.ExpireTime.Format("2006-01-02 15:04"),
+	})
 
-	go services.QueueEmail(user.Email, "您的订阅信息 - CBoard", body, "subscription")
+	go services.QueueEmail(user.Email, subject, body, "subscription")
 	utils.SuccessMessage(c, "订阅信息已发送至邮箱")
 }
 

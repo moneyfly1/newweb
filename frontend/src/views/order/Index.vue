@@ -126,7 +126,18 @@
             <span style="color: #18a058; font-size: 18px; font-weight: bold;">¥{{ currentOrder?.final_amount }}</span>
           </n-descriptions-item>
         </n-descriptions>
-        <n-alert type="info" :bordered="false">将使用账户余额支付</n-alert>
+        <!-- Payment Method -->
+        <div>
+          <div style="font-size: 14px; font-weight: 500; margin-bottom: 8px; color: #333;">支付方式</div>
+          <n-radio-group v-model:value="orderPayMethod">
+            <n-space>
+              <n-radio v-if="pmBalanceEnabled" value="balance">余额支付</n-radio>
+              <n-radio v-for="pm in pmMethods" :key="pm.id" :value="'pm_' + pm.id">
+                {{ pmLabel(pm.pay_type) }}
+              </n-radio>
+            </n-space>
+          </n-radio-group>
+        </div>
       </n-space>
       <template #footer>
         <n-space justify="end">
@@ -160,16 +171,40 @@
         <n-descriptions-item v-if="detailOrder.paid_at" label="支付时间">{{ formatDateTime(detailOrder.paid_at) }}</n-descriptions-item>
       </n-descriptions>
     </n-modal>
+
+    <!-- QR Code Payment Modal -->
+    <n-modal
+      v-model:show="showQrModal"
+      preset="card"
+      title="扫码支付"
+      style="width: 400px; max-width: 92vw;"
+      :bordered="false"
+      :mask-closable="false"
+      @after-leave="stopPolling"
+    >
+      <div style="text-align: center;">
+        <p style="margin-bottom: 16px; color: #666;">请使用支付宝扫描下方二维码完成支付</p>
+        <canvas ref="qrCanvas" style="margin: 0 auto;"></canvas>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后将自动跳转...</p>
+        <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
+      </div>
+      <template #footer>
+        <n-space justify="center">
+          <n-button @click="showQrModal = false">取消支付</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="tsx">
-import { ref, onMounted, h } from 'vue'
+import { ref, onMounted, h, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage, useDialog, NButton, NSpace, NTag } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { listOrders, payOrder, cancelOrder } from '@/api/order'
-import { listRechargeRecords, cancelRecharge } from '@/api/common'
+import QRCode from 'qrcode'
+import { listOrders, payOrder, cancelOrder, createPayment, getOrderStatus } from '@/api/order'
+import { listRechargeRecords, cancelRecharge, getPaymentMethods } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
@@ -188,6 +223,30 @@ const currentOrder = ref<any>(null)
 const detailOrder = ref<any>(null)
 const paying = ref(false)
 const orderStatusFilter = ref('')
+const orderPayMethod = ref('balance')
+const pmMethods = ref<any[]>([])
+const pmBalanceEnabled = ref(true)
+const showQrModal = ref(false)
+const qrCanvas = ref<HTMLCanvasElement | null>(null)
+const pollingStatus = ref(false)
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const pmLabel = (payType: string) => {
+  const labels: Record<string, string> = { epay: '在线支付', alipay: '支付宝', wxpay: '微信支付', qqpay: 'QQ支付' }
+  return labels[payType] || payType
+}
+
+const loadPaymentMethods = async () => {
+  try {
+    const res = await getPaymentMethods()
+    const data = res.data || {}
+    pmMethods.value = data.methods || []
+    pmBalanceEnabled.value = data.balance_enabled !== false
+    if (!pmBalanceEnabled.value && pmMethods.value.length > 0) {
+      orderPayMethod.value = 'pm_' + pmMethods.value[0].id
+    }
+  } catch {}
+}
 
 const statusFilters = [
   { label: '全部', value: '' },
@@ -207,7 +266,6 @@ const getStatusText = (s: string) => {
   return m[s] || s
 }
 
-/* PLACEHOLDER_ORDER_PAGINATION */
 
 const orderPagination = ref({
   page: 1, pageSize: 10, itemCount: 0,
@@ -257,7 +315,6 @@ const orderColumns: DataTableColumns<any> = [
   }
 ]
 
-/* PLACEHOLDER_RECHARGE_COLS */
 
 const rechargeColumns: DataTableColumns<any> = [
   { title: '订单号', key: 'order_no', width: 180, ellipsis: { tooltip: true } },
@@ -303,17 +360,69 @@ const handleTabChange = (tab: string) => {
   else loadRechargeRecords()
 }
 
+const isQrCodeUrl = (url: string) => {
+  return url.includes('qr.alipay.com') || (url.startsWith('https://qr.') && url.length < 200)
+}
+
+const startPolling = (orderNo: string) => {
+  pollingStatus.value = true
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await getOrderStatus(orderNo)
+      if (res.data?.status === 'paid') {
+        stopPolling()
+        showQrModal.value = false
+        message.success('支付成功')
+        loadOrders()
+      }
+    } catch {}
+  }, 3000)
+}
+
+const stopPolling = () => {
+  pollingStatus.value = false
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
 const handlePay = async () => {
   if (!currentOrder.value) return
   paying.value = true
   try {
-    await payOrder(currentOrder.value.id, { payment_method: 'balance' })
-    message.success('支付成功')
-    showPaymentModal.value = false
-    loadOrders()
+    if (orderPayMethod.value === 'balance') {
+      await payOrder(currentOrder.value.order_no, { payment_method: 'balance' })
+      message.success('支付成功')
+      showPaymentModal.value = false
+      loadOrders()
+    } else if (orderPayMethod.value.startsWith('pm_')) {
+      const pmId = parseInt(orderPayMethod.value.replace('pm_', ''))
+      const res = await createPayment({ order_id: currentOrder.value.id, payment_method_id: pmId })
+      const data = res.data
+      if (data?.payment_url) {
+        showPaymentModal.value = false
+        if (isQrCodeUrl(data.payment_url)) {
+          showQrModal.value = true
+          await nextTick()
+          if (qrCanvas.value) {
+            QRCode.toCanvas(qrCanvas.value, data.payment_url, { width: 240, margin: 2 })
+          }
+          startPolling(currentOrder.value.order_no)
+        } else {
+          window.location.href = data.payment_url
+        }
+      } else {
+        message.info('支付已创建，请等待处理')
+        showPaymentModal.value = false
+        loadOrders()
+      }
+    }
   } catch (e: any) { message.error(e.message || '支付失败') }
   finally { paying.value = false }
 }
+
+onUnmounted(() => { stopPolling() })
 
 const handleCancelOrder = (order: any) => {
   dialog.warning({
@@ -321,7 +430,7 @@ const handleCancelOrder = (order: any) => {
     content: `确定要取消订单 ${order.order_no} 吗？`,
     positiveText: '确定', negativeText: '取消',
     onPositiveClick: async () => {
-      try { await cancelOrder(order.id); message.success('订单已取消'); loadOrders() }
+      try { await cancelOrder(order.order_no); message.success('订单已取消'); loadOrders() }
       catch (e: any) { message.error(e.message || '取消订单失败') }
     }
   })
@@ -339,7 +448,7 @@ const handleCancelRecharge = (record: any) => {
   })
 }
 
-onMounted(() => { loadOrders() })
+onMounted(() => { loadOrders(); loadPaymentMethods() })
 </script>
 
 <style scoped>

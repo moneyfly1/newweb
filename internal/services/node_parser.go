@@ -7,11 +7,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 
 	"cboard/v2/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 // FetchSubscriptionContent fetches and base64-decodes subscription content from a URL.
@@ -55,8 +57,22 @@ func ParseNodeLinks(content string) ([]models.Node, error) {
 			node, err = ParseVlessLink(line)
 		} else if strings.HasPrefix(line, "trojan://") {
 			node, err = ParseTrojanLink(line)
+		} else if strings.HasPrefix(line, "ssr://") {
+			node, err = ParseSSRLink(line)
 		} else if strings.HasPrefix(line, "ss://") {
 			node, err = ParseShadowsocksLink(line)
+		} else if strings.HasPrefix(line, "hysteria2://") || strings.HasPrefix(line, "hy2://") {
+			node, err = ParseHysteria2Link(line)
+		} else if strings.HasPrefix(line, "hysteria://") {
+			node, err = ParseHysteriaLink(line)
+		} else if strings.HasPrefix(line, "tuic://") {
+			node, err = ParseTUICLink(line)
+		} else if strings.HasPrefix(line, "naive+https://") || strings.HasPrefix(line, "naive://") {
+			node, err = ParseNaiveLink(line)
+		} else if strings.HasPrefix(line, "anytls://") {
+			node, err = ParseAnytlsLink(line)
+		} else if strings.HasPrefix(line, "socks5://") || strings.HasPrefix(line, "socks://") {
+			node, err = ParseSOCKSLink(line)
 		}
 
 		if err == nil && node != nil {
@@ -177,6 +193,245 @@ func ParseShadowsocksLink(link string) (*models.Node, error) {
 		IsActive: true,
 		IsManual: false,
 	}, nil
+}
+
+// ParseSSRLink parses an ssr:// link into a Node model.
+func ParseSSRLink(link string) (*models.Node, error) {
+	encoded := strings.TrimPrefix(link, "ssr://")
+	// SSR links are base64 encoded
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		decoded, err = base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Format: host:port:protocol:method:obfs:base64(password)/?params
+	mainAndParams := strings.SplitN(string(decoded), "/?", 2)
+	parts := strings.SplitN(mainAndParams[0], ":", 6)
+	if len(parts) < 6 {
+		return nil, fmt.Errorf("invalid ssr link format")
+	}
+
+	name := "SSR Node"
+	if len(mainAndParams) > 1 {
+		params, _ := url.ParseQuery(mainAndParams[1])
+		if remarks := params.Get("remarks"); remarks != "" {
+			remarksDecoded, err := base64.RawURLEncoding.DecodeString(remarks)
+			if err == nil {
+				name = string(remarksDecoded)
+			}
+		}
+	}
+
+	region := DetectRegion(name)
+	config := link
+
+	return &models.Node{
+		Name:     name,
+		Region:   region,
+		Type:     "ssr",
+		Status:   "online",
+		Config:   &config,
+		IsActive: true,
+		IsManual: false,
+	}, nil
+}
+
+// ParseHysteriaLink parses a hysteria:// link into a Node model.
+func ParseHysteriaLink(link string) (*models.Node, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+
+	name := u.Fragment
+	if name == "" {
+		name = "Hysteria Node"
+	}
+
+	region := DetectRegion(name)
+	config := link
+
+	return &models.Node{
+		Name:     name,
+		Region:   region,
+		Type:     "hysteria",
+		Status:   "online",
+		Config:   &config,
+		IsActive: true,
+		IsManual: false,
+	}, nil
+}
+
+// ParseHysteria2Link parses a hysteria2:// or hy2:// link into a Node model.
+func ParseHysteria2Link(link string) (*models.Node, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+
+	name := u.Fragment
+	if name == "" {
+		name = "Hysteria2 Node"
+	}
+
+	region := DetectRegion(name)
+	config := link
+
+	return &models.Node{
+		Name:     name,
+		Region:   region,
+		Type:     "hysteria2",
+		Status:   "online",
+		Config:   &config,
+		IsActive: true,
+		IsManual: false,
+	}, nil
+}
+
+// ParseTUICLink parses a tuic:// link into a Node model.
+func ParseTUICLink(link string) (*models.Node, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+
+	name := u.Fragment
+	if name == "" {
+		name = "TUIC Node"
+	}
+
+	region := DetectRegion(name)
+	config := link
+
+	return &models.Node{
+		Name:     name,
+		Region:   region,
+		Type:     "tuic",
+		Status:   "online",
+		Config:   &config,
+		IsActive: true,
+		IsManual: false,
+	}, nil
+}
+
+// ParseNaiveLink parses naive:// or naive+https:// links
+func ParseNaiveLink(link string) (*models.Node, error) {
+	// Normalize to https:// for URL parsing
+	normalized := link
+	for _, prefix := range []string{"naive+https://", "naive://"} {
+		if strings.HasPrefix(normalized, prefix) {
+			normalized = "https://" + strings.TrimPrefix(normalized, prefix)
+			break
+		}
+	}
+	u, err := url.Parse(normalized)
+	if err != nil {
+		return nil, err
+	}
+	name := ""
+	if u.Fragment != "" {
+		name, _ = url.QueryUnescape(u.Fragment)
+	}
+	if name == "" {
+		name = u.Hostname()
+	}
+	region := DetectRegion(name)
+	config := link
+	return &models.Node{
+		Name:     name,
+		Type:     "naive",
+		Region:   region,
+		Status:   "online",
+		Config:   &config,
+		IsActive: true,
+	}, nil
+}
+
+// ParseAnytlsLink parses anytls:// links
+func ParseAnytlsLink(link string) (*models.Node, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	name := ""
+	if u.Fragment != "" {
+		name, _ = url.QueryUnescape(u.Fragment)
+	}
+	if name == "" {
+		name = u.Hostname()
+	}
+	region := DetectRegion(name)
+	config := link
+	return &models.Node{
+		Name:     name,
+		Type:     "anytls",
+		Region:   region,
+		Status:   "online",
+		Config:   &config,
+		IsActive: true,
+	}, nil
+}
+
+// ParseSOCKSLink parses socks5:// and socks:// links
+func ParseSOCKSLink(link string) (*models.Node, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	name := ""
+	if u.Fragment != "" {
+		name, _ = url.QueryUnescape(u.Fragment)
+	}
+	if name == "" {
+		name = u.Hostname()
+	}
+	nodeType := "socks5"
+	if strings.HasPrefix(link, "socks://") {
+		nodeType = "socks"
+	}
+	region := DetectRegion(name)
+	config := link
+	return &models.Node{
+		Name:     name,
+		Type:     nodeType,
+		Region:   region,
+		Status:   "online",
+		Config:   &config,
+		IsActive: true,
+	}, nil
+}
+
+// ParseHTTPLink parses http:// and https:// proxy links
+func ParseHTTPLink(link string) (*models.Node, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	name := ""
+	if u.Fragment != "" {
+		name, _ = url.QueryUnescape(u.Fragment)
+	}
+	if name == "" {
+		name = u.Hostname()
+	}
+	region := DetectRegion(name)
+	config := link
+	return &models.Node{
+		Name:     name,
+		Type:     "http",
+		Region:   region,
+		Status:   "online",
+		Config:   &config,
+		IsActive: true,
+	}, nil
+}
+
+func portToInt(port string) int {
+	p, _ := strconv.Atoi(port)
+	return p
 }
 
 func DetectRegion(name string) string {
@@ -395,6 +650,268 @@ func ShadowsocksLinkToClashMap(link string, name string) (map[string]interface{}
 	return m, nil
 }
 
+// SSRLinkToClashMap parses an ssr:// link into a Clash-compatible proxy map.
+func SSRLinkToClashMap(link string, name string) (map[string]interface{}, error) {
+	encoded := strings.TrimPrefix(link, "ssr://")
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		decoded, err = base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	mainAndParams := strings.SplitN(string(decoded), "/?", 2)
+	parts := strings.SplitN(mainAndParams[0], ":", 6)
+	if len(parts) < 6 {
+		return nil, fmt.Errorf("invalid ssr link format")
+	}
+
+	host := parts[0]
+	port, _ := strconv.Atoi(parts[1])
+	protocol := parts[2]
+	method := parts[3]
+	obfs := parts[4]
+	passwordB64 := parts[5]
+
+	passwordBytes, err := base64.RawURLEncoding.DecodeString(passwordB64)
+	if err != nil {
+		passwordBytes, _ = base64.StdEncoding.DecodeString(passwordB64)
+	}
+	password := string(passwordBytes)
+
+	m := map[string]interface{}{
+		"name":     name,
+		"type":     "ssr",
+		"server":   host,
+		"port":     port,
+		"cipher":   method,
+		"password": password,
+		"protocol": protocol,
+		"obfs":     obfs,
+	}
+
+	if len(mainAndParams) > 1 {
+		params, _ := url.ParseQuery(mainAndParams[1])
+		if pp := params.Get("protoparam"); pp != "" {
+			ppDecoded, err := base64.RawURLEncoding.DecodeString(pp)
+			if err == nil {
+				m["protocol-param"] = string(ppDecoded)
+			}
+		}
+		if op := params.Get("obfsparam"); op != "" {
+			opDecoded, err := base64.RawURLEncoding.DecodeString(op)
+			if err == nil {
+				m["obfs-param"] = string(opDecoded)
+			}
+		}
+	}
+
+	return m, nil
+}
+
+// HysteriaLinkToClashMap parses a hysteria:// link into a Clash-compatible proxy map.
+func HysteriaLinkToClashMap(link string, name string) (map[string]interface{}, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	host, portStr := splitHostPort(u.Host)
+	port, _ := strconv.Atoi(portStr)
+
+	m := map[string]interface{}{
+		"name":   name,
+		"type":   "hysteria",
+		"server": host,
+		"port":   port,
+	}
+	if auth := q.Get("auth"); auth != "" {
+		m["auth-str"] = auth
+	}
+	if peer := q.Get("peer"); peer != "" {
+		m["sni"] = peer
+	}
+	if insecure := q.Get("insecure"); insecure == "1" {
+		m["skip-cert-verify"] = true
+	}
+	if up := q.Get("upmbps"); up != "" {
+		m["up"] = up
+	}
+	if down := q.Get("downmbps"); down != "" {
+		m["down"] = down
+	}
+	if proto := q.Get("protocol"); proto != "" {
+		m["protocol"] = proto
+	}
+	return m, nil
+}
+
+// Hysteria2LinkToClashMap parses a hysteria2:// or hy2:// link into a Clash-compatible proxy map.
+func Hysteria2LinkToClashMap(link string, name string) (map[string]interface{}, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	host, portStr := splitHostPort(u.Host)
+	port, _ := strconv.Atoi(portStr)
+
+	password := ""
+	if u.User != nil {
+		password = u.User.Username()
+	}
+
+	m := map[string]interface{}{
+		"name":     name,
+		"type":     "hysteria2",
+		"server":   host,
+		"port":     port,
+		"password": password,
+	}
+	if sni := q.Get("sni"); sni != "" {
+		m["sni"] = sni
+	}
+	if insecure := q.Get("insecure"); insecure == "1" {
+		m["skip-cert-verify"] = true
+	}
+	return m, nil
+}
+
+// TUICLinkToClashMap parses a tuic:// link into a Clash-compatible proxy map.
+func TUICLinkToClashMap(link string, name string) (map[string]interface{}, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	host, portStr := splitHostPort(u.Host)
+	port, _ := strconv.Atoi(portStr)
+
+	uuid := ""
+	password := ""
+	if u.User != nil {
+		uuid = u.User.Username()
+		if p, ok := u.User.Password(); ok {
+			password = p
+		}
+	}
+
+	m := map[string]interface{}{
+		"name":     name,
+		"type":     "tuic",
+		"server":   host,
+		"port":     port,
+		"uuid":     uuid,
+		"password": password,
+	}
+	if cc := q.Get("congestion_control"); cc != "" {
+		m["congestion-controller"] = cc
+	}
+	if alpn := q.Get("alpn"); alpn != "" {
+		m["alpn"] = strings.Split(alpn, ",")
+	}
+	if sni := q.Get("sni"); sni != "" {
+		m["sni"] = sni
+	}
+	return m, nil
+}
+
+// SOCKSLinkToClashMap parses a socks5:// or socks:// link into a Clash-compatible proxy map.
+func SOCKSLinkToClashMap(link string, name string) (map[string]interface{}, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	host, portStr := splitHostPort(u.Host)
+	port, _ := strconv.Atoi(portStr)
+	if port == 0 {
+		port = 1080
+	}
+	m := map[string]interface{}{
+		"name":   name,
+		"type":   "socks5",
+		"server": host,
+		"port":   port,
+		"udp":    true,
+	}
+	if u.User != nil {
+		m["username"] = u.User.Username()
+		if pw, ok := u.User.Password(); ok {
+			m["password"] = pw
+		}
+	}
+	return m, nil
+}
+
+// HTTPLinkToClashMap parses an http:// or https:// proxy link into a Clash-compatible proxy map.
+func HTTPLinkToClashMap(link string, name string) (map[string]interface{}, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	host, portStr := splitHostPort(u.Host)
+	port, _ := strconv.Atoi(portStr)
+	if port == 0 {
+		if strings.HasPrefix(link, "https://") {
+			port = 443
+		} else {
+			port = 80
+		}
+	}
+	m := map[string]interface{}{
+		"name":   name,
+		"type":   "http",
+		"server": host,
+		"port":   port,
+	}
+	if strings.HasPrefix(link, "https://") {
+		m["tls"] = true
+	}
+	if u.User != nil {
+		m["username"] = u.User.Username()
+		if pw, ok := u.User.Password(); ok {
+			m["password"] = pw
+		}
+	}
+	return m, nil
+}
+
+// AnytlsLinkToClashMap parses an anytls:// link into a Clash-compatible proxy map.
+func AnytlsLinkToClashMap(link string, name string) (map[string]interface{}, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	host, portStr := splitHostPort(u.Host)
+	port, _ := strconv.Atoi(portStr)
+	if port == 0 {
+		port = 443
+	}
+	password := ""
+	if u.User != nil {
+		password = u.User.Username()
+		if pw, ok := u.User.Password(); ok && pw != "" {
+			password = pw
+		}
+	}
+	sni := u.Query().Get("sni")
+	if sni == "" {
+		sni = host
+	}
+	m := map[string]interface{}{
+		"name":               name,
+		"type":               "anytls",
+		"server":             host,
+		"port":               port,
+		"password":           password,
+		"udp":                true,
+		"client-fingerprint": "chrome",
+		"sni":                sni,
+	}
+	return m, nil
+}
+
 // NodeConfigToClashMap converts a node's Config link to a Clash proxy map.
 func NodeConfigToClashMap(nodeType string, configLink string, nodeName string) (map[string]interface{}, error) {
 	switch nodeType {
@@ -406,6 +923,20 @@ func NodeConfigToClashMap(nodeType string, configLink string, nodeName string) (
 		return TrojanLinkToClashMap(configLink, nodeName)
 	case "ss":
 		return ShadowsocksLinkToClashMap(configLink, nodeName)
+	case "ssr":
+		return SSRLinkToClashMap(configLink, nodeName)
+	case "hysteria":
+		return HysteriaLinkToClashMap(configLink, nodeName)
+	case "hysteria2":
+		return Hysteria2LinkToClashMap(configLink, nodeName)
+	case "tuic":
+		return TUICLinkToClashMap(configLink, nodeName)
+	case "socks5", "socks":
+		return SOCKSLinkToClashMap(configLink, nodeName)
+	case "http":
+		return HTTPLinkToClashMap(configLink, nodeName)
+	case "anytls":
+		return AnytlsLinkToClashMap(configLink, nodeName)
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", nodeType)
 	}
@@ -413,14 +944,14 @@ func NodeConfigToClashMap(nodeType string, configLink string, nodeName string) (
 
 // GenerateClashYAML generates a proper Clash YAML config from nodes.
 func GenerateClashYAML(nodes []models.Node) string {
-	return GenerateClashYAMLWithDomain(nodes, "")
+	return GenerateClashYAMLWithDomain(nodes, "", "")
 }
 
-// GenerateClashYAMLWithDomain generates Clash YAML with full proxy-groups and rules.
-func GenerateClashYAMLWithDomain(nodes []models.Node, siteDomain string) string {
+// GenerateClashYAMLWithDomain generates Clash YAML using the template file (uploads/config/temp.yaml).
+// subscriptionName is used for the YAML `name` field (e.g. "到期: 2026-03-15").
+func GenerateClashYAMLWithDomain(nodes []models.Node, siteDomain string, subscriptionName string) string {
 	var proxies []map[string]interface{}
 	var proxyNames []string
-	// Separate info nodes (fake SS) from real proxy nodes
 	var infoNames []string
 	usedNames := make(map[string]bool)
 
@@ -444,70 +975,199 @@ func GenerateClashYAMLWithDomain(nodes []models.Node, siteDomain string) string 
 		proxies = append(proxies, m)
 		proxyNames = append(proxyNames, name)
 
-		// Info nodes use baidu.com:1234 as server
 		if server, ok := m["server"].(string); ok && server == "baidu.com" {
 			infoNames = append(infoNames, name)
 		}
 	}
 
 	// Real proxy names (exclude info nodes) for auto-select groups
-	var realNames []string
 	infoSet := make(map[string]bool)
 	for _, n := range infoNames {
 		infoSet[n] = true
 	}
+	var realNames []string
 	for _, n := range proxyNames {
 		if !infoSet[n] {
 			realNames = append(realNames, n)
 		}
 	}
 
+	// Try template-based generation
+	if result := generateFromTemplate(proxies, proxyNames, realNames, subscriptionName); result != "" {
+		return result
+	}
+
+	// Fallback: generate default YAML
+	return generateDefaultClashYAML(proxies, proxyNames, realNames, siteDomain, subscriptionName)
+}
+
+// generateFromTemplate loads uploads/config/temp.yaml and injects proxies + updates proxy-groups.
+func generateFromTemplate(proxies []map[string]interface{}, allNames, realNames []string, subscriptionName string) string {
+	data, err := os.ReadFile("uploads/config/temp.yaml")
+	if err != nil {
+		return ""
+	}
+
+	var templateConfig map[string]interface{}
+	if err := yaml.Unmarshal(data, &templateConfig); err != nil {
+		return ""
+	}
+
+	// Set subscription name
+	if subscriptionName != "" {
+		templateConfig["name"] = subscriptionName
+	}
+
+	// Inject proxies
+	proxyList := make([]interface{}, 0, len(proxies))
+	for _, p := range proxies {
+		proxyList = append(proxyList, p)
+	}
+	templateConfig["proxies"] = proxyList
+
+	// Update proxy-groups: inject real node names
+	if groups, ok := templateConfig["proxy-groups"].([]interface{}); ok {
+		updateProxyGroups(groups, allNames, realNames)
+	}
+
+	output, err := yaml.Marshal(templateConfig)
+	if err != nil {
+		return ""
+	}
+	return unescapeUnicode(string(output))
+}
+
+// unescapeUnicode converts \UXXXXXXXX and \uXXXX escape sequences back to actual Unicode characters.
+func unescapeUnicode(s string) string {
+	result := s
+	// Handle \UXXXXXXXX (8-digit)
+	for {
+		idx := strings.Index(result, "\\U")
+		if idx < 0 || idx+10 > len(result) {
+			break
+		}
+		hexStr := result[idx+2 : idx+10]
+		codePoint, err := strconv.ParseInt(hexStr, 16, 32)
+		if err != nil {
+			// Not a valid escape, skip
+			result = result[:idx] + "U" + result[idx+2:]
+			continue
+		}
+		result = result[:idx] + string(rune(codePoint)) + result[idx+10:]
+	}
+	// Handle \uXXXX (4-digit)
+	for {
+		idx := strings.Index(result, "\\u")
+		if idx < 0 || idx+6 > len(result) {
+			break
+		}
+		hexStr := result[idx+2 : idx+6]
+		codePoint, err := strconv.ParseInt(hexStr, 16, 32)
+		if err != nil {
+			result = result[:idx] + "u" + result[idx+2:]
+			continue
+		}
+		result = result[:idx] + string(rune(codePoint)) + result[idx+6:]
+	}
+	return result
+}
+
+// updateProxyGroups injects proxy names into each group, preserving special entries.
+func updateProxyGroups(groups []interface{}, allNames, realNames []string) {
+	// Collect all group names for reference
+	groupNames := make(map[string]bool)
+	for _, g := range groups {
+		if m, ok := g.(map[string]interface{}); ok {
+			if name, ok := m["name"].(string); ok {
+				groupNames[name] = true
+			}
+		}
+	}
+
+	for _, g := range groups {
+		group, ok := g.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		gType, _ := group["type"].(string)
+
+		if gType == "select" || gType == "url-test" || gType == "fallback" || gType == "load-balance" {
+			// Keep special entries (DIRECT, REJECT, other group names)
+			existingProxies := make([]string, 0)
+			if oldProxies, ok := group["proxies"].([]interface{}); ok {
+				for _, p := range oldProxies {
+					if pStr, ok := p.(string); ok {
+						if pStr == "DIRECT" || pStr == "REJECT" || groupNames[pStr] {
+							existingProxies = append(existingProxies, pStr)
+						}
+					}
+				}
+			}
+
+			if gType == "select" {
+				// Select groups: keep special entries + append all proxy names
+				newProxies := make([]interface{}, 0, len(existingProxies)+len(allNames))
+				for _, p := range existingProxies {
+					newProxies = append(newProxies, p)
+				}
+				for _, n := range allNames {
+					newProxies = append(newProxies, n)
+				}
+				group["proxies"] = newProxies
+			} else {
+				// url-test/fallback/load-balance: only real nodes
+				newProxies := make([]interface{}, 0, len(realNames))
+				for _, n := range realNames {
+					newProxies = append(newProxies, n)
+				}
+				group["proxies"] = newProxies
+			}
+		}
+	}
+}
+
+// generateDefaultClashYAML is the fallback when no template file exists.
+func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNames []string, siteDomain, subscriptionName string) string {
 	var sb strings.Builder
 
-	// Head: basic config + DNS
+	if subscriptionName != "" {
+		sb.WriteString(fmt.Sprintf("name: %s\n", escapeYAML(subscriptionName)))
+	}
 	sb.WriteString("port: 7890\n")
 	sb.WriteString("socks-port: 7891\n")
 	sb.WriteString("allow-lan: true\n")
-	sb.WriteString("mode: rule\n")
+	sb.WriteString("mode: Rule\n")
 	sb.WriteString("log-level: info\n")
-	sb.WriteString("external-controller: :9090\n\n")
-	sb.WriteString("dns:\n")
-	sb.WriteString("  enable: true\n")
-	sb.WriteString("  nameserver:\n")
-	sb.WriteString("    - 119.29.29.29\n")
-	sb.WriteString("    - 223.5.5.5\n")
-	sb.WriteString("  fallback:\n")
-	sb.WriteString("    - 8.8.8.8\n")
-	sb.WriteString("    - 8.8.4.4\n\n")
+	sb.WriteString("external-controller: 127.0.0.1:9090\n\n")
 
-	// Proxies
 	sb.WriteString("proxies:\n")
 	for _, p := range proxies {
 		writeClashProxy(&sb, p)
 	}
 
-	// Proxy groups
+	grpSelect := "🚀 节点选择"
+	grpAuto := "♻️ 自动选择"
+	grpFallover := "🔰 故障转移"
+	grpBalance := "🔮 负载均衡"
+	grpDirect := "🎯 全球直连"
+	grpBlock := "🛑 全球拦截"
+	grpFish := "🐟 漏网之鱼"
+
 	sb.WriteString("\nproxy-groups:\n")
 
-	grpSelect := "\U0001F680 节点选择"
-	grpAuto := "\u267B\uFE0F 自动选择"
-	grpDirect := "\U0001F3AF 全球直连"
-	grpBlock := "\U0001F6D1 全球拦截"
-	grpFallback := "\U0001F41F 漏网之鱼"
-
-	// 🚀 节点选择 - manual select, includes auto-select + DIRECT + all real nodes
+	// 🚀 节点选择
 	sb.WriteString("  - name: " + escapeYAML(grpSelect) + "\n")
 	sb.WriteString("    type: select\n")
 	sb.WriteString("    proxies:\n")
 	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpFallover) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpBalance) + "\n")
 	sb.WriteString("      - DIRECT\n")
-	for _, name := range realNames {
-		sb.WriteString("      - ")
-		sb.WriteString(escapeYAML(name))
-		sb.WriteString("\n")
+	for _, name := range allNames {
+		sb.WriteString("      - " + escapeYAML(name) + "\n")
 	}
 
-	// ♻️ 自动选择 - url-test with all real nodes
+	// ♻️ 自动选择
 	sb.WriteString("  - name: " + escapeYAML(grpAuto) + "\n")
 	sb.WriteString("    type: url-test\n")
 	sb.WriteString("    url: http://www.gstatic.com/generate_204\n")
@@ -515,9 +1175,28 @@ func GenerateClashYAMLWithDomain(nodes []models.Node, siteDomain string) string 
 	sb.WriteString("    tolerance: 50\n")
 	sb.WriteString("    proxies:\n")
 	for _, name := range realNames {
-		sb.WriteString("      - ")
-		sb.WriteString(escapeYAML(name))
-		sb.WriteString("\n")
+		sb.WriteString("      - " + escapeYAML(name) + "\n")
+	}
+
+	// 🔰 故障转移
+	sb.WriteString("  - name: " + escapeYAML(grpFallover) + "\n")
+	sb.WriteString("    type: fallback\n")
+	sb.WriteString("    url: http://www.gstatic.com/generate_204\n")
+	sb.WriteString("    interval: 300\n")
+	sb.WriteString("    proxies:\n")
+	for _, name := range realNames {
+		sb.WriteString("      - " + escapeYAML(name) + "\n")
+	}
+
+	// 🔮 负载均衡
+	sb.WriteString("  - name: " + escapeYAML(grpBalance) + "\n")
+	sb.WriteString("    type: load-balance\n")
+	sb.WriteString("    url: http://www.gstatic.com/generate_204\n")
+	sb.WriteString("    interval: 300\n")
+	sb.WriteString("    strategy: consistent-hashing\n")
+	sb.WriteString("    proxies:\n")
+	for _, name := range realNames {
+		sb.WriteString("      - " + escapeYAML(name) + "\n")
 	}
 
 	// 🎯 全球直连
@@ -536,17 +1215,15 @@ func GenerateClashYAMLWithDomain(nodes []models.Node, siteDomain string) string 
 	sb.WriteString("      - DIRECT\n")
 
 	// 🐟 漏网之鱼
-	sb.WriteString("  - name: " + escapeYAML(grpFallback) + "\n")
+	sb.WriteString("  - name: " + escapeYAML(grpFish) + "\n")
 	sb.WriteString("    type: select\n")
 	sb.WriteString("    proxies:\n")
 	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
-	sb.WriteString("      - " + escapeYAML(grpDirect) + "\n")
+	sb.WriteString("      - DIRECT\n")
 	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
 
-	// Rules
 	sb.WriteString("\nrules:\n")
 	if siteDomain != "" {
-		// Strip protocol prefix for domain rule
 		d := siteDomain
 		for _, prefix := range []string{"https://", "http://"} {
 			d = strings.TrimPrefix(d, prefix)
@@ -554,17 +1231,16 @@ func GenerateClashYAMLWithDomain(nodes []models.Node, siteDomain string) string 
 		d = strings.TrimRight(d, "/")
 		sb.WriteString("  - DOMAIN-SUFFIX," + d + "," + grpDirect + "\n")
 	}
-	sb.WriteString("  - IP-CIDR,127.0.0.0/8," + grpDirect + ",no-resolve\n")
-	sb.WriteString("  - IP-CIDR,172.16.0.0/12," + grpDirect + ",no-resolve\n")
-	sb.WriteString("  - IP-CIDR,192.168.0.0/16," + grpDirect + ",no-resolve\n")
-	sb.WriteString("  - IP-CIDR,10.0.0.0/8," + grpDirect + ",no-resolve\n")
-	sb.WriteString("  - GEOIP,CN," + grpDirect + "\n")
-	sb.WriteString("  - MATCH," + grpFallback + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,local,DIRECT\n")
+	sb.WriteString("  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve\n")
+	sb.WriteString("  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve\n")
+	sb.WriteString("  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve\n")
+	sb.WriteString("  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve\n")
+	sb.WriteString("  - GEOIP,CN,DIRECT\n")
+	sb.WriteString("  - MATCH," + grpFish + "\n")
 
 	return sb.String()
 }
-
-// GenerateUniversalBase64 generates base64-encoded links for all nodes.
 func GenerateUniversalBase64(nodes []models.Node) string {
 	var links []string
 	for _, n := range nodes {
@@ -578,7 +1254,7 @@ func GenerateUniversalBase64(nodes []models.Node) string {
 func writeClashProxy(sb *strings.Builder, m map[string]interface{}) {
 	sb.WriteString("  - ")
 	// Write fields in a deterministic order
-	orderedKeys := []string{"name", "type", "server", "port", "uuid", "alterId", "cipher", "password", "flow", "network", "tls", "servername", "sni", "client-fingerprint", "skip-cert-verify", "udp"}
+	orderedKeys := []string{"name", "type", "server", "port", "uuid", "alterId", "cipher", "username", "password", "flow", "network", "tls", "servername", "sni", "client-fingerprint", "skip-cert-verify", "udp", "protocol", "protocol-param", "obfs", "obfs-param", "auth-str", "up", "down", "congestion-controller", "alpn"}
 	written := make(map[string]bool)
 
 	first := true
@@ -655,6 +1331,24 @@ func writeYAMLInlineValue(sb *strings.Builder, val interface{}) {
 			writeYAMLInlineValue(sb, v[k])
 		}
 		sb.WriteString("}")
+	case []interface{}:
+		sb.WriteString("[")
+		for i, item := range v {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			writeYAMLInlineValue(sb, item)
+		}
+		sb.WriteString("]")
+	case []string:
+		sb.WriteString("[")
+		for i, item := range v {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(escapeYAML(item))
+		}
+		sb.WriteString("]")
 	default:
 		sb.WriteString(fmt.Sprintf("%v", val))
 	}

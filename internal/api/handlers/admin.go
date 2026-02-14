@@ -16,7 +16,6 @@ import (
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -50,6 +49,29 @@ func AdminDashboard(c *gin.Context) {
 	var ticketList []models.Ticket
 	db.Where("status IN ?", []string{"pending", "open"}).Order("created_at DESC").Limit(5).Find(&ticketList)
 
+	// Revenue trend (last 30 days)
+	type DayStat struct {
+		Date  string  `json:"date"`
+		Value float64 `json:"value"`
+	}
+	var revenueTrend []DayStat
+	thirtyDaysAgo := time.Now().AddDate(0, 0, -29).Format("2006-01-02")
+	db.Model(&models.Order{}).
+		Where("status = ? AND DATE(payment_time) >= ?", "paid", thirtyDaysAgo).
+		Select("DATE(payment_time) as date, COALESCE(SUM(amount), 0) as value").
+		Group("DATE(payment_time)").
+		Order("date ASC").
+		Scan(&revenueTrend)
+
+	// User growth (last 30 days)
+	var userGrowth []DayStat
+	db.Model(&models.User{}).
+		Where("DATE(created_at) >= ?", thirtyDaysAgo).
+		Select("DATE(created_at) as date, COUNT(*) as value").
+		Group("DATE(created_at)").
+		Order("date ASC").
+		Scan(&userGrowth)
+
 	utils.Success(c, gin.H{
 		"total_users":          userCount,
 		"active_subscriptions": subCount,
@@ -59,6 +81,8 @@ func AdminDashboard(c *gin.Context) {
 		"pending_tickets":      pendingTickets,
 		"recent_orders":        recentOrders,
 		"pending_ticket_list":  ticketList,
+		"revenue_trend":        revenueTrend,
+		"user_growth":          userGrowth,
 	})
 }
 
@@ -1006,7 +1030,7 @@ func AdminResetSubscription(c *gin.Context) {
 	}
 
 	oldURL := sub.SubscriptionURL
-	newURL := uuid.New().String()[:8]
+	newURL := utils.GenerateRandomString(32)
 
 	tx := db.Begin()
 	// Clear devices
@@ -1687,7 +1711,7 @@ func AdminCreateUser(c *gin.Context) {
 	}
 
 	// Auto-create subscription for new user
-	subURL := uuid.New().String()[:8]
+	subURL := utils.GenerateRandomString(32)
 	subscription := models.Subscription{
 		UserID:          user.ID,
 		SubscriptionURL: subURL,

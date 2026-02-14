@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -167,7 +166,7 @@ func Register(c *gin.Context) {
 		expireTime = time.Now().AddDate(0, 0, subscribeDays)
 	}
 
-	subURL := uuid.New().String()[:8]
+	subURL := utils.GenerateRandomString(32)
 	subscription := models.Subscription{
 		UserID:          user.ID,
 		SubscriptionURL: subURL,

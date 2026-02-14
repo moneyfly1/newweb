@@ -8,7 +8,6 @@ import (
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -57,7 +56,7 @@ func RedeemCode(c *gin.Context) {
 			var sub models.Subscription
 			if err := tx.Where("user_id = ?", userID).First(&sub).Error; err != nil {
 				// Create new subscription
-				subURL := uuid.New().String()[:8]
+				subURL := utils.GenerateRandomString(32)
 				sub = models.Subscription{
 					UserID:          userID,
 					SubscriptionURL: subURL,

@@ -3,6 +3,7 @@ package services
 import (
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -25,7 +26,7 @@ type SMTPConfig struct {
 // falling back to app config env vars.
 func GetSMTPConfig() (*SMTPConfig, error) {
 	db := database.GetDB()
-	keys := []string{"smtp_host", "smtp_port", "smtp_username", "smtp_password", "smtp_from"}
+	keys := []string{"smtp_host", "smtp_port", "smtp_username", "smtp_password", "smtp_from", "smtp_from_email", "smtp_from_name"}
 	var configs []models.SystemConfig
 	db.Where("`key` IN ?", keys).Find(&configs)
 
@@ -44,12 +45,25 @@ func GetSMTPConfig() (*SMTPConfig, error) {
 		port = p
 	}
 
+	// Determine From address: prefer smtp_from_email, fallback to smtp_from, then smtp_username
+	from := m["smtp_from_email"]
+	if from == "" {
+		from = m["smtp_from"]
+	}
+	if from == "" {
+		from = m["smtp_username"]
+	}
+	// If from_name is set, format as "Name <email>"
+	if name := m["smtp_from_name"]; name != "" && from != "" && !strings.Contains(from, "<") {
+		from = fmt.Sprintf("%s <%s>", name, from)
+	}
+
 	return &SMTPConfig{
 		Host:     host,
 		Port:     port,
 		Username: m["smtp_username"],
 		Password: m["smtp_password"],
-		From:     m["smtp_from"],
+		From:     from,
 	}, nil
 }
 
@@ -65,12 +79,18 @@ func SendEmail(to, subject, body string) error {
 
 // SendEmailWithConfig sends an email using the provided SMTP config.
 func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
-	from := cfg.From
-	if from == "" {
-		from = cfg.Username
+	headerFrom := cfg.From
+	if headerFrom == "" {
+		headerFrom = cfg.Username
 	}
 
-	msg := buildMIME(from, to, subject, body)
+	// Extract bare email for SMTP envelope (MAIL FROM)
+	envelopeFrom := headerFrom
+	if idx := strings.Index(envelopeFrom, "<"); idx != -1 {
+		envelopeFrom = strings.TrimRight(envelopeFrom[idx+1:], ">")
+	}
+
+	msg := buildMIME(headerFrom, to, subject, body)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
 
@@ -90,7 +110,7 @@ func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
 		if err = client.Auth(auth); err != nil {
 			return fmt.Errorf("SMTP 认证失败: %w", err)
 		}
-		if err = client.Mail(from); err != nil {
+		if err = client.Mail(envelopeFrom); err != nil {
 			return err
 		}
 		if err = client.Rcpt(to); err != nil {
@@ -108,7 +128,7 @@ func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
 	}
 
 	// STARTTLS (port 587 / 25)
-	return smtp.SendMail(addr, auth, from, []string{to}, []byte(msg))
+	return smtp.SendMail(addr, auth, envelopeFrom, []string{to}, []byte(msg))
 }
 
 func buildMIME(from, to, subject, body string) string {
@@ -145,6 +165,11 @@ func ProcessEmailQueue() {
 	db.Where("status = ? AND retry_count < max_retries", "pending").
 		Order("created_at ASC").Limit(50).Find(&emails)
 
+	if len(emails) == 0 {
+		return
+	}
+	log.Printf("[EmailQueue] 发现 %d 封待发送邮件", len(emails))
+
 	for i := range emails {
 		eq := &emails[i]
 		err := SendEmail(eq.ToEmail, eq.Subject, eq.Content)
@@ -157,10 +182,12 @@ func ProcessEmailQueue() {
 				eq.Status = "failed"
 			}
 			db.Save(eq)
+			log.Printf("[EmailQueue] 发送失败 #%d -> %s: %s", eq.ID, eq.ToEmail, errMsg)
 		} else {
 			eq.Status = "sent"
 			eq.SentAt = &now
 			db.Save(eq)
+			log.Printf("[EmailQueue] 发送成功 #%d -> %s", eq.ID, eq.ToEmail)
 		}
 	}
 }

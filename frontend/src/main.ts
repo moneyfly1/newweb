@@ -4,6 +4,7 @@ import App from './App.vue'
 import router from './router'
 import './assets/styles/global.scss'
 import './styles/admin-mobile.css'
+import './styles/mobile-cards.css'
 
 const app = createApp(App)
 app.use(createPinia())

@@ -78,7 +78,36 @@
 
       <n-tab-pane name="login-history" tab="登录历史">
         <n-card :bordered="false">
-          <n-data-table :columns="historyColumns" :data="loginHistory" :loading="loadingHistory" :pagination="{ pageSize: 10 }" />
+          <!-- Desktop table -->
+          <n-data-table v-if="!appStore.isMobile" :columns="historyColumns" :data="loginHistory" :loading="loadingHistory" :pagination="{ pageSize: 10 }" />
+          <!-- Mobile card list -->
+          <div v-else>
+            <n-spin :show="loadingHistory">
+              <div v-if="!loadingHistory && loginHistory.length === 0" class="mobile-empty">暂无登录记录</div>
+              <div v-for="(record, idx) in loginHistory" :key="idx" class="mobile-card">
+                <div class="card-row">
+                  <span class="label">时间</span>
+                  <span class="value">{{ new Date(record.login_time).toLocaleString('zh-CN') }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="label">IP 地址</span>
+                  <span class="value" style="font-family: monospace;">{{ record.ip_address }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="label">地区</span>
+                  <span class="value">{{ record.location || '-' }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="label">状态</span>
+                  <span class="value">
+                    <n-tag :type="record.login_status === 'success' ? 'success' : 'error'" size="small" :bordered="false">
+                      {{ record.login_status === 'success' ? '成功' : '失败' }}
+                    </n-tag>
+                  </span>
+                </div>
+              </div>
+            </n-spin>
+          </div>
         </n-card>
       </n-tab-pane>
     </n-tabs>

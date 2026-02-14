@@ -49,7 +49,7 @@
                 <span class="value">{{ device.last_access ? new Date(device.last_access).toLocaleString('zh-CN') : '-' }}</span>
               </div>
               <div class="card-actions">
-                <n-button size="small" type="error" @click="handleDelete(device.id)" style="flex: 1; min-height: 40px;">删除</n-button>
+                <n-button size="small" type="error" @click="handleDelete(device.id)">删除</n-button>
               </div>
             </div>
           </div>
@@ -219,34 +219,5 @@ onMounted(() => {
 
 @media (max-width: 767px) {
   .device-page { padding: 0; }
-}
-
-.mobile-card-list { display: none; }
-@media (max-width: 767px) {
-  .mobile-card-list { display: block; }
-}
-.mobile-card {
-  background: #fff;
-  border-radius: 14px;
-  border: 1px solid #e0e7ff;
-  padding: 16px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 8px rgba(66, 165, 245, 0.08);
-}
-.mobile-card:nth-child(odd) { background: linear-gradient(135deg, #fff 0%, #f8faff 100%); }
-.mobile-card:nth-child(even) { background: linear-gradient(135deg, #fff 0%, #fef3ff 100%); border-color: #f3e8ff; }
-.card-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 0; border-bottom: 1px solid rgba(224, 231, 255, 0.4); min-height: 44px;
-}
-.card-row:last-child { border-bottom: none; }
-.card-row .label {
-  font-weight: 600; color: #64748b; font-size: 13px; min-width: 60px; flex-shrink: 0;
-  padding: 4px 10px; background: rgba(66, 165, 245, 0.08); border-radius: 6px;
-}
-.card-row .value { flex: 1; text-align: right; font-size: 14px; color: #1e293b; word-break: break-word; }
-.card-actions {
-  margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(224, 231, 255, 0.4);
-  display: flex; gap: 8px;
 }
 </style>

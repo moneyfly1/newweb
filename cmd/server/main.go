@@ -10,8 +10,8 @@ import (
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
+	"cboard/v2/internal/utils"
 
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -43,6 +43,9 @@ func main() {
 
 	// 启动节点自动更新定时任务
 	services.GetConfigUpdateService().StartSchedule()
+
+	// 启动后台任务调度器（邮件队列、订阅过期检查、到期提醒等）
+	services.GetScheduler().Start()
 
 	// 设置路由
 	r := router.SetupRouter(cfg)
@@ -92,7 +95,7 @@ func createDefaultAdmin() {
 	}
 
 	// Auto-create subscription for admin
-	subURL := uuid.New().String()[:8]
+	subURL := utils.GenerateRandomString(32)
 	db.Create(&models.Subscription{
 		UserID:          admin.ID,
 		SubscriptionURL: subURL,
@@ -111,7 +114,7 @@ func ensureUserSubscriptions() {
 	var users []models.User
 	db.Where("id NOT IN (SELECT user_id FROM subscriptions)").Find(&users)
 	for _, user := range users {
-		subURL := uuid.New().String()[:8]
+		subURL := utils.GenerateRandomString(32)
 		sub := models.Subscription{
 			UserID:          user.ID,
 			SubscriptionURL: subURL,

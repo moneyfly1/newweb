@@ -101,26 +101,16 @@
       </n-grid>
 
       <!-- Charts Row -->
-      <n-grid :cols="1" :x-gap="16" :y-gap="16" responsive="screen">
-        <n-grid-item span="1 m:2">
-          <n-card title="收入趋势" :bordered="false" class="chart-card">
-            <div class="chart-placeholder">
-              <n-icon :size="48" :depth="3">
-                <BarChartOutline />
-              </n-icon>
-              <div class="placeholder-text">图表加载中...</div>
-            </div>
+      <n-grid :cols="1" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true">
+        <n-grid-item span="1 m:1 l:1">
+          <n-card title="收入趋势（近30天）" :bordered="false" class="chart-card">
+            <v-chart :option="revenueChartOption" autoresize style="height: 300px;" />
           </n-card>
         </n-grid-item>
 
-        <n-grid-item span="1 m:2">
-          <n-card title="用户增长" :bordered="false" class="chart-card">
-            <div class="chart-placeholder">
-              <n-icon :size="48" :depth="3">
-                <StatsChartOutline />
-              </n-icon>
-              <div class="placeholder-text">图表加载中...</div>
-            </div>
+        <n-grid-item span="1 m:1 l:1">
+          <n-card title="用户增长（近30天）" :bordered="false" class="chart-card">
+            <v-chart :option="userGrowthChartOption" autoresize style="height: 300px;" />
           </n-card>
         </n-grid-item>
       </n-grid>
@@ -201,7 +191,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import {
   PeopleOutline,
@@ -210,11 +200,16 @@ import {
   WalletOutline,
   CartOutline,
   ChatbubbleEllipsesOutline,
-  BarChartOutline,
-  StatsChartOutline,
   DocumentTextOutline
 } from '@vicons/ionicons5'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart, BarChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import VChart from 'vue-echarts'
 import { getAdminDashboard } from '@/api/admin'
+
+use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
 
 const message = useMessage()
 
@@ -229,7 +224,36 @@ const stats = ref({
 
 const recentOrders = ref<any[]>([])
 const pendingTickets = ref<any[]>([])
+const revenueTrend = ref<{ date: string; value: number }[]>([])
+const userGrowth = ref<{ date: string; value: number }[]>([])
 
+const revenueChartOption = computed(() => ({
+  tooltip: { trigger: 'axis', formatter: (params: any) => `${params[0].axisValue}<br/>收入: ¥${params[0].value}` },
+  grid: { left: 50, right: 20, top: 20, bottom: 30 },
+  xAxis: { type: 'category', data: revenueTrend.value.map(d => d.date.slice(5)), axisLabel: { fontSize: 11 } },
+  yAxis: { type: 'value', axisLabel: { formatter: '¥{value}' } },
+  series: [{
+    type: 'bar',
+    data: revenueTrend.value.map(d => d.value),
+    itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#667eea' }, { offset: 1, color: '#764ba2' }] }, borderRadius: [4, 4, 0, 0] },
+    barMaxWidth: 20,
+  }],
+}))
+
+const userGrowthChartOption = computed(() => ({
+  tooltip: { trigger: 'axis', formatter: (params: any) => `${params[0].axisValue}<br/>新增用户: ${params[0].value}` },
+  grid: { left: 50, right: 20, top: 20, bottom: 30 },
+  xAxis: { type: 'category', data: userGrowth.value.map(d => d.date.slice(5)), axisLabel: { fontSize: 11 } },
+  yAxis: { type: 'value', minInterval: 1 },
+  series: [{
+    type: 'line',
+    data: userGrowth.value.map(d => d.value),
+    smooth: true,
+    areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(17,153,142,0.3)' }, { offset: 1, color: 'rgba(56,239,125,0.05)' }] } },
+    lineStyle: { color: '#11998e', width: 2 },
+    itemStyle: { color: '#11998e' },
+  }],
+}))
 const loadDashboard = async () => {
   try {
     const res = await getAdminDashboard()
@@ -244,6 +268,8 @@ const loadDashboard = async () => {
     }
     recentOrders.value = data.recent_orders || []
     pendingTickets.value = data.pending_ticket_list || []
+    revenueTrend.value = data.revenue_trend || []
+    userGrowth.value = data.user_growth || []
   } catch (error: any) {
     message.error(error.message || '加载仪表盘数据失败')
   }
@@ -444,20 +470,6 @@ onMounted(() => {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
-.chart-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 280px;
-  color: #999;
-}
-
-.placeholder-text {
-  margin-top: 16px;
-  font-size: 14px;
-}
-
 .ticket-header {
   display: flex;
   align-items: center;
@@ -503,10 +515,6 @@ onMounted(() => {
   .stat-icon {
     width: 48px;
     height: 48px;
-  }
-
-  .chart-placeholder {
-    height: 200px;
   }
 }
 </style>

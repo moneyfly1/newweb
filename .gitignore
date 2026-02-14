@@ -21,6 +21,7 @@ frontend/dist/
 # 数据库与备份（按需可改为不忽略）
 *.db
 backups/
+uploads/
 
 # IDE / 编辑器
 .idea/
@@ -39,6 +40,3 @@ vendor/
 tmp/
 temp/
 *.pid
-
-# 上传与临时配置
-uploads/

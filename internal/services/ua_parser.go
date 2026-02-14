@@ -158,8 +158,6 @@ func inferOSFromSoftware(info *ClientInfo) {
 	}
 }
 
-// PLACEHOLDER_UA_PARSER_PART2
-
 func detectDevice(lower, ua string, info *ClientInfo) {
 	// iPhone model
 	if m := regexp.MustCompile(`(?i)iPhone(\d+,\d+)`).FindStringSubmatch(ua); len(m) > 1 {

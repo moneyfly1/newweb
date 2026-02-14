@@ -115,7 +115,7 @@ import {
   RefreshOutline,
   TrashOutline
 } from '@vicons/ionicons5'
-import { listEmailQueue, retryEmail } from '@/api/admin'
+import { listEmailQueue, retryEmail, deleteEmail } from '@/api/admin'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -302,8 +302,14 @@ const handleDelete = (row) => {
     content: `确定要删除这封邮件记录吗？此操作不可恢复！`,
     positiveText: '删除',
     negativeText: '取消',
-    onPositiveClick: () => {
-      message.info('删除功能待实现')
+    onPositiveClick: async () => {
+      try {
+        await deleteEmail(row.id)
+        message.success('邮件记录已删除')
+        fetchEmails()
+      } catch (error) {
+        message.error('删除失败：' + (error.message || '未知错误'))
+      }
     }
   })
 }

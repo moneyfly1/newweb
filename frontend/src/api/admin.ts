@@ -13,6 +13,7 @@ export const toggleUserActive = (id: number) => request.post(`/admin/users/${id}
 export const createUser = (data: any) => request.post('/admin/users', data)
 export const resetUserPassword = (id: number, data: { password: string }) => request.post(`/admin/users/${id}/reset-password`, data)
 export const getAbnormalUsers = (params?: any) => request.get('/admin/users/abnormal', { params })
+export const loginAsUser = (id: number) => request.post(`/admin/users/${id}/login-as`)
 
 // Orders
 export const listAdminOrders = (params?: any) => request.get('/admin/orders', { params })
@@ -99,6 +100,7 @@ export const deleteRedeemCode = (id: number) => request.delete(`/admin/redeem-co
 // Email Queue
 export const listEmailQueue = (params?: any) => request.get('/admin/email-queue', { params })
 export const retryEmail = (id: number) => request.post(`/admin/email-queue/${id}/retry`)
+export const deleteEmail = (id: number) => request.delete(`/admin/email-queue/${id}`)
 
 // Custom Nodes
 export const listCustomNodes = (params?: any) => request.get('/admin/custom-nodes', { params })

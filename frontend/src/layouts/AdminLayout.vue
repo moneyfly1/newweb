@@ -24,7 +24,6 @@
       </n-layout-content>
     </n-layout>
   </n-layout>
-<!-- MOBILE_PLACEHOLDER -->
   <!-- Mobile Layout -->
   <n-layout style="height: 100%" v-else>
     <n-layout-header bordered class="mobile-header">
@@ -63,7 +62,6 @@
   </n-drawer>
   </div>
 </template>
-<!-- SCRIPT_PLACEHOLDER -->
 <script setup lang="ts">
 import { computed, ref, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -131,7 +129,6 @@ function handleUserMenu(key: string) {
   else if (key === 'theme-picker') { showThemeDrawer.value = true }
 }
 </script>
-<!-- STYLE_PLACEHOLDER -->
 <style scoped>
 .logo { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; cursor: pointer; border-bottom: 1px solid var(--n-border-color); }
 .desktop-header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }

@@ -318,6 +318,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		// 邮件队列
 		admin.GET("/email-queue", handlers.AdminListEmailQueue)
 		admin.POST("/email-queue/:id/retry", handlers.AdminRetryEmail)
+		admin.DELETE("/email-queue/:id", handlers.AdminDeleteEmail)
 
 		// 系统设置
 		settings := admin.Group("/settings")

@@ -238,7 +238,6 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		btnText = "去支付"
 		btnLink = domain + "/orders"
 
-	// PLACEHOLDER_TEMPLATES2
 	default:
 		subject = fmt.Sprintf("通知 - %s", siteName)
 		title = "通知"

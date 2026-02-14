@@ -124,8 +124,6 @@ const fetchLogs = async () => {
   } catch {}
 }
 
-// STYLE_PLACEHOLDER
-
 const handleSaveConfig = async () => {
   saving.value = true
   try {

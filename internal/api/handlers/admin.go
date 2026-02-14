@@ -1474,6 +1474,19 @@ func AdminRetryEmail(c *gin.Context) {
 	utils.SuccessMessage(c, "已重新加入队列")
 }
 
+func AdminDeleteEmail(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的邮件ID")
+		return
+	}
+	if err := database.GetDB().Delete(&models.EmailQueue{}, id).Error; err != nil {
+		utils.InternalError(c, "删除失败")
+		return
+	}
+	utils.SuccessMessage(c, "邮件记录已删除")
+}
+
 func AdminGetSettings(c *gin.Context) {
 	var settings []models.SystemConfig
 	database.GetDB().Where("category = ? OR category IS NULL", "").Find(&settings)
@@ -1987,10 +2000,7 @@ func AdminDeleteUserFull(c *gin.Context) {
 	}
 	db := database.GetDB()
 	var user models.User
-	if err := db.First(&user, id).Error; err != nil {
-		utils.NotFound(c, "用户不存在")
-		return
-	}
+	userExists := db.First(&user, id).Error == nil
 
 	tx := db.Begin()
 
@@ -2001,37 +2011,21 @@ func AdminDeleteUserFull(c *gin.Context) {
 		tx.Where("ticket_id IN ?", ticketIDs).Delete(&models.TicketReply{})
 	}
 
-	// Delete payment transactions
+	// Delete all related data by user_id
 	tx.Where("user_id = ?", id).Delete(&models.PaymentTransaction{})
-
-	// Delete notifications
 	tx.Where("user_id = ?", id).Delete(&models.Notification{})
-
-	// Delete user activities
 	tx.Where("user_id = ?", id).Delete(&models.UserActivity{})
-
-	// Delete invite codes owned by user
 	tx.Where("user_id = ?", id).Delete(&models.InviteCode{})
-
-	// Delete invite relations (as inviter or invitee)
 	tx.Where("inviter_id = ? OR invitee_id = ?", id, id).Delete(&models.InviteRelation{})
-
-	// Delete commission logs
 	tx.Where("inviter_id = ? OR invitee_id = ?", id, id).Delete(&models.CommissionLog{})
-
-	// Delete registration logs
 	tx.Where("user_id = ?", id).Delete(&models.RegistrationLog{})
-
-	// Delete subscription logs
 	tx.Where("user_id = ?", id).Delete(&models.SubscriptionLog{})
 
-	// Delete login attempts
-	tx.Where("username = ? OR username = ?", user.Email, user.Username).Delete(&models.LoginAttempt{})
+	if userExists {
+		tx.Where("username = ? OR username = ?", user.Email, user.Username).Delete(&models.LoginAttempt{})
+		tx.Where("email = ?", user.Email).Delete(&models.VerificationCode{})
+	}
 
-	// Delete verification codes
-	tx.Where("email = ?", user.Email).Delete(&models.VerificationCode{})
-
-	// Original cleanup
 	tx.Where("user_id = ?", id).Delete(&models.Order{})
 	tx.Where("user_id = ?", id).Delete(&models.Device{})
 	tx.Where("user_id = ?", id).Delete(&models.SubscriptionReset{})
@@ -2040,18 +2034,25 @@ func AdminDeleteUserFull(c *gin.Context) {
 	tx.Where("user_id = ?", id).Delete(&models.BalanceLog{})
 	tx.Where("user_id = ?", id).Delete(&models.LoginHistory{})
 	tx.Where("user_id = ?", id).Delete(&models.RechargeRecord{})
+	tx.Where("user_id = ?", id).Delete(&models.UserCustomNode{})
 
-	// Delete user
-	tx.Delete(&user)
+	if userExists {
+		tx.Delete(&user)
+	}
 
 	if err := tx.Commit().Error; err != nil {
 		utils.InternalError(c, "删除用户失败")
 		return
 	}
 
-	go services.NotifyUserDirect(user.Email, "account_deleted", nil)
-	utils.CreateAuditLog(c, "delete_user_full", "user", uint(id),
-		fmt.Sprintf("完全删除用户: %s (%s)", user.Username, user.Email))
+	if userExists {
+		go services.NotifyUserDirect(user.Email, "account_deleted", nil)
+		utils.CreateAuditLog(c, "delete_user_full", "user", uint(id),
+			fmt.Sprintf("完全删除用户: %s (%s)", user.Username, user.Email))
+	} else {
+		utils.CreateAuditLog(c, "delete_user_full", "user", uint(id),
+			fmt.Sprintf("清理孤立数据: 用户ID %d", id))
+	}
 	utils.SuccessMessage(c, "用户及所有关联数据已删除")
 }
 

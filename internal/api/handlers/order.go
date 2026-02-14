@@ -6,6 +6,7 @@ import (
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -18,9 +19,34 @@ func ListOrders(c *gin.Context) {
 	var orders []models.Order
 	var total int64
 	db := database.GetDB().Model(&models.Order{}).Where("user_id = ?", userID)
+	if status := c.Query("status"); status != "" {
+		db = db.Where("status = ?", status)
+	}
 	db.Count(&total)
 	db.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&orders)
-	utils.SuccessPage(c, orders, total, p.Page, p.PageSize)
+
+	// Enrich with package_name
+	type OrderItem struct {
+		models.Order
+		PackageName string `json:"package_name"`
+	}
+	items := make([]OrderItem, 0, len(orders))
+	pkgNameCache := make(map[uint]string)
+	dbConn := database.GetDB()
+	for _, o := range orders {
+		item := OrderItem{Order: o}
+		if name, ok := pkgNameCache[o.PackageID]; ok {
+			item.PackageName = name
+		} else {
+			var pkg models.Package
+			if err := dbConn.Select("name").First(&pkg, o.PackageID).Error; err == nil {
+				item.PackageName = pkg.Name
+				pkgNameCache[o.PackageID] = pkg.Name
+			}
+		}
+		items = append(items, item)
+	}
+	utils.SuccessPage(c, items, total, p.Page, p.PageSize)
 }
 
 func CreateOrder(c *gin.Context) {
@@ -79,6 +105,16 @@ func CreateOrder(c *gin.Context) {
 		ExpireTime:     &expireTime,
 	}
 	db.Create(&order)
+
+	// 通知用户新订单 + 通知管理员
+	user := c.MustGet("user").(*models.User)
+	go services.NotifyUser(userID, "new_order", map[string]string{
+		"order_no": orderNo, "package_name": pkg.Name, "amount": fmt.Sprintf("%.2f", finalAmount),
+	})
+	go services.NotifyAdmin("new_order", map[string]string{
+		"username": user.Username, "order_no": orderNo, "package_name": pkg.Name, "amount": fmt.Sprintf("%.2f", finalAmount),
+	})
+
 	utils.Success(c, order)
 }
 
@@ -118,6 +154,9 @@ func PayOrder(c *gin.Context) {
 			utils.InternalError(c, "扣减余额失败")
 			return
 		}
+		// 记录余额消费日志
+		orderID := order.ID
+		utils.CreateBalanceLogEntry(userID, "consume", -payAmount, user.Balance, user.Balance-payAmount, &orderID, fmt.Sprintf("余额支付订单: %s", orderNo), c)
 		now := time.Now()
 		balanceStr := "balance"
 		if err := tx.Model(&order).Updates(map[string]interface{}{
@@ -178,6 +217,19 @@ func PayOrder(c *gin.Context) {
 			utils.InternalError(c, "支付事务提交失败")
 			return
 		}
+		// 发送支付成功邮件 + 通知管理员
+		payAmountStr := fmt.Sprintf("%.2f", payAmount)
+		var pkgName string
+		if err := database.GetDB().Model(&models.Package{}).Where("id = ?", order.PackageID).Pluck("name", &pkgName).Error; err != nil {
+			pkgName = "未知套餐"
+		}
+		emailSubject, emailBody := services.RenderEmail("payment_success", map[string]string{
+			"order_no": orderNo, "amount": payAmountStr, "package_name": pkgName,
+		})
+		go services.QueueEmail(user.Email, emailSubject, emailBody, "payment_success")
+		go services.NotifyAdmin("payment_success", map[string]string{
+			"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": payAmountStr,
+		})
 		utils.Success(c, gin.H{"message": "支付成功", "order_no": orderNo})
 		return
 	}

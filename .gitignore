@@ -39,3 +39,6 @@ vendor/
 tmp/
 temp/
 *.pid
+
+# 上传与临时配置
+uploads/

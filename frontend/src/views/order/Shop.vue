@@ -111,18 +111,42 @@
         </n-space>
       </template>
     </n-modal>
+
+    <!-- QR Code Payment Modal -->
+    <n-modal
+      v-model:show="showQrModal"
+      preset="card"
+      title="扫码支付"
+      style="width: 400px; max-width: 92vw;"
+      :bordered="false"
+      :mask-closable="false"
+      @after-leave="stopPolling"
+    >
+      <div style="text-align: center;">
+        <p style="margin-bottom: 16px; color: #666;">请使用支付宝扫描下方二维码完成支付</p>
+        <canvas ref="qrCanvas" style="margin: 0 auto;"></canvas>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后将自动跳转...</p>
+        <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
+      </div>
+      <template #footer>
+        <n-space justify="center">
+          <n-button @click="showQrModal = false">取消支付</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
+import QRCode from 'qrcode'
 import {
   TimeOutline, PhonePortraitOutline, CloudDownloadOutline, CheckmarkCircleOutline
 } from '@vicons/ionicons5'
 import { listPackages, verifyCoupon, getPaymentMethods } from '@/api/common'
-import { createOrder, payOrder, createPayment } from '@/api/order'
+import { createOrder, payOrder, createPayment, getOrderStatus } from '@/api/order'
 
 const router = useRouter()
 const message = useMessage()
@@ -139,8 +163,11 @@ const paying = ref(false)
 const paymentMethod = ref('balance')
 const paymentMethods = ref<any[]>([])
 const balanceEnabled = ref(true)
+const showQrModal = ref(false)
+const qrCanvas = ref<HTMLCanvasElement | null>(null)
+const pollingStatus = ref(false)
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
-/* PLACEHOLDER_SHOP_METHODS */
 
 const loadPackages = async () => {
   loading.value = true
@@ -214,6 +241,33 @@ const handleBuy = async (pkg: any) => {
   }
 }
 
+const isQrCodeUrl = (url: string) => {
+  return url.includes('qr.alipay.com') || (url.startsWith('https://qr.') && url.length < 200)
+}
+
+const startPolling = (orderNo: string) => {
+  pollingStatus.value = true
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await getOrderStatus(orderNo)
+      if (res.data?.status === 'paid') {
+        stopPolling()
+        showQrModal.value = false
+        message.success('支付成功')
+        router.push('/orders')
+      }
+    } catch {}
+  }, 3000)
+}
+
+const stopPolling = () => {
+  pollingStatus.value = false
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
 const handlePay = async () => {
   if (!orderInfo.value) return
   paying.value = true
@@ -222,25 +276,35 @@ const handlePay = async () => {
       await payOrder(orderInfo.value.order_no, { payment_method: 'balance' })
       message.success('支付成功')
       showPaymentModal.value = false
-      router.push('/order')
+      router.push('/orders')
     } else if (paymentMethod.value.startsWith('pm_')) {
-      // External payment via CreatePayment API
       const pmId = parseInt(paymentMethod.value.replace('pm_', ''))
       const res = await createPayment({ order_id: orderInfo.value.id, payment_method_id: pmId })
       const data = res.data
       if (data?.payment_url) {
         showPaymentModal.value = false
-        window.location.href = data.payment_url
+        if (isQrCodeUrl(data.payment_url)) {
+          showQrModal.value = true
+          await nextTick()
+          if (qrCanvas.value) {
+            QRCode.toCanvas(qrCanvas.value, data.payment_url, { width: 240, margin: 2 })
+          }
+          startPolling(orderInfo.value.order_no)
+        } else {
+          window.location.href = data.payment_url
+        }
       } else {
         message.info('支付已创建，请等待处理')
         showPaymentModal.value = false
-        router.push('/order')
+        router.push('/orders')
       }
     }
   } catch (e: any) {
     message.error(e.message || '支付失败')
   } finally { paying.value = false }
 }
+
+onUnmounted(() => { stopPolling() })
 
 onMounted(() => { loadPackages() })
 </script>

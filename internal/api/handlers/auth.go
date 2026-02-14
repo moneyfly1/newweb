@@ -56,6 +56,10 @@ func Register(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("密码长度不能少于 %d 位", minPwdLen))
 		return
 	}
+	if err := utils.ValidatePasswordStrength(req.Password); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
 
 	// 检查是否需要邀请码
 	inviteRequired := settings["register_invite_required"] == "true" || settings["register_invite_required"] == "1"
@@ -120,7 +124,7 @@ func Register(c *gin.Context) {
 	// 处理邀请码
 	if req.InviteCode != "" {
 		var inviteCode models.InviteCode
-		if err := db.Where("code = ? AND is_active = ?", req.InviteCode, true).First(&inviteCode).Error; err != nil {
+		if err := db.Where("UPPER(code) = UPPER(?) AND is_active = ?", req.InviteCode, true).First(&inviteCode).Error; err != nil {
 			utils.BadRequest(c, "邀请码无效或已失效")
 			return
 		}
@@ -139,15 +143,73 @@ func Register(c *gin.Context) {
 		user.InviteCodeUsed = &req.InviteCode
 	}
 
-	if err := db.Create(&user).Error; err != nil {
+	// 开启事务：创建用户、更新邀请码、发放奖励、创建订阅
+	tx := db.Begin()
+
+	if err := tx.Create(&user).Error; err != nil {
+		tx.Rollback()
 		utils.InternalError(c, "创建用户失败")
 		return
 	}
 
 	// 更新邀请码使用次数
 	if req.InviteCode != "" {
-		db.Model(&models.InviteCode{}).Where("code = ?", req.InviteCode).
-			UpdateColumn("used_count", gorm.Expr("used_count + 1"))
+		if err := tx.Model(&models.InviteCode{}).Where("code = ?", req.InviteCode).
+			UpdateColumn("used_count", gorm.Expr("used_count + 1")).Error; err != nil {
+			tx.Rollback()
+			utils.InternalError(c, "更新邀请码失败")
+			return
+		}
+	}
+
+	// 创建邀请关系 + 发放奖励
+	if req.InviteCode != "" && user.InvitedBy != nil {
+		var inviteCode models.InviteCode
+		if tx.Where("UPPER(code) = UPPER(?)", req.InviteCode).First(&inviteCode).Error == nil {
+			relation := models.InviteRelation{
+				InviteCodeID: inviteCode.ID,
+				InviterID:    inviteCode.UserID,
+				InviteeID:    user.ID,
+			}
+			// 发放邀请人奖励
+			if inviteCode.InviterReward > 0 {
+				relation.InviterRewardAmount = inviteCode.InviterReward
+				relation.InviterRewardGiven = true
+				var inviter models.User
+				if tx.First(&inviter, inviteCode.UserID).Error == nil {
+					tx.Model(&inviter).UpdateColumn("balance", gorm.Expr("balance + ?", inviteCode.InviterReward))
+					desc := fmt.Sprintf("邀请用户 %s 注册奖励", user.Username)
+					tx.Create(&models.BalanceLog{
+						UserID:        inviter.ID,
+						ChangeType:    "invite_reward",
+						Amount:        inviteCode.InviterReward,
+						BalanceBefore: inviter.Balance,
+						BalanceAfter:  inviter.Balance + inviteCode.InviterReward,
+						Description:   &desc,
+					})
+				}
+			}
+			// 发放被邀请人奖励
+			if inviteCode.InviteeReward > 0 {
+				relation.InviteeRewardAmount = inviteCode.InviteeReward
+				relation.InviteeRewardGiven = true
+				tx.Model(&user).UpdateColumn("balance", gorm.Expr("balance + ?", inviteCode.InviteeReward))
+				desc := fmt.Sprintf("受邀注册奖励 (邀请码: %s)", req.InviteCode)
+				tx.Create(&models.BalanceLog{
+					UserID:        user.ID,
+					ChangeType:    "invite_reward",
+					Amount:        inviteCode.InviteeReward,
+					BalanceBefore: 0,
+					BalanceAfter:  inviteCode.InviteeReward,
+					Description:   &desc,
+				})
+			}
+			if err := tx.Create(&relation).Error; err != nil {
+				tx.Rollback()
+				utils.InternalError(c, "创建邀请关系失败")
+				return
+			}
+		}
 	}
 
 	// Auto-create subscription for new user
@@ -175,7 +237,29 @@ func Register(c *gin.Context) {
 		Status:          "active",
 		ExpireTime:      expireTime,
 	}
-	db.Create(&subscription)
+	if err := tx.Create(&subscription).Error; err != nil {
+		tx.Rollback()
+		utils.InternalError(c, "创建订阅失败")
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		utils.InternalError(c, "注册事务提交失败")
+		return
+	}
+
+	// 记录注册日志
+	var inviterIDPtr *uint
+	if user.InvitedBy != nil {
+		inviterIDPtr = new(uint)
+		*inviterIDPtr = uint(*user.InvitedBy)
+	}
+	utils.CreateRegistrationLog(c, user.ID, user.Username, user.Email, req.InviteCode, inviterIDPtr)
+
+	// 发送欢迎邮件 + 通知管理员
+	welcomeSubject, welcomeBody := services.RenderEmail("welcome", map[string]string{"username": user.Username})
+	go services.QueueEmail(user.Email, welcomeSubject, welcomeBody, "welcome")
+	go services.NotifyAdmin("new_user", map[string]string{"username": user.Username, "email": user.Email})
 
 	// 生成 Token
 	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
@@ -200,7 +284,7 @@ func Login(c *gin.Context) {
 	}
 
 	db := database.GetDB()
-	clientIP := c.ClientIP()
+	clientIP := utils.GetRealClientIP(c)
 	userAgent := c.GetHeader("User-Agent")
 
 	// 检查登录锁定（基于IP+用户名）
@@ -252,7 +336,7 @@ func Login(c *gin.Context) {
 	db.Model(&user).Update("last_login", time.Now())
 
 	// 记录登录历史
-	loginIP := c.ClientIP()
+	loginIP := utils.GetRealClientIP(c)
 	loginUA := c.GetHeader("User-Agent")
 	loginLocation := utils.GetIPLocation(loginIP)
 	db.Create(&models.LoginHistory{
@@ -262,6 +346,19 @@ func Login(c *gin.Context) {
 		Location:    &loginLocation,
 		LoginStatus: "success",
 	})
+
+	// 异常登录检测：检查是否为新 IP
+	if user.AbnormalLoginAlertEnabled {
+		var prevCount int64
+		db.Model(&models.LoginHistory{}).Where("user_id = ? AND ip_address = ? AND id < (SELECT MAX(id) FROM login_history WHERE user_id = ?)",
+			user.ID, loginIP, user.ID).Count(&prevCount)
+		if prevCount == 0 && user.LastLogin != nil {
+			go services.NotifyUser(user.ID, "abnormal_login", map[string]string{
+				"ip": loginIP, "location": loginLocation,
+				"time": time.Now().Format("2006-01-02 15:04:05"), "user_agent": loginUA,
+			})
+		}
+	}
 
 	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
 	refreshToken, _ := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
@@ -350,9 +447,8 @@ func SendVerificationCode(c *gin.Context) {
 	})
 
 	// 发送验证码邮件
-	go services.QueueEmail(req.Email, "验证码 - CBoard",
-		fmt.Sprintf("<h3>您的验证码</h3><p>您的验证码是: <strong>%s</strong></p><p>有效期 5 分钟，请勿泄露给他人。</p>", code),
-		"verification")
+	subject, body := services.RenderEmail("verification", map[string]string{"code": code})
+	go services.QueueEmail(req.Email, subject, body, "verification")
 	utils.SuccessMessage(c, "验证码已发送")
 }
 
@@ -406,9 +502,8 @@ func ForgotPassword(c *gin.Context) {
 	})
 
 	// 发送重置密码邮件
-	go services.QueueEmail(req.Email, "密码重置 - CBoard",
-		fmt.Sprintf("<h3>密码重置</h3><p>您的密码重置验证码是: <strong>%s</strong></p><p>有效期 15 分钟。如果这不是您的操作，请忽略此邮件。</p>", code),
-		"reset_password")
+	subject, body := services.RenderEmail("reset_password", map[string]string{"code": code})
+	go services.QueueEmail(req.Email, subject, body, "reset_password")
 	utils.SuccessMessage(c, "如果邮箱存在，重置链接已发送")
 }
 
@@ -421,6 +516,10 @@ func ResetPassword(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if err := utils.ValidatePasswordStrength(req.Password); err != nil {
+		utils.BadRequest(c, err.Error())
 		return
 	}
 

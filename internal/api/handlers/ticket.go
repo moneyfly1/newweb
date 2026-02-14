@@ -7,6 +7,7 @@ import (
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -70,6 +71,14 @@ func CreateTicket(c *gin.Context) {
 	if err := database.GetDB().Create(&ticket).Error; err != nil {
 		utils.InternalError(c, "创建工单失败")
 		return
+	}
+
+	// 通知管理员
+	var user models.User
+	if database.GetDB().First(&user, userID).Error == nil {
+		go services.NotifyAdmin("new_ticket", map[string]string{
+			"username": user.Username, "ticket_no": ticketNo, "title": req.Title,
+		})
 	}
 
 	utils.Success(c, ticket)
@@ -158,6 +167,11 @@ func CloseTicket(c *gin.Context) {
 	var ticket models.Ticket
 	if err := db.Where("id = ? AND user_id = ?", id, userID).First(&ticket).Error; err != nil {
 		utils.NotFound(c, "工单不存在")
+		return
+	}
+
+	if ticket.Status == string(models.TicketStatusClosed) {
+		utils.BadRequest(c, "工单已关闭")
 		return
 	}
 

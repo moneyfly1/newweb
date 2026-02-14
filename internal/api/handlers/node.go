@@ -47,7 +47,17 @@ func ListNodes(c *gin.Context) {
 		}
 	}
 
-	utils.SuccessPage(c, nodes, total, p.Page, p.PageSize)
+	// Map Type to protocol for frontend compatibility
+	type NodeResponse struct {
+		models.Node
+		Protocol string `json:"protocol"`
+	}
+	result := make([]NodeResponse, len(nodes))
+	for i, n := range nodes {
+		result[i] = NodeResponse{Node: n, Protocol: n.Type}
+	}
+
+	utils.SuccessPage(c, result, total, p.Page, p.PageSize)
 }
 
 // GetNodeStats returns node counts grouped by status and region.

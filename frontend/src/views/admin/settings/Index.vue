@@ -114,10 +114,26 @@
                     <n-input v-model:value="form.pay_alipay_app_id" placeholder="请输入支付宝 App ID" />
                   </n-form-item>
                   <n-form-item label="应用私钥">
-                    <n-input v-model:value="form.pay_alipay_private_key" type="textarea" placeholder="请输入应用私钥" :rows="3" />
+                    <n-input v-model:value="form.pay_alipay_private_key" type="textarea" placeholder="请输入应用私钥（PKCS1 或 PKCS8 格式）" :rows="3" />
                   </n-form-item>
                   <n-form-item label="支付宝公钥">
-                    <n-input v-model:value="form.pay_alipay_public_key" type="textarea" placeholder="请输入支付宝公钥" :rows="3" />
+                    <n-input v-model:value="form.pay_alipay_public_key" type="textarea" placeholder="请输入支付宝公钥（用于验证回调签名）" :rows="3" />
+                  </n-form-item>
+                  <n-form-item label="异步回调地址">
+                    <n-input v-model:value="form.pay_alipay_notify_url" :placeholder="alipayNotifyUrlHint" />
+                    <template #feedback>
+                      <span style="font-size: 12px; color: #999">支付宝服务器通知地址，留空则自动使用: {{ alipayNotifyUrlHint }}</span>
+                    </template>
+                  </n-form-item>
+                  <n-form-item label="同步回调地址">
+                    <n-input v-model:value="form.pay_alipay_return_url" :placeholder="alipayReturnUrlHint" />
+                    <template #feedback>
+                      <span style="font-size: 12px; color: #999">支付完成后跳转地址，留空则自动使用: {{ alipayReturnUrlHint }}</span>
+                    </template>
+                  </n-form-item>
+                  <n-form-item label="沙箱模式">
+                    <n-switch v-model:value="form.pay_alipay_sandbox" />
+                    <span style="margin-left: 8px; font-size: 12px; color: #999">开启后使用支付宝沙箱环境测试</span>
                   </n-form-item>
                 </n-form>
               </n-card>
@@ -173,6 +189,12 @@
               </n-form-item>
               <n-form-item label="Telegram Chat ID">
                 <n-input v-model:value="form.notify_telegram_chat_id" placeholder="请输入 Chat ID" />
+              </n-form-item>
+              <n-form-item label="Bark 服务器地址">
+                <n-input v-model:value="form.notify_bark_server" placeholder="https://api.day.app" />
+              </n-form-item>
+              <n-form-item label="Bark Device Key">
+                <n-input v-model:value="form.notify_bark_device_key" placeholder="请输入 Device Key" />
               </n-form-item>
               <n-divider />
               <n-form-item label="新订单通知">
@@ -268,7 +290,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { getSettings, updateSettings, sendTestEmail, createBackup, listBackups } from '@/api/admin'
 
@@ -281,6 +303,15 @@ const backupLoading = ref(false)
 const backupCreating = ref(false)
 const backups = ref<any[]>([])
 
+// Computed URL hints based on site_url
+const siteBase = computed(() => {
+  const url = form.value.site_url || ''
+  if (!url) return window.location.origin
+  return url.startsWith('http') ? url.replace(/\/+$/, '') : 'https://' + url.replace(/\/+$/, '')
+})
+const alipayNotifyUrlHint = computed(() => siteBase.value + '/api/v1/payment/notify/alipay')
+const alipayReturnUrlHint = computed(() => siteBase.value + '/payment/return')
+
 const encryptionOptions = [
   { label: '无', value: 'none' },
   { label: 'TLS', value: 'tls' },
@@ -290,7 +321,7 @@ const encryptionOptions = [
 // Boolean keys that should be stored as switches
 const booleanKeys = [
   'register_enabled', 'register_email_verify', 'register_invite_required',
-  'pay_balance_enabled', 'pay_alipay_enabled', 'pay_wechat_enabled', 'pay_epay_enabled',
+  'pay_balance_enabled', 'pay_alipay_enabled', 'pay_alipay_sandbox', 'pay_wechat_enabled', 'pay_epay_enabled',
   'notify_new_order', 'notify_new_ticket', 'notify_new_user', 'notify_expiry_reminder',
   'abnormal_login_alert', 'backup_github_enabled'
 ]
@@ -331,6 +362,9 @@ const form = ref<Record<string, any>>({
   pay_alipay_app_id: '',
   pay_alipay_private_key: '',
   pay_alipay_public_key: '',
+  pay_alipay_notify_url: '',
+  pay_alipay_return_url: '',
+  pay_alipay_sandbox: false,
   pay_wechat_enabled: false,
   pay_wechat_app_id: '',
   pay_wechat_mch_id: '',
@@ -343,6 +377,8 @@ const form = ref<Record<string, any>>({
   notify_admin_email: '',
   notify_telegram_bot_token: '',
   notify_telegram_chat_id: '',
+  notify_bark_server: '',
+  notify_bark_device_key: '',
   notify_new_order: false,
   notify_new_ticket: false,
   notify_new_user: false,

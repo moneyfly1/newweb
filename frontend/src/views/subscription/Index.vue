@@ -54,6 +54,9 @@
                     <template #icon><n-icon :component="CopyOutline" /></template>
                     复制
                   </n-button>
+                  <n-button size="small" @click="showQrCode(subscriptionUrl, '通用订阅')">
+                    <template #icon><n-icon :component="QrCodeOutline" /></template>
+                  </n-button>
                 </div>
               </div>
               <!-- Clash URL -->
@@ -64,6 +67,9 @@
                   <n-button size="small" type="primary" @click="copyToClipboard(clashUrl, 'Clash 订阅地址')">
                     <template #icon><n-icon :component="CopyOutline" /></template>
                     复制
+                  </n-button>
+                  <n-button size="small" @click="showQrCode(clashUrl, 'Clash 订阅')">
+                    <template #icon><n-icon :component="QrCodeOutline" /></template>
                   </n-button>
                 </div>
               </div>
@@ -145,6 +151,14 @@
       </n-space>
     </n-spin>
 
+    <!-- QR Code Modal -->
+    <n-modal v-model:show="showQrModal" preset="card" :title="qrTitle + ' 二维码'" style="width: 340px; max-width: 92vw;" :bordered="false">
+      <div style="text-align: center;">
+        <canvas ref="qrCanvas" style="margin: 0 auto;"></canvas>
+        <p style="margin-top: 12px; color: #999; font-size: 13px;">使用客户端扫描二维码导入订阅</p>
+      </div>
+    </n-modal>
+
     <!-- Reset Modal -->
     <n-modal v-model:show="showResetModal" preset="dialog" title="重置订阅地址"
       content="重置后原订阅地址将失效，所有设备需要重新配置。确定要继续吗？"
@@ -163,12 +177,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useMessage } from 'naive-ui'
+import QRCode from 'qrcode'
 import {
   CopyOutline, TimeOutline, PhonePortraitOutline, TrashOutline,
   RefreshOutline, SwapHorizontalOutline, MailOutline,
-  CheckmarkCircle, CloseCircle, AlertCircle
+  CheckmarkCircle, CloseCircle, AlertCircle, QrCodeOutline
 } from '@vicons/ionicons5'
 import {
   getSubscription, getSubscriptionDevices, deleteDevice,
@@ -186,6 +201,10 @@ const showDeleteModal = ref(false)
 const deviceToDelete = ref<number | null>(null)
 const sendingEmail = ref(false)
 const selectedFormat = ref('clash')
+
+const showQrModal = ref(false)
+const qrCanvas = ref<HTMLCanvasElement | null>(null)
+const qrTitle = ref('')
 
 const formats = [
   { type: 'clash', name: 'Clash', icon: '\u2694\uFE0F', desc: 'Clash 系列客户端' },
@@ -272,6 +291,16 @@ const importFormat = (fmt: any) => {
     }
   } else {
     copyToClipboard(url, fmt.name)
+  }
+}
+
+const showQrCode = async (url: string, label: string) => {
+  if (!url) { message.warning('暂无可用订阅'); return }
+  qrTitle.value = label
+  showQrModal.value = true
+  await nextTick()
+  if (qrCanvas.value) {
+    QRCode.toCanvas(qrCanvas.value, url, { width: 240, margin: 2 })
   }
 }
 

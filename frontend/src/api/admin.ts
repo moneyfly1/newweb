@@ -37,8 +37,13 @@ export const getAdminSubscription = (id: number) => request.get(`/admin/subscrip
 export const resetAdminSubscription = (id: number) => request.post(`/admin/subscriptions/${id}/reset`)
 export const extendSubscription = (id: number, data: { days: number }) =>
   request.post(`/admin/subscriptions/${id}/extend`, data)
-export const updateSubscriptionDeviceLimit = (id: number, data: { device_limit: number }) =>
+export const updateSubscriptionDeviceLimit = (id: number, data: any) =>
   request.put(`/admin/subscriptions/${id}`, data)
+export const sendSubscriptionEmail = (id: number) =>
+  request.post(`/admin/subscriptions/${id}/send-email`)
+export const setSubscriptionExpireTime = (id: number, data: { expire_time: string }) =>
+  request.post(`/admin/subscriptions/${id}/set-expire`, data)
+export const deleteUserFull = (id: number) => request.delete(`/admin/users/${id}/full`)
 
 // Coupons
 export const listAdminCoupons = (params?: any) => request.get('/admin/coupons', { params })

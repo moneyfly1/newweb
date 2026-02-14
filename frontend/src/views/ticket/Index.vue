@@ -45,7 +45,7 @@
               <span class="value">{{ ticket.created_at }}</span>
             </div>
             <div class="card-actions">
-              <n-button type="primary" @click="router.push('/ticket/' + ticket.id)">查看详情</n-button>
+              <n-button type="primary" @click="router.push('/tickets/' + ticket.id)">查看详情</n-button>
             </div>
           </div>
         </n-spin>
@@ -248,7 +248,7 @@ const columns = [
         {
           text: true,
           type: 'primary',
-          onClick: () => router.push(`/ticket/${row.id}`)
+          onClick: () => router.push(`/tickets/${row.id}`)
         },
         { default: () => '查看' }
       )

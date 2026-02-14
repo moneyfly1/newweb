@@ -184,9 +184,52 @@ func AdminGetUser(c *gin.Context) {
 	db.Where("user_id = ?", id).First(&subscription)
 
 	var orders []models.Order
-	db.Where("user_id = ?", id).Order("created_at DESC").Limit(10).Find(&orders)
+	db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&orders)
 
-	utils.Success(c, gin.H{"user": user, "subscription": subscription, "recent_orders": orders})
+	var devices []models.Device
+	db.Where("subscription_id = ?", subscription.ID).Order("last_access DESC").Find(&devices)
+
+	var resets []models.SubscriptionReset
+	db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&resets)
+
+	var balanceLogs []models.BalanceLog
+	db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&balanceLogs)
+
+	var loginHistory []models.LoginHistory
+	db.Where("user_id = ?", id).Order("login_time DESC").Limit(20).Find(&loginHistory)
+
+	var rechargeRecords []models.RechargeRecord
+	db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&rechargeRecords)
+
+	// Build subscription URLs
+	baseURL := getSubscriptionBaseURL()
+	subURLs := gin.H{}
+	if baseURL != "" && subscription.SubscriptionURL != "" {
+		subURLs["universal_url"] = fmt.Sprintf("%s/api/v1/sub/%s", baseURL, subscription.SubscriptionURL)
+		subURLs["clash_url"] = fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, subscription.SubscriptionURL)
+	}
+
+	// Package name
+	var packageName string
+	if subscription.PackageID != nil {
+		var pkg models.Package
+		if db.Select("name").First(&pkg, *subscription.PackageID).Error == nil {
+			packageName = pkg.Name
+		}
+	}
+
+	utils.Success(c, gin.H{
+		"user":              user,
+		"subscription":      subscription,
+		"subscription_urls": subURLs,
+		"package_name":      packageName,
+		"recent_orders":     orders,
+		"devices":           devices,
+		"resets":            resets,
+		"balance_logs":      balanceLogs,
+		"login_history":     loginHistory,
+		"recharge_records":  rechargeRecords,
+	})
 }
 
 
@@ -230,6 +273,7 @@ func AdminUpdateUser(c *gin.Context) {
 		utils.InternalError(c, "更新用户失败")
 		return
 	}
+	utils.CreateAuditLog(c, "update_user", "user", uint(id), fmt.Sprintf("更新用户: %s", user.Username))
 	utils.Success(c, user)
 }
 
@@ -246,9 +290,15 @@ func AdminDeleteUser(c *gin.Context) {
 		utils.NotFound(c, "用户不存在")
 		return
 	}
-	// Soft deactivate instead of hard delete
-	db.Model(&user).Update("is_active", false)
-	utils.SuccessMessage(c, "用户已停用")
+	// Send notification before deleting
+	go services.NotifyUserDirect(user.Email, "account_deleted", nil)
+	// Actually delete the user record
+	if err := db.Delete(&user).Error; err != nil {
+		utils.InternalError(c, "删除用户失败")
+		return
+	}
+	utils.CreateAuditLog(c, "delete_user", "user", uint(id), fmt.Sprintf("删除用户: %s (%s)", user.Username, user.Email))
+	utils.SuccessMessage(c, "用户已删除")
 }
 
 func AdminToggleUserActive(c *gin.Context) {
@@ -265,6 +315,15 @@ func AdminToggleUserActive(c *gin.Context) {
 	}
 	newStatus := !user.IsActive
 	db.Model(&user).Update("is_active", newStatus)
+	// 通知用户账户状态变更
+	if newStatus {
+		go services.NotifyUser(user.ID, "account_enabled", nil)
+	} else {
+		go services.NotifyUser(user.ID, "account_disabled", nil)
+	}
+	action := "启用"
+	if !newStatus { action = "禁用" }
+	utils.CreateAuditLog(c, "toggle_user_active", "user", uint(id), fmt.Sprintf("%s用户: %s", action, user.Username))
 	utils.Success(c, gin.H{"is_active": newStatus})
 }
 
@@ -369,6 +428,36 @@ func AdminGetAbnormalUsers(c *gin.Context) {
 	utils.Success(c, gin.H{"users": abnormalUsers})
 }
 
+// ==================== Login As User ====================
+
+func AdminLoginAsUser(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的用户ID")
+		return
+	}
+	db := database.GetDB()
+	var user models.User
+	if err := db.First(&user, id).Error; err != nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+
+	accessToken, _ := generateToken(user.ID, "access", 2*time.Hour)
+	refreshToken, _ := generateToken(user.ID, "refresh", 24*time.Hour)
+
+	utils.CreateAuditLog(c, "login_as_user", "user", uint(id), fmt.Sprintf("以用户身份登录: %s", user.Username))
+	utils.Success(c, gin.H{
+		"user": gin.H{
+			"id": user.ID, "username": user.Username, "email": user.Email,
+			"is_admin": user.IsAdmin, "nickname": user.Nickname, "avatar": user.Avatar,
+			"balance": user.Balance, "theme": user.Theme,
+		},
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	})
+}
+
 // ==================== Order Management ====================
 
 func AdminListOrders(c *gin.Context) {
@@ -448,6 +537,12 @@ func AdminRefundOrder(c *gin.Context) {
 		return
 	}
 	tx.Commit()
+	// 记录退款余额日志
+	var refundUser models.User
+	if db.First(&refundUser, order.UserID).Error == nil {
+		utils.CreateBalanceLogEntry(order.UserID, "refund", refundAmount, refundUser.Balance-refundAmount, refundUser.Balance, func() *uint { id := uint(order.ID); return &id }(), fmt.Sprintf("管理员退款订单: %s", order.OrderNo), c)
+	}
+	utils.CreateAuditLog(c, "refund_order", "order", uint(id), fmt.Sprintf("退款订单: %s, 金额: %.2f", order.OrderNo, refundAmount))
 	utils.SuccessMessage(c, "退款成功")
 }
 
@@ -477,6 +572,7 @@ func AdminCreatePackage(c *gin.Context) {
 		utils.InternalError(c, "创建套餐失败")
 		return
 	}
+	utils.CreateAuditLog(c, "create_package", "package", pkg.ID, fmt.Sprintf("创建套餐: %s", pkg.Name))
 	utils.Success(c, pkg)
 }
 
@@ -501,6 +597,7 @@ func AdminUpdatePackage(c *gin.Context) {
 		utils.InternalError(c, "更新套餐失败")
 		return
 	}
+	utils.CreateAuditLog(c, "update_package", "package", uint(id), fmt.Sprintf("更新套餐: %s", pkg.Name))
 	utils.Success(c, pkg)
 }
 
@@ -514,6 +611,7 @@ func AdminDeletePackage(c *gin.Context) {
 		utils.InternalError(c, "删除套餐失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_package", "package", uint(id), "删除套餐")
 	utils.SuccessMessage(c, "套餐已删除")
 }
 
@@ -551,6 +649,7 @@ func AdminCreateNode(c *gin.Context) {
 		utils.InternalError(c, "创建节点失败")
 		return
 	}
+	utils.CreateAuditLog(c, "create_node", "node", node.ID, fmt.Sprintf("创建节点: %s", node.Name))
 	utils.Success(c, node)
 }
 
@@ -575,6 +674,7 @@ func AdminUpdateNode(c *gin.Context) {
 		utils.InternalError(c, "更新节点失败")
 		return
 	}
+	utils.CreateAuditLog(c, "update_node", "node", uint(id), fmt.Sprintf("更新节点: %s", node.Name))
 	utils.Success(c, node)
 }
 
@@ -589,6 +689,7 @@ func AdminDeleteNode(c *gin.Context) {
 		utils.InternalError(c, "删除节点失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_node", "node", uint(id), "删除节点")
 	utils.SuccessMessage(c, "节点已删除")
 }
 
@@ -786,6 +887,7 @@ func AdminAssignCustomNode(c *gin.Context) {
 		assignment := models.UserCustomNode{UserID: uid, CustomNodeID: uint(id)}
 		db.Create(&assignment)
 	}
+	utils.CreateAuditLog(c, "assign_custom_node", "custom_node", uint(id), fmt.Sprintf("分配专线节点给 %d 个用户", len(req.UserIDs)))
 	utils.SuccessMessage(c, "分配成功")
 }
 
@@ -996,8 +1098,8 @@ func AdminGetSubscription(c *gin.Context) {
 	// Build full subscription URLs
 	baseURL := getSubscriptionBaseURL()
 	if baseURL != "" && sub.SubscriptionURL != "" {
-		result["universal_url"] = fmt.Sprintf("%s/api/v1/subscribe/universal/%s", baseURL, sub.SubscriptionURL)
-		result["clash_url"] = fmt.Sprintf("%s/api/v1/subscribe/%s", baseURL, sub.SubscriptionURL)
+		result["universal_url"] = fmt.Sprintf("%s/api/v1/sub/%s", baseURL, sub.SubscriptionURL)
+		result["clash_url"] = fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, sub.SubscriptionURL)
 	}
 
 	var user models.User
@@ -1053,6 +1155,12 @@ func AdminResetSubscription(c *gin.Context) {
 	})
 	tx.Commit()
 
+	// 通知用户订阅已重置
+	go services.NotifyUser(sub.UserID, "subscription_reset", map[string]string{"reset_by": "管理员"})
+
+	adminID := c.GetUint("user_id")
+	utils.CreateSubscriptionLog(sub.ID, sub.UserID, "reset", "admin", &adminID, "管理员重置订阅", nil, nil)
+	utils.CreateAuditLog(c, "reset_subscription", "subscription", uint(id), fmt.Sprintf("重置订阅 (用户ID: %d)", sub.UserID))
 	utils.Success(c, gin.H{"new_subscription_url": newURL})
 }
 
@@ -1080,6 +1188,9 @@ func AdminExtendSubscription(c *gin.Context) {
 	newExpire := sub.ExpireTime.AddDate(0, 0, req.Days)
 	db.Model(&sub).Update("expire_time", newExpire)
 
+	adminID := c.GetUint("user_id")
+	utils.CreateSubscriptionLog(sub.ID, sub.UserID, "extend", "admin", &adminID, fmt.Sprintf("管理员延长订阅 %d 天", req.Days), nil, nil)
+	utils.CreateAuditLog(c, "extend_subscription", "subscription", uint(id), fmt.Sprintf("延长订阅 %d 天 (用户ID: %d)", req.Days, sub.UserID))
 	utils.Success(c, gin.H{"new_expire_time": newExpire})
 }
 
@@ -1384,6 +1495,7 @@ func AdminUpdateSettings(c *gin.Context) {
 		strVal := fmt.Sprintf("%v", v)
 		db.Where("`key` = ?", k).Assign(models.SystemConfig{Key: k, Value: strVal}).FirstOrCreate(&models.SystemConfig{})
 	}
+	utils.CreateAuditLog(c, "update_settings", "settings", 0, "更新系统设置")
 	utils.SuccessMessage(c, "设置已更新")
 }
 
@@ -1722,6 +1834,15 @@ func AdminCreateUser(c *gin.Context) {
 	}
 	db.Create(&subscription)
 
+	// 发送账户创建通知邮件（含初始密码）
+	go services.NotifyUserDirect(user.Email, "admin_create_user", map[string]string{
+		"username": user.Username, "password": req.Password,
+	})
+	go services.NotifyAdmin("admin_create_user", map[string]string{
+		"username": user.Username, "email": user.Email,
+	})
+
+	utils.CreateAuditLog(c, "create_user", "user", user.ID, fmt.Sprintf("管理员创建用户: %s (%s)", user.Username, user.Email))
 	utils.Success(c, user)
 }
 
@@ -1754,6 +1875,7 @@ func AdminResetUserPassword(c *gin.Context) {
 		return
 	}
 	db.Model(&user).Update("password", hashed)
+	utils.CreateAuditLog(c, "reset_password", "user", uint(id), fmt.Sprintf("重置用户密码: %s", user.Username))
 	utils.SuccessMessage(c, "密码已重置")
 }
 
@@ -1767,8 +1889,8 @@ func AdminSendTestEmail(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	err := services.SendEmail(req.Email, "CBoard 测试邮件",
-		"<h3>测试邮件</h3><p>如果您收到此邮件，说明 SMTP 配置正确。</p>")
+	subject, body := services.RenderEmail("test", map[string]string{})
+	err := services.SendEmail(req.Email, subject, body)
 	if err != nil {
 		utils.InternalError(c, "发送失败: "+err.Error())
 		return
@@ -1815,7 +1937,168 @@ func AdminUpdateSubscription(c *gin.Context) {
 		utils.InternalError(c, "更新订阅失败")
 		return
 	}
+	adminID := c.GetUint("user_id")
+	utils.CreateSubscriptionLog(sub.ID, sub.UserID, "update", "admin", &adminID, "管理员更新订阅设置", nil, nil)
+	utils.CreateAuditLog(c, "update_subscription", "subscription", uint(id), fmt.Sprintf("更新订阅 (用户ID: %d)", sub.UserID))
 	utils.Success(c, sub)
+}
+
+// ==================== Admin Send Subscription Email ====================
+
+func AdminSendSubscriptionEmail(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的订阅ID")
+		return
+	}
+	db := database.GetDB()
+	var sub models.Subscription
+	if err := db.First(&sub, id).Error; err != nil {
+		utils.NotFound(c, "订阅不存在")
+		return
+	}
+	var user models.User
+	if err := db.First(&user, sub.UserID).Error; err != nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+	baseURL := getSubscriptionBaseURL()
+	if baseURL == "" {
+		utils.BadRequest(c, "系统未配置域名")
+		return
+	}
+	universalURL := fmt.Sprintf("%s/api/v1/sub/%s", baseURL, sub.SubscriptionURL)
+	clashURL := fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, sub.SubscriptionURL)
+	subject, body := services.RenderEmail("subscription", map[string]string{
+		"clash_url": clashURL, "universal_url": universalURL,
+		"expire_time": sub.ExpireTime.Format("2006-01-02 15:04"),
+	})
+	go services.QueueEmail(user.Email, subject, body, "subscription")
+	utils.SuccessMessage(c, "订阅信息已发送至 "+user.Email)
+}
+
+// ==================== Admin Delete User (Full) ====================
+
+func AdminDeleteUserFull(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的用户ID")
+		return
+	}
+	db := database.GetDB()
+	var user models.User
+	if err := db.First(&user, id).Error; err != nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+
+	tx := db.Begin()
+
+	// Delete ticket replies (via user's tickets)
+	var ticketIDs []uint
+	tx.Model(&models.Ticket{}).Where("user_id = ?", id).Pluck("id", &ticketIDs)
+	if len(ticketIDs) > 0 {
+		tx.Where("ticket_id IN ?", ticketIDs).Delete(&models.TicketReply{})
+	}
+
+	// Delete payment transactions
+	tx.Where("user_id = ?", id).Delete(&models.PaymentTransaction{})
+
+	// Delete notifications
+	tx.Where("user_id = ?", id).Delete(&models.Notification{})
+
+	// Delete user activities
+	tx.Where("user_id = ?", id).Delete(&models.UserActivity{})
+
+	// Delete invite codes owned by user
+	tx.Where("user_id = ?", id).Delete(&models.InviteCode{})
+
+	// Delete invite relations (as inviter or invitee)
+	tx.Where("inviter_id = ? OR invitee_id = ?", id, id).Delete(&models.InviteRelation{})
+
+	// Delete commission logs
+	tx.Where("inviter_id = ? OR invitee_id = ?", id, id).Delete(&models.CommissionLog{})
+
+	// Delete registration logs
+	tx.Where("user_id = ?", id).Delete(&models.RegistrationLog{})
+
+	// Delete subscription logs
+	tx.Where("user_id = ?", id).Delete(&models.SubscriptionLog{})
+
+	// Delete login attempts
+	tx.Where("username = ? OR username = ?", user.Email, user.Username).Delete(&models.LoginAttempt{})
+
+	// Delete verification codes
+	tx.Where("email = ?", user.Email).Delete(&models.VerificationCode{})
+
+	// Original cleanup
+	tx.Where("user_id = ?", id).Delete(&models.Order{})
+	tx.Where("user_id = ?", id).Delete(&models.Device{})
+	tx.Where("user_id = ?", id).Delete(&models.SubscriptionReset{})
+	tx.Where("user_id = ?", id).Delete(&models.Subscription{})
+	tx.Where("user_id = ?", id).Delete(&models.Ticket{})
+	tx.Where("user_id = ?", id).Delete(&models.BalanceLog{})
+	tx.Where("user_id = ?", id).Delete(&models.LoginHistory{})
+	tx.Where("user_id = ?", id).Delete(&models.RechargeRecord{})
+
+	// Delete user
+	tx.Delete(&user)
+
+	if err := tx.Commit().Error; err != nil {
+		utils.InternalError(c, "删除用户失败")
+		return
+	}
+
+	go services.NotifyUserDirect(user.Email, "account_deleted", nil)
+	utils.CreateAuditLog(c, "delete_user_full", "user", uint(id),
+		fmt.Sprintf("完全删除用户: %s (%s)", user.Username, user.Email))
+	utils.SuccessMessage(c, "用户及所有关联数据已删除")
+}
+
+// ==================== Admin Set Subscription Expire Time ====================
+
+func AdminSetSubscriptionExpireTime(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的订阅ID")
+		return
+	}
+	var req struct {
+		ExpireTime string `json:"expire_time" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	expireTime, err := time.Parse("2006-01-02T15:04:05Z", req.ExpireTime)
+	if err != nil {
+		expireTime, err = time.Parse("2006-01-02 15:04:05", req.ExpireTime)
+		if err != nil {
+			expireTime, err = time.Parse("2006-01-02", req.ExpireTime)
+			if err != nil {
+				utils.BadRequest(c, "时间格式错误，支持: 2006-01-02 或 2006-01-02 15:04:05")
+				return
+			}
+		}
+	}
+
+	db := database.GetDB()
+	var sub models.Subscription
+	if err := db.First(&sub, id).Error; err != nil {
+		utils.NotFound(c, "订阅不存在")
+		return
+	}
+
+	updates := map[string]interface{}{"expire_time": expireTime}
+	if expireTime.After(time.Now()) {
+		updates["is_active"] = true
+		updates["status"] = "active"
+	}
+	db.Model(&sub).Updates(updates)
+	adminID := c.GetUint("user_id")
+	utils.CreateSubscriptionLog(sub.ID, sub.UserID, "update", "admin", &adminID, fmt.Sprintf("管理员设置到期时间: %s", expireTime.Format("2006-01-02")), nil, nil)
+	utils.CreateAuditLog(c, "set_expire_time", "subscription", uint(id), fmt.Sprintf("设置订阅到期时间: %s (用户ID: %d)", expireTime.Format("2006-01-02"), sub.UserID))
+	utils.Success(c, gin.H{"expire_time": expireTime})
 }
 
 // ==================== Public Announcements ====================
@@ -1847,4 +2130,84 @@ func AdminRegionStats(c *gin.Context) {
 		Find(&regions)
 
 	utils.Success(c, regions)
+}
+
+// ==================== Batch Operations ====================
+
+func AdminBatchUserAction(c *gin.Context) {
+	var req struct {
+		IDs    []uint `json:"ids" binding:"required"`
+		Action string `json:"action" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if len(req.IDs) == 0 {
+		utils.BadRequest(c, "请选择用户")
+		return
+	}
+
+	db := database.GetDB()
+	var affected int64
+
+	switch req.Action {
+	case "enable":
+		result := db.Model(&models.User{}).Where("id IN ?", req.IDs).Update("is_active", true)
+		affected = result.RowsAffected
+	case "disable":
+		result := db.Model(&models.User{}).Where("id IN ? AND is_admin = ?", req.IDs, false).Update("is_active", false)
+		affected = result.RowsAffected
+	case "delete":
+		result := db.Where("id IN ? AND is_admin = ?", req.IDs, false).Delete(&models.User{})
+		affected = result.RowsAffected
+	default:
+		utils.BadRequest(c, "不支持的操作: "+req.Action)
+		return
+	}
+
+	utils.CreateAuditLog(c, "batch_user_action", "user", 0, fmt.Sprintf("批量操作用户: %s, 影响 %d 个用户", req.Action, affected))
+	utils.Success(c, gin.H{"affected": affected, "action": req.Action})
+}
+
+func AdminBatchNodeAction(c *gin.Context) {
+	var req struct {
+		IDs    []uint `json:"ids" binding:"required"`
+		Action string `json:"action" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if len(req.IDs) == 0 {
+		utils.BadRequest(c, "请选择节点")
+		return
+	}
+
+	db := database.GetDB()
+	var affected int64
+
+	switch req.Action {
+	case "enable":
+		result := db.Model(&models.Node{}).Where("id IN ?", req.IDs).Update("is_active", true)
+		affected = result.RowsAffected
+	case "disable":
+		result := db.Model(&models.Node{}).Where("id IN ?", req.IDs).Update("is_active", false)
+		affected = result.RowsAffected
+	case "online":
+		result := db.Model(&models.Node{}).Where("id IN ?", req.IDs).Update("status", "online")
+		affected = result.RowsAffected
+	case "offline":
+		result := db.Model(&models.Node{}).Where("id IN ?", req.IDs).Update("status", "offline")
+		affected = result.RowsAffected
+	case "delete":
+		result := db.Where("id IN ?", req.IDs).Delete(&models.Node{})
+		affected = result.RowsAffected
+	default:
+		utils.BadRequest(c, "不支持的操作: "+req.Action)
+		return
+	}
+
+	utils.CreateAuditLog(c, "batch_node_action", "node", 0, fmt.Sprintf("批量操作节点: %s, 影响 %d 个节点", req.Action, affected))
+	utils.Success(c, gin.H{"affected": affected, "action": req.Action})
 }

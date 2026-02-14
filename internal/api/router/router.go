@@ -1,6 +1,10 @@
 package router
 
 import (
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"cboard/v2/internal/api/handlers"
@@ -52,6 +56,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	}
 
 	// 公开订阅链接
+	api.GET("/sub/clash/:url", handlers.GetSubscription)
+	api.GET("/sub/:url", handlers.GetUniversalSubscription)
+	// 兼容旧路径
 	api.GET("/subscribe/clash/:url", handlers.GetSubscription)
 	api.GET("/subscribe/universal/:url", handlers.GetUniversalSubscription)
 	api.GET("/subscribe/:url", handlers.GetSubscription)
@@ -167,6 +174,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			invites.POST("", handlers.CreateInviteCode)
 			invites.GET("/stats", handlers.GetInviteStats)
 			invites.GET("/my-codes", handlers.GetMyCodes)
+			invites.DELETE("/:id", handlers.DeleteInviteCode)
 		}
 
 		// 充值
@@ -174,6 +182,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		{
 			recharge.GET("", handlers.ListRechargeRecords)
 			recharge.POST("", handlers.CreateRecharge)
+			recharge.POST("/:id/pay", handlers.CreateRechargePayment)
 			recharge.POST("/:id/cancel", handlers.CancelRecharge)
 		}
 	}
@@ -197,6 +206,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminUsers.POST("/:id/toggle-active", handlers.AdminToggleUserActive)
 			adminUsers.POST("/:id/reset-password", handlers.AdminResetUserPassword)
 			adminUsers.GET("/abnormal", handlers.AdminGetAbnormalUsers)
+			adminUsers.POST("/:id/login-as", handlers.AdminLoginAsUser)
+			adminUsers.POST("/batch-action", handlers.AdminBatchUserAction)
 		}
 
 		// 订单管理
@@ -225,6 +236,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminNodes.DELETE("/:id", handlers.AdminDeleteNode)
 			adminNodes.POST("/import", handlers.AdminImportNodes)
 			adminNodes.POST("/:id/test", handlers.AdminTestNode)
+			adminNodes.POST("/batch-action", handlers.AdminBatchNodeAction)
 		}
 
 		// 专线节点
@@ -261,7 +273,12 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminSubs.POST("/:id/reset", handlers.AdminResetSubscription)
 			adminSubs.POST("/:id/extend", handlers.AdminExtendSubscription)
 			adminSubs.PUT("/:id", handlers.AdminUpdateSubscription)
+			adminSubs.POST("/:id/send-email", handlers.AdminSendSubscriptionEmail)
+			adminSubs.POST("/:id/set-expire", handlers.AdminSetSubscriptionExpireTime)
 		}
+
+		// 用户完全删除
+		admin.DELETE("/users/:id/full", handlers.AdminDeleteUserFull)
 
 		// 优惠券管理
 		adminCoupons := admin.Group("/coupons")
@@ -338,6 +355,25 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		// 备份
 		admin.POST("/backup", handlers.AdminCreateBackup)
 		admin.GET("/backup", handlers.AdminListBackups)
+	}
+
+	// Serve frontend static files and SPA fallback
+	distPath := filepath.Join("frontend", "dist")
+	if _, err := os.Stat(distPath); err == nil {
+		r.Static("/assets", filepath.Join(distPath, "assets"))
+		r.StaticFile("/favicon.ico", filepath.Join(distPath, "favicon.ico"))
+
+		// SPA fallback: any route not matched by API or static files serves index.html
+		indexHTML := filepath.Join(distPath, "index.html")
+		r.NoRoute(func(c *gin.Context) {
+			path := c.Request.URL.Path
+			// Don't serve index.html for API routes
+			if strings.HasPrefix(path, "/api/") {
+				c.JSON(http.StatusNotFound, gin.H{"code": 1, "message": "not found"})
+				return
+			}
+			c.File(indexHTML)
+		})
 	}
 
 	return r

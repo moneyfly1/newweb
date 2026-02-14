@@ -251,7 +251,7 @@ func (s *ConfigUpdateService) runUpdate() {
 	// Filter by keywords
 	if len(cfg.Keywords) > 0 {
 		allNodes = s.filterNodes(allNodes, cfg.Keywords)
-		s.addLog("info", fmt.Sprintf("关键词过滤后剩余 %d 个节点", len(allNodes)))
+		s.addLog("info", fmt.Sprintf("关键词排除过滤后剩余 %d 个节点", len(allNodes)))
 	}
 
 	if len(allNodes) == 0 {
@@ -311,7 +311,7 @@ func (s *ConfigUpdateService) filterNodes(nodes []models.Node, keywords []string
 				break
 			}
 		}
-		if match {
+		if !match {
 			filtered = append(filtered, node)
 		}
 	}

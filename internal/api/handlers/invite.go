@@ -29,8 +29,18 @@ func CreateInviteCode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	db := database.GetDB()
+	codeStr := ""
+	for i := 0; i < 5; i++ {
+		codeStr = utils.GenerateRandomString(8)
+		var count int64
+		db.Model(&models.InviteCode{}).Where("UPPER(code) = UPPER(?)", codeStr).Count(&count)
+		if count == 0 {
+			break
+		}
+	}
 	code := models.InviteCode{
-		Code:          utils.GenerateRandomString(8),
+		Code:          codeStr,
 		UserID:        userID,
 		RewardType:    "balance",
 		InviterReward: req.InviterReward,
@@ -45,7 +55,7 @@ func CreateInviteCode(c *gin.Context) {
 		exp := time.Now().AddDate(0, 0, *req.ExpiresInDays)
 		code.ExpiresAt = &exp
 	}
-	database.GetDB().Create(&code)
+	db.Create(&code)
 	utils.Success(c, code)
 }
 
@@ -64,10 +74,23 @@ func GetMyCodes(c *gin.Context) {
 	ListInviteCodes(c)
 }
 
+func DeleteInviteCode(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	id := c.Param("id")
+	db := database.GetDB()
+	var code models.InviteCode
+	if err := db.Where("id = ? AND user_id = ?", id, userID).First(&code).Error; err != nil {
+		utils.NotFound(c, "邀请码不存在")
+		return
+	}
+	db.Delete(&code)
+	utils.SuccessMessage(c, "邀请码已删除")
+}
+
 func ValidateInviteCode(c *gin.Context) {
 	code := c.Param("code")
 	var invite models.InviteCode
-	if err := database.GetDB().Where("code = ? AND is_active = ?", code, true).First(&invite).Error; err != nil {
+	if err := database.GetDB().Where("UPPER(code) = UPPER(?) AND is_active = ?", code, true).First(&invite).Error; err != nil {
 		utils.NotFound(c, "邀请码无效")
 		return
 	}

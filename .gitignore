@@ -1,0 +1,40 @@
+# 环境与敏感配置（保留 .env.example 作模板）
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# 构建产物与二进制
+/server
+/cboard
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+
+# 数据库与备份（按需可改为不忽略）
+*.db
+backups/
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+.claude/
+
+# Go
+*.test
+*.out
+vendor/
+
+# 日志与临时文件
+*.log
+tmp/
+temp/

@@ -1,0 +1,58 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+.page-container {
+  padding: 24px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Mobile responsive utilities */
+@media (max-width: 767px) {
+  .page-container {
+    padding: 12px 0;
+  }
+
+  /* Naive UI table scroll on mobile */
+  .n-data-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Reduce card padding on mobile */
+  .n-card > .n-card__content {
+    padding: 12px !important;
+  }
+  .n-card > .n-card-header {
+    padding: 12px 12px 0 !important;
+  }
+
+  /* Make modals full-width on mobile */
+  .n-modal {
+    width: 92vw !important;
+    max-width: 92vw !important;
+  }
+
+  /* Drawer adjustments */
+  .n-drawer .n-drawer-body-content-wrapper {
+    padding: 12px !important;
+  }
+}

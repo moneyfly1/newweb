@@ -1,0 +1,93 @@
+/* Global mobile responsive styles */
+@media (max-width: 767px) {
+  /* Admin container padding */
+  .subscriptions-container,
+  .admin-packages-page,
+  [class$="-container"],
+  [class$="-page"] {
+    padding: 8px !important;
+  }
+
+  /* Cards */
+  .n-card .n-card-header {
+    padding: 12px 14px;
+  }
+  .n-card-header__main {
+    font-size: 15px !important;
+  }
+  .n-card-header-extra {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .n-card-header-extra .n-space {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  /* Data tables - smaller font, ensure horizontal scroll */
+  .n-data-table {
+    font-size: 13px;
+  }
+  .n-data-table-th,
+  .n-data-table-td {
+    padding: 8px 6px !important;
+  }
+
+  /* Modals - constrain to viewport on mobile */
+  .n-modal,
+  .n-dialog {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    margin: 0 auto;
+  }
+
+  /* Form items - stack label on top for narrow screens */
+  .n-form-item .n-form-item-label {
+    min-width: 70px;
+  }
+
+  /* Input groups in header-extra */
+  .n-card-header-extra .n-input {
+    width: 160px !important;
+    min-width: 120px;
+  }
+  .n-card-header-extra .n-select {
+    width: 110px !important;
+    min-width: 90px;
+  }
+
+  /* Descriptions - single column on mobile */
+  .n-descriptions .n-descriptions-table-row {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Pagination */
+  .n-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  /* QR code grid */
+  .qr-grid {
+    flex-direction: column !important;
+    align-items: center;
+  }
+
+  /* Subscription URL section */
+  .sub-url-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .sub-url-text {
+    width: 100% !important;
+    word-break: break-all;
+    white-space: normal !important;
+  }
+
+  /* Tabs on mobile */
+  .n-tabs .n-tabs-nav {
+    overflow-x: auto;
+  }
+}

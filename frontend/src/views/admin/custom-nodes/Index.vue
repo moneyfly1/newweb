@@ -13,18 +13,80 @@
         </n-space>
       </template>
 
-      <n-data-table
-        remote
-        :columns="columns"
-        :data="tableData"
-        :loading="loading"
-        :pagination="pagination"
-        :bordered="false"
-        :row-key="(row) => row.id"
-        v-model:checked-row-keys="checkedRowKeys"
-        @update:page="(p) => { pagination.page = p; fetchData() }"
-        @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
-      />
+      <template v-if="!appStore.isMobile">
+        <n-data-table
+          remote
+          :columns="columns"
+          :data="tableData"
+          :loading="loading"
+          :pagination="pagination"
+          :bordered="false"
+          :row-key="(row) => row.id"
+          v-model:checked-row-keys="checkedRowKeys"
+          @update:page="(p) => { pagination.page = p; fetchData() }"
+          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+        />
+      </template>
+
+      <template v-else>
+        <div class="mobile-card-list">
+          <div v-for="row in tableData" :key="row.id" class="mobile-card">
+            <div class="card-header">
+              <span class="card-title">{{ row.display_name }}</span>
+              <n-tag :type="protocolColorMap[row.protocol] || 'default'" size="small">
+                {{ row.protocol.toUpperCase() }}
+              </n-tag>
+            </div>
+            <div class="card-body">
+              <div class="card-row">
+                <span class="card-label">节点名称</span>
+                <span>{{ row.name }}</span>
+              </div>
+              <div class="card-row">
+                <span class="card-label">服务器</span>
+                <span>{{ row.domain }}:{{ row.port }}</span>
+              </div>
+              <div class="card-row">
+                <span class="card-label">状态</span>
+                <n-switch :value="row.is_active" @update:value="(value) => handleToggleActive(row, value)" />
+              </div>
+              <div class="card-row">
+                <span class="card-label">过期时间</span>
+                <span>{{ row.expire_time ? formatDate(row.expire_time) : '-' }}</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <n-button size="small" type="primary" @click="handleEdit(row)">
+                <template #icon><n-icon><CreateOutline /></n-icon></template>
+                编辑
+              </n-button>
+              <n-button size="small" type="info" @click="handleAssign(row)">
+                <template #icon><n-icon><PeopleOutline /></n-icon></template>
+                分配
+              </n-button>
+              <n-button size="small" @click="handleViewLink(row)">
+                <template #icon><n-icon><LinkOutline /></n-icon></template>
+                链接
+              </n-button>
+              <n-button size="small" type="error" @click="handleDelete(row)">
+                <template #icon><n-icon><TrashOutline /></n-icon></template>
+                删除
+              </n-button>
+            </div>
+          </div>
+        </div>
+
+        <n-pagination
+          v-model:page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :item-count="pagination.itemCount"
+          :page-sizes="pagination.pageSizes"
+          show-size-picker
+          style="margin-top: 16px; justify-content: center"
+          @update:page="fetchData"
+          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+        />
+      </template>
     </n-card>
 
     <!-- Create/Edit Modal -->
@@ -32,7 +94,7 @@
       v-model:show="showEditModal"
       :title="editId ? '编辑专线节点' : '创建专线节点'"
       preset="card"
-      style="width: 700px"
+      :style="appStore.isMobile ? 'width: 95vw; max-width: 700px' : 'width: 700px'"
       :mask-closable="false"
     >
       <n-form
@@ -109,7 +171,7 @@
       v-model:show="showAssignModal"
       title="分配节点给用户"
       preset="card"
-      style="width: 600px"
+      :style="appStore.isMobile ? 'width: 95vw; max-width: 600px' : 'width: 600px'"
       :mask-closable="false"
     >
       <n-form label-placement="top">
@@ -140,7 +202,7 @@
       v-model:show="showImportModal"
       title="导入节点链接"
       preset="card"
-      style="width: 600px"
+      :style="appStore.isMobile ? 'width: 95vw; max-width: 600px' : 'width: 600px'"
       :mask-closable="false"
     >
       <n-form label-placement="top">
@@ -166,7 +228,7 @@
       v-model:show="showLinkModal"
       title="节点链接"
       preset="card"
-      style="width: 600px"
+      :style="appStore.isMobile ? 'width: 95vw; max-width: 600px' : 'width: 600px'"
     >
       <n-form label-placement="top">
         <n-form-item :label="linkData.name">
@@ -209,9 +271,12 @@ import {
   batchDeleteCustomNodes,
   getCustomNodeLink
 } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
+import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 
 const message = useMessage()
 const dialog = useDialog()
+const appStore = useAppStore()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -559,13 +624,10 @@ const handleViewLink = async (row) => {
   }
 }
 
-const handleCopyLink = () => {
+const handleCopyLink = async () => {
   if (linkData.link) {
-    navigator.clipboard.writeText(linkData.link).then(() => {
-      message.success('链接已复制')
-    }).catch(() => {
-      message.error('复制失败')
-    })
+    const ok = await clipboardCopy(linkData.link)
+    ok ? message.success('链接已复制') : message.error('复制失败')
   }
 }
 
@@ -577,6 +639,61 @@ onMounted(() => {
 <style scoped>
 .custom-nodes-container {
   padding: 20px;
+}
+
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.card-body {
+  padding: 10px 14px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.card-label {
+  color: #999;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0f0f0;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 767px) {

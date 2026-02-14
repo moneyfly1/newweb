@@ -5,7 +5,7 @@
         <n-tabs type="line" animated>
           <!-- Tab 1: 基本设置 -->
           <n-tab-pane name="basic" tab="基本设置">
-            <n-form label-placement="left" label-width="140" :model="form">
+            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
               <n-form-item label="站点名称">
                 <n-input v-model:value="form.site_name" placeholder="请输入站点名称" />
               </n-form-item>
@@ -32,7 +32,7 @@
 
           <!-- Tab 2: 注册设置 -->
           <n-tab-pane name="register" tab="注册设置">
-            <n-form label-placement="left" label-width="200" :model="form">
+            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '200'" :model="form">
               <n-form-item label="开放注册">
                 <n-switch v-model:value="form.register_enabled" />
               </n-form-item>
@@ -59,7 +59,7 @@
 
           <!-- Tab 3: 邮件设置 -->
           <n-tab-pane name="email" tab="邮件设置">
-            <n-form label-placement="left" label-width="140" :model="form">
+            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
               <n-form-item label="SMTP 主机">
                 <n-input v-model:value="form.smtp_host" placeholder="smtp.example.com" />
               </n-form-item>
@@ -83,9 +83,9 @@
               </n-form-item>
               <n-divider />
               <n-form-item label="测试邮件">
-                <n-space>
-                  <n-input v-model:value="testEmail" placeholder="输入测试邮箱地址" style="width: 280px" />
-                  <n-button type="info" :loading="sendingTest" @click="handleSendTestEmail">发送测试邮件</n-button>
+                <n-space :vertical="appStore.isMobile">
+                  <n-input v-model:value="testEmail" placeholder="输入测试邮箱地址" :style="{ width: appStore.isMobile ? '100%' : '280px' }" />
+                  <n-button type="info" :loading="sendingTest" @click="handleSendTestEmail" :block="appStore.isMobile">发送测试邮件</n-button>
                 </n-space>
               </n-form-item>
               <n-space justify="center" style="margin-top: 24px">
@@ -98,7 +98,7 @@
           <n-tab-pane name="payment" tab="支付设置">
             <n-space vertical :size="16">
               <n-card title="余额支付" size="small" :bordered="true">
-                <n-form label-placement="left" label-width="140" :model="form">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
                   <n-form-item label="启用余额支付">
                     <n-switch v-model:value="form.pay_balance_enabled" />
                   </n-form-item>
@@ -106,7 +106,7 @@
               </n-card>
 
               <n-card title="支付宝" size="small" :bordered="true" :collapsible="true">
-                <n-form label-placement="left" label-width="140" :model="form">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
                   <n-form-item label="启用支付宝">
                     <n-switch v-model:value="form.pay_alipay_enabled" />
                   </n-form-item>
@@ -139,7 +139,7 @@
               </n-card>
 
               <n-card title="微信支付" size="small" :bordered="true" :collapsible="true">
-                <n-form label-placement="left" label-width="140" :model="form">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
                   <n-form-item label="启用微信支付">
                     <n-switch v-model:value="form.pay_wechat_enabled" />
                   </n-form-item>
@@ -156,7 +156,7 @@
               </n-card>
 
               <n-card title="易支付" size="small" :bordered="true" :collapsible="true">
-                <n-form label-placement="left" label-width="140" :model="form">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
                   <n-form-item label="启用易支付">
                     <n-switch v-model:value="form.pay_epay_enabled" />
                   </n-form-item>
@@ -180,7 +180,7 @@
 
           <!-- Tab 5: 通知设置 -->
           <n-tab-pane name="notification" tab="通知设置">
-            <n-form label-placement="left" label-width="200" :model="form">
+            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '200'" :model="form">
               <n-form-item label="管理员通知邮箱">
                 <n-input v-model:value="form.notify_admin_email" placeholder="admin@example.com" />
               </n-form-item>
@@ -217,7 +217,7 @@
 
           <!-- Tab 6: 安全设置 -->
           <n-tab-pane name="security" tab="安全设置">
-            <n-form label-placement="left" label-width="200" :model="form">
+            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '200'" :model="form">
               <n-form-item label="最大登录尝试次数">
                 <n-input-number v-model:value="form.max_login_attempts" :min="1" :max="100" />
               </n-form-item>
@@ -252,7 +252,7 @@
               </n-card>
 
               <n-card title="GitHub 备份设置" size="small" :bordered="true">
-                <n-form label-placement="left" label-width="160" :model="form">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '160'" :model="form">
                   <n-form-item label="启用 GitHub 备份">
                     <n-switch v-model:value="form.backup_github_enabled" />
                   </n-form-item>
@@ -272,13 +272,28 @@
               </n-card>
 
               <n-card title="备份记录" size="small" :bordered="true">
-                <n-data-table
-                  :columns="backupColumns"
-                  :data="backups"
-                  :loading="backupLoading"
-                  :bordered="false"
-                  size="small"
-                />
+                <template v-if="!appStore.isMobile">
+                  <n-data-table
+                    :columns="backupColumns"
+                    :data="backups"
+                    :loading="backupLoading"
+                    :bordered="false"
+                    size="small"
+                  />
+                </template>
+                <template v-else>
+                  <div class="mobile-card-list">
+                    <div v-for="item in backups" :key="item.filename" class="mobile-card">
+                      <div class="card-header">
+                        <span class="card-title">{{ item.filename }}</span>
+                      </div>
+                      <div class="card-body">
+                        <div class="card-row"><span class="card-label">大小:</span><span>{{ item.size }}</span></div>
+                        <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at }}</span></div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
                 <n-empty v-if="!backupLoading && backups.length === 0" description="暂无备份记录" style="padding: 40px 0" />
               </n-card>
             </n-space>
@@ -293,6 +308,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { getSettings, updateSettings, sendTestEmail, createBackup, listBackups } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 
 const message = useMessage()
 const loading = ref(false)
@@ -507,6 +525,14 @@ onMounted(() => {
 :deep(.n-card.n-card--bordered) {
   margin-bottom: 0;
 }
+
+.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
+.mobile-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+.card-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-body { padding: 10px 14px; }
+.card-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
+.card-label { color: #999; }
 
 @media (max-width: 767px) {
   .settings-container { padding: 8px; }

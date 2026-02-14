@@ -215,6 +215,7 @@ import { ref, h, onMounted, computed } from 'vue'
 import { NButton, NSpace, NTag, NTime, useMessage, useDialog } from 'naive-ui'
 import { listInviteCodes, createInviteCode, getInviteStats, deleteInviteCode, getPublicConfig } from '@/api/common'
 import { useAppStore } from '@/stores/app'
+import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 
 interface InviteCode {
   id: number
@@ -293,12 +294,8 @@ const rewardInfo = computed(() => {
 })
 
 const copyToClipboard = async (text: string) => {
-  try {
-    await navigator.clipboard.writeText(text)
-    message.success('复制成功')
-  } catch {
-    message.error('复制失败，请手动复制')
-  }
+  const ok = await clipboardCopy(text)
+  ok ? message.success('复制成功') : message.error('复制失败，请手动复制')
 }
 
 const getInviteLink = (code: string) => {

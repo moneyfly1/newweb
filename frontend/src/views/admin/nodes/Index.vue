@@ -34,18 +34,67 @@
         </n-space>
       </template>
 
-      <n-data-table
-        remote
-        :columns="columns"
-        :data="tableData"
-        :loading="loading"
-        :pagination="pagination"
-        :bordered="false"
-        :row-key="(row) => row.id"
-        @update:checked-row-keys="handleCheck"
-        @update:page="(p) => { pagination.page = p; fetchData() }"
-        @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
-      />
+      <template v-if="!appStore.isMobile">
+        <n-data-table
+          remote
+          :columns="columns"
+          :data="tableData"
+          :loading="loading"
+          :pagination="pagination"
+          :bordered="false"
+          :row-key="(row) => row.id"
+          @update:checked-row-keys="handleCheck"
+          @update:page="(p) => { pagination.page = p; fetchData() }"
+          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+        />
+      </template>
+
+      <template v-else>
+        <div class="mobile-card-list">
+          <div v-for="row in tableData" :key="row.id" class="mobile-card">
+            <div class="card-header">
+              <div style="flex:1;min-width:0">
+                <div class="card-title">{{ row.name }}</div>
+                <div style="margin-top:4px">
+                  <n-tag size="small" :type="protocolColorMap[row.type] || 'default'">{{ (row.type || '').toUpperCase() }}</n-tag>
+                  <n-tag size="small" style="margin-left:4px">{{ row.region }}</n-tag>
+                </div>
+              </div>
+              <n-switch :value="row.is_active" @update:value="(v) => handleToggleActive(row, v)" />
+            </div>
+            <div class="card-body">
+              <div class="card-row">
+                <span class="card-label">状态</span>
+                <n-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</n-tag>
+              </div>
+              <div class="card-row">
+                <span class="card-label">来源</span>
+                <span>{{ row.is_manual ? '手动' : '订阅' }}</span>
+              </div>
+              <div class="card-row">
+                <span class="card-label">排序</span>
+                <span>{{ row.order_index }}</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <n-button size="small" type="primary" @click="handleEdit(row)">编辑</n-button>
+              <n-button size="small" type="error" @click="handleDelete(row)">删除</n-button>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; display: flex; justify-content: center;">
+          <n-pagination
+            v-model:page="pagination.page"
+            v-model:page-size="pagination.pageSize"
+            :item-count="pagination.itemCount"
+            :page-sizes="pagination.pageSizes"
+            show-size-picker
+            @update:page="fetchData"
+            @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+          />
+        </div>
+      </template>
     </n-card>
 
     <!-- Import Subscription Modal -->
@@ -53,7 +102,7 @@
       v-model:show="showImportSubModal"
       title="导入订阅"
       preset="card"
-      style="width: 600px"
+      :style="{ width: appStore.isMobile ? '95%' : '600px' }"
       :mask-closable="false"
     >
       <n-form label-placement="top">
@@ -85,7 +134,7 @@
       v-model:show="showImportLinksModal"
       title="导入链接"
       preset="card"
-      style="width: 600px"
+      :style="{ width: appStore.isMobile ? '95%' : '600px' }"
       :mask-closable="false"
     >
       <n-form label-placement="top">
@@ -118,7 +167,7 @@
       v-model:show="showEditModal"
       title="编辑节点"
       preset="card"
-      style="width: 600px"
+      :style="{ width: appStore.isMobile ? '95%' : '600px' }"
       :mask-closable="false"
     >
       <n-form
@@ -161,7 +210,7 @@
 
 <script setup>
 import { ref, reactive, h, onMounted } from 'vue'
-import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NSwitch, NPagination, useMessage, useDialog } from 'naive-ui'
 import {
   CloudDownloadOutline,
   LinkOutline,
@@ -170,9 +219,11 @@ import {
   TrashOutline
 } from '@vicons/ionicons5'
 import { listAdminNodes, updateNode, deleteNode, importNodes } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
 
 const message = useMessage()
 const dialog = useDialog()
+const appStore = useAppStore()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -291,6 +342,22 @@ const columns = [
     }
   }
 ]
+
+const getStatusType = (status) => {
+  const statusMap = {
+    online: 'success',
+    offline: 'error',
+  }
+  return statusMap[status] || 'default'
+}
+
+const getStatusText = (status) => {
+  const statusMap = {
+    online: '在线',
+    offline: '离线',
+  }
+  return statusMap[status] || status || '未知'
+}
 
 const fetchData = async () => {
   loading.value = true
@@ -462,6 +529,58 @@ onMounted(() => {
 <style scoped>
 .nodes-container {
   padding: 20px;
+}
+
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-body {
+  padding: 10px 14px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.card-label {
+  color: #999;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0f0f0;
 }
 
 @media (max-width: 767px) {

@@ -3,69 +3,226 @@
     <n-card title="系统日志" :bordered="false">
       <n-tabs type="line" animated @update:value="handleTabChange">
         <n-tab-pane name="audit" tab="审计日志">
-          <n-data-table
-            remote
-            :columns="auditColumns"
-            :data="auditData"
-            :loading="auditLoading"
-            :pagination="auditPagination"
-            :bordered="false"
-          />
+          <template v-if="!appStore.isMobile">
+            <n-data-table
+              remote
+              :columns="auditColumns"
+              :data="auditData"
+              :loading="auditLoading"
+              :pagination="auditPagination"
+              :bordered="false"
+            />
+          </template>
+          <template v-else>
+            <div class="mobile-card-list">
+              <div v-for="item in auditData" :key="item.id" class="mobile-card">
+                <div class="card-header">
+                  <span class="card-title">ID: {{ item.id }}</span>
+                </div>
+                <div class="card-body">
+                  <div class="card-row"><span class="card-label">管理员ID:</span><span>{{ item.user_id }}</span></div>
+                  <div class="card-row"><span class="card-label">操作:</span><span>{{ item.action_type }}</span></div>
+                  <div class="card-row"><span class="card-label">目标类型:</span><span>{{ item.resource_type }}</span></div>
+                  <div class="card-row"><span class="card-label">目标ID:</span><span>{{ item.resource_id }}</span></div>
+                  <div class="card-row"><span class="card-label">IP地址:</span><span>{{ item.ip_address }}</span></div>
+                  <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at }}</span></div>
+                </div>
+              </div>
+            </div>
+            <n-pagination
+              v-model:page="auditPagination.page"
+              v-model:page-size="auditPagination.pageSize"
+              :item-count="auditPagination.itemCount"
+              :page-sizes="auditPagination.pageSizes"
+              show-size-picker
+              style="margin-top: 16px; justify-content: center"
+            />
+          </template>
         </n-tab-pane>
 
         <n-tab-pane name="login" tab="登录日志">
-          <n-data-table
-            remote
-            :columns="loginColumns"
-            :data="loginData"
-            :loading="loginLoading"
-            :pagination="loginPagination"
-            :bordered="false"
-          />
+          <template v-if="!appStore.isMobile">
+            <n-data-table
+              remote
+              :columns="loginColumns"
+              :data="loginData"
+              :loading="loginLoading"
+              :pagination="loginPagination"
+              :bordered="false"
+            />
+          </template>
+          <template v-else>
+            <div class="mobile-card-list">
+              <div v-for="item in loginData" :key="item.id" class="mobile-card">
+                <div class="card-header">
+                  <span class="card-title">ID: {{ item.id }}</span>
+                  <n-tag :type="item.login_status === 'success' ? 'success' : 'error'" size="small">{{ item.login_status }}</n-tag>
+                </div>
+                <div class="card-body">
+                  <div class="card-row"><span class="card-label">用户ID:</span><span>{{ item.user_id }}</span></div>
+                  <div class="card-row"><span class="card-label">IP地址:</span><span>{{ item.ip_address }}</span></div>
+                  <div class="card-row"><span class="card-label">位置:</span><span>{{ item.location }}</span></div>
+                  <div class="card-row"><span class="card-label">设备:</span><span>{{ item.user_agent }}</span></div>
+                  <div class="card-row"><span class="card-label">登录时间:</span><span>{{ item.login_time }}</span></div>
+                </div>
+              </div>
+            </div>
+            <n-pagination
+              v-model:page="loginPagination.page"
+              v-model:page-size="loginPagination.pageSize"
+              :item-count="loginPagination.itemCount"
+              :page-sizes="loginPagination.pageSizes"
+              show-size-picker
+              style="margin-top: 16px; justify-content: center"
+            />
+          </template>
         </n-tab-pane>
 
         <n-tab-pane name="registration" tab="注册日志">
-          <n-data-table
-            remote
-            :columns="registrationColumns"
-            :data="registrationData"
-            :loading="registrationLoading"
-            :pagination="registrationPagination"
-            :bordered="false"
-          />
+          <template v-if="!appStore.isMobile">
+            <n-data-table
+              remote
+              :columns="registrationColumns"
+              :data="registrationData"
+              :loading="registrationLoading"
+              :pagination="registrationPagination"
+              :bordered="false"
+            />
+          </template>
+          <template v-else>
+            <div class="mobile-card-list">
+              <div v-for="item in registrationData" :key="item.id" class="mobile-card">
+                <div class="card-header">
+                  <span class="card-title">ID: {{ item.id }}</span>
+                </div>
+                <div class="card-body">
+                  <div class="card-row"><span class="card-label">用户ID:</span><span>{{ item.user_id }}</span></div>
+                  <div class="card-row"><span class="card-label">IP地址:</span><span>{{ item.ip_address }}</span></div>
+                  <div class="card-row"><span class="card-label">邀请码:</span><span>{{ item.invite_code }}</span></div>
+                  <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at }}</span></div>
+                </div>
+              </div>
+            </div>
+            <n-pagination
+              v-model:page="registrationPagination.page"
+              v-model:page-size="registrationPagination.pageSize"
+              :item-count="registrationPagination.itemCount"
+              :page-sizes="registrationPagination.pageSizes"
+              show-size-picker
+              style="margin-top: 16px; justify-content: center"
+            />
+          </template>
         </n-tab-pane>
 
         <n-tab-pane name="subscription" tab="订阅日志">
-          <n-data-table
-            remote
-            :columns="subscriptionColumns"
-            :data="subscriptionData"
-            :loading="subscriptionLoading"
-            :pagination="subscriptionPagination"
-            :bordered="false"
-          />
+          <template v-if="!appStore.isMobile">
+            <n-data-table
+              remote
+              :columns="subscriptionColumns"
+              :data="subscriptionData"
+              :loading="subscriptionLoading"
+              :pagination="subscriptionPagination"
+              :bordered="false"
+            />
+          </template>
+          <template v-else>
+            <div class="mobile-card-list">
+              <div v-for="item in subscriptionData" :key="item.id" class="mobile-card">
+                <div class="card-header">
+                  <span class="card-title">ID: {{ item.id }}</span>
+                </div>
+                <div class="card-body">
+                  <div class="card-row"><span class="card-label">用户ID:</span><span>{{ item.user_id }}</span></div>
+                  <div class="card-row"><span class="card-label">操作:</span><span>{{ item.action_type }}</span></div>
+                  <div class="card-row"><span class="card-label">详情:</span><span>{{ item.description }}</span></div>
+                  <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at }}</span></div>
+                </div>
+              </div>
+            </div>
+            <n-pagination
+              v-model:page="subscriptionPagination.page"
+              v-model:page-size="subscriptionPagination.pageSize"
+              :item-count="subscriptionPagination.itemCount"
+              :page-sizes="subscriptionPagination.pageSizes"
+              show-size-picker
+              style="margin-top: 16px; justify-content: center"
+            />
+          </template>
         </n-tab-pane>
 
         <n-tab-pane name="balance" tab="余额日志">
-          <n-data-table
-            remote
-            :columns="balanceColumns"
-            :data="balanceData"
-            :loading="balanceLoading"
-            :pagination="balancePagination"
-            :bordered="false"
-          />
+          <template v-if="!appStore.isMobile">
+            <n-data-table
+              remote
+              :columns="balanceColumns"
+              :data="balanceData"
+              :loading="balanceLoading"
+              :pagination="balancePagination"
+              :bordered="false"
+            />
+          </template>
+          <template v-else>
+            <div class="mobile-card-list">
+              <div v-for="item in balanceData" :key="item.id" class="mobile-card">
+                <div class="card-header">
+                  <span class="card-title">ID: {{ item.id }}</span>
+                </div>
+                <div class="card-body">
+                  <div class="card-row"><span class="card-label">用户ID:</span><span>{{ item.user_id }}</span></div>
+                  <div class="card-row"><span class="card-label">类型:</span><span>{{ item.change_type }}</span></div>
+                  <div class="card-row"><span class="card-label">金额:</span><span>{{ item.amount }}</span></div>
+                  <div class="card-row"><span class="card-label">余额:</span><span>{{ item.balance_after }}</span></div>
+                  <div class="card-row"><span class="card-label">备注:</span><span>{{ item.description }}</span></div>
+                  <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at }}</span></div>
+                </div>
+              </div>
+            </div>
+            <n-pagination
+              v-model:page="balancePagination.page"
+              v-model:page-size="balancePagination.pageSize"
+              :item-count="balancePagination.itemCount"
+              :page-sizes="balancePagination.pageSizes"
+              show-size-picker
+              style="margin-top: 16px; justify-content: center"
+            />
+          </template>
         </n-tab-pane>
 
         <n-tab-pane name="commission" tab="佣金日志">
-          <n-data-table
-            remote
-            :columns="commissionColumns"
-            :data="commissionData"
-            :loading="commissionLoading"
-            :pagination="commissionPagination"
-            :bordered="false"
-          />
+          <template v-if="!appStore.isMobile">
+            <n-data-table
+              remote
+              :columns="commissionColumns"
+              :data="commissionData"
+              :loading="commissionLoading"
+              :pagination="commissionPagination"
+              :bordered="false"
+            />
+          </template>
+          <template v-else>
+            <div class="mobile-card-list">
+              <div v-for="item in commissionData" :key="item.id" class="mobile-card">
+                <div class="card-header">
+                  <span class="card-title">ID: {{ item.id }}</span>
+                </div>
+                <div class="card-body">
+                  <div class="card-row"><span class="card-label">用户ID:</span><span>{{ item.inviter_id }}</span></div>
+                  <div class="card-row"><span class="card-label">来源用户ID:</span><span>{{ item.invitee_id }}</span></div>
+                  <div class="card-row"><span class="card-label">金额:</span><span>{{ item.amount }}</span></div>
+                  <div class="card-row"><span class="card-label">类型:</span><span>{{ item.commission_type }}</span></div>
+                  <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at }}</span></div>
+                </div>
+              </div>
+            </div>
+            <n-pagination
+              v-model:page="commissionPagination.page"
+              v-model:page-size="commissionPagination.pageSize"
+              :item-count="commissionPagination.itemCount"
+              :page-sizes="commissionPagination.pageSizes"
+              show-size-picker
+              style="margin-top: 16px; justify-content: center"
+            />
+          </template>
         </n-tab-pane>
       </n-tabs>
     </n-card>
@@ -74,8 +231,11 @@
 
 <script setup lang="tsx">
 import { ref, reactive, h, onMounted } from 'vue'
-import { NCard, NTabs, NTabPane, NDataTable, NTag, useMessage, type DataTableColumns } from 'naive-ui'
+import { NCard, NTabs, NTabPane, NDataTable, NTag, NPagination, useMessage, type DataTableColumns } from 'naive-ui'
 import { getAuditLogs, getLoginLogs, getRegistrationLogs, getSubscriptionLogs, getBalanceLogs, getCommissionLogs } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 
 const message = useMessage()
 const currentTab = ref('audit')
@@ -390,6 +550,15 @@ onMounted(() => {
 .logs-container {
   padding: 20px;
 }
+
+.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
+.mobile-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+.card-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-body { padding: 10px 14px; }
+.card-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
+.card-label { color: #999; }
+.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid #f0f0f0; flex-wrap: wrap; }
 
 @media (max-width: 767px) {
   .logs-container { padding: 8px; }

@@ -7,19 +7,56 @@
         </n-button>
       </template>
 
-      <n-data-table
-        :columns="columns"
-        :data="levels"
-        :loading="loading"
-        :bordered="false"
-      />
+      <template v-if="!appStore.isMobile">
+        <n-data-table
+          :columns="columns"
+          :data="levels"
+          :loading="loading"
+          :bordered="false"
+        />
+      </template>
+
+      <template v-else>
+        <div class="mobile-card-list">
+          <div v-for="row in levels" :key="row.id" class="mobile-card">
+            <div class="card-header">
+              <span class="card-title">{{ row.level_name }}</span>
+              <n-tag :type="row.is_active ? 'success' : 'default'" size="small">
+                {{ row.is_active ? '启用' : '禁用' }}
+              </n-tag>
+            </div>
+            <div class="card-body">
+              <div class="card-row">
+                <span class="card-label">折扣率</span>
+                <span>{{ row.discount_rate }}%</span>
+              </div>
+              <div class="card-row">
+                <span class="card-label">最低消费</span>
+                <span>¥{{ row.min_consumption || 0 }}</span>
+              </div>
+              <div class="card-row">
+                <span class="card-label">设备限制</span>
+                <span>{{ row.device_limit }}</span>
+              </div>
+              <div class="card-row" v-if="row.benefits">
+                <span class="card-label">权益说明</span>
+                <span style="text-align: right; flex: 1; margin-left: 8px;">{{ row.benefits }}</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <n-button size="small" type="primary" @click="handleEdit(row)">编辑</n-button>
+              <n-button size="small" type="error" @click="handleDelete(row.id)">删除</n-button>
+            </div>
+          </div>
+        </div>
+      </template>
     </n-card>
 
     <n-modal
       v-model:show="showModal"
       preset="card"
       :title="isEdit ? '编辑等级' : '添加等级'"
-      style="width: 600px"
+      :style="appStore.isMobile ? 'width: 95vw; max-width: 600px' : 'width: 600px'"
       :segmented="{ content: 'soft' }"
     >
       <n-form
@@ -104,9 +141,11 @@
 import { ref, reactive, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { listUserLevels, createUserLevel, updateUserLevel, deleteUserLevel } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
 
 const message = useMessage()
 const dialog = useDialog()
+const appStore = useAppStore()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -279,6 +318,59 @@ onMounted(() => {
 <style scoped>
 .levels-container {
   padding: 20px;
+}
+
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-body {
+  padding: 10px 14px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.card-label {
+  color: #999;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0f0f0;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 767px) {

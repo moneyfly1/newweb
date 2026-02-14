@@ -208,6 +208,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminUsers.GET("/abnormal", handlers.AdminGetAbnormalUsers)
 			adminUsers.POST("/:id/login-as", handlers.AdminLoginAsUser)
 			adminUsers.POST("/batch-action", handlers.AdminBatchUserAction)
+			adminUsers.DELETE("/:id/devices/:deviceId", handlers.AdminDeleteUserDevice)
 		}
 
 		// 订单管理

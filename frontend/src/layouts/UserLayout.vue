@@ -23,6 +23,11 @@
           </n-dropdown>
         </n-space>
       </n-layout-header>
+      <!-- Admin return banner -->
+      <div v-if="isAdminViewing" class="admin-return-banner" @click="returnToAdmin">
+        <n-icon :size="16"><shield-outline /></n-icon>
+        <span>正在以用户身份浏览 · 点击返回管理后台</span>
+      </div>
       <n-layout-content content-style="padding: 24px;" :native-scrollbar="false">
         <router-view />
       </n-layout-content>
@@ -44,6 +49,11 @@
         </n-button>
       </div>
     </n-layout-header>
+    <!-- Admin return banner -->
+    <div v-if="isAdminViewing" class="admin-return-banner" @click="returnToAdmin">
+      <n-icon :size="16"><shield-outline /></n-icon>
+      <span>正在以用户身份浏览 · 点击返回管理后台</span>
+    </div>
     <n-layout-content content-style="padding: 12px 14px; padding-bottom: 72px;" :native-scrollbar="false">
       <router-view />
     </n-layout-content>
@@ -108,7 +118,8 @@ import {
   HomeOutline, CloudOutline, CartOutline, StorefrontOutline,
   ChatbubblesOutline, ServerOutline, PhonePortraitOutline, PeopleOutline,
   SettingsOutline, NotificationsOutline, EllipsisHorizontalOutline,
-  LogOutOutline, ShieldOutline,
+  LogOutOutline, ShieldOutline, KeyOutline,
+  TimeOutline, WalletOutline, HelpCircleOutline,
 } from '@vicons/ionicons5'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -122,7 +133,6 @@ const unreadCount = ref(0)
 const showMobileMore = ref(false)
 
 onMounted(async () => {
-  appStore.initTheme()
   try { const res: any = await getUnreadCount(); unreadCount.value = res.data?.count || 0 } catch {}
 })
 
@@ -137,6 +147,10 @@ const menuOptions = [
   { label: '节点状态', key: 'Nodes', icon: renderIcon(ServerOutline) },
   { label: '我的设备', key: 'Devices', icon: renderIcon(PhonePortraitOutline) },
   { label: '邀请返利', key: 'Invite', icon: renderIcon(PeopleOutline) },
+  { label: '卡密兑换', key: 'Redeem', icon: renderIcon(KeyOutline) },
+  { label: '充值', key: 'Recharge', icon: renderIcon(WalletOutline) },
+  { label: '登录历史', key: 'LoginHistory', icon: renderIcon(TimeOutline) },
+  { label: '帮助', key: 'Help', icon: renderIcon(HelpCircleOutline) },
 ]
 
 // Mobile: 5 main tabs at bottom
@@ -154,6 +168,10 @@ const moreMenuItems = [
   { label: '节点状态', key: 'Nodes', icon: ServerOutline },
   { label: '我的设备', key: 'Devices', icon: PhonePortraitOutline },
   { label: '邀请返利', key: 'Invite', icon: PeopleOutline },
+  { label: '卡密兑换', key: 'Redeem', icon: KeyOutline },
+  { label: '充值', key: 'Recharge', icon: WalletOutline },
+  { label: '登录历史', key: 'LoginHistory', icon: TimeOutline },
+  { label: '帮助', key: 'Help', icon: HelpCircleOutline },
   ...(userStore.isAdmin ? [{ label: '管理后台', key: 'admin', icon: ShieldOutline }] : []),
   { label: '退出登录', key: 'logout', icon: LogOutOutline },
 ]
@@ -190,6 +208,21 @@ function handleUserMenu(key: string) {
   else if (key === 'admin') { router.push('/admin') }
   else if (key === 'theme-picker') { showThemeDrawer.value = true }
   else if (key === 'settings') { router.push({ name: 'Settings' }) }
+}
+
+const isAdminViewing = computed(() => !!localStorage.getItem('admin_token'))
+
+function returnToAdmin() {
+  const adminToken = localStorage.getItem('admin_token')
+  const adminUser = localStorage.getItem('admin_user')
+  if (adminToken) {
+    localStorage.setItem('token', adminToken)
+    if (adminUser) localStorage.setItem('user', adminUser)
+    localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_user')
+    // Reload to refresh user state
+    window.location.href = '/admin'
+  }
 }
 </script>
 <!-- STYLE_SECTION -->
@@ -245,4 +278,12 @@ function handleUserMenu(key: string) {
 .theme-picker-item.active { border-color: var(--primary-color, #667eea); background: var(--primary-color, #667eea)11; }
 .theme-picker-color { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
 .theme-picker-label { font-size: 13px; }
+
+/* Admin Return Banner */
+.admin-return-banner {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 16px; background: #ff9800; color: #fff; cursor: pointer;
+  font-size: 13px; font-weight: 500;
+}
+.admin-return-banner:hover { background: #f57c00; }
 </style>

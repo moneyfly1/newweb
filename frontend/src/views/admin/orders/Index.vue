@@ -30,25 +30,78 @@
           </n-button>
         </n-space>
 
-        <n-data-table
-          :columns="columns"
-          :data="orders"
-          :loading="loading"
-          :pagination="false"
-          :bordered="false"
-          :single-line="false"
-          :scroll-x="1400"
-        />
+        <template v-if="!appStore.isMobile">
+          <n-data-table
+            :columns="columns"
+            :data="orders"
+            :loading="loading"
+            :pagination="false"
+            :bordered="false"
+            :single-line="false"
+            :scroll-x="1400"
+          />
 
-        <n-pagination
-          v-model:page="currentPage"
-          v-model:page-size="pageSize"
-          :page-count="totalPages"
-          :page-sizes="[10, 20, 50, 100]"
-          show-size-picker
-          @update:page="handlePageChange"
-          @update:page-size="handlePageSizeChange"
-        />
+          <n-pagination
+            v-model:page="currentPage"
+            v-model:page-size="pageSize"
+            :page-count="totalPages"
+            :page-sizes="[10, 20, 50, 100]"
+            show-size-picker
+            @update:page="handlePageChange"
+            @update:page-size="handlePageSizeChange"
+          />
+        </template>
+
+        <template v-else>
+          <div v-if="loading" style="text-align: center; padding: 20px;">
+            <n-spin size="medium" />
+          </div>
+          <div v-else-if="orders.length === 0" style="text-align: center; padding: 20px; color: #999;">
+            暂无订单数据
+          </div>
+          <div v-else class="mobile-card-list">
+            <div v-for="row in orders" :key="row.id" class="mobile-card">
+              <div class="card-header">
+                <span class="card-title">{{ row.order_no }}</span>
+                <n-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</n-tag>
+              </div>
+              <div class="card-body">
+                <div class="card-row">
+                  <span class="card-label">用户ID</span>
+                  <span>{{ row.user_id }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">订单金额</span>
+                  <span>¥{{ row.amount.toFixed(2) }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">实付金额</span>
+                  <span style="color:#18a058;font-weight:600">¥{{ row.final_amount != null ? Number(row.final_amount).toFixed(2) : '0.00' }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">支付方式</span>
+                  <span>{{ getPaymentMethodText(row.payment_method_name) }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">创建时间</span>
+                  <span>{{ new Date(row.created_at).toLocaleString('zh-CN') }}</span>
+                </div>
+              </div>
+              <div class="card-actions">
+                <n-button size="small" @click="handleViewDetail(row)">详情</n-button>
+                <n-button v-if="row.status === 'paid'" size="small" type="error" @click="handleRefund(row)">退款</n-button>
+              </div>
+            </div>
+          </div>
+
+          <n-pagination
+            v-model:page="currentPage"
+            :page-count="totalPages"
+            :page-slot="5"
+            style="margin-top: 16px; justify-content: center;"
+            @update:page="handlePageChange"
+          />
+        </template>
       </n-space>
     </n-card>
 
@@ -56,7 +109,7 @@
       v-model:show="showDetailModal"
       preset="card"
       title="订单详情"
-      style="width: 600px"
+      :style="{ width: appStore.isMobile ? '95%' : '600px' }"
       :bordered="false"
     >
       <n-descriptions
@@ -100,12 +153,14 @@
 
 <script setup>
 import { ref, h, onMounted } from 'vue'
-import { NButton, NTag, NSpace, NIcon, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline } from '@vicons/ionicons5'
 import { listAdminOrders, refundOrder } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
 
 const message = useMessage()
 const dialog = useDialog()
+const appStore = useAppStore()
 
 const loading = ref(false)
 const orders = ref([])
@@ -325,6 +380,58 @@ onMounted(() => {
 
 :deep(.n-data-table .n-data-table-th) {
   font-weight: 600;
+}
+
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.card-body {
+  padding: 10px 14px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.card-label {
+  color: #999;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0f0f0;
 }
 
 @media (max-width: 767px) {

@@ -49,18 +49,82 @@
           <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
         </n-space>
 
-        <!-- Data table -->
-        <n-data-table
-          :columns="columns"
-          :data="users"
-          :loading="loading"
-          :pagination="false"
-          :bordered="false"
-          :single-line="false"
-          :row-key="(row) => row.id"
-          :checked-row-keys="checkedRowKeys"
-          @update:checked-row-keys="handleCheck"
-        />
+        <!-- Data table (Desktop) -->
+        <template v-if="!appStore.isMobile">
+          <n-data-table
+            :columns="columns"
+            :data="users"
+            :loading="loading"
+            :pagination="false"
+            :bordered="false"
+            :single-line="false"
+            :row-key="(row) => row.id"
+            :checked-row-keys="checkedRowKeys"
+            @update:checked-row-keys="handleCheck"
+          />
+        </template>
+
+        <!-- Mobile card layout -->
+        <template v-else>
+          <div v-if="loading" style="text-align: center; padding: 40px;">
+            <n-spin size="medium" />
+          </div>
+          <div v-else-if="users.length === 0" style="text-align: center; padding: 40px; color: #999;">
+            暂无数据
+          </div>
+          <div v-else class="mobile-card-list">
+            <div v-for="row in users" :key="row.id" class="mobile-card">
+              <div class="card-header">
+                <div class="card-title">{{ row.username }}</div>
+                <n-space :size="4">
+                  <n-tag :type="row.is_active ? 'success' : 'error'" size="small">
+                    {{ row.is_active ? '激活' : '禁用' }}
+                  </n-tag>
+                  <n-tag v-if="row.is_admin" type="warning" size="small">管理员</n-tag>
+                </n-space>
+              </div>
+              <div class="card-body">
+                <div class="card-row">
+                  <span class="card-label">邮箱</span>
+                  <span>{{ row.email }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">余额</span>
+                  <span>¥{{ (row.balance ?? 0).toFixed(2) }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">等级</span>
+                  <span>{{ row.level_name || row.level || '无' }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">注册时间</span>
+                  <span>{{ row.created_at ? new Date(row.created_at).toLocaleString('zh-CN') : '-' }}</span>
+                </div>
+              </div>
+              <div class="card-actions">
+                <n-button size="small" @click="handleViewDetail(row)">详情</n-button>
+                <n-button size="small" @click="handleEdit(row)">编辑</n-button>
+                <n-button size="small" @click="handleToggleActive(row)">
+                  {{ row.is_active ? '禁用' : '启用' }}
+                </n-button>
+                <n-dropdown
+                  trigger="click"
+                  :options="[
+                    { label: '重置密码', key: 'resetPwd' },
+                    { label: '删除', key: 'delete' }
+                  ]"
+                  @select="(key) => handleAction(key, row)"
+                >
+                  <n-button size="small" quaternary>
+                    <template #icon>
+                      <n-icon :component="EllipsisVertical" />
+                    </template>
+                  </n-button>
+                </n-dropdown>
+              </div>
+            </div>
+          </div>
+        </template>
 
         <n-pagination
           v-model:page="currentPage"
@@ -75,7 +139,7 @@
     </n-card>
 
     <!-- Create/Edit User Modal -->
-    <n-modal v-model:show="showEditModal" preset="card" :title="isCreate ? '新增用户' : '编辑用户'" style="width: 520px">
+    <n-modal v-model:show="showEditModal" preset="card" :title="isCreate ? '新增用户' : '编辑用户'" :style="{ width: appStore.isMobile ? '95%' : '520px' }">
       <n-form ref="formRef" :model="editForm" :rules="formRulesComputed" label-placement="left" label-width="80" style="margin-top: 8px">
         <n-form-item label="用户名" path="username">
           <n-input v-model:value="editForm.username" placeholder="请输入用户名" />
@@ -108,7 +172,7 @@
     </n-modal>
 
     <!-- User Detail Drawer -->
-    <n-drawer v-model:show="showDetailDrawer" :width="780" placement="right">
+    <n-drawer v-model:show="showDetailDrawer" :width="appStore.isMobile ? '100%' : 780" placement="right">
       <n-drawer-content :title="'用户详情 - ' + (userDetail.username || userDetail.email || '')">
         <n-descriptions bordered :column="2" label-placement="left" size="small">
           <n-descriptions-item label="ID">{{ userDetail.id }}</n-descriptions-item>
@@ -131,6 +195,7 @@
             <n-descriptions-item label="套餐">{{ userDetail.package_name || '-' }}</n-descriptions-item>
             <n-descriptions-item label="状态">
               <n-tag :type="subStatusType(userDetail.subscription.status)" size="small">{{ subStatusText(userDetail.subscription.status) }}</n-tag>
+              <n-tag v-if="!userDetail.subscription.is_active" type="error" size="small" style="margin-left:4px">已停用</n-tag>
             </n-descriptions-item>
             <n-descriptions-item label="设备">{{ userDetail.subscription.current_devices || 0 }} / {{ userDetail.subscription.device_limit || 0 }}</n-descriptions-item>
             <n-descriptions-item label="到期时间">{{ fmtDate(userDetail.subscription.expire_time) }}</n-descriptions-item>
@@ -173,7 +238,7 @@
     </n-drawer>
 
     <!-- Reset Password Modal -->
-    <n-modal v-model:show="showResetPwdModal" preset="card" title="重置密码" style="width: 420px">
+    <n-modal v-model:show="showResetPwdModal" preset="card" title="重置密码" :style="{ width: appStore.isMobile ? '95%' : '420px' }">
       <n-form ref="resetPwdFormRef" :model="resetPwdForm" :rules="resetPwdRules" label-placement="left" label-width="80">
         <n-form-item label="新密码" path="password">
           <n-input v-model:value="resetPwdForm.password" type="password" show-password-on="click" placeholder="请输入新密码" />
@@ -191,15 +256,17 @@
 
 <script setup>
 import { ref, reactive, h, onMounted, computed } from 'vue'
-import { NButton, NTag, NSpace, NIcon, NDropdown, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NDropdown, NSpin, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, AddOutline, RefreshOutline, EllipsisVertical } from '@vicons/ionicons5'
 import {
   listUsers, getUser, updateUser, deleteUser, toggleUserActive,
-  createUser, resetUserPassword
+  createUser, resetUserPassword, deleteUserDevice
 } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
 
 const message = useMessage()
 const dialog = useDialog()
+const appStore = useAppStore()
 
 // State
 const loading = ref(false)
@@ -564,7 +631,20 @@ const handleBatchDelete = () => {
 const handleViewDetail = async (row) => {
   try {
     const res = await getUser(row.id)
-    userDetail.value = res.data
+    const d = res.data
+    // Flatten: spread user fields + attach nested data
+    userDetail.value = {
+      ...d.user,
+      subscription: d.subscription || null,
+      subscription_urls: d.subscription_urls || {},
+      package_name: d.package_name || '',
+      recent_orders: d.recent_orders || [],
+      devices: d.devices || [],
+      resets: d.resets || [],
+      balance_logs: d.balance_logs || [],
+      login_history: d.login_history || [],
+      recharge_records: d.recharge_records || [],
+    }
     showDetailDrawer.value = true
   } catch (e) {
     message.error('获取用户详情失败')
@@ -572,6 +652,25 @@ const handleViewDetail = async (row) => {
 }
 
 const fmtDate = (d) => d ? new Date(d).toLocaleString('zh-CN') : '-'
+
+const handleDeleteDevice = (device) => {
+  dialog.warning({
+    title: '确认删除设备',
+    content: `确定要删除设备 ${device.device_name || device.software_name || '未知设备'} 吗？`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await deleteUserDevice(userDetail.value.id, device.id)
+        message.success('设备已删除')
+        // Refresh detail
+        await handleViewDetail(userDetail.value)
+      } catch (error) {
+        message.error('删除设备失败：' + (error.message || '未知错误'))
+      }
+    }
+  })
+}
 const subStatusType = (s) => ({ active: 'success', expiring: 'warning', expired: 'error' }[s] || 'default')
 const subStatusText = (s) => ({ active: '活跃', expiring: '即将到期', expired: '已过期', disabled: '已禁用' }[s] || s || '-')
 
@@ -582,25 +681,32 @@ const orderCols = [
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]
 const deviceCols = [
-  { title: '设备名', key: 'device_name', ellipsis: { tooltip: true } },
-  { title: 'IP', key: 'ip_address', width: 130 },
-  { title: '最后活跃', key: 'last_active', width: 160, render: (r) => fmtDate(r.last_active || r.updated_at) }
+  { title: '设备名', key: 'device_name', ellipsis: { tooltip: true }, render: (r) => r.device_name || r.software_name || '未知设备' },
+  { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
+  { title: '最后活跃', key: 'last_access', width: 160, render: (r) => fmtDate(r.last_access || r.updated_at) },
+  {
+    title: '操作', key: 'actions', width: 80,
+    render: (r) => h(NButton, { size: 'small', type: 'error', secondary: true, onClick: () => handleDeleteDevice(r) }, { default: () => '删除' })
+  }
 ]
 const loginCols = [
-  { title: 'IP', key: 'ip', width: 130 },
-  { title: 'UA', key: 'user_agent', ellipsis: { tooltip: true } },
-  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
+  { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
+  { title: '位置', key: 'location', width: 100, render: (r) => r.location || '-' },
+  { title: 'UA', key: 'user_agent', ellipsis: { tooltip: true }, render: (r) => r.user_agent || '-' },
+  { title: '状态', key: 'login_status', width: 70, render: (r) => h(NTag, { type: r.login_status === 'success' ? 'success' : 'error', size: 'small' }, { default: () => r.login_status === 'success' ? '成功' : '失败' }) },
+  { title: '时间', key: 'login_time', width: 160, render: (r) => fmtDate(r.login_time) }
 ]
 const resetCols = [
-  { title: '操作者', key: 'reset_by', width: 100 },
+  { title: '操作者', key: 'reset_by', width: 100, render: (r) => r.reset_by || '-' },
+  { title: '类型', key: 'reset_type', width: 80 },
   { title: '原因', key: 'reason', ellipsis: { tooltip: true } },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]
 const balanceCols = [
-  { title: '类型', key: 'type', width: 80 },
+  { title: '类型', key: 'change_type', width: 90 },
   { title: '金额', key: 'amount', width: 90, render: (r) => `¥${(r.amount ?? 0).toFixed(2)}` },
-  { title: '余额', key: 'balance_after', width: 90, render: (r) => `¥${(r.balance_after ?? 0).toFixed(2)}` },
-  { title: '备注', key: 'remark', ellipsis: { tooltip: true } },
+  { title: '变动后', key: 'balance_after', width: 90, render: (r) => `¥${(r.balance_after ?? 0).toFixed(2)}` },
+  { title: '说明', key: 'description', ellipsis: { tooltip: true }, render: (r) => r.description || '-' },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]
 const rechargeCols = [
@@ -637,4 +743,54 @@ onMounted(() => { fetchUsers() })
 .url-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .url-label { font-size: 12px; color: #666; min-width: 40px; }
 .url-text { font-size: 12px; word-break: break-all; color: #333; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
+
+/* Mobile card styles */
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.card-body {
+  padding: 10px 14px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.card-label {
+  color: #999;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0f0f0;
+  flex-wrap: wrap;
+}
 </style>

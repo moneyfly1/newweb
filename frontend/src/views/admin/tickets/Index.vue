@@ -21,16 +21,55 @@
           />
         </n-space>
 
-        <n-data-table
-          remote
-          :columns="columns"
-          :data="tickets"
-          :loading="loading"
-          :pagination="pagination"
-          :bordered="false"
-          @update:page="(p) => { pagination.page = p; fetchData() }"
-          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
-        />
+        <template v-if="!appStore.isMobile">
+          <n-data-table
+            remote
+            :columns="columns"
+            :data="tickets"
+            :loading="loading"
+            :pagination="pagination"
+            :bordered="false"
+            @update:page="(p: number) => { pagination.page = p; loadTickets() }"
+            @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; loadTickets() }"
+          />
+        </template>
+
+        <template v-else>
+          <n-spin :show="loading">
+            <div v-if="tickets.length === 0" style="text-align: center; padding: 40px 0; color: #999;">
+              暂无数据
+            </div>
+            <div v-else class="mobile-card-list">
+              <div v-for="ticket in tickets" :key="ticket.id" class="mobile-card">
+                <div class="card-header">
+                  <div class="card-title">{{ ticket.title }}</div>
+                  <n-tag :type="getStatusTagType(ticket.status)" size="small">
+                    {{ getStatusText(ticket.status) }}
+                  </n-tag>
+                </div>
+                <div class="card-body">
+                  <div class="card-row">
+                    <span class="card-label">用户ID</span>
+                    <span>{{ ticket.user_id }}</span>
+                  </div>
+                  <div class="card-row">
+                    <span class="card-label">优先级</span>
+                    <n-tag :type="getPriorityTagType(ticket.priority)" size="small">
+                      {{ getPriorityText(ticket.priority) }}
+                    </n-tag>
+                  </div>
+                  <div class="card-row">
+                    <span class="card-label">创建时间</span>
+                    <span>{{ formatDate(ticket.created_at) }}</span>
+                  </div>
+                </div>
+                <div class="card-actions">
+                  <n-button size="small" type="primary" @click="handleViewDetail(ticket.id)">查看详情</n-button>
+                </div>
+              </div>
+            </div>
+          </n-spin>
+        </template>
       </n-space>
     </n-card>
 
@@ -38,7 +77,7 @@
       v-model:show="showDetailModal"
       preset="card"
       title="工单详情"
-      style="width: 800px"
+      :style="appStore.isMobile ? 'width: 95%; max-width: 800px' : 'width: 800px'"
       :segmented="{ content: 'soft' }"
     >
       <n-spin :show="detailLoading">
@@ -120,8 +159,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, h, onMounted } from 'vue'
-import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NSpin, useMessage, useDialog } from 'naive-ui'
 import { listAdminTickets, getAdminTicket, updateTicket, replyAdminTicket } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 
 const message = useMessage()
 const dialog = useDialog()
@@ -428,6 +470,61 @@ onMounted(() => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.card-body {
+  padding: 10px 14px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.card-label {
+  color: #999;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0f0f0;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 767px) {

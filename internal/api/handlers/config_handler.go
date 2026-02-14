@@ -15,6 +15,13 @@ func GetPublicConfig(c *gin.Context) {
 		"site_name", "site_description", "site_url",
 		"support_email", "support_qq", "support_telegram",
 		"register_enabled", "register_email_verify", "register_invite_required",
+		// Client download URLs
+		"client_clash_windows_url", "client_v2rayn_url", "client_mihomo_windows_url",
+		"client_hiddify_windows_url", "client_flclash_windows_url",
+		"client_clash_android_url", "client_v2rayng_url", "client_hiddify_android_url",
+		"client_flclash_macos_url", "client_mihomo_macos_url",
+		"client_shadowrocket_url", "client_stash_url", "client_singbox_url",
+		"client_clash_linux_url",
 	}
 	db.Where("is_public = ? OR `key` IN ?", true, publicKeys).Find(&configs)
 	result := make(map[string]string)

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login as loginApi, logout as logoutApi } from '@/api/auth'
+import { login as loginApi } from '@/api/auth'
 import { getCurrentUser } from '@/api/user'
 
 export interface UserInfo {
@@ -40,15 +40,22 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = res.data
   }
 
-  function logout() {
-    const hadToken = !!token.value
+  function logout(skipApi = false) {
+    const oldToken = token.value
     token.value = ''
     refreshTokenVal.value = ''
     userInfo.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('refresh_token')
-    if (hadToken) {
-      try { logoutApi() } catch {}
+    if (!skipApi && oldToken) {
+      // Fire-and-forget with the old token
+      try {
+        import('@/utils/request').then(({ default: req }) => {
+          req.post('/auth/logout', null, {
+            headers: { Authorization: `Bearer ${oldToken}` }
+          }).catch(() => {})
+        })
+      } catch {}
     }
   }
 

@@ -111,3 +111,39 @@ func CreateBalanceLogSimple(userID uint, changeType string, amount, balanceBefor
 
 // Ensure fmt is used
 var _ = fmt.Sprintf
+
+// SysLog writes a system log entry to both stdout and the database.
+func SysLog(level, module, message string, detail ...string) {
+	db := database.GetDB()
+	if db == nil {
+		return
+	}
+	entry := models.SystemLog{
+		Level:   level,
+		Module:  module,
+		Message: message,
+	}
+	if len(detail) > 0 && detail[0] != "" {
+		entry.Detail = &detail[0]
+	}
+	go func() { db.Create(&entry) }()
+}
+
+// SysInfo logs an info-level system event.
+func SysInfo(module, message string) {
+	SysLog("info", module, message)
+}
+
+// SysWarn logs a warning-level system event.
+func SysWarn(module, message string) {
+	SysLog("warn", module, message)
+}
+
+// SysError logs an error-level system event.
+func SysError(module, message string, detail ...string) {
+	d := ""
+	if len(detail) > 0 {
+		d = detail[0]
+	}
+	SysLog("error", module, message, d)
+}

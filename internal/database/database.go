@@ -240,6 +240,7 @@ func AutoMigrate() error {
 		&models.SubscriptionLog{},
 		&models.BalanceLog{},
 		&models.CommissionLog{},
+		&models.SystemLog{},
 
 		// 卡密（v2 新增）
 		&models.RedeemCode{},

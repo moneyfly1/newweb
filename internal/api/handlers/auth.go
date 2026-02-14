@@ -348,7 +348,8 @@ func Login(c *gin.Context) {
 	})
 
 	// 异常登录检测：检查是否为新 IP
-	if user.AbnormalLoginAlertEnabled {
+	abnormalAlertGlobal := utils.IsBoolSettingDefault("abnormal_login_alert", true)
+	if abnormalAlertGlobal && user.AbnormalLoginAlertEnabled {
 		var prevCount int64
 		db.Model(&models.LoginHistory{}).Where("user_id = ? AND ip_address = ? AND id < (SELECT MAX(id) FROM login_history WHERE user_id = ?)",
 			user.ID, loginIP, user.ID).Count(&prevCount)
@@ -360,7 +361,12 @@ func Login(c *gin.Context) {
 		}
 	}
 
-	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
+	// Token 过期时间：优先使用管理员设置的 session_timeout_minutes
+	accessExpireMinutes := config.AppConfig.AccessTokenExpireMinutes
+	if v := utils.GetIntSetting("session_timeout_minutes", 0); v > 0 {
+		accessExpireMinutes = v
+	}
+	accessToken, _ := generateToken(user.ID, "access", time.Duration(accessExpireMinutes)*time.Minute)
 	refreshToken, _ := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
 
 	utils.Success(c, gin.H{

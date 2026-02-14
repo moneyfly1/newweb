@@ -73,3 +73,15 @@ type CommissionLog struct {
 }
 
 func (CommissionLog) TableName() string { return "commission_logs" }
+
+// SystemLog stores runtime system events (email sending, scheduler tasks, errors, etc.)
+type SystemLog struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Level     string    `gorm:"type:varchar(10);index;not null" json:"level"` // info, warn, error
+	Module    string    `gorm:"type:varchar(50);index;not null" json:"module"` // scheduler, email, payment, notify, system
+	Message   string    `gorm:"type:text;not null" json:"message"`
+	Detail    *string   `gorm:"type:text" json:"detail,omitempty"`
+	CreatedAt time.Time `gorm:"autoCreateTime;index" json:"created_at"`
+}
+
+func (SystemLog) TableName() string { return "system_logs" }

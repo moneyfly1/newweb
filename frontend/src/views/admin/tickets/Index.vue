@@ -352,8 +352,8 @@ const handleViewDetail = async (id: number) => {
   showDetailModal.value = true
   try {
     const res = await getAdminTicket(id)
-    currentTicket.value = res.data
-    updateStatus.value = res.data.status
+    currentTicket.value = { ...res.data.ticket, replies: res.data.replies || [] }
+    updateStatus.value = res.data.ticket.status
   } catch (error: any) {
     message.error(error.message || '加载工单详情失败')
     showDetailModal.value = false

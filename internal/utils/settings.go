@@ -35,6 +35,15 @@ func IsBoolSetting(key string) bool {
 	return v == "true" || v == "1"
 }
 
+// IsBoolSettingDefault checks if a setting is truthy, with a default if not set
+func IsBoolSettingDefault(key string, defaultVal bool) bool {
+	v := GetSetting(key)
+	if v == "" {
+		return defaultVal
+	}
+	return v == "true" || v == "1"
+}
+
 // GetIntSetting reads an integer setting with a default fallback
 func GetIntSetting(key string, defaultVal int) int {
 	v := GetSetting(key)

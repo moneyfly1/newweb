@@ -8,6 +8,7 @@ import (
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/utils"
 )
 
 // Scheduler manages all periodic background tasks.
@@ -40,6 +41,7 @@ func (s *Scheduler) Start() {
 	}
 	s.running = true
 	log.Println("[Scheduler] 后台任务调度器已启动")
+	utils.SysInfo("scheduler", "后台任务调度器已启动")
 
 	s.startLoop("EmailQueue", 10*time.Second, processEmailQueueTask)
 	s.startLoop("DeactivateExpired", 5*time.Minute, deactivateExpiredTask)
@@ -86,6 +88,7 @@ func safeRun(name string, fn func()) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("[Scheduler] 任务 %s panic: %v", name, r)
+			utils.SysError("scheduler", fmt.Sprintf("任务 %s panic", name), fmt.Sprintf("%v", r))
 		}
 	}()
 	fn()
@@ -106,6 +109,7 @@ func deactivateExpiredTask() {
 		Updates(map[string]interface{}{"is_active": false, "status": "expired"})
 	if result.RowsAffected > 0 {
 		log.Printf("[Scheduler] 已停用 %d 个过期订阅", result.RowsAffected)
+		utils.SysInfo("scheduler", fmt.Sprintf("已停用 %d 个过期订阅", result.RowsAffected))
 	}
 }
 
@@ -175,6 +179,7 @@ func sendExpiryRemindersTask() {
 	total := len(remind3) + len(remind1) + len(expired)
 	if total > 0 {
 		log.Printf("[Scheduler] 到期提醒: 3天=%d, 1天=%d, 已过期=%d", len(remind3), len(remind1), len(expired))
+		utils.SysInfo("scheduler", fmt.Sprintf("到期提醒: 3天=%d, 1天=%d, 已过期=%d", len(remind3), len(remind1), len(expired)))
 	}
 }
 
@@ -185,6 +190,7 @@ func cleanExpiredCodesTask() {
 		Delete(&models.VerificationCode{})
 	if result.RowsAffected > 0 {
 		log.Printf("[Scheduler] 已清理 %d 条过期验证码", result.RowsAffected)
+		utils.SysInfo("scheduler", fmt.Sprintf("已清理 %d 条过期验证码", result.RowsAffected))
 	}
 }
 
@@ -228,5 +234,6 @@ func sendUnpaidOrderRemindersTask() {
 
 	if len(orders) > 0 {
 		log.Printf("[Scheduler] 未付款订单提醒: %d 条", len(orders))
+		utils.SysInfo("scheduler", fmt.Sprintf("未付款订单提醒: %d 条", len(orders)))
 	}
 }

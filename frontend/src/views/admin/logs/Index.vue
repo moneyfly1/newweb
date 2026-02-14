@@ -224,6 +224,46 @@
             />
           </template>
         </n-tab-pane>
+
+        <n-tab-pane name="system" tab="系统日志">
+          <n-space style="margin-bottom: 12px">
+            <n-select v-model:value="systemLevelFilter" :options="levelOptions" placeholder="级别" clearable style="width: 120px" @update:value="loadSystemLogs" />
+            <n-select v-model:value="systemModuleFilter" :options="moduleOptions" placeholder="模块" clearable style="width: 140px" @update:value="loadSystemLogs" />
+          </n-space>
+          <template v-if="!appStore.isMobile">
+            <n-data-table
+              remote
+              :columns="systemColumns"
+              :data="systemData"
+              :loading="systemLoading"
+              :pagination="systemPagination"
+              :bordered="false"
+            />
+          </template>
+          <template v-else>
+            <div class="mobile-card-list">
+              <div v-for="item in systemData" :key="item.id" class="mobile-card">
+                <div class="card-header">
+                  <n-tag :type="item.level === 'error' ? 'error' : item.level === 'warn' ? 'warning' : 'info'" size="small">{{ item.level }}</n-tag>
+                  <span style="font-size: 12px; color: #999">{{ item.created_at }}</span>
+                </div>
+                <div class="card-body">
+                  <div class="card-row"><span class="card-label">模块:</span><span>{{ item.module }}</span></div>
+                  <div class="card-row"><span class="card-label">消息:</span><span>{{ item.message }}</span></div>
+                  <div v-if="item.detail" class="card-row"><span class="card-label">详情:</span><span>{{ item.detail }}</span></div>
+                </div>
+              </div>
+            </div>
+            <n-pagination
+              v-model:page="systemPagination.page"
+              v-model:page-size="systemPagination.pageSize"
+              :item-count="systemPagination.itemCount"
+              :page-sizes="systemPagination.pageSizes"
+              show-size-picker
+              style="margin-top: 16px; justify-content: center"
+            />
+          </template>
+        </n-tab-pane>
       </n-tabs>
     </n-card>
   </div>
@@ -231,8 +271,8 @@
 
 <script setup lang="tsx">
 import { ref, reactive, h, onMounted } from 'vue'
-import { NCard, NTabs, NTabPane, NDataTable, NTag, NPagination, useMessage, type DataTableColumns } from 'naive-ui'
-import { getAuditLogs, getLoginLogs, getRegistrationLogs, getSubscriptionLogs, getBalanceLogs, getCommissionLogs } from '@/api/admin'
+import { NCard, NTabs, NTabPane, NDataTable, NTag, NPagination, NSpace, NSelect, useMessage, type DataTableColumns } from 'naive-ui'
+import { getAuditLogs, getLoginLogs, getRegistrationLogs, getSubscriptionLogs, getBalanceLogs, getCommissionLogs, getSystemLogs } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -517,6 +557,68 @@ const loadCommissionLogs = async () => {
   }
 }
 
+// System logs
+const systemLoading = ref(false)
+const systemData = ref<any[]>([])
+const systemLevelFilter = ref<string | null>(null)
+const systemModuleFilter = ref<string | null>(null)
+const levelOptions = [
+  { label: 'info', value: 'info' },
+  { label: 'warn', value: 'warn' },
+  { label: 'error', value: 'error' },
+]
+const moduleOptions = [
+  { label: '调度器', value: 'scheduler' },
+  { label: '邮件', value: 'email' },
+  { label: '通知', value: 'notify' },
+  { label: '支付', value: 'payment' },
+  { label: '系统', value: 'system' },
+]
+const systemPagination = reactive({
+  page: 1,
+  pageSize: 20,
+  itemCount: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50],
+  onChange: (page: number) => {
+    systemPagination.page = page
+    loadSystemLogs()
+  },
+  onUpdatePageSize: (pageSize: number) => {
+    systemPagination.pageSize = pageSize
+    systemPagination.page = 1
+    loadSystemLogs()
+  },
+})
+
+const systemColumns: DataTableColumns = [
+  { title: 'ID', key: 'id', width: 70 },
+  {
+    title: '级别', key: 'level', width: 80,
+    render: (row: any) => h(NTag, { type: row.level === 'error' ? 'error' : row.level === 'warn' ? 'warning' : 'info', size: 'small' }, { default: () => row.level }),
+  },
+  { title: '模块', key: 'module', width: 100 },
+  { title: '消息', key: 'message', ellipsis: { tooltip: true } },
+  { title: '详情', key: 'detail', width: 200, ellipsis: { tooltip: true } },
+  { title: '时间', key: 'created_at', width: 180 },
+]
+
+const loadSystemLogs = async () => {
+  systemLoading.value = true
+  try {
+    const params: any = { page: systemPagination.page, page_size: systemPagination.pageSize }
+    if (systemLevelFilter.value) params.level = systemLevelFilter.value
+    if (systemModuleFilter.value) params.module = systemModuleFilter.value
+    const res = await getSystemLogs(params)
+    systemData.value = res.data?.items || res.data || []
+    systemPagination.itemCount = res.data?.total || 0
+  } catch (error: any) {
+    message.error(error.message || '加载失败')
+  } finally {
+    systemLoading.value = false
+  }
+}
+
 const handleTabChange = (value: string) => {
   currentTab.value = value
   switch (value) {
@@ -537,6 +639,9 @@ const handleTabChange = (value: string) => {
       break
     case 'commission':
       if (commissionData.value.length === 0) loadCommissionLogs()
+      break
+    case 'system':
+      if (systemData.value.length === 0) loadSystemLogs()
       break
   }
 }

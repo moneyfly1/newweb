@@ -1727,6 +1727,22 @@ func AdminCommissionLogs(c *gin.Context) {
 	utils.SuccessPage(c, items, total, p.Page, p.PageSize)
 }
 
+func AdminSystemLogs(c *gin.Context) {
+	p := utils.GetPagination(c)
+	var items []models.SystemLog
+	var total int64
+	db := database.GetDB().Model(&models.SystemLog{})
+	if level := c.Query("level"); level != "" {
+		db = db.Where("level = ?", level)
+	}
+	if module := c.Query("module"); module != "" {
+		db = db.Where("module = ?", module)
+	}
+	db.Count(&total)
+	db.Order("created_at DESC").Offset(p.Offset()).Limit(p.PageSize).Find(&items)
+	utils.SuccessPage(c, items, total, p.Page, p.PageSize)
+}
+
 func AdminMonitoring(c *gin.Context) {
 	db := database.GetDB()
 	var userCount int64
@@ -1967,6 +1983,14 @@ func AdminSendTestEmail(c *gin.Context) {
 		return
 	}
 	utils.SuccessMessage(c, "测试邮件已发送至 "+req.Email)
+}
+
+func AdminTestTelegram(c *gin.Context) {
+	if err := services.SendTestTelegram(); err != nil {
+		utils.InternalError(c, "发送失败: "+err.Error())
+		return
+	}
+	utils.SuccessMessage(c, "Telegram 测试消息已发送")
 }
 
 // ==================== Update Subscription ====================

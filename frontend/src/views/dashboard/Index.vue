@@ -120,43 +120,139 @@
         <span class="section-title-text">快速订阅</span>
       </template>
       <div v-if="subscription.clash_url || subscription.subscription_url" class="quick-sub-links">
+        <!-- Clash -->
         <div class="quick-sub-item">
           <div class="quick-sub-info">
-            <n-icon size="24" :component="LinkOutline" color="#667eea" />
+            <span class="client-icon">🔵</span>
             <span class="quick-sub-name">Clash 订阅</span>
           </div>
           <div class="quick-sub-actions">
             <n-button size="small" @click="copyText(subscription.clash_url || subscription.subscription_url, 'Clash 订阅地址')">
-              <template #icon>
-                <n-icon :component="CopyOutline" />
-              </template>
+              <template #icon><n-icon :component="CopyOutline" /></template>
               复制
             </n-button>
-            <n-button size="small" type="primary" @click="importClash">
-              <template #icon>
-                <n-icon :component="CloudDownloadOutline" />
-              </template>
-              一键导入
+            <n-button size="small" type="primary" @click="oneClickImport('clash')">
+              <template #icon><n-icon :component="CloudDownloadOutline" /></template>
+              导入
             </n-button>
           </div>
         </div>
+        <!-- Shadowrocket -->
         <div class="quick-sub-item">
           <div class="quick-sub-info">
-            <n-icon size="24" :component="LinkOutline" color="#764ba2" />
-            <span class="quick-sub-name">V2Ray 通用订阅</span>
+            <span class="client-icon">🚀</span>
+            <span class="quick-sub-name">Shadowrocket</span>
           </div>
           <div class="quick-sub-actions">
-            <n-button size="small" @click="copyText(subscription.universal_url || subscription.subscription_url, 'V2Ray 订阅地址')">
-              <template #icon>
-                <n-icon :component="CopyOutline" />
-              </template>
+            <n-button size="small" @click="copyText(subscription.universal_url || subscription.subscription_url, 'Shadowrocket 订阅地址')">
+              <template #icon><n-icon :component="CopyOutline" /></template>
               复制
+            </n-button>
+            <n-button size="small" type="primary" @click="oneClickImport('shadowrocket')">
+              <template #icon><n-icon :component="CloudDownloadOutline" /></template>
+              导入
+            </n-button>
+            <n-button size="small" @click="showQrCode = true">
+              <template #icon><n-icon :component="QrCodeOutline" /></template>
+              二维码
+            </n-button>
+          </div>
+        </div>
+        <!-- V2Ray / Hiddify -->
+        <div class="quick-sub-item">
+          <div class="quick-sub-info">
+            <span class="client-icon">🟢</span>
+            <span class="quick-sub-name">V2Ray / Hiddify 通用</span>
+          </div>
+          <div class="quick-sub-actions">
+            <n-button size="small" @click="copyText(subscription.universal_url || subscription.subscription_url, '通用订阅地址')">
+              <template #icon><n-icon :component="CopyOutline" /></template>
+              复制
+            </n-button>
+          </div>
+        </div>
+        <!-- Stash -->
+        <div class="quick-sub-item">
+          <div class="quick-sub-info">
+            <span class="client-icon">🟡</span>
+            <span class="quick-sub-name">Stash</span>
+          </div>
+          <div class="quick-sub-actions">
+            <n-button size="small" @click="copyText(subscription.clash_url || subscription.subscription_url, 'Stash 订阅地址')">
+              <template #icon><n-icon :component="CopyOutline" /></template>
+              复制
+            </n-button>
+            <n-button size="small" type="primary" @click="oneClickImport('stash')">
+              <template #icon><n-icon :component="CloudDownloadOutline" /></template>
+              导入
             </n-button>
           </div>
         </div>
       </div>
       <n-empty v-else description="暂无订阅，请先购买套餐" />
     </n-card>
+
+    <!-- Client Downloads -->
+    <n-card :bordered="false" class="section-card" style="margin-top: 20px;" v-if="hasAnyClientUrl">
+      <template #header>
+        <span class="section-title-text">客户端下载</span>
+      </template>
+      <n-tabs type="segment" size="small" animated>
+        <n-tab-pane name="windows" tab="Windows" v-if="windowsClients.length">
+          <div class="client-grid">
+            <div v-for="c in windowsClients" :key="c.key" class="client-card" @click="openUrl(c.url)">
+              <span class="client-card-icon">{{ c.icon }}</span>
+              <span class="client-card-name">{{ c.name }}</span>
+              <n-icon :component="DownloadOutline" size="16" color="#999" />
+            </div>
+          </div>
+        </n-tab-pane>
+        <n-tab-pane name="android" tab="Android" v-if="androidClients.length">
+          <div class="client-grid">
+            <div v-for="c in androidClients" :key="c.key" class="client-card" @click="openUrl(c.url)">
+              <span class="client-card-icon">{{ c.icon }}</span>
+              <span class="client-card-name">{{ c.name }}</span>
+              <n-icon :component="DownloadOutline" size="16" color="#999" />
+            </div>
+          </div>
+        </n-tab-pane>
+        <n-tab-pane name="macos" tab="macOS" v-if="macClients.length">
+          <div class="client-grid">
+            <div v-for="c in macClients" :key="c.key" class="client-card" @click="openUrl(c.url)">
+              <span class="client-card-icon">{{ c.icon }}</span>
+              <span class="client-card-name">{{ c.name }}</span>
+              <n-icon :component="DownloadOutline" size="16" color="#999" />
+            </div>
+          </div>
+        </n-tab-pane>
+        <n-tab-pane name="ios" tab="iOS" v-if="iosClients.length">
+          <div class="client-grid">
+            <div v-for="c in iosClients" :key="c.key" class="client-card" @click="openUrl(c.url)">
+              <span class="client-card-icon">{{ c.icon }}</span>
+              <span class="client-card-name">{{ c.name }}</span>
+              <n-icon :component="DownloadOutline" size="16" color="#999" />
+            </div>
+          </div>
+        </n-tab-pane>
+        <n-tab-pane name="linux" tab="Linux" v-if="linuxClients.length">
+          <div class="client-grid">
+            <div v-for="c in linuxClients" :key="c.key" class="client-card" @click="openUrl(c.url)">
+              <span class="client-card-icon">{{ c.icon }}</span>
+              <span class="client-card-name">{{ c.name }}</span>
+              <n-icon :component="DownloadOutline" size="16" color="#999" />
+            </div>
+          </div>
+        </n-tab-pane>
+      </n-tabs>
+    </n-card>
+
+    <!-- QR Code Modal -->
+    <n-modal v-model:show="showQrCode" preset="card" title="Shadowrocket 二维码" style="max-width: 360px;">
+      <div class="qr-modal-content">
+        <img v-if="qrCodeUrl" :src="qrCodeUrl" alt="订阅二维码" class="qr-image" />
+        <p class="qr-tip">使用 Shadowrocket 扫描二维码即可添加订阅</p>
+      </div>
+    </n-modal>
 
     <!-- Quick Actions -->
     <n-card :bordered="false" class="section-card" style="margin-top: 20px;">
@@ -249,10 +345,10 @@ import { useMessage } from 'naive-ui'
 import {
   WalletOutline, CloudOutline, PhonePortraitOutline, RibbonOutline,
   CartOutline, LinkOutline, ChatbubblesOutline, PeopleOutline,
-  CopyOutline, CloudDownloadOutline,
+  CopyOutline, CloudDownloadOutline, DownloadOutline, QrCodeOutline,
 } from '@vicons/ionicons5'
 import { getDashboardInfo } from '@/api/user'
-import { listPublicAnnouncements } from '@/api/common'
+import { listPublicAnnouncements, getPublicConfig } from '@/api/common'
 import { listOrders } from '@/api/order'
 import { getSubscription } from '@/api/subscription'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
@@ -266,6 +362,54 @@ const recentOrders = ref<any[]>([])
 const announcementsLoading = ref(false)
 const ordersLoading = ref(false)
 const subscriptionLoading = ref(false)
+const showQrCode = ref(false)
+const clientConfig = ref<Record<string, string>>({})
+
+// Client definitions
+const allClients = {
+  windows: [
+    { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵' },
+    { key: 'client_v2rayn_url', name: 'V2rayN', icon: '🟢' },
+    { key: 'client_mihomo_windows_url', name: 'Mihomo Party', icon: '🟣' },
+    { key: 'client_hiddify_windows_url', name: 'Hiddify', icon: '🟠' },
+    { key: 'client_flclash_windows_url', name: 'FlClash', icon: '⚡' },
+  ],
+  android: [
+    { key: 'client_clash_android_url', name: 'Clash Meta', icon: '🔵' },
+    { key: 'client_v2rayng_url', name: 'V2rayNG', icon: '🟢' },
+    { key: 'client_hiddify_android_url', name: 'Hiddify', icon: '🟠' },
+  ],
+  macos: [
+    { key: 'client_flclash_macos_url', name: 'FlClash', icon: '⚡' },
+    { key: 'client_mihomo_macos_url', name: 'Mihomo Party', icon: '🟣' },
+  ],
+  ios: [
+    { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀' },
+    { key: 'client_stash_url', name: 'Stash', icon: '🟡' },
+  ],
+  linux: [
+    { key: 'client_clash_linux_url', name: 'Clash', icon: '🐧' },
+    { key: 'client_singbox_url', name: 'Sing-box', icon: '📦' },
+  ],
+}
+
+const filterClients = (list: typeof allClients.windows) =>
+  list.filter(c => clientConfig.value[c.key]).map(c => ({ ...c, url: clientConfig.value[c.key] }))
+
+const windowsClients = computed(() => filterClients(allClients.windows))
+const androidClients = computed(() => filterClients(allClients.android))
+const macClients = computed(() => filterClients(allClients.macos))
+const iosClients = computed(() => filterClients(allClients.ios))
+const linuxClients = computed(() => filterClients(allClients.linux))
+const hasAnyClientUrl = computed(() =>
+  Object.values(allClients).flat().some(c => clientConfig.value[c.key])
+)
+
+const qrCodeUrl = computed(() => {
+  const url = subscription.value.universal_url || subscription.value.subscription_url
+  if (!url) return ''
+  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}&ecc=M&margin=10`
+})
 
 const greetingText = computed(() => {
   const h = new Date().getHours()
@@ -329,21 +473,47 @@ async function copyText(text: string, label: string) {
   ok ? message.success(`${label}已复制到剪贴板`) : message.error('复制失败，请手动复制')
 }
 
-function importClash() {
-  const clashSubUrl = subscription.value.clash_url || subscription.value.subscription_url
-  if (!clashSubUrl) {
+function oneClickImport(client: string) {
+  const clashUrl = subscription.value.clash_url || subscription.value.subscription_url
+  const universalUrl = subscription.value.universal_url || subscription.value.subscription_url
+  if (!clashUrl && !universalUrl) {
     message.warning('暂无订阅地址')
     return
   }
-  const clashUrl = `clash://install-config?url=${encodeURIComponent(clashSubUrl)}`
-  window.location.href = clashUrl
-  message.info('正在打开 Clash 客户端...')
+  const siteName = info.value.site_name || 'CBoard'
+  switch (client) {
+    case 'clash':
+      window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(siteName)}`
+      break
+    case 'shadowrocket':
+      window.location.href = `shadowrocket://add/sub://${btoa(universalUrl)}#${encodeURIComponent(siteName)}`
+      break
+    case 'stash':
+      window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(siteName)}`
+      break
+    default:
+      copyText(universalUrl, '订阅地址')
+      return
+  }
+  message.info(`正在打开 ${client} 客户端...`)
+}
+
+function openUrl(url: string) {
+  if (url) window.open(url, '_blank')
 }
 
 onMounted(async () => {
   try {
     const res: any = await getDashboardInfo()
     info.value = res.data || {}
+  } catch {}
+
+  try {
+    const res: any = await getPublicConfig()
+    if (res.data) {
+      clientConfig.value = res.data
+      if (res.data.site_name) info.value.site_name = res.data.site_name
+    }
   } catch {}
 
   subscriptionLoading.value = true
@@ -528,6 +698,38 @@ onMounted(async () => {
   gap: 8px;
 }
 
+.client-icon { font-size: 20px; }
+
+/* Client Downloads */
+.client-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  padding: 12px 0;
+}
+.client-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--n-color-embedded);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.client-card:hover {
+  background: var(--n-color-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.client-card-icon { font-size: 20px; }
+.client-card-name { flex: 1; font-size: 14px; font-weight: 500; }
+
+/* QR Code Modal */
+.qr-modal-content { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 12px 0; }
+.qr-image { width: 200px; height: 200px; border-radius: 8px; }
+.qr-tip { font-size: 13px; color: #999; text-align: center; margin: 0; }
+
 .quick-action {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 20px 12px; border-radius: 10px; cursor: pointer;
@@ -572,8 +774,12 @@ onMounted(async () => {
   .subscription-stats { grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
   .quick-sub-item { flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px; }
-  .quick-sub-actions { width: 100%; }
-  .quick-sub-actions .n-button { flex: 1; }
+  .quick-sub-actions { width: 100%; flex-wrap: wrap; }
+  .quick-sub-actions .n-button { flex: 1; min-width: 70px; }
+
+  .client-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .client-card { padding: 10px 12px; }
+  .client-card-name { font-size: 13px; }
 
   .quick-action { padding: 14px 8px; }
   .quick-action span { font-size: 12px; }

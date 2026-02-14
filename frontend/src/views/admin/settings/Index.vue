@@ -180,39 +180,79 @@
 
           <!-- Tab 5: 通知设置 -->
           <n-tab-pane name="notification" tab="通知设置">
-            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '200'" :model="form">
-              <n-form-item label="管理员通知邮箱">
-                <n-input v-model:value="form.notify_admin_email" placeholder="admin@example.com" />
-              </n-form-item>
-              <n-form-item label="Telegram Bot Token">
-                <n-input v-model:value="form.notify_telegram_bot_token" placeholder="请输入 Bot Token" />
-              </n-form-item>
-              <n-form-item label="Telegram Chat ID">
-                <n-input v-model:value="form.notify_telegram_chat_id" placeholder="请输入 Chat ID" />
-              </n-form-item>
-              <n-form-item label="Bark 服务器地址">
-                <n-input v-model:value="form.notify_bark_server" placeholder="https://api.day.app" />
-              </n-form-item>
-              <n-form-item label="Bark Device Key">
-                <n-input v-model:value="form.notify_bark_device_key" placeholder="请输入 Device Key" />
-              </n-form-item>
-              <n-divider />
-              <n-form-item label="新订单通知">
-                <n-switch v-model:value="form.notify_new_order" />
-              </n-form-item>
-              <n-form-item label="新工单通知">
-                <n-switch v-model:value="form.notify_new_ticket" />
-              </n-form-item>
-              <n-form-item label="新用户注册通知">
-                <n-switch v-model:value="form.notify_new_user" />
-              </n-form-item>
-              <n-form-item label="订阅到期提醒">
-                <n-switch v-model:value="form.notify_expiry_reminder" />
-              </n-form-item>
+            <n-space vertical :size="16">
+              <!-- 通知渠道配置 -->
+              <n-card title="通知渠道" size="small" :bordered="true">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
+                  <n-h4 prefix="bar">邮件通知</n-h4>
+                  <n-form-item label="启用邮件通知">
+                    <n-switch v-model:value="form.notify_email_enabled" />
+                  </n-form-item>
+                  <n-form-item label="管理员通知邮箱">
+                    <n-input v-model:value="form.notify_admin_email" placeholder="admin@example.com" />
+                  </n-form-item>
+                  <n-divider style="margin: 12px 0" />
+                  <n-h4 prefix="bar">Telegram 通知</n-h4>
+                  <n-form-item label="启用 Telegram">
+                    <n-switch v-model:value="form.notify_telegram_enabled" />
+                  </n-form-item>
+                  <n-form-item label="Bot Token">
+                    <n-input v-model:value="form.notify_telegram_bot_token" placeholder="请输入 Bot Token" />
+                  </n-form-item>
+                  <n-form-item label="Chat ID">
+                    <n-input v-model:value="form.notify_telegram_chat_id" placeholder="请输入 Chat ID" />
+                  </n-form-item>
+                  <n-form-item label="测试">
+                    <n-button type="info" :loading="testingTelegram" @click="handleTestTelegram" :disabled="!form.notify_telegram_enabled">发送测试消息</n-button>
+                  </n-form-item>
+                  <n-divider style="margin: 12px 0" />
+                  <n-h4 prefix="bar">Bark 通知</n-h4>
+                  <n-form-item label="启用 Bark">
+                    <n-switch v-model:value="form.notify_bark_enabled" />
+                  </n-form-item>
+                  <n-form-item label="服务器地址">
+                    <n-input v-model:value="form.notify_bark_server" placeholder="https://api.day.app" />
+                  </n-form-item>
+                  <n-form-item label="Device Key">
+                    <n-input v-model:value="form.notify_bark_device_key" placeholder="请输入 Device Key" />
+                  </n-form-item>
+                </n-form>
+              </n-card>
+
+              <!-- 管理员事件通知开关 -->
+              <n-card title="管理员事件通知" size="small" :bordered="true">
+                <template #header-extra><n-text depth="3" style="font-size: 12px">触发时通知管理员</n-text></template>
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
+                  <n-form-item label="新用户注册"><n-switch v-model:value="form.notify_new_user" /></n-form-item>
+                  <n-form-item label="新订单创建"><n-switch v-model:value="form.notify_new_order" /></n-form-item>
+                  <n-form-item label="支付成功"><n-switch v-model:value="form.notify_payment_success" /></n-form-item>
+                  <n-form-item label="充值成功"><n-switch v-model:value="form.notify_recharge_success" /></n-form-item>
+                  <n-form-item label="新工单"><n-switch v-model:value="form.notify_new_ticket" /></n-form-item>
+                  <n-form-item label="订阅到期提醒"><n-switch v-model:value="form.notify_expiry_reminder" /></n-form-item>
+                  <n-form-item label="订阅重置"><n-switch v-model:value="form.notify_subscription_reset" /></n-form-item>
+                  <n-form-item label="异常登录"><n-switch v-model:value="form.notify_abnormal_login" /></n-form-item>
+                  <n-form-item label="未支付订单提醒"><n-switch v-model:value="form.notify_unpaid_order" /></n-form-item>
+                </n-form>
+              </n-card>
+
+              <!-- 用户邮件通知开关 -->
+              <n-card title="用户邮件通知" size="small" :bordered="true">
+                <template #header-extra><n-text depth="3" style="font-size: 12px">系统级控制发给用户的邮件</n-text></template>
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
+                  <n-form-item label="注册欢迎邮件"><n-switch v-model:value="form.user_notify_welcome" /></n-form-item>
+                  <n-form-item label="支付成功通知"><n-switch v-model:value="form.user_notify_payment" /></n-form-item>
+                  <n-form-item label="订阅到期提醒"><n-switch v-model:value="form.user_notify_expiry" /></n-form-item>
+                  <n-form-item label="订阅过期通知"><n-switch v-model:value="form.user_notify_expired" /></n-form-item>
+                  <n-form-item label="订阅重置通知"><n-switch v-model:value="form.user_notify_reset" /></n-form-item>
+                  <n-form-item label="账户状态变更"><n-switch v-model:value="form.user_notify_account_status" /></n-form-item>
+                  <n-form-item label="未支付订单提醒"><n-switch v-model:value="form.user_notify_unpaid_order" /></n-form-item>
+                </n-form>
+              </n-card>
+
               <n-space justify="center" style="margin-top: 24px">
                 <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
               </n-space>
-            </n-form>
+            </n-space>
           </n-tab-pane>
 
           <!-- Tab 6: 安全设置 -->
@@ -238,7 +278,50 @@
               </n-space>
             </n-form>
           </n-tab-pane>
-          <!-- Tab 7: 备份与恢复 -->
+          <!-- Tab 7: 软件下载配置 -->
+          <n-tab-pane name="client" tab="软件下载">
+            <n-space vertical :size="16">
+              <n-card title="Windows 客户端" size="small" :bordered="true">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
+                  <n-form-item label="Clash for Windows"><n-input v-model:value="form.client_clash_windows_url" placeholder="下载链接" /></n-form-item>
+                  <n-form-item label="V2rayN"><n-input v-model:value="form.client_v2rayn_url" placeholder="下载链接" /></n-form-item>
+                  <n-form-item label="Mihomo Party"><n-input v-model:value="form.client_mihomo_windows_url" placeholder="下载链接" /></n-form-item>
+                  <n-form-item label="Hiddify"><n-input v-model:value="form.client_hiddify_windows_url" placeholder="下载链接" /></n-form-item>
+                  <n-form-item label="FlClash"><n-input v-model:value="form.client_flclash_windows_url" placeholder="下载链接" /></n-form-item>
+                </n-form>
+              </n-card>
+              <n-card title="Android 客户端" size="small" :bordered="true">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
+                  <n-form-item label="Clash Meta"><n-input v-model:value="form.client_clash_android_url" placeholder="下载链接" /></n-form-item>
+                  <n-form-item label="V2rayNG"><n-input v-model:value="form.client_v2rayng_url" placeholder="下载链接" /></n-form-item>
+                  <n-form-item label="Hiddify"><n-input v-model:value="form.client_hiddify_android_url" placeholder="下载链接" /></n-form-item>
+                </n-form>
+              </n-card>
+              <n-card title="macOS 客户端" size="small" :bordered="true">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
+                  <n-form-item label="FlClash"><n-input v-model:value="form.client_flclash_macos_url" placeholder="下载链接" /></n-form-item>
+                  <n-form-item label="Mihomo Party"><n-input v-model:value="form.client_mihomo_macos_url" placeholder="下载链接" /></n-form-item>
+                </n-form>
+              </n-card>
+              <n-card title="iOS 客户端" size="small" :bordered="true">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
+                  <n-form-item label="Shadowrocket"><n-input v-model:value="form.client_shadowrocket_url" placeholder="App Store 链接" /></n-form-item>
+                  <n-form-item label="Stash"><n-input v-model:value="form.client_stash_url" placeholder="App Store 链接" /></n-form-item>
+                </n-form>
+              </n-card>
+              <n-card title="通用客户端" size="small" :bordered="true">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
+                  <n-form-item label="Sing-box"><n-input v-model:value="form.client_singbox_url" placeholder="下载链接" /></n-form-item>
+                  <n-form-item label="Clash (Linux)"><n-input v-model:value="form.client_clash_linux_url" placeholder="下载链接" /></n-form-item>
+                </n-form>
+              </n-card>
+              <n-space justify="center" style="margin-top: 24px">
+                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
+              </n-space>
+            </n-space>
+          </n-tab-pane>
+
+          <!-- Tab 8: 备份与恢复 -->
           <n-tab-pane name="backup" tab="备份与恢复">
             <n-space vertical :size="16">
               <n-card title="数据库备份" size="small" :bordered="true">
@@ -306,8 +389,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useMessage } from 'naive-ui'
-import { getSettings, updateSettings, sendTestEmail, createBackup, listBackups } from '@/api/admin'
+import { useMessage, NH4 } from 'naive-ui'
+import { getSettings, updateSettings, sendTestEmail, testTelegram, createBackup, listBackups } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -319,6 +402,7 @@ const sendingTest = ref(false)
 const testEmail = ref('')
 const backupLoading = ref(false)
 const backupCreating = ref(false)
+const testingTelegram = ref(false)
 const backups = ref<any[]>([])
 
 // Computed URL hints based on site_url
@@ -340,7 +424,12 @@ const encryptionOptions = [
 const booleanKeys = [
   'register_enabled', 'register_email_verify', 'register_invite_required',
   'pay_balance_enabled', 'pay_alipay_enabled', 'pay_alipay_sandbox', 'pay_wechat_enabled', 'pay_epay_enabled',
+  'notify_email_enabled', 'notify_telegram_enabled', 'notify_bark_enabled',
   'notify_new_order', 'notify_new_ticket', 'notify_new_user', 'notify_expiry_reminder',
+  'notify_payment_success', 'notify_recharge_success', 'notify_subscription_reset',
+  'notify_abnormal_login', 'notify_unpaid_order',
+  'user_notify_welcome', 'user_notify_payment', 'user_notify_expiry', 'user_notify_expired',
+  'user_notify_reset', 'user_notify_account_status', 'user_notify_unpaid_order',
   'abnormal_login_alert', 'backup_github_enabled'
 ]
 
@@ -391,16 +480,33 @@ const form = ref<Record<string, any>>({
   pay_epay_gateway: '',
   pay_epay_merchant_id: '',
   pay_epay_secret_key: '',
-  // Notification
+  // Notification - channels
+  notify_email_enabled: true,
   notify_admin_email: '',
+  notify_telegram_enabled: false,
   notify_telegram_bot_token: '',
   notify_telegram_chat_id: '',
+  notify_bark_enabled: false,
   notify_bark_server: '',
   notify_bark_device_key: '',
+  // Notification - admin events
   notify_new_order: false,
   notify_new_ticket: false,
   notify_new_user: false,
   notify_expiry_reminder: false,
+  notify_payment_success: false,
+  notify_recharge_success: false,
+  notify_subscription_reset: false,
+  notify_abnormal_login: false,
+  notify_unpaid_order: false,
+  // Notification - user email
+  user_notify_welcome: true,
+  user_notify_payment: true,
+  user_notify_expiry: true,
+  user_notify_expired: true,
+  user_notify_reset: true,
+  user_notify_account_status: true,
+  user_notify_unpaid_order: true,
   // Security
   max_login_attempts: 5,
   login_lockout_minutes: 30,
@@ -412,6 +518,21 @@ const form = ref<Record<string, any>>({
   backup_github_token: '',
   backup_github_repo: '',
   backup_interval_hours: 24,
+  // Client download URLs
+  client_clash_windows_url: '',
+  client_v2rayn_url: '',
+  client_mihomo_windows_url: '',
+  client_hiddify_windows_url: '',
+  client_flclash_windows_url: '',
+  client_clash_android_url: '',
+  client_v2rayng_url: '',
+  client_hiddify_android_url: '',
+  client_flclash_macos_url: '',
+  client_mihomo_macos_url: '',
+  client_shadowrocket_url: '',
+  client_stash_url: '',
+  client_singbox_url: '',
+  client_clash_linux_url: '',
 })
 
 const loadSettings = async () => {
@@ -474,6 +595,22 @@ const handleSendTestEmail = async () => {
     message.error(error.message || '发送失败')
   } finally {
     sendingTest.value = false
+  }
+}
+
+const handleTestTelegram = async () => {
+  testingTelegram.value = true
+  try {
+    const res = await testTelegram()
+    if (res.code === 0) {
+      message.success('Telegram 测试消息已发送')
+    } else {
+      message.error(res.message || '发送失败')
+    }
+  } catch (error: any) {
+    message.error(error.message || '发送失败')
+  } finally {
+    testingTelegram.value = false
   }
 }
 

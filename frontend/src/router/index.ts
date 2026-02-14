@@ -92,9 +92,8 @@ router.beforeEach(async (to, _from, next) => {
     try {
       await userStore.fetchUser()
     } catch {
-      // Token invalid/expired — clear local state only (no API call)
-      // The 401 interceptor already handles redirect
-      userStore.logout()
+      // Token invalid/expired — clear local state only, skip logout API call
+      userStore.logout(true)
       return next('/login')
     }
   }

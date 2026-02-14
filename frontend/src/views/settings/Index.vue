@@ -50,8 +50,22 @@
       <n-tab-pane name="notification" tab="通知设置">
         <n-card :bordered="false">
           <n-form label-placement="left" label-width="140">
-            <n-form-item label="邮件通知">
+            <n-form-item label="邮件通知总开关">
               <n-switch v-model:value="notifForm.email_notifications" @update:value="saveNotif" />
+              <n-text depth="3" style="margin-left: 12px; font-size: 12px">关闭后不接收任何邮件（验证码除外）</n-text>
+            </n-form-item>
+            <n-divider style="margin: 8px 0" />
+            <n-form-item label="订单相关通知">
+              <n-switch v-model:value="notifForm.notify_order" :disabled="!notifForm.email_notifications" @update:value="saveNotif" />
+              <n-text depth="3" style="margin-left: 12px; font-size: 12px">新订单、支付成功</n-text>
+            </n-form-item>
+            <n-form-item label="订阅到期提醒">
+              <n-switch v-model:value="notifForm.notify_expiry" :disabled="!notifForm.email_notifications" @update:value="saveNotif" />
+              <n-text depth="3" style="margin-left: 12px; font-size: 12px">订阅即将到期/已过期</n-text>
+            </n-form-item>
+            <n-form-item label="订阅变更通知">
+              <n-switch v-model:value="notifForm.notify_subscription" :disabled="!notifForm.email_notifications" @update:value="saveNotif" />
+              <n-text depth="3" style="margin-left: 12px; font-size: 12px">订阅重置、账户状态变更</n-text>
             </n-form-item>
             <n-form-item label="异常登录提醒">
               <n-switch v-model:value="notifForm.abnormal_login_alert_enabled" @update:value="saveNotif" />
@@ -149,7 +163,7 @@ const pwRules = {
   ],
 }
 
-const notifForm = ref({ email_notifications: true, abnormal_login_alert_enabled: true, push_notifications: true })
+const notifForm = ref({ email_notifications: true, abnormal_login_alert_enabled: true, push_notifications: true, notify_order: true, notify_expiry: true, notify_subscription: true })
 const privacyForm = ref({ data_sharing: true, analytics: true })
 const loginHistory = ref<any[]>([])
 

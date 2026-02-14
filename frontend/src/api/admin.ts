@@ -64,6 +64,7 @@ export const replyAdminTicket = (id: number, data: { content: string }) =>
 export const getSettings = () => request.get('/admin/settings')
 export const updateSettings = (data: any) => request.put('/admin/settings', data)
 export const sendTestEmail = (data: { email: string }) => request.post('/admin/settings/test-email', data)
+export const testTelegram = () => request.post('/admin/settings/test-telegram')
 
 // Announcements
 export const listAnnouncements = (params?: any) => request.get('/admin/announcements', { params })
@@ -83,6 +84,7 @@ export const getRegistrationLogs = (params?: any) => request.get('/admin/logs/re
 export const getSubscriptionLogs = (params?: any) => request.get('/admin/logs/subscription', { params })
 export const getBalanceLogs = (params?: any) => request.get('/admin/logs/balance', { params })
 export const getCommissionLogs = (params?: any) => request.get('/admin/logs/commission', { params })
+export const getSystemLogs = (params?: any) => request.get('/admin/logs/system', { params })
 
 // Monitoring
 export const getMonitoring = () => request.get('/admin/monitoring')

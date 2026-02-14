@@ -39,7 +39,7 @@ instance.interceptors.response.use(
     if (error.response?.status === 401 && !isLoggingOut && !isAuthEndpoint) {
       isLoggingOut = true
       const userStore = useUserStore()
-      userStore.logout()
+      userStore.logout(true)
       router.push('/login').finally(() => {
         isLoggingOut = false
       })

@@ -19,6 +19,9 @@ type User struct {
 	AbnormalLoginAlertEnabled   bool       `gorm:"default:true" json:"abnormal_login_alert_enabled"`
 	NotificationTypes           string     `gorm:"type:text" json:"notification_types"`
 	PushNotifications           bool       `gorm:"default:true" json:"push_notifications"`
+	NotifyOrder                 bool       `gorm:"default:true" json:"notify_order"`
+	NotifyExpiry                bool       `gorm:"default:true" json:"notify_expiry"`
+	NotifySubscription          bool       `gorm:"default:true" json:"notify_subscription"`
 	DataSharing                 bool       `gorm:"default:true" json:"data_sharing"`
 	Analytics                   bool       `gorm:"default:true" json:"analytics"`
 	Balance                     float64    `gorm:"type:decimal(10,2);default:0" json:"balance"`

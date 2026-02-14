@@ -104,18 +104,24 @@ func UpdatePreferences(c *gin.Context) {
 func GetNotificationSettings(c *gin.Context) {
 	user := c.MustGet("user").(*models.User)
 	utils.Success(c, gin.H{
-		"email_notifications": user.EmailNotifications,
+		"email_notifications":          user.EmailNotifications,
 		"abnormal_login_alert_enabled": user.AbnormalLoginAlertEnabled,
-		"push_notifications": user.PushNotifications,
+		"push_notifications":           user.PushNotifications,
+		"notify_order":                 user.NotifyOrder,
+		"notify_expiry":                user.NotifyExpiry,
+		"notify_subscription":          user.NotifySubscription,
 	})
 }
 
 func UpdateNotificationSettings(c *gin.Context) {
 	user := c.MustGet("user").(*models.User)
 	var req struct {
-		EmailNotifications        *bool `json:"email_notifications"`
+		EmailNotifications       *bool `json:"email_notifications"`
 		AbnormalLoginAlertEnabled *bool `json:"abnormal_login_alert_enabled"`
-		PushNotifications         *bool `json:"push_notifications"`
+		PushNotifications        *bool `json:"push_notifications"`
+		NotifyOrder              *bool `json:"notify_order"`
+		NotifyExpiry             *bool `json:"notify_expiry"`
+		NotifySubscription       *bool `json:"notify_subscription"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -125,6 +131,9 @@ func UpdateNotificationSettings(c *gin.Context) {
 	if req.EmailNotifications != nil { updates["email_notifications"] = *req.EmailNotifications }
 	if req.AbnormalLoginAlertEnabled != nil { updates["abnormal_login_alert_enabled"] = *req.AbnormalLoginAlertEnabled }
 	if req.PushNotifications != nil { updates["push_notifications"] = *req.PushNotifications }
+	if req.NotifyOrder != nil { updates["notify_order"] = *req.NotifyOrder }
+	if req.NotifyExpiry != nil { updates["notify_expiry"] = *req.NotifyExpiry }
+	if req.NotifySubscription != nil { updates["notify_subscription"] = *req.NotifySubscription }
 	database.GetDB().Model(user).Updates(updates)
 	utils.SuccessMessage(c, "通知设置已更新")
 }

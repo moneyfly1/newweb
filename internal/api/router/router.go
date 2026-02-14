@@ -189,7 +189,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	// ===== 管理员路由 =====
 	admin := api.Group("/admin")
-	admin.Use(middleware.AuthRequired(), middleware.AdminRequired())
+	admin.Use(middleware.AuthRequired(), middleware.AdminRequired(), middleware.IPWhitelist())
 	{
 		// 仪表盘
 		admin.GET("/dashboard", handlers.AdminDashboard)
@@ -327,6 +327,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			settings.GET("", handlers.AdminGetSettings)
 			settings.PUT("", handlers.AdminUpdateSettings)
 			settings.POST("/test-email", handlers.AdminSendTestEmail)
+			settings.POST("/test-telegram", handlers.AdminTestTelegram)
 		}
 
 		// 公告
@@ -350,6 +351,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/logs/subscription", handlers.AdminSubscriptionLogs)
 		admin.GET("/logs/balance", handlers.AdminBalanceLogs)
 		admin.GET("/logs/commission", handlers.AdminCommissionLogs)
+		admin.GET("/logs/system", handlers.AdminSystemLogs)
 
 		// 监控
 		admin.GET("/monitoring", handlers.AdminMonitoring)

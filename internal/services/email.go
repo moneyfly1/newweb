@@ -11,6 +11,7 @@ import (
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/utils"
 )
 
 // SMTPConfig holds SMTP connection parameters
@@ -183,11 +184,13 @@ func ProcessEmailQueue() {
 			}
 			db.Save(eq)
 			log.Printf("[EmailQueue] 发送失败 #%d -> %s: %s", eq.ID, eq.ToEmail, errMsg)
+			utils.SysError("email", fmt.Sprintf("发送失败 -> %s", eq.ToEmail), errMsg)
 		} else {
 			eq.Status = "sent"
 			eq.SentAt = &now
 			db.Save(eq)
 			log.Printf("[EmailQueue] 发送成功 #%d -> %s", eq.ID, eq.ToEmail)
+			utils.SysInfo("email", fmt.Sprintf("发送成功 -> %s (%s)", eq.ToEmail, eq.EmailType))
 		}
 	}
 }

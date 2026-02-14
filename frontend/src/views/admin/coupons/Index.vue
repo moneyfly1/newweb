@@ -10,23 +10,66 @@
         </n-button>
       </template>
 
-      <n-data-table
-        remote
-        :columns="columns"
-        :data="tableData"
-        :loading="loading"
-        :pagination="pagination"
-        :bordered="false"
-        @update:page="(p) => { pagination.page = p; fetchData() }"
-        @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
-      />
+      <template v-if="!appStore.isMobile">
+        <n-data-table
+          remote
+          :columns="columns"
+          :data="tableData"
+          :loading="loading"
+          :pagination="pagination"
+          :bordered="false"
+          @update:page="(p) => { pagination.page = p; fetchData() }"
+          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+        />
+      </template>
+
+      <template v-else>
+        <n-spin :show="loading">
+          <div v-if="tableData.length === 0" style="text-align: center; padding: 40px 0; color: #999;">
+            暂无数据
+          </div>
+          <div v-else class="mobile-card-list">
+            <div v-for="coupon in tableData" :key="coupon.id" class="mobile-card">
+              <div class="card-header">
+                <div class="card-title" style="font-family: monospace; font-weight: bold;">{{ coupon.code }}</div>
+                <n-tag :type="coupon.status === 'active' ? 'success' : coupon.status === 'inactive' ? 'error' : 'default'" size="small">
+                  {{ coupon.status === 'active' ? '启用' : coupon.status === 'inactive' ? '禁用' : '已过期' }}
+                </n-tag>
+              </div>
+              <div class="card-body">
+                <div class="card-row">
+                  <span class="card-label">名称</span>
+                  <span>{{ coupon.name }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">优惠</span>
+                  <span>{{ coupon.type === 'discount' ? `${coupon.discount_value}%` : coupon.type === 'fixed' ? `¥${coupon.discount_value}` : `${coupon.discount_value}天` }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">使用情况</span>
+                  <span>{{ coupon.used_quantity || 0 }} / {{ coupon.total_quantity || 0 }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">失效时间</span>
+                  <span>{{ formatDateTime(coupon.valid_until) }}</span>
+                </div>
+              </div>
+              <div class="card-actions">
+                <n-button size="small" type="primary" @click="handleEdit(coupon)">编辑</n-button>
+                <n-button size="small" type="error" @click="handleDelete(coupon)">删除</n-button>
+                <n-button size="small" @click="copyToClipboard(coupon.code)">复制代码</n-button>
+              </div>
+            </div>
+          </div>
+        </n-spin>
+      </template>
     </n-card>
 
     <n-modal
       v-model:show="showModal"
       :title="modalTitle"
       preset="card"
-      style="width: 700px"
+      :style="appStore.isMobile ? 'width: 95%; max-width: 700px' : 'width: 700px'"
       :mask-closable="false"
     >
       <n-form
@@ -125,9 +168,13 @@
 
 <script setup>
 import { ref, reactive, h, onMounted } from 'vue'
-import { NButton, NTag, NSpace, NIcon, NTooltip, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NTooltip, NSpin, useMessage, useDialog } from 'naive-ui'
 import { AddOutline, CreateOutline, TrashOutline, CopyOutline } from '@vicons/ionicons5'
 import { listAdminCoupons, createCoupon, updateCoupon, deleteCoupon } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
+import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+
+const appStore = useAppStore()
 
 const message = useMessage()
 const dialog = useDialog()
@@ -199,12 +246,9 @@ const getDiscountPlaceholder = () => {
   }
 }
 
-const copyToClipboard = (text) => {
-  navigator.clipboard.writeText(text).then(() => {
-    message.success('已复制到剪贴板')
-  }).catch(() => {
-    message.error('复制失败')
-  })
+const copyToClipboard = async (text) => {
+  const ok = await clipboardCopy(text)
+  ok ? message.success('已复制到剪贴板') : message.error('复制失败')
 }
 
 const formatDateTime = (timestamp) => {
@@ -442,6 +486,61 @@ onMounted(() => {
 <style scoped>
 .coupons-container {
   padding: 20px;
+}
+
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.card-body {
+  padding: 10px 14px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.card-label {
+  color: #999;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0f0f0;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 767px) {

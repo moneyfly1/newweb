@@ -14,6 +14,7 @@ export const createUser = (data: any) => request.post('/admin/users', data)
 export const resetUserPassword = (id: number, data: { password: string }) => request.post(`/admin/users/${id}/reset-password`, data)
 export const getAbnormalUsers = (params?: any) => request.get('/admin/users/abnormal', { params })
 export const loginAsUser = (id: number) => request.post(`/admin/users/${id}/login-as`)
+export const deleteUserDevice = (userId: number, deviceId: number) => request.delete(`/admin/users/${userId}/devices/${deviceId}`)
 
 // Orders
 export const listAdminOrders = (params?: any) => request.get('/admin/orders', { params })

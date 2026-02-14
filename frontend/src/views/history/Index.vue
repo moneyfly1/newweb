@@ -67,7 +67,7 @@
             :item-count="pagination.itemCount"
             :page-size="pagination.pageSize"
             style="margin-top: 16px; justify-content: center;"
-            @update:page="(p) => { pagination.page = p; loadHistory() }"
+            @update:page="(p: number) => { pagination.page = p; loadHistory() }"
           />
         </div>
       </n-card>

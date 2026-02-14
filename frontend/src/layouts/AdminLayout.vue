@@ -31,7 +31,11 @@
         <template #icon><n-icon :size="22"><menu-outline /></n-icon></template>
       </n-button>
       <span class="mobile-title">管理后台</span>
-      <n-button quaternary size="tiny" @click="router.push('/')">前台</n-button>
+      <n-dropdown :options="mobileMenuOptions" @select="handleMobileUserMenu">
+        <n-button quaternary circle size="small">
+          <template #icon><n-icon :size="20"><ellipsis-vertical /></n-icon></template>
+        </n-button>
+      </n-dropdown>
     </n-layout-header>
     <n-layout-content content-style="padding: 12px 14px;" :native-scrollbar="false">
       <router-view />
@@ -71,7 +75,7 @@ import {
   CloudOutline, PricetagOutline, ChatbubblesOutline, RibbonOutline,
   KeyOutline, SettingsOutline, MegaphoneOutline, StatsChartOutline,
   DocumentTextOutline, WarningOutline, GitNetworkOutline, MailOutline,
-  RefreshOutline, MenuOutline,
+  RefreshOutline, MenuOutline, EllipsisVertical,
 } from '@vicons/ionicons5'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -117,6 +121,19 @@ function handleMenuClick(key: string) { router.push({ name: key }) }
 function handleMobileMenuClick(key: string) { showDrawer.value = false; router.push({ name: key }) }
 
 const showThemeDrawer = ref(false)
+
+const mobileMenuOptions = [
+  { label: '返回前台', key: 'frontend' },
+  { label: '切换主题', key: 'theme-picker' },
+  { type: 'divider', key: 'd1' },
+  { label: '退出登录', key: 'logout' },
+]
+
+function handleMobileUserMenu(key: string) {
+  if (key === 'logout') { userStore.logout(); router.push('/login') }
+  else if (key === 'frontend') { router.push('/') }
+  else if (key === 'theme-picker') { showThemeDrawer.value = true }
+}
 
 const userMenuOptions = [
   { label: '切换主题', key: 'theme-picker' },

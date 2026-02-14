@@ -79,15 +79,45 @@
         </n-tabs>
 
         <!-- Data Table -->
-        <n-data-table
-          :columns="columns"
-          :data="emails"
-          :loading="loading"
-          :pagination="false"
-          :bordered="false"
-          :single-line="false"
-          :scroll-x="1200"
-        />
+        <template v-if="!appStore.isMobile">
+          <n-data-table
+            :columns="columns"
+            :data="emails"
+            :loading="loading"
+            :pagination="false"
+            :bordered="false"
+            :single-line="false"
+            :scroll-x="1200"
+          />
+        </template>
+
+        <!-- Mobile Cards -->
+        <template v-else>
+          <div class="mobile-card-list">
+            <div v-for="item in emails" :key="item.id" class="mobile-card">
+              <div class="card-header">
+                <span class="card-title">{{ item.to_email }}</span>
+                <n-tag :type="getStatusType(item.status)" size="small">{{ getStatusText(item.status) }}</n-tag>
+              </div>
+              <div class="card-body">
+                <div class="card-row"><span class="card-label">主题:</span><span>{{ item.subject }}</span></div>
+                <div class="card-row"><span class="card-label">重试次数:</span><span>{{ item.retry_count || 0 }}</span></div>
+                <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '-' }}</span></div>
+                <div class="card-row"><span class="card-label">发送时间:</span><span>{{ item.sent_at ? new Date(item.sent_at).toLocaleString('zh-CN') : '-' }}</span></div>
+              </div>
+              <div class="card-actions">
+                <n-button v-if="item.status === 'failed'" size="small" type="warning" @click="handleRetry(item)">
+                  <template #icon><n-icon :component="RefreshOutline" /></template>
+                  重试
+                </n-button>
+                <n-button size="small" type="error" quaternary @click="handleDelete(item)">
+                  <template #icon><n-icon :component="TrashOutline" /></template>
+                  删除
+                </n-button>
+              </div>
+            </div>
+          </div>
+        </template>
 
         <!-- Pagination -->
         <n-pagination
@@ -116,6 +146,9 @@ import {
   TrashOutline
 } from '@vicons/ionicons5'
 import { listEmailQueue, retryEmail, deleteEmail } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 
 const message = useMessage()
 const dialog = useDialog()
@@ -435,6 +468,16 @@ onMounted(() => {
 :deep(.n-tabs .n-tabs-tab) {
   font-weight: 500;
 }
+
+.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
+.mobile-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+.card-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 8px; }
+.card-body { padding: 10px 14px; }
+.card-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 4px 0; font-size: 13px; }
+.card-row span:last-child { text-align: right; word-break: break-word; max-width: 60%; }
+.card-label { color: #999; }
+.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid #f0f0f0; flex-wrap: wrap; }
 
 @media (max-width: 767px) {
   .admin-email-queue-page { padding: 8px; }

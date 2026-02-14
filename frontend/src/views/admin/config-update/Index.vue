@@ -28,7 +28,7 @@
     </n-card>
 
     <n-card title="更新配置" style="margin-top: 16px">
-      <n-form label-placement="left" label-width="120">
+      <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '120'">
         <n-form-item label="订阅URL列表">
           <div style="width: 100%">
             <n-dynamic-input v-model:value="config.urls" placeholder="请输入订阅URL" />
@@ -49,7 +49,7 @@
           </n-text>
         </n-form-item>
         <n-form-item label="更新间隔（分钟）">
-          <n-input-number v-model:value="config.interval" :min="1" :max="1440" style="width: 200px" />
+          <n-input-number v-model:value="config.interval" :min="1" :max="1440" :style="{ width: appStore.isMobile ? '100%' : '200px' }" />
         </n-form-item>
       </n-form>
       <template #footer>
@@ -88,6 +88,9 @@ import {
   getConfigUpdateLogs,
   clearConfigUpdateLogs
 } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 
 const message = useMessage()
 const logViewerRef = ref(null)
@@ -239,5 +242,6 @@ onUnmounted(() => {
 
 @media (max-width: 767px) {
   .config-update-container { padding: 8px; }
+  .log-viewer { font-size: 12px; padding: 12px; max-height: 300px; }
 }
 </style>

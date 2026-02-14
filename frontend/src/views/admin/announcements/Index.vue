@@ -7,23 +7,62 @@
         </n-button>
       </template>
 
-      <n-data-table
-        remote
-        :columns="columns"
-        :data="tableData"
-        :loading="loading"
-        :pagination="pagination"
-        :bordered="false"
-        @update:page="(p) => { pagination.page = p; fetchData() }"
-        @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
-      />
+      <template v-if="!appStore.isMobile">
+        <n-data-table
+          remote
+          :columns="columns"
+          :data="tableData"
+          :loading="loading"
+          :pagination="pagination"
+          :bordered="false"
+          @update:page="(p) => { pagination.page = p; fetchData() }"
+          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+        />
+      </template>
+
+      <template v-else>
+        <n-spin :show="loading">
+          <div v-if="tableData.length === 0" style="text-align: center; padding: 40px 0; color: #999;">
+            暂无数据
+          </div>
+          <div v-else class="mobile-card-list">
+            <div v-for="item in tableData" :key="item.id" class="mobile-card">
+              <div class="card-header">
+                <div class="card-title">{{ item.title }}</div>
+                <n-tag :type="item.is_active ? 'success' : 'default'" size="small">
+                  {{ item.is_active ? '启用' : '禁用' }}
+                </n-tag>
+              </div>
+              <div class="card-body">
+                <div class="card-row">
+                  <span class="card-label">类型</span>
+                  <component :is="getTypeTag(item.type)" />
+                </div>
+                <div class="card-row">
+                  <span class="card-label">创建时间</span>
+                  <span>{{ item.created_at }}</span>
+                </div>
+              </div>
+              <div class="card-actions">
+                <n-button size="small" type="primary" @click="handleEdit(item)">编辑</n-button>
+                <n-popconfirm @positive-click="handleDelete(item.id)">
+                  <template #trigger>
+                    <n-button size="small" type="error">删除</n-button>
+                  </template>
+                  确定删除此公告吗？
+                </n-popconfirm>
+              </div>
+            </div>
+          </div>
+        </n-spin>
+      </template>
     </n-card>
 
     <n-modal
       v-model:show="showModal"
       :title="modalTitle"
       preset="card"
-      style="width: 600px"
+      :style="appStore.isMobile ? 'width: 95%; max-width: 600px' : 'width: 600px'"
       :mask-closable="false"
     >
       <n-form
@@ -88,10 +127,14 @@ import {
   NSpace,
   NTag,
   NPopconfirm,
+  NSpin,
   useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { listAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 
 const message = useMessage()
 const formRef = ref()
@@ -208,6 +251,8 @@ const loadData = async () => {
   }
 }
 
+const fetchData = loadData
+
 const handleCreate = () => {
   isEdit.value = false
   modalTitle.value = '发布公告'
@@ -271,6 +316,61 @@ onMounted(() => {
 <style scoped>
 .announcements-container {
   padding: 20px;
+}
+
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.card-body {
+  padding: 10px 14px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.card-label {
+  color: #999;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0f0f0;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 767px) {

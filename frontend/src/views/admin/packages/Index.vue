@@ -11,14 +11,52 @@
       </template>
 
       <n-space vertical :size="16">
-        <n-data-table
-          :columns="columns"
-          :data="packages"
-          :loading="loading"
-          :pagination="false"
-          :bordered="false"
-          :single-line="false"
-        />
+        <template v-if="!appStore.isMobile">
+          <n-data-table
+            :columns="columns"
+            :data="packages"
+            :loading="loading"
+            :pagination="false"
+            :bordered="false"
+            :single-line="false"
+          />
+        </template>
+
+        <template v-else>
+          <n-spin :show="loading">
+            <div v-if="packages.length === 0" style="text-align: center; padding: 40px 0; color: #999;">
+              暂无数据
+            </div>
+            <div v-else class="mobile-card-list">
+              <div v-for="pkg in packages" :key="pkg.id" class="mobile-card">
+                <div class="card-header">
+                  <div class="card-title">{{ pkg.name }}</div>
+                  <n-tag :type="pkg.is_active ? 'success' : 'default'" size="small">
+                    {{ pkg.is_active ? '启用' : '禁用' }}
+                  </n-tag>
+                </div>
+                <div class="card-body">
+                  <div class="card-row">
+                    <span class="card-label">价格</span>
+                    <span style="color: #18a058; font-weight: 600;">¥{{ pkg.price.toFixed(2) }}</span>
+                  </div>
+                  <div class="card-row">
+                    <span class="card-label">有效期</span>
+                    <span>{{ pkg.duration_days }} 天</span>
+                  </div>
+                  <div class="card-row">
+                    <span class="card-label">流量</span>
+                    <span>{{ pkg.traffic_limit && pkg.traffic_limit > 0 ? (pkg.traffic_limit / (1024 * 1024 * 1024)).toFixed(0) + ' GB' : '不限' }}</span>
+                  </div>
+                </div>
+                <div class="card-actions">
+                  <n-button size="small" type="primary" @click="handleEdit(pkg)">编辑</n-button>
+                  <n-button size="small" type="error" @click="handleDelete(pkg)">删除</n-button>
+                </div>
+              </div>
+            </div>
+          </n-spin>
+        </template>
 
         <n-pagination
           v-model:page="currentPage"
@@ -38,7 +76,7 @@
       :title="isCreating ? '新建套餐' : '编辑套餐'"
       :positive-text="'保存'"
       :negative-text="'取消'"
-      style="width: 600px"
+      :style="appStore.isMobile ? 'width: 95%; max-width: 600px' : 'width: 600px'"
       @positive-click="handleSavePackage"
     >
       <n-form
@@ -142,9 +180,12 @@
 
 <script setup>
 import { ref, reactive, h, onMounted } from 'vue'
-import { NButton, NTag, NSpace, NIcon, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naive-ui'
 import { AddOutline } from '@vicons/ionicons5'
 import { listAdminPackages, createPackage, updatePackage, deletePackage } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 
 const message = useMessage()
 const dialog = useDialog()
@@ -417,6 +458,61 @@ onMounted(() => {
 
 :deep(.n-data-table .n-data-table-th) {
   font-weight: 600;
+}
+
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.card-body {
+  padding: 10px 14px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.card-label {
+  color: #999;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0f0f0;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 767px) {

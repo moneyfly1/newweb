@@ -189,6 +189,7 @@ import {
   getSubscription, getSubscriptionDevices, deleteDevice,
   resetSubscription, convertToBalance, sendSubscriptionEmail
 } from '@/api/subscription'
+import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 
 const message = useMessage()
 
@@ -265,10 +266,8 @@ const formatDate = (dateStr: string) => {
 
 const copyToClipboard = async (text: string, label: string) => {
   if (!text) { message.warning('暂无可用订阅'); return }
-  try {
-    await navigator.clipboard.writeText(text)
-    message.success(`${label}已复制到剪贴板`)
-  } catch { message.error('复制失败，请手动复制') }
+  const ok = await clipboardCopy(text)
+  ok ? message.success(`${label}已复制到剪贴板`) : message.error('复制失败，请手动复制')
 }
 
 const importFormat = (fmt: any) => {

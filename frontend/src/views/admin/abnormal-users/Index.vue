@@ -25,14 +25,49 @@
         </n-space>
 
         <!-- Data table -->
-        <n-data-table
-          :columns="columns"
-          :data="users"
-          :loading="loading"
-          :pagination="false"
-          :bordered="false"
-          :single-line="false"
-        />
+        <template v-if="!appStore.isMobile">
+          <n-data-table
+            :columns="columns"
+            :data="users"
+            :loading="loading"
+            :pagination="false"
+            :bordered="false"
+            :single-line="false"
+          />
+        </template>
+
+        <template v-else>
+          <div class="mobile-card-list">
+            <div v-for="row in users" :key="row.user_id" class="mobile-card">
+              <div class="card-header">
+                <span class="card-title">{{ row.username }}</span>
+                <n-tag :type="getTypeTag(row.abnormal_type).type" size="small">
+                  {{ getTypeTag(row.abnormal_type).label }}
+                </n-tag>
+              </div>
+              <div class="card-body">
+                <div class="card-row">
+                  <span class="card-label">邮箱</span>
+                  <span style="overflow: hidden; text-overflow: ellipsis;">{{ row.email }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">异常原因</span>
+                  <span style="text-align: right; flex: 1; margin-left: 8px;">{{ row.details }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">最后活跃</span>
+                  <span>{{ row.last_active ? new Date(row.last_active).toLocaleString('zh-CN') : '-' }}</span>
+                </div>
+              </div>
+              <div class="card-actions">
+                <n-button size="small" type="primary" @click="handleViewUser(row.user_id)">
+                  <template #icon><n-icon><PersonOutline /></n-icon></template>
+                  查看用户
+                </n-button>
+              </div>
+            </div>
+          </div>
+        </template>
 
         <n-alert v-if="users.length === 0 && !loading" type="info" title="暂无异常用户">
           当前没有检测到异常用户
@@ -48,9 +83,11 @@ import { NButton, NTag, NSpace, NIcon, useMessage } from 'naive-ui'
 import { SearchOutline, RefreshOutline, PersonOutline } from '@vicons/ionicons5'
 import { useRouter } from 'vue-router'
 import { getAbnormalUsers } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
 
 const message = useMessage()
 const router = useRouter()
+const appStore = useAppStore()
 
 // State
 const loading = ref(false)
@@ -165,6 +202,63 @@ onMounted(() => {
 
 :deep(.n-data-table .n-data-table-th) {
   font-weight: 600;
+}
+
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.card-body {
+  padding: 10px 14px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.card-label {
+  color: #999;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #f0f0f0;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 767px) {

@@ -32,21 +32,13 @@
                 <span class="label">设备名称</span>
                 <span class="value">{{ device.device_name || '未知设备' }}</span>
               </div>
-              <div class="card-row" v-if="device.software_name">
-                <span class="label">软件</span>
-                <span class="value">{{ device.software_name }}{{ device.software_version ? ' ' + device.software_version : '' }}</span>
-              </div>
-              <div class="card-row" v-if="device.os_name">
-                <span class="label">系统</span>
-                <span class="value">{{ device.os_name }}{{ device.os_version ? ' ' + device.os_version : '' }}</span>
-              </div>
               <div class="card-row">
                 <span class="label">IP 地址</span>
-                <span class="value" style="font-family: monospace;">{{ device.ip_address || device.ip || '-' }}</span>
+                <span class="value" style="font-family: monospace;">{{ device.ip || '-' }}</span>
               </div>
               <div class="card-row">
                 <span class="label">最后访问</span>
-                <span class="value">{{ device.last_access ? new Date(device.last_access).toLocaleString('zh-CN') : '-' }}</span>
+                <span class="value">{{ device.last_access_at ? new Date(device.last_access_at).toLocaleString('zh-CN') : '-' }}</span>
               </div>
               <div class="card-actions">
                 <n-button size="small" type="error" @click="handleDelete(device.id)">删除</n-button>

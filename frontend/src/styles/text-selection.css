@@ -1,0 +1,104 @@
+/*
+ * Text Selection — allow free text selection everywhere,
+ * then selectively disable on interactive controls.
+ * Adapted for Naive UI components.
+ */
+
+/* Global: allow text selection on all elements */
+*,
+*::before,
+*::after {
+  -webkit-user-select: auto !important;
+  user-select: auto !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* Interactive controls: disable text selection */
+button,
+[role="button"],
+[role="tab"],
+[role="switch"],
+[role="checkbox"],
+[role="radio"],
+[role="menuitem"],
+[role="option"],
+.n-button,
+.n-tag,
+.n-switch,
+.n-checkbox,
+.n-radio,
+.n-tabs-tab,
+.n-menu-item,
+.n-menu-item-content,
+.n-pagination .n-pagination-item,
+.n-select,
+.n-cascader,
+.n-date-picker,
+.n-time-picker,
+.n-color-picker,
+.n-slider,
+.n-rate,
+.n-upload,
+.n-tree-node-switcher,
+.n-tree-node-checkbox,
+.n-collapse-item__header,
+.n-drawer-header,
+.n-modal-header,
+.n-card-header,
+.n-breadcrumb-item,
+.n-step-indicator,
+.n-back-top,
+.n-popconfirm__action,
+.n-dialog__action {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+/* Inputs and textareas: always allow text selection */
+input,
+textarea,
+[contenteditable="true"],
+.n-input__input-el,
+.n-input__textarea-el,
+.n-input,
+.n-mention,
+pre,
+code {
+  -webkit-user-select: auto !important;
+  user-select: auto !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* Table cells: allow text selection (override Naive UI default) */
+.n-data-table-td,
+.n-data-table-th,
+.n-data-table .n-data-table-td__content,
+.n-descriptions-table-content,
+.n-descriptions-table-header {
+  -webkit-user-select: auto !important;
+  user-select: auto !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* Mobile card content: allow text selection */
+.mobile-card,
+.mobile-card-list,
+.card-body,
+.card-row,
+.card-row .value,
+.card-title,
+.code-item {
+  -webkit-user-select: auto !important;
+  user-select: auto !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* Ensure copy works on monospace/code elements */
+.n-text[code],
+.n-code,
+code,
+pre {
+  -webkit-user-select: all !important;
+  user-select: all !important;
+}

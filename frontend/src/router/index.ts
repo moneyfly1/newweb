@@ -45,6 +45,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'payment/return', name: 'PaymentReturn', component: () => import('@/views/payment/Return.vue') },
       { path: 'login-history', name: 'LoginHistory', component: () => import('@/views/history/Index.vue') },
       { path: 'recharge', name: 'Recharge', component: () => import('@/views/recharge/Index.vue') },
+      { path: 'redeem', name: 'Redeem', component: () => import('@/views/redeem/Index.vue') },
     ],
   },
   {

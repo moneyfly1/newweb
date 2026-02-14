@@ -255,6 +255,7 @@ import { getDashboardInfo } from '@/api/user'
 import { listPublicAnnouncements } from '@/api/common'
 import { listOrders } from '@/api/order'
 import { getSubscription } from '@/api/subscription'
+import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 
 const message = useMessage()
 
@@ -324,12 +325,8 @@ function formatDate(d: string) {
 }
 
 async function copyText(text: string, label: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-    message.success(`${label}已复制到剪贴板`)
-  } catch {
-    message.error('复制失败，请手动复制')
-  }
+  const ok = await clipboardCopy(text)
+  ok ? message.success(`${label}已复制到剪贴板`) : message.error('复制失败，请手动复制')
 }
 
 function importClash() {

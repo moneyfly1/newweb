@@ -3,7 +3,7 @@
     <n-spin :show="loading">
       <n-space vertical :size="20">
         <n-card title="收入统计" :bordered="false">
-          <n-grid :cols="4" :x-gap="16">
+          <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="16" :y-gap="appStore.isMobile ? 16 : 0">
             <n-gi>
               <n-statistic label="总收入" :value="revenueStats.total_revenue">
                 <template #prefix>¥</template>
@@ -26,7 +26,7 @@
         </n-card>
 
         <n-card title="用户统计" :bordered="false">
-          <n-grid :cols="4" :x-gap="16">
+          <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="16" :y-gap="appStore.isMobile ? 16 : 0">
             <n-gi>
               <n-statistic label="总用户数" :value="userStats.total_users" />
             </n-gi>
@@ -73,6 +73,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { getRevenueStats, getUserStats, getRegionStats } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 
 const message = useMessage()
 const loading = ref(false)

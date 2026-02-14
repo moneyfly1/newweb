@@ -301,6 +301,42 @@ func AdminDeleteUser(c *gin.Context) {
 	utils.SuccessMessage(c, "用户已删除")
 }
 
+func AdminDeleteUserDevice(c *gin.Context) {
+	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的用户ID")
+		return
+	}
+	deviceID, err := strconv.ParseUint(c.Param("deviceId"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的设备ID")
+		return
+	}
+	db := database.GetDB()
+	var device models.Device
+	if err := db.First(&device, deviceID).Error; err != nil {
+		utils.NotFound(c, "设备不存在")
+		return
+	}
+	// Verify device belongs to this user's subscription
+	var sub models.Subscription
+	if err := db.Where("user_id = ?", userID).First(&sub).Error; err != nil {
+		utils.NotFound(c, "用户订阅不存在")
+		return
+	}
+	if device.SubscriptionID != sub.ID {
+		utils.Forbidden(c, "设备不属于该用户")
+		return
+	}
+	db.Delete(&device)
+	// Decrement current_devices
+	if sub.CurrentDevices > 0 {
+		db.Model(&sub).UpdateColumn("current_devices", gorm.Expr("CASE WHEN current_devices > 0 THEN current_devices - 1 ELSE 0 END"))
+	}
+	utils.CreateAuditLog(c, "delete_device", "device", uint(deviceID), fmt.Sprintf("删除用户%d的设备%d", userID, deviceID))
+	utils.SuccessMessage(c, "设备已删除")
+}
+
 func AdminToggleUserActive(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -315,6 +351,28 @@ func AdminToggleUserActive(c *gin.Context) {
 	}
 	newStatus := !user.IsActive
 	db.Model(&user).Update("is_active", newStatus)
+
+	// Sync subscription status
+	if newStatus {
+		// Re-enable: set subscription status based on expire time
+		var sub models.Subscription
+		if db.Where("user_id = ?", id).First(&sub).Error == nil {
+			updates := map[string]interface{}{"is_active": true}
+			if sub.ExpireTime.After(time.Now()) {
+				updates["status"] = "active"
+			} else {
+				updates["status"] = "expired"
+			}
+			db.Model(&sub).Updates(updates)
+		}
+	} else {
+		// Disable: set subscription to disabled
+		db.Model(&models.Subscription{}).Where("user_id = ?", id).Updates(map[string]interface{}{
+			"is_active": false,
+			"status":    "disabled",
+		})
+	}
+
 	// 通知用户账户状态变更
 	if newStatus {
 		go services.NotifyUser(user.ID, "account_enabled", nil)

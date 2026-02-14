@@ -13,10 +13,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { zhCN, dateZhCN, darkTheme } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
 const naiveTheme = computed(() => appStore.isDark ? darkTheme : null)
+
+onMounted(() => {
+  appStore.initTheme()
+})
 </script>

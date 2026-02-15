@@ -2,31 +2,76 @@ package utils
 
 import (
 	"strconv"
+	"sync"
+	"time"
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 )
 
-// GetSettings reads multiple keys from system_configs and returns a map
-func GetSettings(keys ...string) map[string]string {
+// ---------- in-memory settings cache (30 s TTL) ----------
+
+var (
+	cacheMu       sync.RWMutex
+	settingsCache map[string]string
+	lastCacheTime time.Time
+	cacheTTL      = 30 * time.Second
+)
+
+// refreshCacheIfStale reloads all settings from DB when the cache is older than cacheTTL.
+// Caller must NOT hold cacheMu.
+func refreshCacheIfStale() {
+	cacheMu.RLock()
+	fresh := settingsCache != nil && time.Since(lastCacheTime) < cacheTTL
+	cacheMu.RUnlock()
+	if fresh {
+		return
+	}
+
+	// Reload all settings in one query
 	db := database.GetDB()
 	var configs []models.SystemConfig
-	db.Where("`key` IN ?", keys).Find(&configs)
+	db.Find(&configs)
+
 	m := make(map[string]string, len(configs))
 	for _, c := range configs {
 		m[c.Key] = c.Value
 	}
+
+	cacheMu.Lock()
+	settingsCache = m
+	lastCacheTime = time.Now()
+	cacheMu.Unlock()
+}
+
+// InvalidateSettingsCache forces the next GetSetting/GetSettings call to reload from DB.
+func InvalidateSettingsCache() {
+	cacheMu.Lock()
+	settingsCache = nil
+	lastCacheTime = time.Time{}
+	cacheMu.Unlock()
+}
+
+// GetSettings reads multiple keys from the cached settings map.
+func GetSettings(keys ...string) map[string]string {
+	refreshCacheIfStale()
+	cacheMu.RLock()
+	defer cacheMu.RUnlock()
+	m := make(map[string]string, len(keys))
+	for _, k := range keys {
+		if v, ok := settingsCache[k]; ok {
+			m[k] = v
+		}
+	}
 	return m
 }
 
-// GetSetting reads a single key from system_configs
+// GetSetting reads a single key from the cached settings map.
 func GetSetting(key string) string {
-	db := database.GetDB()
-	var cfg models.SystemConfig
-	if err := db.Where("`key` = ?", key).First(&cfg).Error; err != nil {
-		return ""
-	}
-	return cfg.Value
+	refreshCacheIfStale()
+	cacheMu.RLock()
+	defer cacheMu.RUnlock()
+	return settingsCache[key]
 }
 
 // IsBoolSetting checks if a setting is truthy ("true" or "1")

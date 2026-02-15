@@ -193,11 +193,15 @@ export const useAppStore = defineStore('app', () => {
 
   let resizeHandler: (() => void) | null = null
   let mediaHandler: ((e: MediaQueryListEvent) => void) | null = null
+  let resizeTimer: ReturnType<typeof setTimeout> | null = null
 
   function initApp() {
     applyCSSVariables(getThemeConfig(currentTheme.value))
     checkMobile()
-    resizeHandler = () => checkMobile()
+    resizeHandler = () => {
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => checkMobile(), 150)
+    }
     window.addEventListener('resize', resizeHandler)
     // Listen for system theme changes when in auto mode
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
@@ -210,6 +214,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function cleanup() {
+    if (resizeTimer) clearTimeout(resizeTimer)
     if (resizeHandler) window.removeEventListener('resize', resizeHandler)
     if (mediaHandler) {
       window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', mediaHandler)

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -237,25 +238,37 @@ func BatchTestNodes(c *gin.Context) {
 		Reachable bool   `json:"reachable"`
 	}
 
-	var results []Result
+	var (
+		results []Result
+		mu      sync.Mutex
+		wg      sync.WaitGroup
+	)
 	now := time.Now()
+
 	for _, node := range nodes {
 		if node.Config == nil || *node.Config == "" {
 			continue
 		}
-		latency, reachable := testNodeConnectivity(*node.Config)
-		status := "offline"
-		if reachable {
-			status = "online"
-		}
-		db.Model(&node).Updates(map[string]interface{}{
-			"status": status, "latency": latency, "last_test": &now,
-		})
-		results = append(results, Result{
-			NodeID: node.ID, Name: node.Name,
-			Status: status, Latency: latency, Reachable: reachable,
-		})
+		wg.Add(1)
+		go func(n models.Node) {
+			defer wg.Done()
+			latency, reachable := testNodeConnectivity(*n.Config)
+			status := "offline"
+			if reachable {
+				status = "online"
+			}
+			db.Model(&n).Updates(map[string]interface{}{
+				"status": status, "latency": latency, "last_test": &now,
+			})
+			mu.Lock()
+			results = append(results, Result{
+				NodeID: n.ID, Name: n.Name,
+				Status: status, Latency: latency, Reachable: reachable,
+			})
+			mu.Unlock()
+		}(node)
 	}
+	wg.Wait()
 
 	utils.Success(c, gin.H{"tested": len(results), "results": results})
 }

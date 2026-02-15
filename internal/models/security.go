@@ -8,11 +8,11 @@ import (
 
 type LoginAttempt struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
-	Username  string         `gorm:"type:varchar(100);index;not null" json:"username"`
+	Username  string         `gorm:"type:varchar(100);index;not null;index:idx_login_lookup,priority:1" json:"username"`
 	IPAddress *string   `gorm:"type:varchar(45);index" json:"ip_address,omitempty"`
-	Success   bool      `gorm:"default:false" json:"success"`
+	Success   bool      `gorm:"default:false;index:idx_login_lookup,priority:2" json:"success"`
 	UserAgent *string   `gorm:"type:varchar(500)" json:"user_agent,omitempty"`
-	CreatedAt time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
+	CreatedAt time.Time `gorm:"autoCreateTime;not null;index:idx_login_lookup,priority:3" json:"created_at"`
 }
 
 func (LoginAttempt) TableName() string { return "login_attempts" }
@@ -30,12 +30,12 @@ func (VerificationAttempt) TableName() string { return "verification_attempts" }
 
 type VerificationCode struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	Email     string    `gorm:"type:varchar(100);index;not null" json:"email"`
+	Email     string    `gorm:"type:varchar(100);index;not null;index:idx_verification_lookup,priority:1" json:"email"`
 	Code      string    `gorm:"type:varchar(6);not null" json:"code"`
 	CreatedAt time.Time `gorm:"autoCreateTime;not null" json:"created_at"`
 	ExpiresAt time.Time `gorm:"not null" json:"expires_at"`
-	Used      int       `gorm:"default:0" json:"used"`
-	Purpose   string    `gorm:"type:varchar(50);default:register" json:"purpose"`
+	Used      int       `gorm:"default:0;index:idx_verification_lookup,priority:3" json:"used"`
+	Purpose   string    `gorm:"type:varchar(50);default:register;index:idx_verification_lookup,priority:2" json:"purpose"`
 }
 
 func (VerificationCode) TableName() string { return "verification_codes" }
@@ -47,7 +47,7 @@ type TokenBlacklist struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	TokenHash string    `gorm:"type:varchar(255);uniqueIndex;not null" json:"token_hash"`
 	UserID    uint      `gorm:"index;not null" json:"user_id"`
-	ExpiresAt time.Time `gorm:"not null" json:"expires_at"`
+	ExpiresAt time.Time `gorm:"not null;index" json:"expires_at"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 }
 

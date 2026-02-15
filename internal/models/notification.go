@@ -44,12 +44,12 @@ type EmailQueue struct {
 	ContentType string         `gorm:"type:varchar(20);default:'plain'" json:"content_type"`
 	EmailType   string         `gorm:"type:varchar(50)" json:"email_type"`
 	Attachments string         `gorm:"type:text" json:"attachments"`
-	Status      string         `gorm:"type:varchar(20);default:'pending'" json:"status"`
+	Status      string         `gorm:"type:varchar(20);default:'pending';index" json:"status"`
 	RetryCount  int            `gorm:"default:0" json:"retry_count"`
 	MaxRetries  int            `gorm:"default:3" json:"max_retries"`
 	SentAt      *time.Time `json:"sent_at"`
 	ErrorMessage *string   `gorm:"type:text" json:"error_message"`
-	CreatedAt   time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	CreatedAt   time.Time      `gorm:"autoCreateTime;index" json:"created_at"`
 	UpdatedAt   time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 }
 

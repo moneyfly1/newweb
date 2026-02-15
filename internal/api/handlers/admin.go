@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -26,53 +27,81 @@ import (
 func AdminDashboard(c *gin.Context) {
 	db := database.GetDB()
 
+	now := time.Now()
+	today := now.Format("2006-01-02")
+	monthStart := now.Format("2006-01") + "-01"
+	thirtyDaysAgo := now.AddDate(0, 0, -29).Format("2006-01-02")
+
 	var userCount, orderCount, subCount int64
-	db.Model(&models.User{}).Count(&userCount)
-	db.Model(&models.Order{}).Count(&orderCount)
-	db.Model(&models.Subscription{}).Where("is_active = ? AND expire_time > ?", true, time.Now()).Count(&subCount)
-
 	var revenueToday, revenueMonth float64
-	today := time.Now().Format("2006-01-02")
-	monthStart := time.Now().Format("2006-01") + "-01"
-	db.Model(&models.Order{}).
-		Where("status = ? AND DATE(payment_time) = ?", "paid", today).
-		Select("COALESCE(SUM(amount), 0)").Scan(&revenueToday)
-	db.Model(&models.Order{}).
-		Where("status = ? AND DATE(payment_time) >= ?", "paid", monthStart).
-		Select("COALESCE(SUM(amount), 0)").Scan(&revenueMonth)
-
 	var pendingOrders, pendingTickets int64
-	db.Model(&models.Order{}).Where("status = ?", "pending").Count(&pendingOrders)
-	db.Model(&models.Ticket{}).Where("status IN ?", []string{"pending", "open"}).Count(&pendingTickets)
-
 	var recentOrders []models.Order
-	db.Order("created_at DESC").Limit(5).Find(&recentOrders)
-
 	var ticketList []models.Ticket
-	db.Where("status IN ?", []string{"pending", "open"}).Order("created_at DESC").Limit(5).Find(&ticketList)
 
-	// Revenue trend (last 30 days)
 	type DayStat struct {
 		Date  string  `json:"date"`
 		Value float64 `json:"value"`
 	}
 	var revenueTrend []DayStat
-	thirtyDaysAgo := time.Now().AddDate(0, 0, -29).Format("2006-01-02")
-	db.Model(&models.Order{}).
-		Where("status = ? AND DATE(payment_time) >= ?", "paid", thirtyDaysAgo).
-		Select("DATE(payment_time) as date, COALESCE(SUM(amount), 0) as value").
-		Group("DATE(payment_time)").
-		Order("date ASC").
-		Scan(&revenueTrend)
-
-	// User growth (last 30 days)
 	var userGrowth []DayStat
-	db.Model(&models.User{}).
-		Where("DATE(created_at) >= ?", thirtyDaysAgo).
-		Select("DATE(created_at) as date, COUNT(*) as value").
-		Group("DATE(created_at)").
-		Order("date ASC").
-		Scan(&userGrowth)
+
+	var wg sync.WaitGroup
+	wg.Add(11)
+
+	go func() { defer wg.Done(); db.Model(&models.User{}).Count(&userCount) }()
+	go func() { defer wg.Done(); db.Model(&models.Order{}).Count(&orderCount) }()
+	go func() {
+		defer wg.Done()
+		db.Model(&models.Subscription{}).Where("is_active = ? AND expire_time > ?", true, now).Count(&subCount)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Model(&models.Order{}).
+			Where("status = ? AND DATE(payment_time) = ?", "paid", today).
+			Select("COALESCE(SUM(amount), 0)").Scan(&revenueToday)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Model(&models.Order{}).
+			Where("status = ? AND DATE(payment_time) >= ?", "paid", monthStart).
+			Select("COALESCE(SUM(amount), 0)").Scan(&revenueMonth)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Model(&models.Order{}).Where("status = ?", "pending").Count(&pendingOrders)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Model(&models.Ticket{}).Where("status IN ?", []string{"pending", "open"}).Count(&pendingTickets)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Order("created_at DESC").Limit(5).Find(&recentOrders)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Where("status IN ?", []string{"pending", "open"}).Order("created_at DESC").Limit(5).Find(&ticketList)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Model(&models.Order{}).
+			Where("status = ? AND DATE(payment_time) >= ?", "paid", thirtyDaysAgo).
+			Select("DATE(payment_time) as date, COALESCE(SUM(amount), 0) as value").
+			Group("DATE(payment_time)").
+			Order("date ASC").
+			Scan(&revenueTrend)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Model(&models.User{}).
+			Where("DATE(created_at) >= ?", thirtyDaysAgo).
+			Select("DATE(created_at) as date, COUNT(*) as value").
+			Group("DATE(created_at)").
+			Order("date ASC").
+			Scan(&userGrowth)
+	}()
+
+	wg.Wait()
 
 	utils.Success(c, gin.H{
 		"total_users":          userCount,
@@ -1645,6 +1674,7 @@ func AdminUpdateSettings(c *gin.Context) {
 		db.Where("`key` = ?", k).Assign(models.SystemConfig{Key: k, Value: strVal}).FirstOrCreate(&models.SystemConfig{})
 	}
 	utils.CreateAuditLog(c, "update_settings", "settings", 0, "更新系统设置")
+	utils.InvalidateSettingsCache()
 	utils.SuccessMessage(c, "设置已更新")
 }
 

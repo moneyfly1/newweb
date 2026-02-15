@@ -33,16 +33,17 @@ Go (Gin) + Vue 3 (Naive UI) 构建的代理订阅管理面板。支持 SQLite / 
 适用于纯净 Linux 服务器。安装目录：`/opt/cboard`。**安装过程中会自动安装并配置 Nginx**（前端静态 + API 反向代理）。
 
 ```bash
-# 1. 克隆项目（使用本项目 GitHub 地址）
+# 一键安装：克隆后运行一次即可（必须用 bash，需要 root 权限）
 git clone https://github.com/moneyfly1/newweb.git /opt/cboard
 cd /opt/cboard
-
-# 2. 运行安装脚本（必须用 bash，需要 root 权限）
 bash install.sh
 ```
 
-> **注意**：请务必使用 `bash install.sh` 运行，不要使用 `sh install.sh`，否则可能因 shell 兼容导致安装中途静默退出。  
-> **若 `/opt/cboard` 已存在**（已安装过或想更新代码）：不要删除目录、不要重新执行 `git clone`，否则会报「目录已存在」。请直接 `cd /opt/cboard && git pull && bash install.sh`，在菜单中选 **14 更新代码** 或 **12 重装网站(保留数据)**。
+**首次运行**：脚本会**自动进入安装流程**（按提示输入安装目录、域名、SSL、管理员邮箱和密码），安装完成后自动进入管理菜单，无需在菜单里再选「1. 安装系统」。  
+**已安装过**：再次运行 `bash install.sh` 会直接进入管理菜单。
+
+> **注意**：请务必使用 `bash install.sh`，不要用 `sh install.sh`。  
+> **若 `/opt/cboard` 已存在**：不要重新 `git clone`，直接 `cd /opt/cboard && git pull && bash install.sh`，在菜单中选 **14 更新代码** 或 **12 重装网站(保留数据)**。
 
 **全自动安装（无人值守）**：不进入菜单、不交互，直接完成安装（需预先设置管理员邮箱和密码）：
 ```bash
@@ -63,7 +64,7 @@ CBOARD_UNATTENDED=1 CBOARD_ADMIN_EMAIL=admin@example.com CBOARD_ADMIN_PASSWORD=�
 
 安装完成后**直接打开域名或 IP 即可访问**（如 `https://你的域名` 或 `http://服务器IP`），**无需在地址后加端口**；Nginx 监听 80/443，自动转发到后端。
 
-安装完成后脚本进入管理菜单，后续再次运行 `bash install.sh` 即可进入菜单。
+安装完成后脚本自动进入管理菜单；后续运行 `bash install.sh` 会直接进入菜单。
 
 管理菜单功能列表：
 
@@ -105,13 +106,13 @@ journalctl -u cboard -f    # 查看实时日志
 - 已在宝塔面板「软件商店」中安装 Nginx
 
 ```bash
-# 1. 克隆项目（使用本项目 GitHub 地址）
+# 一键安装：克隆后运行一次即可（需要 root 权限）
 git clone https://github.com/moneyfly1/newweb.git /www/wwwroot/cboard
 cd /www/wwwroot/cboard
-
-# 2. 运行宝塔版安装脚本（需要 root 权限）
 bash install_bt.sh
 ```
+
+**首次运行**会自动进入安装流程，安装完成后进入管理菜单；已安装过则直接进入菜单。
 
 > **若 `/www/wwwroot/cboard` 已存在**：不要删除目录、不要重新 `git clone`。请直接 `cd /www/wwwroot/cboard && git pull && bash install_bt.sh`，在菜单中选 **14 更新代码** 或 **12 重装网站(保留数据)**。
 

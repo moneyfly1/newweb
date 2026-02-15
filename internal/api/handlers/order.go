@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -36,7 +38,14 @@ func ListOrders(c *gin.Context) {
 	dbConn := database.GetDB()
 	for _, o := range orders {
 		item := OrderItem{Order: o}
-		if name, ok := pkgNameCache[o.PackageID]; ok {
+		if o.PackageID == 0 && o.ExtraData != nil {
+			var extra map[string]interface{}
+			if json.Unmarshal([]byte(*o.ExtraData), &extra) == nil && extra["type"] == "custom_package" {
+				devices, _ := extra["devices"].(float64)
+				months, _ := extra["months"].(float64)
+				item.PackageName = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
+			}
+		} else if name, ok := pkgNameCache[o.PackageID]; ok {
 			item.PackageName = name
 		} else {
 			var pkg models.Package
@@ -170,24 +179,48 @@ func PayOrder(c *gin.Context) {
 			return
 		}
 		// 创建或续期订阅
-		var pkg models.Package
-		if err := tx.First(&pkg, order.PackageID).Error; err != nil {
-			tx.Rollback()
-			utils.InternalError(c, "套餐不存在")
-			return
+		var deviceLimit int
+		var durationDays int
+		var pkgName string
+
+		if order.PackageID == 0 && order.ExtraData != nil {
+			// Custom package
+			var extra map[string]interface{}
+			if err := json.Unmarshal([]byte(*order.ExtraData), &extra); err != nil {
+				tx.Rollback()
+				utils.InternalError(c, "订单数据异常")
+				return
+			}
+			devices, _ := extra["devices"].(float64)
+			months, _ := extra["months"].(float64)
+			deviceLimit = int(devices)
+			durationDays = int(months) * 30
+			pkgName = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
+		} else {
+			var pkg models.Package
+			if err := tx.First(&pkg, order.PackageID).Error; err != nil {
+				tx.Rollback()
+				utils.InternalError(c, "套餐不存在")
+				return
+			}
+			deviceLimit = pkg.DeviceLimit
+			durationDays = pkg.DurationDays
+			pkgName = pkg.Name
 		}
+
 		var sub models.Subscription
 		if err := tx.Where("user_id = ?", userID).First(&sub).Error; err != nil {
-			// 创建新订阅
-			pkgID := int64(pkg.ID)
 			sub = models.Subscription{
 				UserID:          userID,
-				PackageID:       &pkgID,
 				SubscriptionURL: utils.GenerateRandomString(32),
-				DeviceLimit:     pkg.DeviceLimit,
+				DeviceLimit:     deviceLimit,
 				IsActive:        true,
 				Status:          "active",
-				ExpireTime:      time.Now().AddDate(0, 0, pkg.DurationDays),
+				ExpireTime:      time.Now().AddDate(0, 0, durationDays),
+			}
+			if order.PackageID > 0 {
+				pkgID := int64(order.PackageID)
+				sub.PackageID = &pkgID
 			}
 			if err := tx.Create(&sub).Error; err != nil {
 				tx.Rollback()
@@ -195,20 +228,22 @@ func PayOrder(c *gin.Context) {
 				return
 			}
 		} else {
-			// 续期
 			newExpire := sub.ExpireTime
 			if newExpire.Before(time.Now()) {
 				newExpire = time.Now()
 			}
-			newExpire = newExpire.AddDate(0, 0, pkg.DurationDays)
-			pkgID := int64(pkg.ID)
-			if err := tx.Model(&sub).Updates(map[string]interface{}{
-				"package_id":   &pkgID,
-				"device_limit": pkg.DeviceLimit,
+			newExpire = newExpire.AddDate(0, 0, durationDays)
+			updates := map[string]interface{}{
+				"device_limit": deviceLimit,
 				"expire_time":  newExpire,
 				"is_active":    true,
 				"status":       "active",
-			}).Error; err != nil {
+			}
+			if order.PackageID > 0 {
+				pkgID := int64(order.PackageID)
+				updates["package_id"] = &pkgID
+			}
+			if err := tx.Model(&sub).Updates(updates).Error; err != nil {
 				tx.Rollback()
 				utils.InternalError(c, "续期订阅失败")
 				return
@@ -220,10 +255,6 @@ func PayOrder(c *gin.Context) {
 		}
 		// 发送支付成功邮件 + 通知管理员
 		payAmountStr := fmt.Sprintf("%.2f", payAmount)
-		var pkgName string
-		if err := database.GetDB().Model(&models.Package{}).Where("id = ?", order.PackageID).Pluck("name", &pkgName).Error; err != nil {
-			pkgName = "未知套餐"
-		}
 		var subURL string
 		var userSub models.Subscription
 		if database.GetDB().Where("user_id = ?", user.ID).First(&userSub).Error == nil {
@@ -282,9 +313,137 @@ func GetOrderStatus(c *gin.Context) {
 		result["paid_at"] = order.PaymentTime.Format("2006-01-02 15:04:05")
 	}
 	// Get package name
-	var pkg models.Package
-	if err := db.First(&pkg, order.PackageID).Error; err == nil {
-		result["package_name"] = pkg.Name
+	if order.PackageID == 0 && order.ExtraData != nil {
+		var extra map[string]interface{}
+		if json.Unmarshal([]byte(*order.ExtraData), &extra) == nil && extra["type"] == "custom_package" {
+			devices, _ := extra["devices"].(float64)
+			months, _ := extra["months"].(float64)
+			result["package_name"] = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
+		}
+	} else {
+		var pkg models.Package
+		if err := db.First(&pkg, order.PackageID).Error; err == nil {
+			result["package_name"] = pkg.Name
+		}
 	}
 	utils.Success(c, result)
+}
+
+// CreateCustomOrder POST /orders/custom
+func CreateCustomOrder(c *gin.Context) {
+	var req struct {
+		Devices    int    `json:"devices" binding:"required,min=1"`
+		Months     int    `json:"months" binding:"required,min=1"`
+		CouponCode string `json:"coupon_code"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	if !utils.IsBoolSetting("custom_package_enabled") {
+		utils.BadRequest(c, "自定义套餐功能未启用")
+		return
+	}
+
+	pricePerDeviceYear := utils.GetFloatSetting("custom_package_price_per_device_year", 40)
+	minDevices := utils.GetIntSetting("custom_package_min_devices", 1)
+	maxDevices := utils.GetIntSetting("custom_package_max_devices", 20)
+	minMonths := utils.GetIntSetting("custom_package_min_months", 6)
+
+	if req.Devices < minDevices || req.Devices > maxDevices {
+		utils.BadRequest(c, fmt.Sprintf("设备数量需在 %d ~ %d 之间", minDevices, maxDevices))
+		return
+	}
+	if req.Months < minMonths {
+		utils.BadRequest(c, fmt.Sprintf("最少购买 %d 个月", minMonths))
+		return
+	}
+
+	// Parse duration discounts
+	var discountTiers []struct {
+		Months   int     `json:"months"`
+		Discount float64 `json:"discount"`
+	}
+	discountsJSON := utils.GetSetting("custom_package_duration_discounts")
+	if discountsJSON != "" {
+		json.Unmarshal([]byte(discountsJSON), &discountTiers)
+	}
+
+	// Calculate price
+	basePrice := pricePerDeviceYear * float64(req.Devices) * (float64(req.Months) / 12.0)
+	basePrice = math.Round(basePrice*100) / 100
+
+	// Find best matching discount
+	var discountPercent float64
+	for _, tier := range discountTiers {
+		if req.Months >= tier.Months && tier.Discount > discountPercent {
+			discountPercent = tier.Discount
+		}
+	}
+	finalPrice := basePrice * (1 - discountPercent/100)
+	finalPrice = math.Round(finalPrice*100) / 100
+
+	// Apply coupon
+	userID := c.GetUint("user_id")
+	db := database.GetDB()
+	var couponDiscount float64
+	var couponID *int64
+	if req.CouponCode != "" {
+		var coupon models.Coupon
+		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
+			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil) {
+				switch coupon.Type {
+				case "discount":
+					couponDiscount = finalPrice * coupon.DiscountValue / 100
+				case "fixed":
+					couponDiscount = coupon.DiscountValue
+				}
+				if couponDiscount > finalPrice {
+					couponDiscount = finalPrice
+				}
+				cid := int64(coupon.ID)
+				couponID = &cid
+			}
+		}
+	}
+	finalPrice = finalPrice - couponDiscount
+	if finalPrice < 0 {
+		finalPrice = 0
+	}
+
+	// Build extra data
+	extraData, _ := json.Marshal(map[string]interface{}{
+		"type": "custom_package", "devices": req.Devices,
+		"months": req.Months, "discount_percent": discountPercent,
+	})
+	extraStr := string(extraData)
+
+	orderNo := fmt.Sprintf("ORD%d%s", time.Now().Unix(), utils.GenerateRandomString(6))
+	expireTime := time.Now().Add(30 * time.Minute)
+	totalDiscount := (basePrice - finalPrice)
+	order := models.Order{
+		OrderNo:        orderNo,
+		UserID:         userID,
+		PackageID:      0,
+		Amount:         basePrice,
+		Status:         "pending",
+		CouponID:       couponID,
+		DiscountAmount: &totalDiscount,
+		FinalAmount:    &finalPrice,
+		ExpireTime:     &expireTime,
+		ExtraData:      &extraStr,
+	}
+	db.Create(&order)
+
+	pkgName := fmt.Sprintf("自定义套餐 (%d设备/%d月)", req.Devices, req.Months)
+	user := c.MustGet("user").(*models.User)
+	go services.NotifyUser(userID, "new_order", map[string]string{
+		"order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
+	})
+	go services.NotifyAdmin("new_order", map[string]string{
+		"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
+	})
+
+	utils.Success(c, order)
 }

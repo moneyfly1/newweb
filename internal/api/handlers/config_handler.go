@@ -16,14 +16,18 @@ func GetPublicConfig(c *gin.Context) {
 		"support_email", "support_qq", "support_telegram",
 		"register_enabled", "register_email_verify", "register_invite_required",
 		// Client download URLs
-		"client_clash_windows_url", "client_v2rayn_url", "client_mihomo_windows_url",
+		"client_clash_windows_url", "client_v2rayn_url", "client_clashparty_windows_url",
 		"client_hiddify_windows_url", "client_flclash_windows_url",
 		"client_clash_android_url", "client_v2rayng_url", "client_hiddify_android_url",
-		"client_flclash_macos_url", "client_mihomo_macos_url",
+		"client_flclash_macos_url", "client_clashparty_macos_url",
 		"client_shadowrocket_url", "client_stash_url", "client_singbox_url",
 		"client_clash_linux_url",
 		// Telegram login
 		"telegram_login_enabled", "telegram_bot_username",
+		// Custom package
+		"custom_package_enabled", "custom_package_price_per_device_year",
+		"custom_package_min_devices", "custom_package_max_devices",
+		"custom_package_min_months", "custom_package_duration_discounts",
 	}
 	db.Where("is_public = ? OR `key` IN ?", true, publicKeys).Find(&configs)
 	result := make(map[string]string)

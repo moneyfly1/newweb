@@ -363,6 +363,47 @@
               </n-space>
             </n-form>
           </n-tab-pane>
+          <!-- Tab: 自定义套餐 -->
+          <n-tab-pane name="custom_package" tab="自定义套餐">
+            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '200'" :model="form">
+              <n-form-item label="启用自定义套餐">
+                <n-switch v-model:value="form.custom_package_enabled" />
+              </n-form-item>
+              <n-form-item label="每设备每年价格 (元)">
+                <n-input-number v-model:value="form.custom_package_price_per_device_year" :min="1" :precision="2" style="width:100%" />
+                <template #feedback>
+                  <span style="font-size: 12px; color: #999">例如 40 表示每台设备每年 40 元</span>
+                </template>
+              </n-form-item>
+              <n-form-item label="最少设备数">
+                <n-input-number v-model:value="form.custom_package_min_devices" :min="1" :max="100" style="width:100%" />
+              </n-form-item>
+              <n-form-item label="最多设备数">
+                <n-input-number v-model:value="form.custom_package_max_devices" :min="1" :max="100" style="width:100%" />
+              </n-form-item>
+              <n-form-item label="最少购买月数">
+                <n-input-number v-model:value="form.custom_package_min_months" :min="1" :max="120" style="width:100%" />
+              </n-form-item>
+              <n-form-item label="时长折扣配置">
+                <n-dynamic-input v-model:value="durationDiscounts" :on-create="() => ({ months: 12, discount: 0 })">
+                  <template #default="{ value: item }">
+                    <div style="display:flex;align-items:center;gap:8px;width:100%">
+                      <n-input-number v-model:value="item.months" :min="1" placeholder="月数" size="small" style="flex:1" />
+                      <span style="color:#999;font-size:13px">个月</span>
+                      <n-input-number v-model:value="item.discount" :min="0" :max="99" :precision="1" placeholder="折扣%" size="small" style="flex:1" />
+                      <span style="color:#999;font-size:13px">% 优惠</span>
+                    </div>
+                  </template>
+                </n-dynamic-input>
+                <template #feedback>
+                  <span style="font-size: 12px; color: #999">购买时长 ≥ 对应月数时享受折扣。例如：12个月 10% 表示买12个月打9折</span>
+                </template>
+              </n-form-item>
+              <n-space justify="center" style="margin-top: 24px">
+                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
+              </n-space>
+            </n-form>
+          </n-tab-pane>
           <!-- Tab 8: 软件下载配置 -->
           <n-tab-pane name="client" tab="软件下载">
             <n-space vertical :size="16">
@@ -370,7 +411,7 @@
                 <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
                   <n-form-item label="Clash for Windows"><n-input v-model:value="form.client_clash_windows_url" placeholder="下载链接" /></n-form-item>
                   <n-form-item label="V2rayN"><n-input v-model:value="form.client_v2rayn_url" placeholder="下载链接" /></n-form-item>
-                  <n-form-item label="Mihomo Party"><n-input v-model:value="form.client_mihomo_windows_url" placeholder="下载链接" /></n-form-item>
+                  <n-form-item label="Clash Party"><n-input v-model:value="form.client_clashparty_windows_url" placeholder="下载链接" /></n-form-item>
                   <n-form-item label="Hiddify"><n-input v-model:value="form.client_hiddify_windows_url" placeholder="下载链接" /></n-form-item>
                   <n-form-item label="FlClash"><n-input v-model:value="form.client_flclash_windows_url" placeholder="下载链接" /></n-form-item>
                 </n-form>
@@ -385,7 +426,7 @@
               <n-card title="macOS 客户端" size="small" :bordered="true">
                 <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
                   <n-form-item label="FlClash"><n-input v-model:value="form.client_flclash_macos_url" placeholder="下载链接" /></n-form-item>
-                  <n-form-item label="Mihomo Party"><n-input v-model:value="form.client_mihomo_macos_url" placeholder="下载链接" /></n-form-item>
+                  <n-form-item label="Clash Party"><n-input v-model:value="form.client_clashparty_macos_url" placeholder="下载链接" /></n-form-item>
                 </n-form>
               </n-card>
               <n-card title="iOS 客户端" size="small" :bordered="true">
@@ -542,7 +583,8 @@ const booleanKeys = [
   'user_notify_welcome', 'user_notify_payment', 'user_notify_expiry', 'user_notify_expired',
   'user_notify_reset', 'user_notify_account_status', 'user_notify_unpaid_order',
   'abnormal_login_alert', 'backup_github_enabled',
-  'checkin_enabled', 'telegram_login_enabled'
+  'checkin_enabled', 'telegram_login_enabled',
+  'custom_package_enabled'
 ]
 
 // Number keys that should be stored as numbers
@@ -550,7 +592,9 @@ const numberKeys = [
   'default_device_limit', 'default_subscribe_days', 'min_password_length',
   'smtp_port', 'max_login_attempts', 'login_lockout_minutes', 'session_timeout_minutes',
   'backup_interval_hours', 'pay_stripe_exchange_rate', 'pay_crypto_exchange_rate',
-  'checkin_min_reward', 'checkin_max_reward'
+  'checkin_min_reward', 'checkin_max_reward',
+  'custom_package_price_per_device_year', 'custom_package_min_devices',
+  'custom_package_max_devices', 'custom_package_min_months'
 ]
 
 const form = ref<Record<string, any>>({
@@ -648,14 +692,14 @@ const form = ref<Record<string, any>>({
   // Client download URLs
   client_clash_windows_url: '',
   client_v2rayn_url: '',
-  client_mihomo_windows_url: '',
+  client_clashparty_windows_url: '',
   client_hiddify_windows_url: '',
   client_flclash_windows_url: '',
   client_clash_android_url: '',
   client_v2rayng_url: '',
   client_hiddify_android_url: '',
   client_flclash_macos_url: '',
-  client_mihomo_macos_url: '',
+  client_clashparty_macos_url: '',
   client_shadowrocket_url: '',
   client_stash_url: '',
   client_singbox_url: '',
@@ -664,7 +708,18 @@ const form = ref<Record<string, any>>({
   checkin_enabled: true,
   checkin_min_reward: 10,
   checkin_max_reward: 50,
+  // Custom package
+  custom_package_enabled: false,
+  custom_package_price_per_device_year: 40,
+  custom_package_min_devices: 1,
+  custom_package_max_devices: 20,
+  custom_package_min_months: 6,
+  custom_package_duration_discounts: '',
 })
+
+const durationDiscounts = ref<{ months: number; discount: number }[]>([
+  { months: 6, discount: 0 }, { months: 12, discount: 10 }, { months: 24, discount: 20 }
+])
 
 const loadSettings = async () => {
   loading.value = true
@@ -683,6 +738,10 @@ const loadSettings = async () => {
           }
         }
       }
+      // Parse duration discounts JSON
+      if (data.custom_package_duration_discounts) {
+        try { durationDiscounts.value = JSON.parse(data.custom_package_duration_discounts) } catch {}
+      }
     } else {
       message.error(res.message || '加载设置失败')
     }
@@ -696,6 +755,8 @@ const loadSettings = async () => {
 const handleSave = async () => {
   saving.value = true
   try {
+    // Serialize duration discounts
+    form.value.custom_package_duration_discounts = JSON.stringify(durationDiscounts.value)
     const res = await updateSettings(form.value)
     if (res.code === 0) {
       message.success('保存成功')

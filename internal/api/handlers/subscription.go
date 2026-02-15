@@ -182,12 +182,30 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		db.Create(&device)
 		db.Model(&sub).Update("current_devices", sub.CurrentDevices+1)
 		ctx.CurrentDevices = sub.CurrentDevices + 1
+
+		// Lookup and update region asynchronously
+		go func(deviceID uint, ipAddr string) {
+			region := utils.GetIPLocation(ipAddr)
+			if region != "" {
+				database.GetDB().Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region)
+			}
+		}(device.ID, ip)
 	} else {
 		db.Model(&device).Updates(map[string]interface{}{
 			"last_access":  time.Now(),
 			"access_count": device.AccessCount + 1,
 			"ip_address":   ip,
 		})
+
+		// Update region asynchronously if IP changed
+		go func(deviceID uint, ipAddr string, oldIP *string) {
+			if oldIP == nil || *oldIP != ipAddr {
+				region := utils.GetIPLocation(ipAddr)
+				if region != "" {
+					database.GetDB().Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region)
+				}
+			}
+		}(device.ID, ip, device.IPAddress)
 	}
 
 	var nodes []models.Node
@@ -346,12 +364,16 @@ func generateSubscriptionName(ctx *subscriptionContext) string {
 func GetSubscription(c *gin.Context) {
 	ctx := buildSubscriptionContext(c)
 
-	// Check explicit format parameter first, then auto-detect from client info
+	// If accessed via /sub/clash/ path, force clash format regardless of UA
+	// Otherwise check explicit format parameter, then auto-detect from client info
 	subType := c.Query("format")
 	if subType == "" {
-		subType = "clash" // default
-		if ctx.ClientInfo != nil {
+		if strings.Contains(c.Request.URL.Path, "/clash/") {
+			subType = "clash"
+		} else if ctx.ClientInfo != nil {
 			subType = ctx.ClientInfo.SubscriptionType
+		} else {
+			subType = "clash"
 		}
 	}
 
@@ -385,17 +407,28 @@ func GetSubscription(c *gin.Context) {
 		c.Data(http.StatusOK, "text/yaml; charset=utf-8", []byte(yamlContent))
 	} else if useSurge {
 		surgeContent := services.GenerateSurgeConfig(nodes, ctx.SiteURL)
+		encodedName := url.QueryEscape(subscriptionName)
 		c.Header("Content-Type", "text/plain; charset=utf-8")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.conf", encodedName))
 		c.Header("Subscription-Title", subscriptionName)
+		c.Header("Profile-Title", subscriptionName)
 		setSubscriptionHeaders(c, ctx)
 		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(surgeContent))
 	} else if useQuantumultX {
 		qxContent := services.GenerateQuantumultXConfig(nodes)
+		encodedName := url.QueryEscape(subscriptionName)
 		c.Header("Content-Type", "text/plain; charset=utf-8")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.conf", encodedName))
+		c.Header("Subscription-Title", subscriptionName)
+		c.Header("Profile-Title", subscriptionName)
 		setSubscriptionHeaders(c, ctx)
 		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(qxContent))
 	} else {
 		encoded := services.GenerateUniversalBase64(nodes)
+		encodedName := url.QueryEscape(subscriptionName)
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", encodedName))
+		c.Header("Subscription-Title", subscriptionName)
+		c.Header("Profile-Title", subscriptionName)
 		setSubscriptionHeaders(c, ctx)
 		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(encoded))
 	}
@@ -413,8 +446,17 @@ func GetUniversalSubscription(c *gin.Context) {
 		incrementSubscriptionCounter(ctx.Sub, "v2ray")
 	}
 
+	subscriptionName := generateSubscriptionName(ctx)
+
 	encoded := services.GenerateUniversalBase64(nodes)
 	setSubscriptionHeaders(c, ctx)
+
+	// Set profile name headers for Shadowrocket and other clients
+	encodedName := url.QueryEscape(subscriptionName)
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", encodedName))
+	c.Header("Subscription-Title", subscriptionName)
+	c.Header("Profile-Title", subscriptionName)
+
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(encoded))
 }
 

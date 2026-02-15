@@ -9,3 +9,5 @@ export const cancelOrder = (orderNo: string) => request.post(`/orders/${orderNo}
 export const getOrderStatus = (orderNo: string) => request.get(`/orders/${orderNo}/status`)
 export const createPayment = (data: { order_id: number; payment_method_id: number }) =>
   request.post('/payment', data)
+export const createCustomOrder = (data: { devices: number; months: number; coupon_code?: string }) =>
+  request.post('/orders/custom', data)

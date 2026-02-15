@@ -274,6 +274,56 @@ func getSiteURL() string {
 	return strings.TrimRight(siteURL, "/")
 }
 
+// AlipayCreateWapOrder creates a WAP payment for mobile browsers.
+func AlipayCreateWapOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notifyURL, returnURL string) (string, error) {
+	privateKey := normalizePrivateKey(cfg.PrivateKey)
+	if privateKey == "" {
+		return "", fmt.Errorf("支付宝私钥格式错误")
+	}
+
+	client, err := alipay.New(cfg.AppID, privateKey, cfg.IsProduction)
+	if err != nil {
+		return "", fmt.Errorf("初始化支付宝客户端失败: %v", err)
+	}
+
+	if cfg.PublicKey != "" {
+		pubKey := normalizePublicKey(cfg.PublicKey)
+		if pubKey != "" {
+			if err := client.LoadAliPayPublicKey(pubKey); err != nil {
+				log.Printf("[alipay] 加载支付宝公钥失败: %v", err)
+			}
+		}
+	}
+
+	if cfg.NotifyURL != "" {
+		notifyURL = cfg.NotifyURL
+	}
+	if cfg.ReturnURL != "" {
+		returnURL = cfg.ReturnURL
+	}
+
+	log.Printf("[alipay] 创建WAP订单: out_trade_no=%s, amount=%s", outTradeNo, amount)
+
+	wapPay := alipay.TradeWapPay{}
+	wapPay.NotifyURL = notifyURL
+	wapPay.ReturnURL = returnURL
+	wapPay.Subject = subject
+	wapPay.OutTradeNo = outTradeNo
+	wapPay.TotalAmount = amount
+	wapPay.ProductCode = "QUICK_WAP_WAY"
+
+	payURL, err := client.TradeWapPay(wapPay)
+	if err != nil {
+		return "", fmt.Errorf("创建WAP支付失败: %v", err)
+	}
+	if payURL == nil {
+		return "", fmt.Errorf("支付宝返回的WAP支付URL为空")
+	}
+
+	log.Printf("[alipay] TradeWapPay成功 (订单: %s)", outTradeNo)
+	return payURL.String(), nil
+}
+
 // BuildPaymentURLs builds notify and return URLs for payment callbacks
 func BuildPaymentURLs(payType, orderNo string) (notifyURL, returnURL string) {
 	siteURL := getSiteURL()
@@ -284,4 +334,48 @@ func BuildPaymentURLs(payType, orderNo string) (notifyURL, returnURL string) {
 	notifyURL = apiBase + "/api/v1/payment/notify/" + payType
 	returnURL = siteURL + "/payment/return?order_no=" + url.QueryEscape(orderNo)
 	return
+}
+
+// AlipayRefund refunds a payment via direct Alipay API.
+func AlipayRefund(tradeNo, outRequestNo, refundAmount string) error {
+	cfg, err := GetAlipayConfig()
+	if err != nil {
+		return fmt.Errorf("获取支付宝配置失败: %v", err)
+	}
+
+	privateKey := normalizePrivateKey(cfg.PrivateKey)
+	if privateKey == "" {
+		return fmt.Errorf("支付宝私钥格式错误")
+	}
+
+	client, err := alipay.New(cfg.AppID, privateKey, cfg.IsProduction)
+	if err != nil {
+		return fmt.Errorf("初始化支付宝客户端失败: %v", err)
+	}
+
+	if cfg.PublicKey != "" {
+		pubKey := normalizePublicKey(cfg.PublicKey)
+		if pubKey != "" {
+			client.LoadAliPayPublicKey(pubKey)
+		}
+	}
+
+	refund := alipay.TradeRefund{}
+	refund.TradeNo = tradeNo
+	refund.OutRequestNo = outRequestNo
+	refund.RefundAmount = refundAmount
+	refund.RefundReason = "管理员退款"
+
+	ctx := context.Background()
+	rsp, err := client.TradeRefund(ctx, refund)
+	if err != nil {
+		return fmt.Errorf("退款请求失败: %v", err)
+	}
+
+	if rsp.IsFailure() {
+		return fmt.Errorf("退款失败: %s - %s", rsp.Msg, rsp.SubMsg)
+	}
+
+	log.Printf("[alipay] 退款成功: trade_no=%s, refund_amount=%s", tradeNo, refundAmount)
+	return nil
 }

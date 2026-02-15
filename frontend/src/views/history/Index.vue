@@ -123,10 +123,12 @@ const columns = [
     title: '登录时间',
     key: 'login_time',
     width: 180,
+    resizable: true,
+    sorter: (a: any, b: any) => new Date(a.login_time).getTime() - new Date(b.login_time).getTime(),
     render: (row: any) => formatDateTime(row.login_time),
   },
-  { title: 'IP 地址', key: 'ip_address', width: 150 },
-  { title: '位置', key: 'location', width: 150, render: (row: any) => row.location || '-' },
+  { title: 'IP 地址', key: 'ip_address', width: 150, resizable: true },
+  { title: '位置', key: 'location', width: 150, resizable: true, render: (row: any) => row.location || '-' },
   {
     title: '设备信息',
     key: 'user_agent',
@@ -137,6 +139,7 @@ const columns = [
     title: '状态',
     key: 'login_status',
     width: 100,
+    resizable: true,
     render: (row: any) => {
       const success = row.login_status === 'success'
       return h(NTag, { type: success ? 'success' : 'error', size: 'small', bordered: false }, { default: () => success ? '成功' : '失败' })

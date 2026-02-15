@@ -152,7 +152,7 @@
     </n-spin>
 
     <!-- QR Code Modal -->
-    <n-modal v-model:show="showQrModal" preset="card" :title="qrTitle + ' 二维码'" style="width: 340px; max-width: 92vw;" :bordered="false">
+    <n-modal v-model:show="showQrModal" preset="card" :title="qrTitle" style="width: 340px; max-width: 92vw;" :bordered="false">
       <div style="text-align: center;">
         <canvas ref="qrCanvas" style="margin: 0 auto;"></canvas>
         <p style="margin-top: 12px; color: #999; font-size: 13px;">使用客户端扫描二维码导入订阅</p>
@@ -295,7 +295,8 @@ const importFormat = (fmt: any) => {
 
 const showQrCode = async (url: string, label: string) => {
   if (!url) { message.warning('暂无可用订阅'); return }
-  qrTitle.value = label
+  const expiry = subscription.value?.expire_time ? formatDate(subscription.value.expire_time) : ''
+  qrTitle.value = expiry ? `${label} (到期: ${expiry})` : label
   showQrModal.value = true
   await nextTick()
   if (qrCanvas.value) {

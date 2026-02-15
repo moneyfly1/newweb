@@ -22,6 +22,11 @@ func GetIPLocation(ip string) string {
 		return "本地"
 	}
 
+	// Check for private IP ranges
+	if isPrivateIP(ip) {
+		return "本地网络"
+	}
+
 	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Get(fmt.Sprintf("http://ip-api.com/json/%s?lang=zh-CN&fields=status,country,regionName,city,query", ip))
 	if err != nil {
@@ -45,4 +50,28 @@ func GetIPLocation(ip string) string {
 		location += " " + info.City
 	}
 	return location
+}
+
+// isPrivateIP checks if an IP address is in a private range
+func isPrivateIP(ip string) bool {
+	// Check for common private IP prefixes
+	privateRanges := []string{
+		"10.",
+		"192.168.",
+		"172.16.", "172.17.", "172.18.", "172.19.",
+		"172.20.", "172.21.", "172.22.", "172.23.",
+		"172.24.", "172.25.", "172.26.", "172.27.",
+		"172.28.", "172.29.", "172.30.", "172.31.",
+		"169.254.", // Link-local
+		"fc00:",    // IPv6 private
+		"fd00:",    // IPv6 private
+		"fe80:",    // IPv6 link-local
+	}
+
+	for _, prefix := range privateRanges {
+		if len(ip) >= len(prefix) && ip[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
 }

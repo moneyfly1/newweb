@@ -119,12 +119,14 @@ const columns = [
   {
     title: 'IP 地址',
     key: 'ip',
-    width: 150
+    width: 150,
+    resizable: true
   },
   {
     title: '设备指纹',
     key: 'fingerprint',
     width: 180,
+    resizable: true,
     render: (row: Device) => {
       return h(
         NEllipsis,
@@ -137,6 +139,7 @@ const columns = [
     title: '最后访问',
     key: 'last_access_at',
     width: 180,
+    resizable: true,
     render: (row: Device) => {
       return h(NTime, { time: new Date(row.last_access_at), type: 'relative' })
     }
@@ -145,6 +148,7 @@ const columns = [
     title: '添加时间',
     key: 'created_at',
     width: 180,
+    resizable: true,
     render: (row: Device) => {
       return h(NTime, { time: new Date(row.created_at), format: 'yyyy-MM-dd HH:mm:ss' })
     }

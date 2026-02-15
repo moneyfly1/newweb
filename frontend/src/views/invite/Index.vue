@@ -327,6 +327,7 @@ const columns = [
     title: '邀请链接',
     key: 'link',
     width: 300,
+    resizable: true,
     render: (row: InviteCode) => {
       const link = getInviteLink(row.code)
       return h(
@@ -384,6 +385,7 @@ const columns = [
     title: '使用情况',
     key: 'usage',
     width: 120,
+    resizable: true,
     render: (row: InviteCode) => {
       return h('span', `${row.used_count} / ${row.max_uses}`)
     }
@@ -392,6 +394,7 @@ const columns = [
     title: '奖励',
     key: 'reward',
     width: 150,
+    resizable: true,
     render: (row: InviteCode) => {
       return h(
         NSpace,
@@ -409,6 +412,7 @@ const columns = [
     title: '状态',
     key: 'status',
     width: 100,
+    resizable: true,
     render: (row: InviteCode) => {
       const statusMap: Record<string, { type: any; text: string }> = {
         active: { type: 'success', text: '有效' },
@@ -423,6 +427,7 @@ const columns = [
     title: '过期时间',
     key: 'expires_at',
     width: 180,
+    resizable: true,
     render: (row: InviteCode) => {
       return h(NTime, { time: new Date(row.expires_at), format: 'yyyy-MM-dd HH:mm' })
     }
@@ -431,6 +436,7 @@ const columns = [
     title: '创建时间',
     key: 'created_at',
     width: 180,
+    resizable: true,
     render: (row: InviteCode) => {
       return h(NTime, { time: new Date(row.created_at), format: 'yyyy-MM-dd HH:mm' })
     }
@@ -459,6 +465,7 @@ const recentColumns = [
     title: '受邀用户',
     key: 'invitee_username',
     width: 150,
+    resizable: true,
     render: (row: RecentInvite) => {
       return h('span', { style: 'font-weight: 500' }, row.invitee_username)
     }
@@ -466,12 +473,14 @@ const recentColumns = [
   {
     title: '邮箱',
     key: 'invitee_email',
-    width: 200
+    width: 200,
+    resizable: true
   },
   {
     title: '注册时间',
     key: 'registered_at',
     width: 180,
+    resizable: true,
     render: (row: RecentInvite) => {
       return h(NTime, { time: new Date(row.registered_at), format: 'yyyy-MM-dd HH:mm' })
     }
@@ -480,6 +489,7 @@ const recentColumns = [
     title: '购买状态',
     key: 'has_purchased',
     width: 100,
+    resizable: true,
     render: (row: RecentInvite) => {
       return h(
         NTag,
@@ -496,14 +506,16 @@ const recentColumns = [
     title: '消费金额',
     key: 'consumption_amount',
     width: 120,
+    resizable: true,
     render: (row: RecentInvite) => {
-      return h('span', `¥${row.consumption_amount.toFixed(2)}`)
+      return h('span', `¥${(row.consumption_amount || 0).toFixed(2)}`)
     }
   },
   {
     title: '奖励状态',
     key: 'reward_status',
     width: 120,
+    resizable: true,
     render: (row: RecentInvite) => {
       const statusMap: Record<string, { type: any; text: string }> = {
         pending: { type: 'warning', text: '待发放' },
@@ -518,8 +530,9 @@ const recentColumns = [
     title: '奖励金额',
     key: 'reward_amount',
     width: 120,
+    resizable: true,
     render: (row: RecentInvite) => {
-      return h('span', { style: 'color: #f0a020; font-weight: 500' }, `¥${row.reward_amount.toFixed(2)}`)
+      return h('span', { style: 'color: #f0a020; font-weight: 500' }, `¥${(row.reward_amount || 0).toFixed(2)}`)
     }
   }
 ]

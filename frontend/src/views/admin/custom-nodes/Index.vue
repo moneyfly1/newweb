@@ -343,24 +343,26 @@ const protocolColorMap = {
 
 const columns = [
   { type: 'selection' },
-  { title: 'ID', key: 'id', width: 80 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '节点名称', key: 'name', ellipsis: { tooltip: true }, minWidth: 150 },
   { title: '显示名称', key: 'display_name', ellipsis: { tooltip: true }, minWidth: 150 },
   {
     title: '协议',
     key: 'protocol',
     width: 120,
+    resizable: true,
     render: (row) => {
       const type = protocolColorMap[row.protocol] || 'default'
       return h(NTag, { type }, { default: () => row.protocol.toUpperCase() })
     }
   },
   { title: '域名', key: 'domain', ellipsis: { tooltip: true }, minWidth: 180 },
-  { title: '端口', key: 'port', width: 100 },
+  { title: '端口', key: 'port', width: 100, resizable: true },
   {
     title: '状态',
     key: 'is_active',
     width: 100,
+    resizable: true,
     render: (row) => {
       return h(NSwitch, {
         value: row.is_active,
@@ -372,6 +374,7 @@ const columns = [
     title: '过期时间',
     key: 'expire_time',
     width: 160,
+    resizable: true,
     render: (row) => row.expire_time ? formatDate(row.expire_time) : '-'
   },
   {

@@ -193,22 +193,24 @@ const getTypeTag = (type: string) => {
 }
 
 const columns: DataTableColumns = [
-  { title: 'ID', key: 'id', width: 80 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '标题', key: 'title', ellipsis: { tooltip: true } },
   {
     title: '类型',
     key: 'type',
     width: 100,
+    resizable: true,
     render: (row: any) => getTypeTag(row.type),
   },
   {
     title: '状态',
     key: 'is_active',
     width: 100,
+    resizable: true,
     render: (row: any) =>
       h(NTag, { type: row.is_active ? 'success' : 'default' }, { default: () => (row.is_active ? '启用' : '禁用') }),
   },
-  { title: '创建时间', key: 'created_at', width: 180 },
+  { title: '创建时间', key: 'created_at', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
   {
     title: '操作',
     key: 'actions',

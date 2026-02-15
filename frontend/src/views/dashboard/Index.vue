@@ -439,7 +439,7 @@ const allClients = {
   windows: [
     { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵' },
     { key: 'client_v2rayn_url', name: 'V2rayN', icon: '🟢' },
-    { key: 'client_mihomo_windows_url', name: 'Mihomo Party', icon: '🟣' },
+    { key: 'client_clashparty_windows_url', name: 'Clash Party', icon: '🟣' },
     { key: 'client_hiddify_windows_url', name: 'Hiddify', icon: '🟠' },
     { key: 'client_flclash_windows_url', name: 'FlClash', icon: '⚡' },
   ],
@@ -450,7 +450,7 @@ const allClients = {
   ],
   macos: [
     { key: 'client_flclash_macos_url', name: 'FlClash', icon: '⚡' },
-    { key: 'client_mihomo_macos_url', name: 'Mihomo Party', icon: '🟣' },
+    { key: 'client_clashparty_macos_url', name: 'Clash Party', icon: '🟣' },
   ],
   ios: [
     { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀' },

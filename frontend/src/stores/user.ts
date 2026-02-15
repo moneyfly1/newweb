@@ -11,6 +11,7 @@ export interface UserInfo {
   balance: number
   level: number
   is_active: boolean
+  telegram_username?: string
 }
 
 export const useUserStore = defineStore('user', () => {

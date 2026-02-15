@@ -301,13 +301,13 @@ const auditPagination = reactive({
 })
 
 const auditColumns: DataTableColumns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '管理员ID', key: 'user_id', width: 100 },
-  { title: '操作', key: 'action_type', width: 150 },
-  { title: '目标类型', key: 'resource_type', width: 120 },
-  { title: '目标ID', key: 'resource_id', width: 100 },
-  { title: 'IP地址', key: 'ip_address', width: 140 },
-  { title: '创建时间', key: 'created_at', width: 180 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
+  { title: '管理员ID', key: 'user_id', width: 100, resizable: true },
+  { title: '操作', key: 'action_type', width: 150, resizable: true },
+  { title: '目标类型', key: 'resource_type', width: 120, resizable: true },
+  { title: '目标ID', key: 'resource_id', width: 100, resizable: true },
+  { title: 'IP地址', key: 'ip_address', width: 140, resizable: true },
+  { title: '创建时间', key: 'created_at', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
 ]
 
 // Login logs
@@ -331,19 +331,20 @@ const loginPagination = reactive({
 })
 
 const loginColumns: DataTableColumns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '用户ID', key: 'user_id', width: 100 },
-  { title: 'IP地址', key: 'ip_address', width: 140 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
+  { title: '用户ID', key: 'user_id', width: 100, resizable: true },
+  { title: 'IP地址', key: 'ip_address', width: 140, resizable: true },
   { title: '位置', key: 'location', ellipsis: { tooltip: true } },
-  { title: '设备', key: 'user_agent', width: 150, ellipsis: { tooltip: true } },
+  { title: '设备', key: 'user_agent', width: 150, resizable: true, ellipsis: { tooltip: true } },
   {
     title: '状态',
     key: 'login_status',
     width: 100,
+    resizable: true,
     render: (row: any) =>
       h(NTag, { type: row.login_status === 'success' ? 'success' : 'error' }, { default: () => row.login_status }),
   },
-  { title: '创建时间', key: 'login_time', width: 180 },
+  { title: '创建时间', key: 'login_time', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.login_time).getTime() - new Date(b.login_time).getTime() },
 ]
 
 // Registration logs
@@ -367,11 +368,11 @@ const registrationPagination = reactive({
 })
 
 const registrationColumns: DataTableColumns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '用户ID', key: 'user_id', width: 100 },
-  { title: 'IP地址', key: 'ip_address', width: 140 },
-  { title: '邀请码', key: 'invite_code', width: 150 },
-  { title: '创建时间', key: 'created_at', width: 180 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
+  { title: '用户ID', key: 'user_id', width: 100, resizable: true },
+  { title: 'IP地址', key: 'ip_address', width: 140, resizable: true },
+  { title: '邀请码', key: 'invite_code', width: 150, resizable: true },
+  { title: '创建时间', key: 'created_at', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
 ]
 
 // Subscription logs
@@ -395,11 +396,11 @@ const subscriptionPagination = reactive({
 })
 
 const subscriptionColumns: DataTableColumns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '用户ID', key: 'user_id', width: 100 },
-  { title: '操作', key: 'action_type', width: 150 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
+  { title: '用户ID', key: 'user_id', width: 100, resizable: true },
+  { title: '操作', key: 'action_type', width: 150, resizable: true },
   { title: '详情', key: 'description', ellipsis: { tooltip: true } },
-  { title: '创建时间', key: 'created_at', width: 180 },
+  { title: '创建时间', key: 'created_at', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
 ]
 
 // Balance logs
@@ -423,13 +424,13 @@ const balancePagination = reactive({
 })
 
 const balanceColumns: DataTableColumns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '用户ID', key: 'user_id', width: 100 },
-  { title: '类型', key: 'change_type', width: 120 },
-  { title: '金额', key: 'amount', width: 120 },
-  { title: '余额', key: 'balance_after', width: 120 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
+  { title: '用户ID', key: 'user_id', width: 100, resizable: true },
+  { title: '类型', key: 'change_type', width: 120, resizable: true },
+  { title: '金额', key: 'amount', width: 120, resizable: true },
+  { title: '余额', key: 'balance_after', width: 120, resizable: true },
   { title: '备注', key: 'description', ellipsis: { tooltip: true } },
-  { title: '创建时间', key: 'created_at', width: 180 },
+  { title: '创建时间', key: 'created_at', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
 ]
 
 // Commission logs
@@ -453,12 +454,12 @@ const commissionPagination = reactive({
 })
 
 const commissionColumns: DataTableColumns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '用户ID', key: 'inviter_id', width: 100 },
-  { title: '来源用户ID', key: 'invitee_id', width: 120 },
-  { title: '金额', key: 'amount', width: 120 },
-  { title: '类型', key: 'commission_type', width: 120 },
-  { title: '创建时间', key: 'created_at', width: 180 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
+  { title: '用户ID', key: 'inviter_id', width: 100, resizable: true },
+  { title: '来源用户ID', key: 'invitee_id', width: 120, resizable: true },
+  { title: '金额', key: 'amount', width: 120, resizable: true },
+  { title: '类型', key: 'commission_type', width: 120, resizable: true },
+  { title: '创建时间', key: 'created_at', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
 ]
 
 const loadAuditLogs = async () => {
@@ -592,15 +593,15 @@ const systemPagination = reactive({
 })
 
 const systemColumns: DataTableColumns = [
-  { title: 'ID', key: 'id', width: 70 },
+  { title: 'ID', key: 'id', width: 70, resizable: true, sorter: 'default' },
   {
-    title: '级别', key: 'level', width: 80,
+    title: '级别', key: 'level', width: 80, resizable: true,
     render: (row: any) => h(NTag, { type: row.level === 'error' ? 'error' : row.level === 'warn' ? 'warning' : 'info', size: 'small' }, { default: () => row.level }),
   },
-  { title: '模块', key: 'module', width: 100 },
+  { title: '模块', key: 'module', width: 100, resizable: true },
   { title: '消息', key: 'message', ellipsis: { tooltip: true } },
-  { title: '详情', key: 'detail', width: 200, ellipsis: { tooltip: true } },
-  { title: '时间', key: 'created_at', width: 180 },
+  { title: '详情', key: 'detail', width: 200, resizable: true, ellipsis: { tooltip: true } },
+  { title: '时间', key: 'created_at', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
 ]
 
 const loadSystemLogs = async () => {

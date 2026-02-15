@@ -101,3 +101,16 @@ func GetIntSetting(key string, defaultVal int) int {
 	}
 	return n
 }
+
+// GetFloatSetting reads a float64 setting with a default fallback
+func GetFloatSetting(key string, defaultVal float64) float64 {
+	v := GetSetting(key)
+	if v == "" {
+		return defaultVal
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return defaultVal
+	}
+	return f
+}

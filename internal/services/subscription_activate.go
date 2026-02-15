@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -16,42 +17,70 @@ import (
 // ActivateSubscription creates or extends a subscription after successful payment.
 // It also sends payment success email and notifies admin.
 func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string) {
-	var pkg models.Package
-	if err := db.First(&pkg, order.PackageID).Error; err != nil {
-		return
+	var deviceLimit int
+	var durationDays int
+	var pkgName string
+
+	if order.PackageID == 0 && order.ExtraData != nil {
+		// Custom package order
+		var extra map[string]interface{}
+		if err := json.Unmarshal([]byte(*order.ExtraData), &extra); err != nil {
+			return
+		}
+		if extra["type"] != "custom_package" {
+			return
+		}
+		devices, _ := extra["devices"].(float64)
+		months, _ := extra["months"].(float64)
+		deviceLimit = int(devices)
+		durationDays = int(months) * 30
+		pkgName = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
+	} else {
+		var pkg models.Package
+		if err := db.First(&pkg, order.PackageID).Error; err != nil {
+			return
+		}
+		deviceLimit = pkg.DeviceLimit
+		durationDays = pkg.DurationDays
+		pkgName = pkg.Name
 	}
 
 	var sub models.Subscription
 	if err := db.Where("user_id = ?", order.UserID).First(&sub).Error; err != nil {
 		// Create new subscription
-		pkgID := int64(pkg.ID)
 		sub = models.Subscription{
 			UserID:          order.UserID,
-			PackageID:       &pkgID,
 			SubscriptionURL: utils.GenerateRandomString(32),
-			DeviceLimit:     pkg.DeviceLimit,
+			DeviceLimit:     deviceLimit,
 			IsActive:        true,
 			Status:          "active",
-			ExpireTime:      time.Now().AddDate(0, 0, pkg.DurationDays),
+			ExpireTime:      time.Now().AddDate(0, 0, durationDays),
+		}
+		if order.PackageID > 0 {
+			pkgID := int64(order.PackageID)
+			sub.PackageID = &pkgID
 		}
 		db.Create(&sub)
-		utils.CreateSubscriptionLog(sub.ID, order.UserID, "activate", "system", nil, fmt.Sprintf("购买套餐激活订阅: %s", pkg.Name), nil, nil)
+		utils.CreateSubscriptionLog(sub.ID, order.UserID, "activate", "system", nil, fmt.Sprintf("购买套餐激活订阅: %s", pkgName), nil, nil)
 	} else {
 		// Extend existing subscription
 		newExpire := sub.ExpireTime
 		if newExpire.Before(time.Now()) {
 			newExpire = time.Now()
 		}
-		newExpire = newExpire.AddDate(0, 0, pkg.DurationDays)
-		pkgID := int64(pkg.ID)
-		db.Model(&sub).Updates(map[string]interface{}{
-			"package_id":   &pkgID,
-			"device_limit": pkg.DeviceLimit,
+		newExpire = newExpire.AddDate(0, 0, durationDays)
+		updates := map[string]interface{}{
+			"device_limit": deviceLimit,
 			"expire_time":  newExpire,
 			"is_active":    true,
 			"status":       "active",
-		})
-		utils.CreateSubscriptionLog(sub.ID, order.UserID, "extend", "system", nil, fmt.Sprintf("购买套餐续期订阅: %s, +%d天", pkg.Name, pkg.DurationDays), nil, nil)
+		}
+		if order.PackageID > 0 {
+			pkgID := int64(order.PackageID)
+			updates["package_id"] = &pkgID
+		}
+		db.Model(&sub).Updates(updates)
+		utils.CreateSubscriptionLog(sub.ID, order.UserID, "extend", "system", nil, fmt.Sprintf("购买套餐续期订阅: %s, +%d天", pkgName, durationDays), nil, nil)
 	}
 
 	// Send payment success email + notify admin
@@ -77,11 +106,11 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			subURL = siteURL + "/api/v1/subscribe/" + userSub.SubscriptionURL
 		}
 		emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
-			"order_no": order.OrderNo, "amount": payAmount, "package_name": pkg.Name, "subscription_url": subURL,
+			"order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL,
 		})
 		go QueueEmail(user.Email, emailSubject, emailBody, "payment_success")
 		go NotifyAdmin("payment_success", map[string]string{
-			"username": user.Username, "order_no": order.OrderNo, "package_name": pkg.Name, "amount": payAmount,
+			"username": user.Username, "order_no": order.OrderNo, "package_name": pkgName, "amount": payAmount,
 		})
 	}
 

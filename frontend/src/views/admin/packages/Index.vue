@@ -218,12 +218,14 @@ const formRules = {
 }
 
 const columns = [
-  { title: 'ID', key: 'id', width: 80 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '套餐名称', key: 'name', ellipsis: { tooltip: true } },
   {
     title: '价格',
     key: 'price',
     width: 120,
+    resizable: true,
+    sorter: (a, b) => a.price - b.price,
     render: (row) => h(
       'span',
       { style: 'color: #18a058; font-weight: 600' },
@@ -234,25 +236,29 @@ const columns = [
     title: '有效期',
     key: 'duration_days',
     width: 100,
+    resizable: true,
+    sorter: (a, b) => a.duration_days - b.duration_days,
     render: (row) => `${row.duration_days} 天`
   },
   {
     title: '设备限制',
     key: 'device_limit',
     width: 100,
+    resizable: true,
     render: (row) => `${row.device_limit} 台`
   },
   {
     title: '状态',
     key: 'is_active',
     width: 100,
+    resizable: true,
     render: (row) => h(
       NTag,
       { type: row.is_active ? 'success' : 'default', size: 'small' },
       { default: () => row.is_active ? '启用' : '禁用' }
     )
   },
-  { title: '排序', key: 'sort_order', width: 80 },
+  { title: '排序', key: 'sort_order', width: 80, resizable: true },
   {
     title: '操作',
     key: 'actions',

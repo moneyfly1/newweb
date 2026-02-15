@@ -609,33 +609,94 @@ func AdminRefundOrder(c *gin.Context) {
 		return
 	}
 
-	tx := db.Begin()
-	// Calculate refund amount (use FinalAmount if available, otherwise Amount)
+	// Calculate refund amount
 	refundAmount := order.Amount
 	if order.FinalAmount != nil {
 		refundAmount = *order.FinalAmount
 	}
-	// Restore user balance using GORM expression
-	if err := tx.Model(&models.User{}).Where("id = ?", order.UserID).
-		UpdateColumn("balance", gorm.Expr("balance + ?", refundAmount)).Error; err != nil {
-		tx.Rollback()
-		utils.InternalError(c, "退款失败")
-		return
+
+	// Try to refund via payment gateway if paid online
+	var gatewayRefunded bool
+	var txn models.PaymentTransaction
+	if db.Where("order_id = ? AND status = ?", order.ID, "paid").First(&txn).Error == nil {
+		// Has a successful payment transaction — try gateway refund
+		if txn.ExternalTransactionID != nil && *txn.ExternalTransactionID != "" {
+			// Check payment method to determine if it's direct Alipay
+			var paymentMethod models.PaymentConfig
+			if db.First(&paymentMethod, txn.PaymentMethodID).Error == nil && paymentMethod.PayType == "alipay" {
+				// Direct Alipay refund
+				if txn.TransactionID != nil && *txn.TransactionID != "" {
+					if err := services.AlipayRefund(*txn.ExternalTransactionID, *txn.TransactionID, fmt.Sprintf("%.2f", refundAmount)); err != nil {
+						utils.BadRequest(c, "支付宝退款失败: "+err.Error())
+						return
+					}
+					gatewayRefunded = true
+				}
+			}
+		}
 	}
+
+	tx := db.Begin()
+
+	// If not refunded via gateway, refund to user balance
+	if !gatewayRefunded {
+		if err := tx.Model(&models.User{}).Where("id = ?", order.UserID).
+			UpdateColumn("balance", gorm.Expr("balance + ?", refundAmount)).Error; err != nil {
+			tx.Rollback()
+			utils.InternalError(c, "退款失败")
+			return
+		}
+	}
+
 	// Update order status
 	if err := tx.Model(&order).Update("status", "refunded").Error; err != nil {
 		tx.Rollback()
 		utils.InternalError(c, "退款失败")
 		return
 	}
-	tx.Commit()
-	// 记录退款余额日志
+
+	// Update payment transaction status
+	if txn.ID > 0 {
+		tx.Model(&txn).Update("status", "refunded")
+	}
+
+	// Cancel/rollback the subscription that was activated by this order
+	var sub models.Subscription
+	if tx.Where("user_id = ?", order.UserID).First(&sub).Error == nil {
+		shouldCancel := false
+		if order.PackageID == 0 {
+			// Custom package order — always cancel
+			shouldCancel = true
+		} else if sub.PackageID != nil && *sub.PackageID == int64(order.PackageID) {
+			shouldCancel = true
+		}
+		if shouldCancel {
+			tx.Model(&sub).Updates(map[string]interface{}{
+				"is_active": false,
+				"status":    "cancelled",
+			})
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		utils.InternalError(c, "退款事务提交失败")
+		return
+	}
+
+	// Log
+	refundMethod := "余额"
+	if gatewayRefunded {
+		refundMethod = "原路退回"
+	}
 	var refundUser models.User
 	if db.First(&refundUser, order.UserID).Error == nil {
-		utils.CreateBalanceLogEntry(order.UserID, "refund", refundAmount, refundUser.Balance-refundAmount, refundUser.Balance, func() *uint { id := uint(order.ID); return &id }(), fmt.Sprintf("管理员退款订单: %s", order.OrderNo), c)
+		desc := fmt.Sprintf("管理员退款订单: %s (%s)", order.OrderNo, refundMethod)
+		if !gatewayRefunded {
+			utils.CreateBalanceLogEntry(order.UserID, "refund", refundAmount, refundUser.Balance-refundAmount, refundUser.Balance, func() *uint { id := uint(order.ID); return &id }(), desc, c)
+		}
 	}
-	utils.CreateAuditLog(c, "refund_order", "order", uint(id), fmt.Sprintf("退款订单: %s, 金额: %.2f", order.OrderNo, refundAmount))
-	utils.SuccessMessage(c, "退款成功")
+	utils.CreateAuditLog(c, "refund_order", "order", uint(id), fmt.Sprintf("退款订单: %s, 金额: %.2f, 方式: %s", order.OrderNo, refundAmount, refundMethod))
+	utils.SuccessMessage(c, fmt.Sprintf("退款成功（%s）", refundMethod))
 }
 
 // ==================== Package Management ====================
@@ -1110,10 +1171,10 @@ func AdminListSubscriptions(c *gin.Context) {
 		query = query.Where("status = ?", status)
 	}
 	if search := c.Query("search"); search != "" {
-		// Search by user email or username
+		// Search by user email, username, or notes
 		var userIDs []uint
-		db.Model(&models.User{}).Where("email LIKE ? OR username LIKE ? OR CAST(id AS CHAR) = ?",
-			"%"+search+"%", "%"+search+"%", search).Pluck("id", &userIDs)
+		db.Model(&models.User{}).Where("email LIKE ? OR username LIKE ? OR notes LIKE ? OR CAST(id AS CHAR) = ?",
+			"%"+search+"%", "%"+search+"%", "%"+search+"%", search).Pluck("id", &userIDs)
 		if len(userIDs) > 0 {
 			query = query.Where("user_id IN ?", userIDs)
 		} else {
@@ -1127,20 +1188,29 @@ func AdminListSubscriptions(c *gin.Context) {
 	var subs []models.Subscription
 	query.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&subs)
 
-	// Enrich with user email and package name
+	// Enrich with user email, package name, and subscription URLs for QR code
+	baseURL := getSubscriptionBaseURL()
 	type SubItem struct {
 		models.Subscription
-		UserEmail   string `json:"user_email"`
-		Username    string `json:"username"`
-		PackageName string `json:"package_name"`
+		UserEmail   string  `json:"user_email"`
+		Username    string  `json:"username"`
+		PackageName string  `json:"package_name"`
+		UserNotes   *string `json:"user_notes"`
+		UniversalURL string `json:"universal_url"`
+		ClashURL     string `json:"clash_url"`
 	}
 	items := make([]SubItem, 0, len(subs))
 	for _, sub := range subs {
 		item := SubItem{Subscription: sub}
+		if baseURL != "" && sub.SubscriptionURL != "" {
+			item.UniversalURL = fmt.Sprintf("%s/api/v1/sub/%s", baseURL, sub.SubscriptionURL)
+			item.ClashURL = fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, sub.SubscriptionURL)
+		}
 		var user models.User
-		if db.Select("email, username").First(&user, sub.UserID).Error == nil {
+		if db.Select("email, username, notes").First(&user, sub.UserID).Error == nil {
 			item.UserEmail = user.Email
 			item.Username = user.Username
+			item.UserNotes = user.Notes
 		}
 		if sub.PackageID != nil {
 			var pkg models.Package
@@ -1152,6 +1222,29 @@ func AdminListSubscriptions(c *gin.Context) {
 	}
 
 	utils.SuccessPage(c, items, total, p.Page, p.PageSize)
+}
+
+func AdminUpdateUserNotes(c *gin.Context) {
+	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的用户ID")
+		return
+	}
+	var req struct {
+		Notes string `json:"notes"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	db := database.GetDB()
+	var user models.User
+	if err := db.First(&user, userID).Error; err != nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+	db.Model(&user).Update("notes", req.Notes)
+	utils.SuccessMessage(c, "备注已更新")
 }
 
 func AdminGetSubscription(c *gin.Context) {
@@ -1195,9 +1288,20 @@ func AdminGetSubscription(c *gin.Context) {
 	}
 
 	var user models.User
-	if db.Select("email, username").First(&user, sub.UserID).Error == nil {
+	if db.First(&user, sub.UserID).Error == nil {
 		result["user_email"] = user.Email
 		result["username"] = user.Username
+		result["user_balance"] = user.Balance
+		result["user_is_active"] = user.IsActive
+		result["user_is_admin"] = user.IsAdmin
+		result["user_created_at"] = user.CreatedAt
+		result["user_last_login"] = user.LastLogin
+		if user.UserLevelID != nil {
+			var level models.UserLevel
+			if db.Select("level_name").First(&level, *user.UserLevelID).Error == nil {
+				result["user_level_name"] = level.LevelName
+			}
+		}
 	}
 	if sub.PackageID != nil {
 		var pkg models.Package
@@ -1205,6 +1309,27 @@ func AdminGetSubscription(c *gin.Context) {
 			result["package_name"] = pkg.Name
 		}
 	}
+
+	// Rich user data (same as AdminGetUser)
+	var orders []models.Order
+	db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&orders)
+	result["recent_orders"] = orders
+
+	var balanceLogs []models.BalanceLog
+	db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&balanceLogs)
+	result["balance_logs"] = balanceLogs
+
+	var loginHistory []models.LoginHistory
+	db.Where("user_id = ?", sub.UserID).Order("login_time DESC").Limit(20).Find(&loginHistory)
+	result["login_history"] = loginHistory
+
+	var resets []models.SubscriptionReset
+	db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&resets)
+	result["resets"] = resets
+
+	var rechargeRecords []models.RechargeRecord
+	db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&rechargeRecords)
+	result["recharge_records"] = rechargeRecords
 
 	utils.Success(c, result)
 }
@@ -1277,8 +1402,16 @@ func AdminExtendSubscription(c *gin.Context) {
 		return
 	}
 
-	newExpire := sub.ExpireTime.AddDate(0, 0, req.Days)
-	db.Model(&sub).Update("expire_time", newExpire)
+	newExpire := sub.ExpireTime
+	if newExpire.Before(time.Now()) {
+		newExpire = time.Now()
+	}
+	newExpire = newExpire.AddDate(0, 0, req.Days)
+	db.Model(&sub).Updates(map[string]interface{}{
+		"expire_time": newExpire,
+		"is_active":   true,
+		"status":      "active",
+	})
 
 	adminID := c.GetUint("user_id")
 	utils.CreateSubscriptionLog(sub.ID, sub.UserID, "extend", "admin", &adminID, fmt.Sprintf("管理员延长订阅 %d 天", req.Days), nil, nil)

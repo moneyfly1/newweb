@@ -2,6 +2,7 @@ package utils
 
 import (
 	"net/http"
+	"reflect"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,6 +40,10 @@ func SuccessMessage(c *gin.Context, message string) {
 }
 
 func SuccessPage(c *gin.Context, items interface{}, total int64, page, pageSize int) {
+	// Ensure items is never null in JSON — use empty array instead
+	if items == nil || (reflect.TypeOf(items).Kind() == reflect.Slice && reflect.ValueOf(items).IsNil()) {
+		items = []interface{}{}
+	}
 	c.JSON(http.StatusOK, Response{
 		Code: 0, Message: "success",
 		Data: PageData{Items: items, Total: total, Page: page, PageSize: pageSize},

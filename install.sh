@@ -309,6 +309,12 @@ create_env_file() {
     cd "$target_dir" || return 1
 
     if [ -f .env ]; then
+        # 旧 .env 可能缺少 CORS_ORIGINS，补上以免生产环境启动失败
+        if ! grep -q '^CORS_ORIGINS=' .env 2>/dev/null; then
+            local base_url
+            base_url=$(grep '^BASE_URL=' .env 2>/dev/null | cut -d'=' -f2- | tr -d '"' | xargs)
+            if [ -n "$base_url" ]; then echo "CORS_ORIGINS=$base_url" >> .env; ok "已补充 CORS_ORIGINS 到 .env"; fi
+        fi
         warn ".env 已存在，跳过生成"
         return 0
     fi
@@ -1116,7 +1122,7 @@ check_service_status() {
     # 读取配置
     local domain="" base_url="" ssl_enabled=""
     local work_dir="$INSTALL_DIR"
-    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
 
     if [ -f "$work_dir/.env" ]; then
         domain=$(grep "^DOMAIN=" "$work_dir/.env" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | xargs)
@@ -1260,7 +1266,7 @@ view_admin_account() {
     echo ""
 
     local work_dir="$INSTALL_DIR"
-    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
 
     if [ -f "$work_dir/.env" ]; then
         local admin_email
@@ -1282,7 +1288,7 @@ backup_data() {
     echo ""
 
     local work_dir="$INSTALL_DIR"
-    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
 
     cd "$work_dir" || {
         err "无法进入项目目录"
@@ -1326,7 +1332,7 @@ reinstall_website() {
     echo ""
 
     local work_dir="$INSTALL_DIR"
-    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
 
     cd "$work_dir" || {
         err "无法进入项目目录"
@@ -1341,14 +1347,14 @@ reinstall_website() {
     echo ""
 
     read -rp "确认继续? (y/n) [n]: " confirm
-    [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo "已取消"; read -rp "按回车键继续..."; return 0; }
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then echo "已取消"; read -rp "按回车键继续..."; return 0; fi
 
     # 备份
     info "1. 备份重要文件..."
     local BACKUP_DIR="$work_dir/backup_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$BACKUP_DIR"
-    [ -f "cboard.db" ] && cp "cboard.db" "$BACKUP_DIR/"
-    [ -f ".env" ] && cp ".env" "$BACKUP_DIR/"
+    if [ -f "cboard.db" ]; then cp "cboard.db" "$BACKUP_DIR/"; fi
+    if [ -f ".env" ]; then cp ".env" "$BACKUP_DIR/"; fi
     ok "备份完成: $BACKUP_DIR"
 
     # 停止服务
@@ -1402,13 +1408,13 @@ diagnose_403_error() {
     echo ""
 
     local work_dir="$INSTALL_DIR"
-    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
 
     local domain=""
     if [ -f "$work_dir/.env" ]; then
         domain=$(grep "^DOMAIN=" "$work_dir/.env" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | xargs)
     fi
-    [ -z "$domain" ] && read -rp "请输入域名: " domain
+    if [ -z "$domain" ]; then read -rp "请输入域名: " domain; fi
 
     local FRONTEND_ROOT="$work_dir/frontend/dist"
 
@@ -1470,7 +1476,7 @@ update_code() {
     echo ""
 
     local work_dir="$INSTALL_DIR"
-    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
 
     cd "$work_dir" || {
         err "无法进入项目目录"
@@ -1559,14 +1565,14 @@ fix_nginx_for_ssl() {
     echo ""
 
     local work_dir="$INSTALL_DIR"
-    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
 
     local domain=""
     if [ -f "$work_dir/.env" ]; then
         domain=$(grep "^DOMAIN=" "$work_dir/.env" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | xargs)
     fi
-    [ -z "$domain" ] && read -rp "请输入域名: " domain
-    [ -z "$domain" ] && { err "域名不能为空"; read -rp "按回车键继续..."; return 1; }
+    if [ -z "$domain" ]; then read -rp "请输入域名: " domain; fi
+    if [ -z "$domain" ]; then err "域名不能为空"; read -rp "按回车键继续..."; return 1; fi
 
     local nginx_conf="/etc/nginx/conf.d/cboard.conf"
     if [ ! -f "$nginx_conf" ]; then
@@ -1613,15 +1619,15 @@ diagnose_website_access() {
     echo ""
 
     local work_dir="$INSTALL_DIR"
-    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
 
     local domain="" base_url=""
     if [ -f "$work_dir/.env" ]; then
         domain=$(grep "^DOMAIN=" "$work_dir/.env" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | xargs)
         base_url=$(grep "^BASE_URL=" "$work_dir/.env" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | xargs)
     fi
-    [ -z "$domain" ] && read -rp "请输入域名: " domain
-    [ -z "$base_url" ] && base_url="http://$domain"
+    if [ -z "$domain" ]; then read -rp "请输入域名: " domain; fi
+    if [ -z "$base_url" ]; then base_url="http://$domain"; fi
 
     echo -e "  域名: ${CYAN}$domain${NC}"
     echo -e "  地址: ${CYAN}$base_url${NC}"
@@ -1724,7 +1730,7 @@ uninstall_cboard() {
     echo ""
 
     local work_dir="$INSTALL_DIR"
-    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
 
     echo -e "${RED}此操作将:${NC}"
     echo "  - 停止并删除 systemd 服务 (cboard)"
@@ -1732,8 +1738,8 @@ uninstall_cboard() {
     echo "  - 可选：删除安装目录及全部数据"
     echo ""
 
-    read -rp "确定要卸载吗? (输入 YES 确认): " confirm
-    if [ "$confirm" != "YES" ]; then
+    read -rp "确定要卸载吗? (输入 yes 确认): " confirm
+    if [ "$(echo "$confirm" | tr '[:lower:]' '[:upper:]')" != "YES" ]; then
         echo "已取消"
         read -rp "按回车键继续..."
         return 0
@@ -1821,7 +1827,7 @@ show_menu() {
 main() {
     # 读取已有配置
     local work_dir="$INSTALL_DIR"
-    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
     if [ -f "$work_dir/.env" ]; then
         CBOARD_PORT=$(grep "^PORT=" "$work_dir/.env" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | xargs)
         CBOARD_PORT=${CBOARD_PORT:-9000}

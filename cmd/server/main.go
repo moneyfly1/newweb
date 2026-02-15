@@ -74,6 +74,24 @@ func createDefaultAdmin() {
 		return
 	}
 
+	// 读取 .env 中的 ADMIN_EMAIL，用用户安装时指定的邮箱创建管理员
+	adminEmail := strings.TrimSpace(os.Getenv("ADMIN_EMAIL"))
+	if adminEmail == "" {
+		adminEmail = "admin@example.com"
+	}
+
+	username := "admin"
+	if adminEmail != "admin@example.com" {
+		localPart := adminEmail
+		if idx := strings.Index(adminEmail, "@"); idx > 0 {
+			localPart = strings.ReplaceAll(adminEmail[:idx], ".", "_")
+		}
+		if len(localPart) > 45 {
+			localPart = localPart[:45]
+		}
+		username = "admin_" + localPart
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("生成管理员密码失败: %v", err)
@@ -81,8 +99,8 @@ func createDefaultAdmin() {
 	}
 
 	admin := models.User{
-		Username:                    "admin",
-		Email:                       "admin@example.com",
+		Username:                    username,
+		Email:                       adminEmail,
 		Password:                    string(hash),
 		IsActive:                    true,
 		IsVerified:                  true,
@@ -113,7 +131,7 @@ func createDefaultAdmin() {
 		ExpireTime:      time.Now(),
 	})
 
-	log.Println("已创建默认管理员: admin@example.com（请立即修改密码）")
+	log.Printf("已创建默认管理员: %s（请立即修改密码）", adminEmail)
 }
 
 // runResetPassword 从命令行参数解析 --email 和 --password，重置管理员密码后退出
@@ -162,10 +180,33 @@ func runResetPassword() {
 	if email != "" && email != "admin" {
 		q = q.Where("email = ?", email)
 	}
+	// 先尝试按邮箱精确匹配管理员
 	err = q.First(&user).Error
 	if err != nil {
-		// 指定了邮箱但该邮箱没有管理员：创建新管理员（安装脚本常用场景）
+		// 指定了邮箱但该邮箱没有管理员
 		if email != "" && email != "admin" {
+			// 如果存在默认管理员 admin@example.com，替换它而不是新建第二个
+			var defaultAdmin models.User
+			if db.Where("email = ? AND is_admin = ?", "admin@example.com", true).First(&defaultAdmin).Error == nil {
+				// 更新默认管理员的邮箱、用户名和密码，使其变为用户指定的管理员
+				localPart := email
+				if idx := strings.Index(email, "@"); idx > 0 {
+					localPart = strings.ReplaceAll(email[:idx], ".", "_")
+				}
+				if len(localPart) > 45 {
+					localPart = localPart[:45]
+				}
+				username := "admin_" + localPart
+				db.Model(&defaultAdmin).Updates(map[string]interface{}{
+					"email":    email,
+					"username": username,
+					"password": string(hash),
+				})
+				log.Printf("已将默认管理员替换为 %s 并设置密码", email)
+				return
+			}
+
+			// 没有任何管理员存在，创建新管理员
 			localPart := email
 			if idx := strings.Index(email, "@"); idx > 0 {
 				localPart = strings.ReplaceAll(email[:idx], ".", "_")

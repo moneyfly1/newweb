@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"cboard/v2/internal/api/middleware"
@@ -282,6 +283,7 @@ func Login(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
 	db := database.GetDB()
 	clientIP := utils.GetRealClientIP(c)

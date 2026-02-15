@@ -85,7 +85,7 @@ CBOARD_UNATTENDED=1 CBOARD_ADMIN_EMAIL=admin@example.com CBOARD_ADMIN_PASSWORD=�
 | 14 | 更新代码（Git） | 从 GitHub 拉取最新代码并重新构建 |
 | 15 | 修复 Nginx SSL 验证 | 修复 SSL 证书相关问题 |
 | 16 | 诊断网站访问 | 检查 DNS、端口、Nginx、后端服务状态 |
-| 17 | 卸载 CBoard | 完全卸载（可选保留数据） |
+| 17 | 卸载 CBoard | 停止服务、删除 Nginx 配置，可选删除安装目录及数据 |
 
 systemd 服务管理命令：
 ```bash

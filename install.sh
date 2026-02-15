@@ -1722,10 +1722,14 @@ diagnose_website_access() {
 uninstall_cboard() {
     echo -e "${BLUE}========== 卸载 CBoard v2 ==========${NC}"
     echo ""
+
+    local work_dir="$INSTALL_DIR"
+    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+
     echo -e "${RED}此操作将:${NC}"
-    echo "  - 停止并删除 systemd 服务"
-    echo "  - 删除 Nginx 配置"
-    echo "  - 不会删除安装目录和数据"
+    echo "  - 停止并删除 systemd 服务 (cboard)"
+    echo "  - 删除 Nginx 站点配置"
+    echo "  - 可选：删除安装目录及全部数据"
     echo ""
 
     read -rp "确定要卸载吗? (输入 YES 确认): " confirm
@@ -1735,17 +1739,44 @@ uninstall_cboard() {
         return 0
     fi
 
+    # 停止并移除服务
+    info "停止并移除 systemd 服务..."
     systemctl stop ${SERVICE_NAME} 2>/dev/null || true
     systemctl disable ${SERVICE_NAME} 2>/dev/null || true
     rm -f /etc/systemd/system/${SERVICE_NAME}.service
-    rm -f /etc/nginx/conf.d/cboard.conf
-    rm -f /usr/local/bin/cboard-ctl
     systemctl daemon-reload
-    nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+    ok "systemd 服务已删除"
 
-    ok "CBoard 服务已卸载"
-    echo -e "${YELLOW}数据目录已保留: $INSTALL_DIR${NC}"
+    # 删除 Nginx 配置
+    info "删除 Nginx 配置..."
+    rm -f /etc/nginx/conf.d/cboard.conf
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+        ok "Nginx 配置已删除并重载"
+    else
+        warn "已删除 cboard 站点配置，请检查 Nginx 其他配置后手动 reload"
+    fi
+
+    rm -f /usr/local/bin/cboard-ctl 2>/dev/null || true
+
+    # 是否删除安装目录
     echo ""
+    read -rp "是否同时删除安装目录及全部数据? $work_dir (y/n) [n]: " del_dir
+    if [[ "${del_dir}" =~ ^[Yy]$ ]]; then
+        if [ -d "$work_dir" ]; then
+            info "正在删除 $work_dir ..."
+            cd / 2>/dev/null || true
+            rm -rf "$work_dir"
+            ok "安装目录已删除"
+        else
+            warn "目录不存在: $work_dir"
+        fi
+    else
+        echo -e "${YELLOW}安装目录已保留: $work_dir${NC}"
+    fi
+
+    echo ""
+    ok "CBoard 已完全卸载"
     read -rp "按回车键继续..."
 }
 

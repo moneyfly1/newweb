@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { login as loginApi, telegramLogin as telegramLoginApi } from '@/api/auth'
 import { getCurrentUser } from '@/api/user'
+import request from '@/utils/request'
 
 export interface UserInfo {
   id: number
@@ -62,13 +63,10 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('token')
     localStorage.removeItem('refresh_token')
     if (!skipApi && oldToken) {
-      // Fire-and-forget with the old token
       try {
-        import('@/utils/request').then(({ default: req }) => {
-          req.post('/auth/logout', null, {
-            headers: { Authorization: `Bearer ${oldToken}` }
-          }).catch(() => {})
-        })
+        request.post('/auth/logout', null, {
+          headers: { Authorization: `Bearer ${oldToken}` },
+        }).catch(() => {})
       } catch {}
     }
   }

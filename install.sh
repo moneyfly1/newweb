@@ -722,6 +722,14 @@ install_system() {
     info "开始安装依赖与构建..."
     echo ""
 
+    # 若已安装过，先停止服务，避免占用二进制/端口，确保新构建生效
+    if systemctl is-active --quiet ${SERVICE_NAME} 2>/dev/null; then
+        info "停止已有 cboard 服务..."
+        systemctl stop ${SERVICE_NAME} 2>/dev/null || true
+        sleep 2
+        ok "已停止"
+    fi
+
     install_system_tools
     install_nginx
     install_go
@@ -742,6 +750,12 @@ install_system() {
 
     if systemctl is-active --quiet ${SERVICE_NAME}; then
         ok "服务启动成功"
+        # 本次输入的管理员邮箱/密码同步到数据库（.env 已存在时不会重新生成，此处确保密码生效）
+        if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ] && [ -f "$INSTALL_DIR/cboard" ]; then
+            if (cd "$INSTALL_DIR" && ./cboard reset-password --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" 2>/dev/null); then
+                ok "管理员密码已同步到数据库"
+            fi
+        fi
     else
         err "服务启动失败，请查看日志: journalctl -u ${SERVICE_NAME} -n 50"
     fi

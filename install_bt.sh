@@ -738,6 +738,14 @@ install_system() {
     info "开始安装依赖与构建..."
     echo ""
 
+    # 若已安装过，先停止服务，确保新构建生效
+    if systemctl is-active --quiet ${SERVICE_NAME} 2>/dev/null; then
+        info "停止已有 cboard 服务..."
+        systemctl stop ${SERVICE_NAME} 2>/dev/null || true
+        sleep 2
+        ok "已停止"
+    fi
+
     install_go
     install_node
     deploy_project
@@ -755,6 +763,11 @@ install_system() {
 
     if systemctl is-active --quiet ${SERVICE_NAME}; then
         ok "服务启动成功"
+        if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ] && [ -f "$INSTALL_DIR/cboard" ]; then
+            if (cd "$INSTALL_DIR" && ./cboard reset-password --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" 2>/dev/null); then
+                ok "管理员密码已同步到数据库"
+            fi
+        fi
     else
         err "服务启动失败"
         journalctl -u ${SERVICE_NAME} -n 20 --no-pager 2>/dev/null | tail -10

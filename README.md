@@ -181,6 +181,16 @@ systemctl restart cboard
 
 > 首次登录后请立即修改密码。管理后台地址：`https://你的域名/admin/login`
 
+**忘记管理员密码**：在服务器上进入安装目录，运行安装脚本，选择 **9 重设管理员密码**，按提示输入管理员邮箱（可留空表示第一个管理员）和新密码即可。
+
+```bash
+cd /opt/cboard   # 无宝塔；宝塔则为 cd /www/wwwroot/cboard
+bash install.sh
+# 选择 9 -> 输入新密码（至少 8 位）
+```
+
+也可直接命令行重置：`cd /opt/cboard && ./cboard reset-password --password 你的新密码`（若提示数据库被占用，可先执行 `systemctl stop cboard` 再试）
+
 ### Nginx 反向代理参考
 
 安装脚本会自动配置 Nginx。手动部署时参考：

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login as loginApi } from '@/api/auth'
+import { login as loginApi, telegramLogin as telegramLoginApi } from '@/api/auth'
 import { getCurrentUser } from '@/api/user'
 
 export interface UserInfo {
@@ -40,6 +40,19 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = res.data
   }
 
+  async function loginWithTelegram(data: any) {
+    const res: any = await telegramLoginApi(data)
+    token.value = res.data.access_token
+    refreshTokenVal.value = res.data.refresh_token || ''
+    localStorage.setItem('token', token.value)
+    localStorage.setItem('refresh_token', refreshTokenVal.value)
+    if (res.data.user) {
+      userInfo.value = res.data.user
+    } else {
+      await fetchUser()
+    }
+  }
+
   function logout(skipApi = false) {
     const oldToken = token.value
     token.value = ''
@@ -59,5 +72,5 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  return { token, refreshTokenVal, userInfo, isLoggedIn, isAdmin, login, fetchUser, logout }
+  return { token, refreshTokenVal, userInfo, isLoggedIn, isAdmin, login, loginWithTelegram, fetchUser, logout }
 })

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,6 +75,26 @@ func GetPaymentMethods(c *gin.Context) {
 			pc := models.PaymentConfig{PayType: "wxpay", Status: 1, SortOrder: 102}
 			db.Create(&pc)
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "wxpay", "sort_order": 102})
+		}
+	}
+
+	// Auto-create PaymentConfig for Stripe if enabled
+	stripeConfigured := cfgMap["pay_stripe_secret_key"] != "" && cfgMap["pay_stripe_publishable_key"] != ""
+	if isEnabled(cfgMap["pay_stripe_enabled"]) && stripeConfigured {
+		if !hasPayType("stripe") {
+			pc := models.PaymentConfig{PayType: "stripe", Status: 1, SortOrder: 103}
+			db.Create(&pc)
+			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "stripe", "sort_order": 103})
+		}
+	}
+
+	// Auto-create PaymentConfig for Crypto USDT if enabled
+	cryptoConfigured := cfgMap["pay_crypto_wallet_address"] != ""
+	if isEnabled(cfgMap["pay_crypto_enabled"]) && cryptoConfigured {
+		if !hasPayType("crypto") {
+			pc := models.PaymentConfig{PayType: "crypto", Status: 1, SortOrder: 104}
+			db.Create(&pc)
+			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "crypto", "sort_order": 104})
 		}
 	}
 
@@ -198,6 +219,89 @@ func CreatePayment(c *gin.Context) {
 			"amount":         payAmount,
 			"pay_type":       payConfig.PayType,
 			"payment_url":    paymentURL,
+		})
+		return
+	}
+
+	// Stripe payment
+	if payConfig.PayType == "stripe" {
+		stripeCfg, err := services.GetStripeConfig()
+		if err != nil {
+			utils.BadRequest(c, "Stripe 未配置")
+			return
+		}
+
+		var pkg models.Package
+		orderName := "订单-" + order.OrderNo
+		if err := db.First(&pkg, order.PackageID).Error; err == nil {
+			orderName = pkg.Name
+		}
+
+		// Read exchange rate (CNY to USD)
+		rate := 7.2
+		if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
+			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
+				rate = parsed
+			}
+		}
+		amountUSD := payAmount / rate
+		amountCents := int64(amountUSD * 100)
+		if amountCents < 50 {
+			amountCents = 50 // Stripe minimum is $0.50
+		}
+
+		siteURL := utils.GetSetting("site_url")
+		if siteURL == "" {
+			siteURL = "http://localhost:8000"
+		}
+		successURL := siteURL + "/payment/return?order_no=" + order.OrderNo
+		cancelURL := siteURL + "/order"
+
+		_, checkoutURL, err := services.StripeCreateCheckoutSession(stripeCfg, txID, orderName, amountCents, "usd", successURL, cancelURL)
+		if err != nil {
+			utils.InternalError(c, "创建 Stripe 支付失败: "+err.Error())
+			return
+		}
+
+		utils.Success(c, gin.H{
+			"message":        "支付创建成功",
+			"order_no":       order.OrderNo,
+			"transaction_id": txID,
+			"amount":         payAmount,
+			"pay_type":       "stripe",
+			"payment_url":    checkoutURL,
+		})
+		return
+	}
+
+	// Crypto payment
+	if payConfig.PayType == "crypto" {
+		cryptoCfg, err := services.GetCryptoConfig()
+		if err != nil {
+			utils.BadRequest(c, "加密货币支付未配置")
+			return
+		}
+
+		rate := 7.2
+		if r := utils.GetSetting("pay_crypto_exchange_rate"); r != "" {
+			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
+				rate = parsed
+			}
+		}
+		amountUSDT := payAmount / rate
+
+		utils.Success(c, gin.H{
+			"message":        "请转账到以下地址",
+			"order_no":       order.OrderNo,
+			"transaction_id": txID,
+			"amount":         payAmount,
+			"pay_type":       "crypto",
+			"crypto_info": gin.H{
+				"wallet_address": cryptoCfg.WalletAddress,
+				"network":        cryptoCfg.Network,
+				"currency":       cryptoCfg.Currency,
+				"amount_usdt":    fmt.Sprintf("%.2f", amountUSDT),
+			},
 		})
 		return
 	}
@@ -328,6 +432,86 @@ func CreateRechargePayment(c *gin.Context) {
 		return
 	}
 
+	// Stripe recharge payment
+	if payConfig.PayType == "stripe" {
+		stripeCfg, err := services.GetStripeConfig()
+		if err != nil {
+			utils.BadRequest(c, "Stripe 未配置")
+			return
+		}
+
+		orderName := "充值-" + record.OrderNo
+
+		rate := 7.2
+		if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
+			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
+				rate = parsed
+			}
+		}
+		amountUSD := record.Amount / rate
+		amountCents := int64(amountUSD * 100)
+		if amountCents < 50 {
+			amountCents = 50
+		}
+
+		siteURL := utils.GetSetting("site_url")
+		if siteURL == "" {
+			siteURL = "http://localhost:8000"
+		}
+		successURL := siteURL + "/payment/return?order_no=" + record.OrderNo
+		cancelURL := siteURL + "/recharge"
+
+		_, checkoutURL, err := services.StripeCreateCheckoutSession(stripeCfg, txID, orderName, amountCents, "usd", successURL, cancelURL)
+		if err != nil {
+			utils.InternalError(c, "创建 Stripe 支付失败: "+err.Error())
+			return
+		}
+
+		db.Model(&record).Update("payment_url", &checkoutURL)
+
+		utils.Success(c, gin.H{
+			"message":        "支付创建成功",
+			"order_no":       record.OrderNo,
+			"transaction_id": txID,
+			"amount":         record.Amount,
+			"pay_type":       "stripe",
+			"payment_url":    checkoutURL,
+		})
+		return
+	}
+
+	// Crypto recharge payment
+	if payConfig.PayType == "crypto" {
+		cryptoCfg, err := services.GetCryptoConfig()
+		if err != nil {
+			utils.BadRequest(c, "加密货币支付未配置")
+			return
+		}
+
+		rate := 7.2
+		if r := utils.GetSetting("pay_crypto_exchange_rate"); r != "" {
+			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
+				rate = parsed
+			}
+		}
+		amountUSDT := record.Amount / rate
+
+		utils.Success(c, gin.H{
+			"message":        "请转账到以下地址",
+			"order_no":       record.OrderNo,
+			"transaction_id": txID,
+			"amount":         record.Amount,
+			"pay_type":       "crypto",
+			"crypto_info": gin.H{
+				"wallet_address": cryptoCfg.WalletAddress,
+				"network":        cryptoCfg.Network,
+				"currency":       cryptoCfg.Currency,
+				"amount_usdt":    fmt.Sprintf("%.2f", amountUSDT),
+			},
+		})
+		return
+	}
+
 	utils.Success(c, gin.H{
 		"message":        "支付创建成功",
 		"order_no":       record.OrderNo,
@@ -338,9 +522,10 @@ func CreateRechargePayment(c *gin.Context) {
 }
 
 func GetPaymentStatus(c *gin.Context) {
+	userID := c.GetUint("user_id")
 	id := c.Param("id")
 	var tx models.PaymentTransaction
-	if err := database.GetDB().First(&tx, id).Error; err != nil {
+	if err := database.GetDB().Where("id = ? AND user_id = ?", id, userID).First(&tx).Error; err != nil {
 		utils.NotFound(c, "支付记录不存在")
 		return
 	}
@@ -360,6 +545,12 @@ func PaymentNotify(c *gin.Context) {
 	// Direct Alipay callback
 	if payType == "alipay" {
 		handleAlipayNotify(c, db)
+		return
+	}
+
+	// Stripe webhook callback
+	if payType == "stripe" {
+		handleStripeWebhook(c, db)
 		return
 	}
 
@@ -417,36 +608,47 @@ func PaymentNotify(c *gin.Context) {
 	}
 
 	if txFound && transaction.Status == "pending" {
-		// Mark transaction as paid
-		extTxID := ""
-		if v, ok := callbackData["trade_no"].(string); ok {
-			extTxID = v
-		}
-		callbackJSON := string(rawBody)
-		updates := map[string]interface{}{
-			"status":        "paid",
-			"callback_data": &callbackJSON,
-		}
-		if extTxID != "" {
-			updates["external_transaction_id"] = &extTxID
-		}
-		db.Model(&transaction).Updates(updates)
+		err := db.Transaction(func(tx *gorm.DB) error {
+			// Re-fetch with status check inside transaction to prevent double-spend
+			var txn models.PaymentTransaction
+			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
+				return err // Already processed or not found
+			}
 
-		// Mark order as paid and activate subscription
-		var order models.Order
-		if err := db.First(&order, transaction.OrderID).Error; err == nil && order.Status == "pending" {
-			now := time.Now()
-			pmName := payType
-			db.Model(&order).Updates(map[string]interface{}{
-				"status":              "paid",
-				"payment_method_name": &pmName,
-				"payment_time":        &now,
-			})
-			services.ActivateSubscription(db, &order, payType)
-		}
+			// Mark transaction as paid
+			extTxID := ""
+			if v, ok := callbackData["trade_no"].(string); ok {
+				extTxID = v
+			}
+			callbackJSON := string(rawBody)
+			updates := map[string]interface{}{
+				"status":        "paid",
+				"callback_data": &callbackJSON,
+			}
+			if extTxID != "" {
+				updates["external_transaction_id"] = &extTxID
+			}
+			tx.Model(&txn).Updates(updates)
 
-		result := "success"
-		callback.ProcessingResult = &result
+			// Mark order as paid and activate subscription
+			var order models.Order
+			if err := tx.First(&order, txn.OrderID).Error; err == nil && order.Status == "pending" {
+				now := time.Now()
+				pmName := payType
+				tx.Model(&order).Updates(map[string]interface{}{
+					"status":              "paid",
+					"payment_method_name": &pmName,
+					"payment_time":        &now,
+				})
+				services.ActivateSubscription(tx, &order, payType)
+			}
+
+			return nil
+		})
+		if err == nil {
+			result := "success"
+			callback.ProcessingResult = &result
+		}
 	}
 
 	db.Create(&callback)
@@ -524,40 +726,55 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 	}
 
 	if transaction.Status == "pending" {
-		// 金额校验
-		if callbackMoney != "" {
-			expectedAmount := fmt.Sprintf("%.2f", transaction.Amount)
-			if callbackMoney != expectedAmount {
-				s := fmt.Sprintf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, callbackMoney)
+		err := db.Transaction(func(tx *gorm.DB) error {
+			// Re-fetch with status check inside transaction to prevent double-spend
+			var txn models.PaymentTransaction
+			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
+				return err // Already processed or not found
+			}
+
+			// 金额校验
+			if callbackMoney != "" {
+				expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
+				if callbackMoney != expectedAmount {
+					return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, callbackMoney)
+				}
+			}
+			// Mark transaction as paid
+			callbackJSON := rawStr
+			updates := map[string]interface{}{
+				"status":        "paid",
+				"callback_data": &callbackJSON,
+			}
+			if tradeNo != "" {
+				updates["external_transaction_id"] = &tradeNo
+			}
+			tx.Model(&txn).Updates(updates)
+
+			// Determine if this is a recharge or order payment by transaction ID prefix
+			if strings.HasPrefix(outTradeNo, "RCH") {
+				handleEpayRechargeCallback(tx, &txn, outTradeNo)
+			} else {
+				handleEpayOrderCallback(tx, &txn)
+			}
+
+			return nil
+		})
+		if err != nil {
+			// Check if it was an amount mismatch (not a duplicate)
+			if strings.Contains(err.Error(), "金额不匹配") {
+				s := err.Error()
 				callback.ProcessingResult = &s
 				callback.Processed = false
 				db.Create(&callback)
 				c.String(200, "success")
 				return
 			}
-		}
-		// Mark transaction as paid
-		callbackJSON := rawStr
-		updates := map[string]interface{}{
-			"status":        "paid",
-			"callback_data": &callbackJSON,
-		}
-		if tradeNo != "" {
-			updates["external_transaction_id"] = &tradeNo
-		}
-		db.Model(&transaction).Updates(updates)
-
-		// Determine if this is a recharge or order payment by transaction ID prefix
-		if strings.HasPrefix(outTradeNo, "RCH") {
-			// Recharge payment: find recharge record via PaymentData or payment_transaction_id
-			handleEpayRechargeCallback(db, &transaction, outTradeNo)
+			// Already processed (duplicate callback) - just log and return success
 		} else {
-			// Order payment: existing logic
-			handleEpayOrderCallback(db, &transaction)
+			result := "success"
+			callback.ProcessingResult = &result
 		}
-
-		result := "success"
-		callback.ProcessingResult = &result
 	}
 
 	db.Create(&callback)
@@ -565,48 +782,71 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 }
 
 func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) {
-	var record models.RechargeRecord
-	if err := db.Where("payment_transaction_id = ? AND status = ?", txID, "pending").First(&record).Error; err != nil {
-		return
-	}
+	// Use a transaction to atomically check status + update balance (prevents double-spend)
+	var notifyUser *models.User
+	var notifyRecord *models.RechargeRecord
 
-	now := time.Now()
-	db.Model(&record).Updates(map[string]interface{}{
-		"status":  "paid",
-		"paid_at": &now,
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var record models.RechargeRecord
+		if err := tx.Where("payment_transaction_id = ? AND status = ?", txID, "pending").First(&record).Error; err != nil {
+			return err // Already processed or not found
+		}
+
+		now := time.Now()
+		tx.Model(&record).Updates(map[string]interface{}{
+			"status":  "paid",
+			"paid_at": &now,
+		})
+
+		// Add balance to user atomically
+		tx.Model(&models.User{}).Where("id = ?", record.UserID).
+			Update("balance", gorm.Expr("balance + ?", record.Amount))
+
+		// Fetch user for notification (after balance update)
+		var user models.User
+		if tx.First(&user, record.UserID).Error == nil {
+			notifyUser = &user
+			notifyRecord = &record
+		}
+
+		return nil
 	})
 
-	// Add balance to user
-	db.Model(&models.User{}).Where("id = ?", record.UserID).
-		Update("balance", gorm.Expr("balance + ?", record.Amount))
+	if err != nil {
+		return // Already processed or not found
+	}
 
-	// Notify
-	var user models.User
-	if db.First(&user, record.UserID).Error == nil {
-		amountStr := fmt.Sprintf("%.2f", record.Amount)
-		utils.CreateBalanceLogSimple(record.UserID, "recharge", record.Amount, user.Balance-record.Amount, user.Balance, nil, fmt.Sprintf("充值到账: %s", record.OrderNo))
+	// Send notifications outside the transaction
+	if notifyUser != nil && notifyRecord != nil {
+		amountStr := fmt.Sprintf("%.2f", notifyRecord.Amount)
+		utils.CreateBalanceLogSimple(notifyRecord.UserID, "recharge", notifyRecord.Amount, notifyUser.Balance-notifyRecord.Amount, notifyUser.Balance, nil, fmt.Sprintf("充值到账: %s", notifyRecord.OrderNo))
 		emailSubject, emailBody := services.RenderEmail("recharge_success", map[string]string{
-			"order_no": record.OrderNo, "amount": amountStr,
+			"order_no": notifyRecord.OrderNo, "amount": amountStr,
 		})
-		go services.QueueEmail(user.Email, emailSubject, emailBody, "recharge_success")
+		go services.QueueEmail(notifyUser.Email, emailSubject, emailBody, "recharge_success")
 		go services.NotifyAdmin("recharge_success", map[string]string{
-			"username": user.Username, "order_no": record.OrderNo, "amount": amountStr,
+			"username": notifyUser.Username, "order_no": notifyRecord.OrderNo, "amount": amountStr,
 		})
 	}
 }
 
 func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
-	var order models.Order
-	if err := db.First(&order, transaction.OrderID).Error; err == nil && order.Status == "pending" {
+	db.Transaction(func(tx *gorm.DB) error {
+		var order models.Order
+		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
+			return err // Already processed or not found
+		}
+
 		now := time.Now()
 		pmName := "epay"
-		db.Model(&order).Updates(map[string]interface{}{
+		tx.Model(&order).Updates(map[string]interface{}{
 			"status":              "paid",
 			"payment_method_name": &pmName,
 			"payment_time":        &now,
 		})
-		services.ActivateSubscription(db, &order, "epay")
-	}
+		services.ActivateSubscription(tx, &order, "epay")
+		return nil
+	})
 }
 
 func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
@@ -659,37 +899,52 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	}
 
 	if transaction.Status == "pending" {
-		// 金额校验
-		if notification.TotalAmount != "" {
-			expectedAmount := fmt.Sprintf("%.2f", transaction.Amount)
-			if notification.TotalAmount != expectedAmount {
-				s := fmt.Sprintf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, notification.TotalAmount)
+		err := db.Transaction(func(tx *gorm.DB) error {
+			// Re-fetch with status check inside transaction to prevent double-spend
+			var txn models.PaymentTransaction
+			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
+				return err // Already processed or not found
+			}
+
+			// 金额校验
+			if notification.TotalAmount != "" {
+				expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
+				if notification.TotalAmount != expectedAmount {
+					return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, notification.TotalAmount)
+				}
+			}
+			callbackJSON := rawStr
+			updates := map[string]interface{}{
+				"status":        "paid",
+				"callback_data": &callbackJSON,
+			}
+			if tradeNo != "" {
+				updates["external_transaction_id"] = &tradeNo
+			}
+			tx.Model(&txn).Updates(updates)
+
+			// Determine if this is a recharge or order payment
+			if strings.HasPrefix(outTradeNo, "RCH") {
+				handleEpayRechargeCallback(tx, &txn, outTradeNo)
+			} else {
+				handleAlipayOrderCallback(tx, &txn)
+			}
+
+			return nil
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "金额不匹配") {
+				s := err.Error()
 				callback.ProcessingResult = &s
 				callback.Processed = false
 				db.Create(&callback)
 				c.String(200, "success")
 				return
 			}
-		}
-		callbackJSON := rawStr
-		updates := map[string]interface{}{
-			"status":        "paid",
-			"callback_data": &callbackJSON,
-		}
-		if tradeNo != "" {
-			updates["external_transaction_id"] = &tradeNo
-		}
-		db.Model(&transaction).Updates(updates)
-
-		// Determine if this is a recharge or order payment
-		if strings.HasPrefix(outTradeNo, "RCH") {
-			handleEpayRechargeCallback(db, &transaction, outTradeNo)
 		} else {
-			handleAlipayOrderCallback(db, &transaction)
+			result := "success"
+			callback.ProcessingResult = &result
 		}
-
-		result := "success"
-		callback.ProcessingResult = &result
 	}
 
 	db.Create(&callback)
@@ -697,17 +952,181 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 }
 
 func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
-	var order models.Order
-	if err := db.First(&order, transaction.OrderID).Error; err != nil || order.Status != "pending" {
+	db.Transaction(func(tx *gorm.DB) error {
+		var order models.Order
+		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
+			return err // Already processed or not found
+		}
+
+		now := time.Now()
+		pmName := "alipay"
+		tx.Model(&order).Updates(map[string]interface{}{
+			"status":              "paid",
+			"payment_method_name": &pmName,
+			"payment_time":        &now,
+		})
+		services.ActivateSubscription(tx, &order, "alipay")
+		return nil
+	})
+}
+
+func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
+	// Read raw body
+	rawBody, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.String(400, "fail")
 		return
 	}
 
-	now := time.Now()
-	pmName := "alipay"
-	db.Model(&order).Updates(map[string]interface{}{
-		"status":              "paid",
-		"payment_method_name": &pmName,
-		"payment_time":        &now,
+	// Get Stripe config for webhook secret
+	stripeCfg, err := services.GetStripeConfig()
+	if err != nil {
+		c.String(400, "stripe not configured")
+		return
+	}
+
+	// Verify webhook signature if webhook secret is set
+	if stripeCfg.WebhookSecret != "" {
+		sigHeader := c.GetHeader("Stripe-Signature")
+		if !services.StripeVerifyWebhook(rawBody, sigHeader, stripeCfg.WebhookSecret) {
+			fmt.Printf("[stripe] webhook 签名验证失败\n")
+			c.String(400, "signature verification failed")
+			return
+		}
+	}
+
+	// Parse event JSON
+	var event map[string]interface{}
+	if err := json.Unmarshal(rawBody, &event); err != nil {
+		c.String(400, "invalid json")
+		return
+	}
+
+	eventType, _ := event["type"].(string)
+	rawStr := string(rawBody)
+
+	// Only handle checkout.session.completed
+	if eventType != "checkout.session.completed" {
+		c.String(200, "ok")
+		return
+	}
+
+	// Extract session data
+	data, _ := event["data"].(map[string]interface{})
+	if data == nil {
+		c.String(200, "ok")
+		return
+	}
+	obj, _ := data["object"].(map[string]interface{})
+	if obj == nil {
+		c.String(200, "ok")
+		return
+	}
+
+	// Get transaction_id from metadata
+	metadata, _ := obj["metadata"].(map[string]interface{})
+	txIDVal, _ := metadata["transaction_id"].(string)
+	if txIDVal == "" {
+		// Log unmatched callback
+		callback := models.PaymentCallback{
+			CallbackType: "stripe",
+			CallbackData: rawStr,
+			RawRequest:   &rawStr,
+			Processed:    false,
+		}
+		db.Create(&callback)
+		c.String(200, "ok")
+		return
+	}
+
+	// Find transaction
+	var transaction models.PaymentTransaction
+	if err := db.Where("transaction_id = ?", txIDVal).First(&transaction).Error; err != nil {
+		callback := models.PaymentCallback{
+			CallbackType: "stripe",
+			CallbackData: rawStr,
+			RawRequest:   &rawStr,
+			Processed:    false,
+		}
+		db.Create(&callback)
+		c.String(200, "ok")
+		return
+	}
+
+	// Log callback
+	callback := models.PaymentCallback{
+		PaymentTransactionID: transaction.ID,
+		CallbackType:         "stripe",
+		CallbackData:         rawStr,
+		RawRequest:           &rawStr,
+		Processed:            true,
+	}
+
+	if transaction.Status == "pending" {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			// Re-fetch with status check inside transaction to prevent double-spend
+			var txn models.PaymentTransaction
+			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
+				return err // Already processed or not found
+			}
+
+			// Extract Stripe payment intent ID as external transaction ID
+			paymentIntent, _ := obj["payment_intent"].(string)
+			sessionID, _ := obj["id"].(string)
+			extTxID := paymentIntent
+			if extTxID == "" {
+				extTxID = sessionID
+			}
+
+			callbackJSON := rawStr
+			updates := map[string]interface{}{
+				"status":        "paid",
+				"callback_data": &callbackJSON,
+			}
+			if extTxID != "" {
+				updates["external_transaction_id"] = &extTxID
+			}
+			tx.Model(&txn).Updates(updates)
+
+			// Determine if this is a recharge or order payment
+			if strings.HasPrefix(txIDVal, "RCH") {
+				handleStripeRechargeCallback(tx, &txn, txIDVal)
+			} else {
+				handleStripeOrderCallback(tx, &txn)
+			}
+
+			return nil
+		})
+		if err == nil {
+			result := "success"
+			callback.ProcessingResult = &result
+		}
+	}
+
+	db.Create(&callback)
+	c.String(200, "ok")
+}
+
+func handleStripeOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
+	db.Transaction(func(tx *gorm.DB) error {
+		var order models.Order
+		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
+			return err // Already processed or not found
+		}
+
+		now := time.Now()
+		pmName := "stripe"
+		tx.Model(&order).Updates(map[string]interface{}{
+			"status":              "paid",
+			"payment_method_name": &pmName,
+			"payment_time":        &now,
+		})
+		services.ActivateSubscription(tx, &order, "stripe")
+		return nil
 	})
-	services.ActivateSubscription(db, &order, "alipay")
+}
+
+func handleStripeRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) {
+	// Reuse the same recharge callback logic as epay
+	handleEpayRechargeCallback(db, transaction, txID)
 }

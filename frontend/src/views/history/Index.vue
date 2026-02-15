@@ -148,7 +148,7 @@ const loadHistory = async () => {
   loading.value = true
   try {
     const res = await getLoginHistory({ page: pagination.page, page_size: pagination.pageSize })
-    records.value = res.data?.list || []
+    records.value = res.data?.items || []
     pagination.itemCount = res.data?.total || 0
   } catch (error: any) {
     message.error(error.message || '获取登录历史失败')

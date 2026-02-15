@@ -51,6 +51,16 @@
               <n-form-item label="最小密码长度">
                 <n-input-number v-model:value="form.min_password_length" :min="6" :max="32" />
               </n-form-item>
+              <n-divider />
+              <n-form-item label="启用 Telegram 登录">
+                <n-switch v-model:value="form.telegram_login_enabled" />
+              </n-form-item>
+              <n-form-item label="Telegram Bot Username">
+                <n-input v-model:value="form.telegram_bot_username" placeholder="不含 @ 的 Bot 用户名" />
+                <template #feedback>
+                  <span style="font-size: 12px; color: #999">用于 Telegram Login Widget，需与通知设置中的 Bot Token 对应</span>
+                </template>
+              </n-form-item>
               <n-space justify="center" style="margin-top: 24px">
                 <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
               </n-space>
@@ -172,6 +182,58 @@
                 </n-form>
               </n-card>
 
+              <n-card title="Stripe" size="small" :bordered="true" :collapsible="true">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '160'" :model="form">
+                  <n-form-item label="启用 Stripe">
+                    <n-switch v-model:value="form.pay_stripe_enabled" />
+                  </n-form-item>
+                  <n-form-item label="Secret Key">
+                    <n-input v-model:value="form.pay_stripe_secret_key" type="password" show-password-on="click" placeholder="sk_live_..." />
+                  </n-form-item>
+                  <n-form-item label="Publishable Key">
+                    <n-input v-model:value="form.pay_stripe_publishable_key" placeholder="pk_live_..." />
+                  </n-form-item>
+                  <n-form-item label="Webhook Secret">
+                    <n-input v-model:value="form.pay_stripe_webhook_secret" type="password" show-password-on="click" placeholder="whsec_..." />
+                  </n-form-item>
+                  <n-form-item label="汇率 (CNY→USD)">
+                    <n-input-number v-model:value="form.pay_stripe_exchange_rate" :min="0.01" :max="100" :precision="2" placeholder="7.2" />
+                    <template #feedback>
+                      <span style="font-size: 12px; color: #999">人民币兑美元汇率，用于自动换算支付金额</span>
+                    </template>
+                  </n-form-item>
+                  <n-form-item label="Webhook 地址">
+                    <n-input :value="stripeWebhookUrlHint" readonly />
+                    <template #feedback>
+                      <span style="font-size: 12px; color: #999">请在 Stripe Dashboard 中配置此 Webhook 地址</span>
+                    </template>
+                  </n-form-item>
+                </n-form>
+              </n-card>
+
+              <n-card title="加密货币 (USDT)" size="small" :bordered="true" :collapsible="true">
+                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '160'" :model="form">
+                  <n-form-item label="启用加密货币">
+                    <n-switch v-model:value="form.pay_crypto_enabled" />
+                  </n-form-item>
+                  <n-form-item label="钱包地址">
+                    <n-input v-model:value="form.pay_crypto_wallet_address" placeholder="请输入收款钱包地址" />
+                  </n-form-item>
+                  <n-form-item label="网络">
+                    <n-select v-model:value="form.pay_crypto_network" :options="cryptoNetworkOptions" placeholder="请选择网络" />
+                  </n-form-item>
+                  <n-form-item label="币种">
+                    <n-select v-model:value="form.pay_crypto_currency" :options="cryptoCurrencyOptions" placeholder="请选择币种" />
+                  </n-form-item>
+                  <n-form-item label="汇率 (CNY→USDT)">
+                    <n-input-number v-model:value="form.pay_crypto_exchange_rate" :min="0.01" :max="100" :precision="2" placeholder="7.2" />
+                    <template #feedback>
+                      <span style="font-size: 12px; color: #999">人民币兑 USDT 汇率，用于自动换算支付金额</span>
+                    </template>
+                  </n-form-item>
+                </n-form>
+              </n-card>
+
               <n-space justify="center" style="margin-top: 24px">
                 <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
               </n-space>
@@ -278,7 +340,30 @@
               </n-space>
             </n-form>
           </n-tab-pane>
-          <!-- Tab 7: 软件下载配置 -->
+          <!-- Tab 7: 签到设置 -->
+          <n-tab-pane name="checkin" tab="签到设置">
+            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '200'" :model="form">
+              <n-form-item label="启用签到功能">
+                <n-switch v-model:value="form.checkin_enabled" />
+              </n-form-item>
+              <n-form-item label="最小奖励金额 (分)">
+                <n-input-number v-model:value="form.checkin_min_reward" :min="1" :max="10000" />
+                <template #feedback>
+                  <span style="font-size: 12px; color: #999">签到随机奖励的最小值，单位为分（如 10 = 0.10 元）</span>
+                </template>
+              </n-form-item>
+              <n-form-item label="最大奖励金额 (分)">
+                <n-input-number v-model:value="form.checkin_max_reward" :min="1" :max="10000" />
+                <template #feedback>
+                  <span style="font-size: 12px; color: #999">签到随机奖励的最大值，单位为分（如 50 = 0.50 元）</span>
+                </template>
+              </n-form-item>
+              <n-space justify="center" style="margin-top: 24px">
+                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
+              </n-space>
+            </n-form>
+          </n-tab-pane>
+          <!-- Tab 8: 软件下载配置 -->
           <n-tab-pane name="client" tab="软件下载">
             <n-space vertical :size="16">
               <n-card title="Windows 客户端" size="small" :bordered="true">
@@ -413,6 +498,7 @@ const siteBase = computed(() => {
 })
 const alipayNotifyUrlHint = computed(() => siteBase.value + '/api/v1/payment/notify/alipay')
 const alipayReturnUrlHint = computed(() => siteBase.value + '/payment/return')
+const stripeWebhookUrlHint = computed(() => siteBase.value + '/api/v1/payment/notify/stripe')
 
 const encryptionOptions = [
   { label: '无', value: 'none' },
@@ -420,24 +506,37 @@ const encryptionOptions = [
   { label: 'SSL', value: 'ssl' }
 ]
 
+const cryptoNetworkOptions = [
+  { label: 'TRC20 (Tron)', value: 'TRC20' },
+  { label: 'ERC20 (Ethereum)', value: 'ERC20' }
+]
+
+const cryptoCurrencyOptions = [
+  { label: 'USDT', value: 'USDT' },
+  { label: 'USDC', value: 'USDC' }
+]
+
 // Boolean keys that should be stored as switches
 const booleanKeys = [
   'register_enabled', 'register_email_verify', 'register_invite_required',
   'pay_balance_enabled', 'pay_alipay_enabled', 'pay_alipay_sandbox', 'pay_wechat_enabled', 'pay_epay_enabled',
+  'pay_stripe_enabled', 'pay_crypto_enabled',
   'notify_email_enabled', 'notify_telegram_enabled', 'notify_bark_enabled',
   'notify_new_order', 'notify_new_ticket', 'notify_new_user', 'notify_expiry_reminder',
   'notify_payment_success', 'notify_recharge_success', 'notify_subscription_reset',
   'notify_abnormal_login', 'notify_unpaid_order',
   'user_notify_welcome', 'user_notify_payment', 'user_notify_expiry', 'user_notify_expired',
   'user_notify_reset', 'user_notify_account_status', 'user_notify_unpaid_order',
-  'abnormal_login_alert', 'backup_github_enabled'
+  'abnormal_login_alert', 'backup_github_enabled',
+  'checkin_enabled', 'telegram_login_enabled'
 ]
 
 // Number keys that should be stored as numbers
 const numberKeys = [
   'default_device_limit', 'default_subscribe_days', 'min_password_length',
   'smtp_port', 'max_login_attempts', 'login_lockout_minutes', 'session_timeout_minutes',
-  'backup_interval_hours'
+  'backup_interval_hours', 'pay_stripe_exchange_rate', 'pay_crypto_exchange_rate',
+  'checkin_min_reward', 'checkin_max_reward'
 ]
 
 const form = ref<Record<string, any>>({
@@ -455,6 +554,8 @@ const form = ref<Record<string, any>>({
   default_device_limit: 3,
   default_subscribe_days: 0,
   min_password_length: 8,
+  telegram_login_enabled: false,
+  telegram_bot_username: '',
   // Email
   smtp_host: '',
   smtp_port: 465,
@@ -480,6 +581,18 @@ const form = ref<Record<string, any>>({
   pay_epay_gateway: '',
   pay_epay_merchant_id: '',
   pay_epay_secret_key: '',
+  // Stripe
+  pay_stripe_enabled: false,
+  pay_stripe_secret_key: '',
+  pay_stripe_publishable_key: '',
+  pay_stripe_webhook_secret: '',
+  pay_stripe_exchange_rate: 7.2,
+  // Crypto
+  pay_crypto_enabled: false,
+  pay_crypto_wallet_address: '',
+  pay_crypto_network: 'TRC20',
+  pay_crypto_currency: 'USDT',
+  pay_crypto_exchange_rate: 7.2,
   // Notification - channels
   notify_email_enabled: true,
   notify_admin_email: '',
@@ -533,6 +646,10 @@ const form = ref<Record<string, any>>({
   client_stash_url: '',
   client_singbox_url: '',
   client_clash_linux_url: '',
+  // Check-in
+  checkin_enabled: true,
+  checkin_min_reward: 10,
+  checkin_max_reward: 50,
 })
 
 const loadSettings = async () => {

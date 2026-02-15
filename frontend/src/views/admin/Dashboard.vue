@@ -299,7 +299,8 @@ const getPriorityType = (priority: string) => {
   const map: Record<string, any> = {
     high: 'error',
     medium: 'warning',
-    low: 'info'
+    normal: 'info',
+    low: 'default'
   }
   return map[priority] || 'default'
 }
@@ -308,6 +309,7 @@ const getPriorityText = (priority: string) => {
   const map: Record<string, string> = {
     high: '高',
     medium: '中',
+    normal: '普通',
     low: '低'
   }
   return map[priority] || priority

@@ -46,6 +46,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'login-history', name: 'LoginHistory', component: () => import('@/views/history/Index.vue') },
       { path: 'recharge', name: 'Recharge', component: () => import('@/views/recharge/Index.vue') },
       { path: 'redeem', name: 'Redeem', component: () => import('@/views/redeem/Index.vue') },
+      { path: 'mystery-box', name: 'MysteryBox', component: () => import('@/views/mystery-box/Index.vue') },
     ],
   },
   {
@@ -66,6 +67,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'tickets', name: 'AdminTickets', component: () => import('@/views/admin/tickets/Index.vue') },
       { path: 'levels', name: 'AdminLevels', component: () => import('@/views/admin/levels/Index.vue') },
       { path: 'redeem', name: 'AdminRedeem', component: () => import('@/views/admin/redeem/Index.vue') },
+      { path: 'mystery-box', name: 'AdminMysteryBox', component: () => import('@/views/admin/mystery-box/Index.vue') },
       { path: 'settings', name: 'AdminSettings', component: () => import('@/views/admin/settings/Index.vue') },
       { path: 'announcements', name: 'AdminAnnouncements', component: () => import('@/views/admin/announcements/Index.vue') },
       { path: 'stats', name: 'AdminStats', component: () => import('@/views/admin/stats/Index.vue') },

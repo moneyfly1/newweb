@@ -14,3 +14,12 @@ export const getMyLevel = () => request.get('/users/my-level')
 export const getActivities = (params?: any) => request.get('/users/activities', { params })
 export const getUserDevices = () => request.get('/users/devices')
 export const getSubscriptionResets = (params?: any) => request.get('/users/subscription-resets', { params })
+
+// Telegram
+export const bindTelegram = (data: any) => request.post('/users/bind-telegram', data)
+export const unbindTelegram = () => request.post('/users/unbind-telegram')
+
+// Check-in
+export const checkIn = () => request.post('/checkin')
+export const getCheckInStatus = () => request.get('/checkin/status')
+export const getCheckInHistory = (params?: any) => request.get('/checkin/history', { params })

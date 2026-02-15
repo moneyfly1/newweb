@@ -119,7 +119,7 @@ import {
   ChatbubblesOutline, ServerOutline, PhonePortraitOutline, PeopleOutline,
   SettingsOutline, NotificationsOutline, EllipsisHorizontalOutline,
   LogOutOutline, ShieldOutline, KeyOutline,
-  TimeOutline, WalletOutline, HelpCircleOutline,
+  TimeOutline, WalletOutline, HelpCircleOutline, GiftOutline,
 } from '@vicons/ionicons5'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -148,9 +148,10 @@ const menuOptions = [
   { label: '我的设备', key: 'Devices', icon: renderIcon(PhonePortraitOutline) },
   { label: '邀请返利', key: 'Invite', icon: renderIcon(PeopleOutline) },
   { label: '卡密兑换', key: 'Redeem', icon: renderIcon(KeyOutline) },
+  { label: '盲盒', key: 'MysteryBox', icon: renderIcon(GiftOutline) },
   { label: '充值', key: 'Recharge', icon: renderIcon(WalletOutline) },
   { label: '登录历史', key: 'LoginHistory', icon: renderIcon(TimeOutline) },
-  { label: '帮助', key: 'Help', icon: renderIcon(HelpCircleOutline) },
+  { label: '帮助/下载', key: 'Help', icon: renderIcon(HelpCircleOutline) },
 ]
 
 // Mobile: 5 main tabs at bottom
@@ -169,9 +170,10 @@ const moreMenuItems = [
   { label: '我的设备', key: 'Devices', icon: PhonePortraitOutline },
   { label: '邀请返利', key: 'Invite', icon: PeopleOutline },
   { label: '卡密兑换', key: 'Redeem', icon: KeyOutline },
+  { label: '盲盒', key: 'MysteryBox', icon: GiftOutline },
   { label: '充值', key: 'Recharge', icon: WalletOutline },
   { label: '登录历史', key: 'LoginHistory', icon: TimeOutline },
-  { label: '帮助', key: 'Help', icon: HelpCircleOutline },
+  { label: '帮助/下载', key: 'Help', icon: HelpCircleOutline },
   ...(userStore.isAdmin ? [{ label: '管理后台', key: 'admin', icon: ShieldOutline }] : []),
   { label: '退出登录', key: 'logout', icon: LogOutOutline },
 ]

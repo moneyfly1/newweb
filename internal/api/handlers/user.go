@@ -3,6 +3,7 @@ package handlers
 import (
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
 	"github.com/gin-gonic/gin"
 )
@@ -238,4 +239,47 @@ func GetUserDevices(c *gin.Context) {
 	var devices []models.Device
 	database.GetDB().Where("subscription_id = ? AND is_active = ?", sub.ID, true).Find(&devices)
 	utils.Success(c, devices)
+}
+
+// BindTelegram 绑定 Telegram 账号
+func BindTelegram(c *gin.Context) {
+	var req services.TelegramLoginData
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	if !services.VerifyTelegramLogin(&req) {
+		utils.Unauthorized(c, "Telegram 验证失败")
+		return
+	}
+
+	userID := c.GetUint("user_id")
+	db := database.GetDB()
+
+	// Check if this Telegram ID is already bound to another user
+	var existing models.User
+	if err := db.Where("telegram_id = ? AND id != ?", req.ID, userID).First(&existing).Error; err == nil {
+		utils.Conflict(c, "该 Telegram 账号已绑定其他用户")
+		return
+	}
+
+	// Bind
+	tgUsername := req.Username
+	db.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"telegram_id":       req.ID,
+		"telegram_username": &tgUsername,
+	})
+
+	utils.SuccessMessage(c, "Telegram 绑定成功")
+}
+
+// UnbindTelegram 解绑 Telegram 账号
+func UnbindTelegram(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	database.GetDB().Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"telegram_id":       nil,
+		"telegram_username": nil,
+	})
+	utils.SuccessMessage(c, "Telegram 已解绑")
 }

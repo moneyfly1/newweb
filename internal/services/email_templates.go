@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"html"
 	"strings"
 
 	"cboard/v2/internal/utils"
@@ -30,7 +31,7 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "verification":
 		subject = fmt.Sprintf("邮箱验证码 - %s", siteName)
 		title = "邮箱验证码"
-		code := data["code"]
+		code := html.EscapeString(data["code"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您正在进行邮箱验证操作。</p>
 <div style="text-align:center;margin:24px 0">
   <span style="display:inline-block;font-size:32px;font-weight:bold;letter-spacing:8px;color:#4F46E5;background:#F0EFFF;padding:12px 24px;border-radius:8px">%s</span>
@@ -39,7 +40,7 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "reset_password":
 		subject = fmt.Sprintf("密码重置 - %s", siteName)
 		title = "密码重置"
-		code := data["code"]
+		code := html.EscapeString(data["code"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您正在进行密码重置操作。</p>
 <div style="text-align:center;margin:24px 0">
   <span style="display:inline-block;font-size:32px;font-weight:bold;letter-spacing:8px;color:#4F46E5;background:#F0EFFF;padding:12px 24px;border-radius:8px">%s</span>
@@ -49,7 +50,7 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "welcome":
 		subject = fmt.Sprintf("欢迎加入 %s", siteName)
 		title = "欢迎加入"
-		username := data["username"]
+		username := html.EscapeString(data["username"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">Hi %s，欢迎加入 %s！</p>
 <p style="font-size:14px;color:#666;margin:0 0 8px">您的账户已创建成功，现在可以开始使用我们的服务了。</p>
 <p style="font-size:14px;color:#666;margin:0">如有任何问题，请随时联系客服。</p>`, username, siteName)
@@ -59,9 +60,9 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "subscription":
 		subject = fmt.Sprintf("您的订阅信息 - %s", siteName)
 		title = "订阅信息"
-		clashURL := data["clash_url"]
-		universalURL := data["universal_url"]
-		expireTime := data["expire_time"]
+		clashURL := html.EscapeString(data["clash_url"])
+		universalURL := html.EscapeString(data["universal_url"])
+		expireTime := html.EscapeString(data["expire_time"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，以下是您的订阅信息：</p>
 <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:13px;color:#888;margin:0 0 4px">Clash 订阅链接</p>
@@ -77,9 +78,9 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "payment_success":
 		subject = fmt.Sprintf("支付成功 - %s", siteName)
 		title = "支付成功"
-		orderNo := data["order_no"]
-		amount := data["amount"]
-		packageName := data["package_name"]
+		orderNo := html.EscapeString(data["order_no"])
+		amount := html.EscapeString(data["amount"])
+		packageName := html.EscapeString(data["package_name"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的订单已支付成功！</p>
 <div style="background:#F0FDF4;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:14px;color:#333;margin:0 0 8px">订单号：<strong>%s</strong></p>
@@ -93,8 +94,8 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "recharge_success":
 		subject = fmt.Sprintf("充值成功 - %s", siteName)
 		title = "充值成功"
-		orderNo := data["order_no"]
-		amount := data["amount"]
+		orderNo := html.EscapeString(data["order_no"])
+		amount := html.EscapeString(data["amount"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的充值已成功到账！</p>
 <div style="background:#F0FDF4;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:14px;color:#333;margin:0 0 8px">充值单号：<strong>%s</strong></p>
@@ -105,8 +106,8 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		btnLink = domain + "/"
 
 	case "expiry_reminder":
-		days := data["days"]
-		expireTime := data["expire_time"]
+		days := html.EscapeString(data["days"])
+		expireTime := html.EscapeString(data["expire_time"])
 		subject = fmt.Sprintf("%s - 订阅即将到期提醒", siteName)
 		title = "订阅到期提醒"
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的 %s 订阅将在 <strong>%s 天</strong>后到期。</p>
@@ -118,7 +119,7 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		btnLink = domain + "/shop"
 
 	case "expiry_notice":
-		expireTime := data["expire_time"]
+		expireTime := html.EscapeString(data["expire_time"])
 		subject = fmt.Sprintf("%s - 订阅已过期", siteName)
 		title = "订阅已过期"
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的 %s 订阅已于 <strong>%s</strong> 过期。</p>
@@ -140,8 +141,8 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "admin_create_user":
 		subject = fmt.Sprintf("账户已创建 - %s", siteName)
 		title = "账户已创建"
-		username := data["username"]
-		password := data["password"]
+		username := html.EscapeString(data["username"])
+		password := html.EscapeString(data["password"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，管理员已为您创建了 %s 账户。</p>
 <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:14px;color:#333;margin:0 0 8px">用户名：<strong>%s</strong></p>
@@ -180,7 +181,7 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "subscription_reset":
 		subject = fmt.Sprintf("订阅地址已重置 - %s", siteName)
 		title = "订阅地址已重置"
-		resetBy := data["reset_by"]
+		resetBy := html.EscapeString(data["reset_by"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的订阅地址已被%s重置。</p>
 <div style="background:#FFFBEB;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:14px;color:#92400E;margin:0">⚠️ 旧的订阅地址已失效，所有已连接设备已被清除。请使用新的订阅地址重新配置客户端。</p>
@@ -191,10 +192,10 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "abnormal_login":
 		subject = fmt.Sprintf("异常登录提醒 - %s", siteName)
 		title = "异常登录提醒"
-		ip := data["ip"]
-		location := data["location"]
-		loginTime := data["time"]
-		ua := data["user_agent"]
+		ip := html.EscapeString(data["ip"])
+		location := html.EscapeString(data["location"])
+		loginTime := html.EscapeString(data["time"])
+		ua := html.EscapeString(data["user_agent"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的账户检测到一次异常登录。</p>
 <div style="background:#FEF2F2;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:14px;color:#333;margin:0 0 8px">IP 地址：<strong>%s</strong></p>
@@ -209,9 +210,9 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "unpaid_order":
 		subject = fmt.Sprintf("您有未支付的订单 - %s", siteName)
 		title = "订单待支付提醒"
-		orderNo := data["order_no"]
-		packageName := data["package_name"]
-		amount := data["amount"]
+		orderNo := html.EscapeString(data["order_no"])
+		packageName := html.EscapeString(data["package_name"])
+		amount := html.EscapeString(data["amount"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您有一笔订单尚未支付。</p>
 <div style="background:#FFFBEB;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:14px;color:#333;margin:0 0 8px">订单号：<strong>%s</strong></p>
@@ -225,9 +226,9 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	case "new_order":
 		subject = fmt.Sprintf("新订单通知 - %s", siteName)
 		title = "新订单"
-		orderNo := data["order_no"]
-		packageName := data["package_name"]
-		amount := data["amount"]
+		orderNo := html.EscapeString(data["order_no"])
+		packageName := html.EscapeString(data["package_name"])
+		amount := html.EscapeString(data["amount"])
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您已成功创建订单。</p>
 <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:14px;color:#333;margin:0 0 8px">订单号：<strong>%s</strong></p>
@@ -241,7 +242,7 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 	default:
 		subject = fmt.Sprintf("通知 - %s", siteName)
 		title = "通知"
-		content = `<p style="font-size:15px;color:#333">` + data["message"] + `</p>`
+		content = `<p style="font-size:15px;color:#333">` + html.EscapeString(data["message"]) + `</p>`
 	}
 
 	htmlBody = buildEmailHTML(siteName, domain, title, content, btnText, btnLink)

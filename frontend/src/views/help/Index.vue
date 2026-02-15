@@ -12,7 +12,7 @@
             <p>购买套餐后，前往「我的订阅」页面复制订阅链接，然后将链接导入到您使用的客户端中即可。不同客户端的导入方式略有不同，请参考下方客户端说明。</p>
           </n-collapse-item>
           <n-collapse-item title="支持哪些客户端" name="clients">
-            <p>我们支持主流的代理客户端，包括 Clash for Windows、ClashX、Clash Verge、V2rayN、Shadowrocket、Quantumult X、Stash、Surfboard 等。请参考下方客户端下载区域获取对应平台的客户端。</p>
+            <p>我们支持主流的代理客户端，包括 Clash for Windows、V2rayN、Mihomo Party、Hiddify、FlClash、Shadowrocket、Stash 等。请参考下方客户端下载区域获取对应平台的客户端。</p>
           </n-collapse-item>
           <n-collapse-item title="如何重置订阅" name="reset">
             <p>前往「我的订阅」页面，点击「重置订阅链接」按钮即可生成新的订阅链接。重置后旧链接将失效，请及时更新客户端中的订阅地址。</p>
@@ -26,18 +26,74 @@
         </n-collapse>
       </n-card>
 
-      <n-card title="客户端下载" :bordered="false">
-        <n-grid :x-gap="16" :y-gap="16" cols="1 s:2 m:3 l:4" responsive="screen">
-          <n-gi v-for="client in clients" :key="client.name">
-            <n-card size="small" :bordered="true" hoverable>
-              <div class="client-card">
-                <div class="client-name">{{ client.name }}</div>
-                <n-tag size="small" :type="client.tagType" :bordered="false">{{ client.platform }}</n-tag>
-                <div class="client-desc">{{ client.desc }}</div>
-              </div>
-            </n-card>
-          </n-gi>
-        </n-grid>
+      <n-card title="软件下载" :bordered="false">
+        <n-spin :show="loadingConfig">
+          <div v-if="hasAnyClient">
+            <n-tabs type="segment" size="small" animated>
+              <n-tab-pane name="windows" tab="Windows" v-if="windowsClients.length">
+                <div class="client-grid">
+                  <a v-for="c in windowsClients" :key="c.key" class="client-card" :href="c.url" target="_blank" rel="noopener">
+                    <span class="client-icon">{{ c.icon }}</span>
+                    <div class="client-info">
+                      <span class="client-name">{{ c.name }}</span>
+                      <span class="client-desc">{{ c.desc }}</span>
+                    </div>
+                    <n-icon :component="DownloadOutline" size="18" color="#667eea" />
+                  </a>
+                </div>
+              </n-tab-pane>
+              <n-tab-pane name="android" tab="Android" v-if="androidClients.length">
+                <div class="client-grid">
+                  <a v-for="c in androidClients" :key="c.key" class="client-card" :href="c.url" target="_blank" rel="noopener">
+                    <span class="client-icon">{{ c.icon }}</span>
+                    <div class="client-info">
+                      <span class="client-name">{{ c.name }}</span>
+                      <span class="client-desc">{{ c.desc }}</span>
+                    </div>
+                    <n-icon :component="DownloadOutline" size="18" color="#667eea" />
+                  </a>
+                </div>
+              </n-tab-pane>
+              <n-tab-pane name="macos" tab="macOS" v-if="macClients.length">
+                <div class="client-grid">
+                  <a v-for="c in macClients" :key="c.key" class="client-card" :href="c.url" target="_blank" rel="noopener">
+                    <span class="client-icon">{{ c.icon }}</span>
+                    <div class="client-info">
+                      <span class="client-name">{{ c.name }}</span>
+                      <span class="client-desc">{{ c.desc }}</span>
+                    </div>
+                    <n-icon :component="DownloadOutline" size="18" color="#667eea" />
+                  </a>
+                </div>
+              </n-tab-pane>
+              <n-tab-pane name="ios" tab="iOS" v-if="iosClients.length">
+                <div class="client-grid">
+                  <a v-for="c in iosClients" :key="c.key" class="client-card" :href="c.url" target="_blank" rel="noopener">
+                    <span class="client-icon">{{ c.icon }}</span>
+                    <div class="client-info">
+                      <span class="client-name">{{ c.name }}</span>
+                      <span class="client-desc">{{ c.desc }}</span>
+                    </div>
+                    <n-icon :component="DownloadOutline" size="18" color="#667eea" />
+                  </a>
+                </div>
+              </n-tab-pane>
+              <n-tab-pane name="linux" tab="Linux" v-if="linuxClients.length">
+                <div class="client-grid">
+                  <a v-for="c in linuxClients" :key="c.key" class="client-card" :href="c.url" target="_blank" rel="noopener">
+                    <span class="client-icon">{{ c.icon }}</span>
+                    <div class="client-info">
+                      <span class="client-name">{{ c.name }}</span>
+                      <span class="client-desc">{{ c.desc }}</span>
+                    </div>
+                    <n-icon :component="DownloadOutline" size="18" color="#667eea" />
+                  </a>
+                </div>
+              </n-tab-pane>
+            </n-tabs>
+          </div>
+          <n-empty v-else-if="!loadingConfig" description="管理员暂未配置下载链接" />
+        </n-spin>
       </n-card>
 
       <n-card title="联系我们" :bordered="false">
@@ -53,16 +109,60 @@
 </template>
 
 <script setup lang="ts">
-const clients = [
-  { name: 'Clash for Windows', platform: 'Windows', tagType: 'info' as const, desc: 'Windows 平台主流代理客户端，支持多种协议' },
-  { name: 'ClashX', platform: 'Mac', tagType: 'success' as const, desc: 'macOS 平台轻量级 Clash 客户端' },
-  { name: 'Clash Verge', platform: '跨平台', tagType: 'warning' as const, desc: '基于 Tauri 的跨平台 Clash GUI 客户端' },
-  { name: 'V2rayN', platform: 'Windows', tagType: 'info' as const, desc: 'Windows 平台 V2Ray 图形化客户端' },
-  { name: 'Shadowrocket', platform: 'iOS', tagType: 'error' as const, desc: 'iOS 平台热门代理工具，需外区 Apple ID 购买' },
-  { name: 'Quantumult X', platform: 'iOS', tagType: 'error' as const, desc: 'iOS 平台功能强大的网络工具' },
-  { name: 'Stash', platform: 'iOS', tagType: 'error' as const, desc: 'iOS 平台基于规则的代理客户端' },
-  { name: 'Surfboard', platform: 'Android', tagType: 'success' as const, desc: 'Android 平台代理客户端，兼容 Surge 配置' },
-]
+import { ref, computed, onMounted } from 'vue'
+import { DownloadOutline } from '@vicons/ionicons5'
+import { getPublicConfig } from '@/api/common'
+
+const loadingConfig = ref(false)
+const config = ref<Record<string, string>>({})
+
+const allClients = {
+  windows: [
+    { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵', desc: 'Clash 内核，支持多种协议' },
+    { key: 'client_v2rayn_url', name: 'V2rayN', icon: '🟢', desc: 'V2Ray 图形化客户端' },
+    { key: 'client_mihomo_windows_url', name: 'Mihomo Party', icon: '🟣', desc: 'Mihomo 内核 GUI 客户端' },
+    { key: 'client_hiddify_windows_url', name: 'Hiddify', icon: '🟠', desc: '多协议代理客户端' },
+    { key: 'client_flclash_windows_url', name: 'FlClash', icon: '⚡', desc: 'Flutter 跨平台 Clash 客户端' },
+  ],
+  android: [
+    { key: 'client_clash_android_url', name: 'Clash Meta', icon: '🔵', desc: 'Android Clash 客户端' },
+    { key: 'client_v2rayng_url', name: 'V2rayNG', icon: '🟢', desc: 'Android V2Ray 客户端' },
+    { key: 'client_hiddify_android_url', name: 'Hiddify', icon: '🟠', desc: 'Android 多协议客户端' },
+  ],
+  macos: [
+    { key: 'client_flclash_macos_url', name: 'FlClash', icon: '⚡', desc: 'macOS Clash 客户端' },
+    { key: 'client_mihomo_macos_url', name: 'Mihomo Party', icon: '🟣', desc: 'macOS Mihomo 客户端' },
+  ],
+  ios: [
+    { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀', desc: '需外区 Apple ID 购买' },
+    { key: 'client_stash_url', name: 'Stash', icon: '🟡', desc: '基于规则的代理客户端' },
+  ],
+  linux: [
+    { key: 'client_clash_linux_url', name: 'Clash', icon: '🐧', desc: 'Linux Clash 客户端' },
+    { key: 'client_singbox_url', name: 'Sing-box', icon: '📦', desc: '通用代理平台' },
+  ],
+}
+
+const filterClients = (list: typeof allClients.windows) =>
+  list.filter(c => config.value[c.key]).map(c => ({ ...c, url: config.value[c.key] }))
+
+const windowsClients = computed(() => filterClients(allClients.windows))
+const androidClients = computed(() => filterClients(allClients.android))
+const macClients = computed(() => filterClients(allClients.macos))
+const iosClients = computed(() => filterClients(allClients.ios))
+const linuxClients = computed(() => filterClients(allClients.linux))
+const hasAnyClient = computed(() =>
+  Object.values(allClients).flat().some(c => config.value[c.key])
+)
+
+onMounted(async () => {
+  loadingConfig.value = true
+  try {
+    const res: any = await getPublicConfig()
+    if (res.data) config.value = res.data
+  } catch {}
+  finally { loadingConfig.value = false }
+})
 </script>
 
 <style scoped>
@@ -82,24 +182,38 @@ const clients = [
   background-clip: text;
 }
 
-.client-card {
+.client-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  padding: 12px 0;
 }
 
-.client-name {
-  font-size: 15px;
-  font-weight: 600;
+.client-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: var(--n-color-embedded, #f5f5f5);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  color: inherit;
+}
+.client-card:hover {
+  background: var(--n-color-hover, #eee);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
-.client-desc {
-  font-size: 13px;
-  color: #999;
-  line-height: 1.5;
-}
+.client-icon { font-size: 24px; flex-shrink: 0; }
+.client-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.client-name { font-size: 15px; font-weight: 600; }
+.client-desc { font-size: 12px; color: #999; }
 
 @media (max-width: 767px) {
   .help-page { padding: 0; }
+  .client-card { padding: 12px 14px; }
 }
 </style>

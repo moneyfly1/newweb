@@ -22,6 +22,8 @@ func GetPublicConfig(c *gin.Context) {
 		"client_flclash_macos_url", "client_mihomo_macos_url",
 		"client_shadowrocket_url", "client_stash_url", "client_singbox_url",
 		"client_clash_linux_url",
+		// Telegram login
+		"telegram_login_enabled", "telegram_bot_username",
 	}
 	db.Where("is_public = ? OR `key` IN ?", true, publicKeys).Find(&configs)
 	result := make(map[string]string)

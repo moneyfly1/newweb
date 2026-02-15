@@ -47,17 +47,23 @@
         <div class="auth-footer">
           还没有账户？<router-link to="/register"><n-button text type="primary">立即注册</n-button></router-link>
         </div>
+        <!-- Telegram Login -->
+        <div v-if="telegramEnabled" class="telegram-login-section">
+          <n-divider>Telegram 登录</n-divider>
+          <div ref="telegramWidgetRef" class="telegram-widget-container"></div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage, type FormInst } from 'naive-ui'
 import { MailOutline, LockClosedOutline } from '@vicons/ionicons5'
 import { useUserStore } from '@/stores/user'
+import { getPublicConfig } from '@/api/common'
 
 const router = useRouter()
 const message = useMessage()
@@ -65,6 +71,9 @@ const userStore = useUserStore()
 const formRef = ref<FormInst | null>(null)
 const loading = ref(false)
 const rememberMe = ref(false)
+const telegramEnabled = ref(false)
+const telegramBotUsername = ref('')
+const telegramWidgetRef = ref<HTMLElement | null>(null)
 
 const form = ref({ email: '', password: '' })
 const rules = {
@@ -85,6 +94,44 @@ async function handleLogin() {
     loading.value = false
   }
 }
+
+function loadTelegramWidget() {
+  if (!telegramWidgetRef.value || !telegramBotUsername.value) return
+  // Define global callback
+  ;(window as any).onTelegramAuth = async (user: any) => {
+    try {
+      await userStore.loginWithTelegram(user)
+      message.success('登录成功')
+      router.push(userStore.isAdmin ? '/admin' : '/')
+    } catch (e: any) {
+      message.error(e.message || 'Telegram 登录失败')
+    }
+  }
+  const script = document.createElement('script')
+  script.src = 'https://telegram.org/js/telegram-widget.js?22'
+  script.setAttribute('data-telegram-login', telegramBotUsername.value)
+  script.setAttribute('data-size', 'large')
+  script.setAttribute('data-radius', '8')
+  script.setAttribute('data-onauth', 'onTelegramAuth(user)')
+  script.setAttribute('data-request-access', 'write')
+  script.async = true
+  telegramWidgetRef.value.innerHTML = ''
+  telegramWidgetRef.value.appendChild(script)
+}
+
+onMounted(async () => {
+  try {
+    const res: any = await getPublicConfig()
+    if (res.data) {
+      const enabled = res.data.telegram_login_enabled
+      telegramEnabled.value = enabled === 'true' || enabled === '1'
+      telegramBotUsername.value = res.data.telegram_bot_username || ''
+      if (telegramEnabled.value && telegramBotUsername.value) {
+        setTimeout(loadTelegramWidget, 100)
+      }
+    }
+  } catch {}
+})
 </script>
 
 <style scoped>
@@ -129,6 +176,8 @@ async function handleLogin() {
 .auth-subtitle { color: #999; margin-bottom: 32px; font-size: 15px; }
 .form-extra { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .auth-footer { text-align: center; margin-top: 24px; color: #999; font-size: 14px; }
+.telegram-login-section { margin-top: 16px; }
+.telegram-widget-container { display: flex; justify-content: center; min-height: 40px; }
 
 @media (max-width: 768px) {
   .auth-left { display: none; }

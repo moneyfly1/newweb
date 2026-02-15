@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"cboard/v2/internal/api/router"
@@ -16,6 +18,12 @@ import (
 )
 
 func main() {
+	// 子命令: 重设管理员密码 (供安装脚本菜单「重设管理员密码」调用)
+	if len(os.Args) >= 2 && os.Args[1] == "reset-password" {
+		runResetPassword()
+		return
+	}
+
 	log.Println("CBoard v2.0 启动中...")
 
 	// 加载配置
@@ -106,6 +114,63 @@ func createDefaultAdmin() {
 	})
 
 	log.Println("已创建默认管理员: admin@example.com / admin123")
+}
+
+// runResetPassword 从命令行参数解析 --email 和 --password，重置管理员密码后退出
+func runResetPassword() {
+	var email, password string
+	for i := 2; i < len(os.Args); i++ {
+		if os.Args[i] == "--email" && i+1 < len(os.Args) {
+			email = strings.TrimSpace(os.Args[i+1])
+			i++
+		} else if os.Args[i] == "--password" && i+1 < len(os.Args) {
+			password = strings.TrimSpace(os.Args[i+1])
+			i++
+		}
+	}
+	if password == "" {
+		log.Fatal("请提供 --password 参数")
+	}
+	if len(password) < 8 {
+		log.Fatal("密码至少 8 位")
+	}
+
+	// 避免生产环境校验 CORS 导致无法执行
+	if os.Getenv("CORS_ORIGINS") == "" {
+		_ = os.Setenv("CORS_ORIGINS", "http://localhost")
+	}
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatalf("加载配置失败: %v", err)
+	}
+	if err := database.InitDatabase(cfg); err != nil {
+		log.Fatalf("初始化数据库失败: %v", err)
+	}
+	if err := database.AutoMigrate(); err != nil {
+		log.Fatalf("数据库迁移失败: %v", err)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatalf("生成密码哈希失败: %v", err)
+	}
+
+	db := database.GetDB()
+	var user models.User
+	q := db.Model(&models.User{}).Where("is_admin = ?", true)
+	// 指定邮箱则按邮箱查，否则用第一个管理员；"admin" 视为留空
+	if email != "" && email != "admin" {
+		q = q.Where("email = ?", email)
+	}
+	if err := q.First(&user).Error; err != nil {
+		log.Fatalf("未找到管理员账号（可指定 --email 或留空使用第一个管理员）: %v", err)
+	}
+
+	if err := db.Model(&user).Update("password", string(hash)).Error; err != nil {
+		log.Fatalf("更新密码失败: %v", err)
+	}
+	log.Printf("管理员 %s 密码已重置成功", user.Email)
 }
 
 func ensureUserSubscriptions() {

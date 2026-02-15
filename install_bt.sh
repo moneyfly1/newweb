@@ -298,6 +298,7 @@ PORT=$CBOARD_PORT
 HOST=127.0.0.1
 SECRET_KEY=$SECRET_KEY
 BASE_URL=$BASE_URL
+CORS_ORIGINS=$BASE_URL
 
 # ---- 数据库 ----
 DATABASE_URL=sqlite:///./cboard.db
@@ -854,10 +855,11 @@ configure_domain() {
     # 更新 .env
     info "更新 .env 文件..."
     if [ -f .env ]; then
-        for key in DOMAIN BASE_URL SSL_ENABLED SUBSCRIPTION_URL_PREFIX ALIPAY_NOTIFY_URL ALIPAY_RETURN_URL; do
+        for key in DOMAIN BASE_URL CORS_ORIGINS SSL_ENABLED SUBSCRIPTION_URL_PREFIX ALIPAY_NOTIFY_URL ALIPAY_RETURN_URL; do
             case $key in
                 DOMAIN) val="$DOMAIN" ;;
                 BASE_URL) val="$BASE_URL" ;;
+                CORS_ORIGINS) val="$BASE_URL" ;;
                 SSL_ENABLED) val="$SSL_ENABLED" ;;
                 SUBSCRIPTION_URL_PREFIX) val="$BASE_URL/sub" ;;
                 ALIPAY_NOTIFY_URL) val="$BASE_URL/api/v1/payment/notify/alipay" ;;

@@ -336,7 +336,7 @@ func getErrorNodes(ctx *subscriptionContext) []models.Node {
 	return nodes
 }
 
-// generateSubscriptionName generates the subscription display name for Clash clients.
+// generateSubscriptionName generates the subscription display name for Clash/Sparkle 等客户端（显示为配置名称，含站点与到期时间）.
 func generateSubscriptionName(ctx *subscriptionContext) string {
 	if ctx.Status != subStatusOK {
 		switch ctx.Status {
@@ -352,10 +352,18 @@ func generateSubscriptionName(ctx *subscriptionContext) string {
 			return "订阅异常"
 		}
 	}
+	expireStr := "无限期"
 	if ctx.Sub != nil && !ctx.Sub.ExpireTime.IsZero() {
-		return fmt.Sprintf("到期: %s", ctx.Sub.ExpireTime.Format("2006-01-02"))
+		expireStr = fmt.Sprintf("到期: %s", ctx.Sub.ExpireTime.Format("2006-01-02"))
 	}
-	return "无限期"
+	// 优先显示站点名 + 到期时间，便于 Sparkle 等客户端识别
+	if ctx.SiteURL != "" {
+		u, err := url.Parse(ctx.SiteURL)
+		if err == nil && u.Host != "" {
+			return u.Host + " " + expireStr
+		}
+	}
+	return expireStr
 }
 
 // GetSubscription serves subscription content, auto-detecting client type from User-Agent.
@@ -460,18 +468,20 @@ func GetUniversalSubscription(c *gin.Context) {
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(encoded))
 }
 
-// setSubscriptionHeaders sets common subscription response headers
+// setSubscriptionHeaders sets common subscription response headers（Sparkle 等客户端用 Profile-Title / Profile-Update-Interval 显示名称与自动更新间隔）
 func setSubscriptionHeaders(c *gin.Context, ctx *subscriptionContext) {
 	if ctx.Sub != nil {
 		// subscription-userinfo: upload=0; download=0; total=0; expire=<unix>
-		// Traffic is always 0 (unlimited) — this system is device-count-based, not traffic-based
 		userinfoParts := []string{"upload=0", "download=0", "total=0"}
 		if !ctx.Sub.ExpireTime.IsZero() {
 			userinfoParts = append(userinfoParts, fmt.Sprintf("expire=%d", ctx.Sub.ExpireTime.Unix()))
 		}
 		c.Header("Subscription-Userinfo", strings.Join(userinfoParts, "; "))
 	}
+	// 自动更新间隔：24 小时（单位小时，部分客户端据此设置定时拉取）
 	c.Header("Profile-Update-Interval", "24")
+	// 部分客户端用分钟
+	c.Header("Subscription-Update-Interval", "1440")
 }
 
 // incrementSubscriptionCounter increments the appropriate counter based on client type

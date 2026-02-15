@@ -1069,6 +1069,11 @@ func generateFromTemplate(proxies []map[string]interface{}, allNames, realNames 
 		if keyNode.Value == "proxy-groups" && valNode.Kind == yaml.SequenceNode {
 			updateProxyGroupsYAML(valNode, allNames, realNames)
 		}
+
+		// 为 Sparkle 等客户端：模板中的 profile 增加自动更新间隔（小时）
+		if keyNode.Value == "profile" && valNode.Kind == yaml.MappingNode {
+			injectProfileUpdateInterval(valNode, 24)
+		}
 	}
 
 	output, err := yaml.Marshal(&templateConfig)
@@ -1076,6 +1081,24 @@ func generateFromTemplate(proxies []map[string]interface{}, allNames, realNames 
 		return ""
 	}
 	return unescapeUnicode(string(output))
+}
+
+// injectProfileUpdateInterval sets profile.update-interval (hours) for Clash/Sparkle 自动更新.
+func injectProfileUpdateInterval(profileNode *yaml.Node, hours int) {
+	if profileNode.Kind != yaml.MappingNode {
+		return
+	}
+	val := strconv.Itoa(hours)
+	for j := 0; j < len(profileNode.Content)-1; j += 2 {
+		if profileNode.Content[j].Value == "update-interval" {
+			profileNode.Content[j+1].Value = val
+			return
+		}
+	}
+	profileNode.Content = append(profileNode.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Value: "update-interval", Tag: "!!str"},
+		&yaml.Node{Kind: yaml.ScalarNode, Value: val, Tag: "!!str"},
+	)
 }
 
 // updateProxyGroupsYAML updates proxy-groups in the YAML node tree.
@@ -1208,6 +1231,7 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 	sb.WriteString("profile:\n")
 	sb.WriteString("  store-selected: true\n")
 	sb.WriteString("  store-fake-ip: true\n")
+	sb.WriteString("  update-interval: 24\n")
 	sb.WriteString("\n")
 	sb.WriteString("dns:\n")
 	sb.WriteString("  enable: true\n")
@@ -1240,6 +1264,7 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 		writeClashProxy(&sb, p)
 	}
 
+	// 17 个代理组（与老项目 goweb 模板一致）
 	grpSelect := "🚀 节点选择"
 	grpAuto := "♻️ 自动选择"
 	grpFallover := "🔰 故障转移"
@@ -1247,10 +1272,20 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 	grpDirect := "🎯 全球直连"
 	grpBlock := "🛑 全球拦截"
 	grpFish := "🐟 漏网之鱼"
+	grpApple := "📱 苹果服务"
+	grpMicrosoft := "🍎 微软服务"
+	grpGoogle := "🔍 谷歌服务"
+	grpTelegram := "📲 电报消息"
+	grpOpenAI := "🤖 OpenAI"
+	grpStreamIntl := "📺 国际流媒体"
+	grpStreamCN := "📺 国内流媒体"
+	grpForeign := "🌐 国外网站"
+	grpChina := "🇨🇳 国内网站"
+	grpLocal := "🏠 本地网络"
 
 	sb.WriteString("\nproxy-groups:\n")
 
-	// 🚀 节点选择
+	// 1. 🚀 节点选择
 	sb.WriteString("  - name: " + escapeYAML(grpSelect) + "\n")
 	sb.WriteString("    type: select\n")
 	sb.WriteString("    proxies:\n")
@@ -1262,7 +1297,7 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 		sb.WriteString("      - " + escapeYAML(name) + "\n")
 	}
 
-	// ♻️ 自动选择
+	// 2. ♻️ 自动选择
 	sb.WriteString("  - name: " + escapeYAML(grpAuto) + "\n")
 	sb.WriteString("    type: url-test\n")
 	sb.WriteString("    url: http://www.gstatic.com/generate_204\n")
@@ -1273,7 +1308,7 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 		sb.WriteString("      - " + escapeYAML(name) + "\n")
 	}
 
-	// 🔰 故障转移
+	// 3. 🔰 故障转移
 	sb.WriteString("  - name: " + escapeYAML(grpFallover) + "\n")
 	sb.WriteString("    type: fallback\n")
 	sb.WriteString("    url: http://www.gstatic.com/generate_204\n")
@@ -1283,7 +1318,7 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 		sb.WriteString("      - " + escapeYAML(name) + "\n")
 	}
 
-	// 🔮 负载均衡
+	// 4. 🔮 负载均衡
 	sb.WriteString("  - name: " + escapeYAML(grpBalance) + "\n")
 	sb.WriteString("    type: load-balance\n")
 	sb.WriteString("    url: http://www.gstatic.com/generate_204\n")
@@ -1294,7 +1329,7 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 		sb.WriteString("      - " + escapeYAML(name) + "\n")
 	}
 
-	// 🎯 全球直连
+	// 5. 🎯 全球直连
 	sb.WriteString("  - name: " + escapeYAML(grpDirect) + "\n")
 	sb.WriteString("    type: select\n")
 	sb.WriteString("    proxies:\n")
@@ -1302,20 +1337,97 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
 	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
 
-	// 🛑 全球拦截
+	// 6. 🛑 全球拦截
 	sb.WriteString("  - name: " + escapeYAML(grpBlock) + "\n")
 	sb.WriteString("    type: select\n")
 	sb.WriteString("    proxies:\n")
 	sb.WriteString("      - REJECT\n")
 	sb.WriteString("      - DIRECT\n")
 
-	// 🐟 漏网之鱼
+	// 7. 🐟 漏网之鱼
 	sb.WriteString("  - name: " + escapeYAML(grpFish) + "\n")
 	sb.WriteString("    type: select\n")
 	sb.WriteString("    proxies:\n")
 	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
 	sb.WriteString("      - DIRECT\n")
 	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+
+	// 8. 📱 苹果服务
+	sb.WriteString("  - name: " + escapeYAML(grpApple) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+	sb.WriteString("      - DIRECT\n")
+
+	// 9. 🍎 微软服务
+	sb.WriteString("  - name: " + escapeYAML(grpMicrosoft) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+	sb.WriteString("      - DIRECT\n")
+
+	// 10. 🔍 谷歌服务
+	sb.WriteString("  - name: " + escapeYAML(grpGoogle) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+	sb.WriteString("      - DIRECT\n")
+
+	// 11. 📲 电报消息
+	sb.WriteString("  - name: " + escapeYAML(grpTelegram) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+	sb.WriteString("      - DIRECT\n")
+
+	// 12. 🤖 OpenAI
+	sb.WriteString("  - name: " + escapeYAML(grpOpenAI) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+	sb.WriteString("      - DIRECT\n")
+
+	// 13. 📺 国际流媒体
+	sb.WriteString("  - name: " + escapeYAML(grpStreamIntl) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+	sb.WriteString("      - DIRECT\n")
+
+	// 14. 📺 国内流媒体
+	sb.WriteString("  - name: " + escapeYAML(grpStreamCN) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - DIRECT\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+
+	// 15. 🌐 国外网站
+	sb.WriteString("  - name: " + escapeYAML(grpForeign) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+	sb.WriteString("      - " + escapeYAML(grpAuto) + "\n")
+	sb.WriteString("      - DIRECT\n")
+
+	// 16. 🇨🇳 国内网站
+	sb.WriteString("  - name: " + escapeYAML(grpChina) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - DIRECT\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
+
+	// 17. 🏠 本地网络
+	sb.WriteString("  - name: " + escapeYAML(grpLocal) + "\n")
+	sb.WriteString("    type: select\n")
+	sb.WriteString("    proxies:\n")
+	sb.WriteString("      - DIRECT\n")
+	sb.WriteString("      - " + escapeYAML(grpSelect) + "\n")
 
 	sb.WriteString("\nrules:\n")
 	if siteDomain != "" {
@@ -1326,12 +1438,57 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 		d = strings.TrimRight(d, "/")
 		sb.WriteString("  - DOMAIN-SUFFIX," + d + "," + grpDirect + "\n")
 	}
-	sb.WriteString("  - DOMAIN-SUFFIX,local,DIRECT\n")
-	sb.WriteString("  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve\n")
-	sb.WriteString("  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve\n")
-	sb.WriteString("  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve\n")
-	sb.WriteString("  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve\n")
-	sb.WriteString("  - GEOIP,CN,DIRECT\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,local," + grpLocal + "\n")
+	sb.WriteString("  - IP-CIDR,127.0.0.0/8," + grpLocal + ",no-resolve\n")
+	sb.WriteString("  - IP-CIDR,172.16.0.0/12," + grpLocal + ",no-resolve\n")
+	sb.WriteString("  - IP-CIDR,192.168.0.0/16," + grpLocal + ",no-resolve\n")
+	sb.WriteString("  - IP-CIDR,10.0.0.0/8," + grpLocal + ",no-resolve\n")
+	// 苹果
+	sb.WriteString("  - DOMAIN-SUFFIX,apple.com," + grpApple + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,icloud.com," + grpApple + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,apple.news," + grpApple + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,apple.ae," + grpApple + "\n")
+	sb.WriteString("  - DOMAIN-KEYWORD,apple," + grpApple + "\n")
+	// 微软
+	sb.WriteString("  - DOMAIN-SUFFIX,microsoft.com," + grpMicrosoft + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,windows.com," + grpMicrosoft + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,live.com," + grpMicrosoft + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,office.com," + grpMicrosoft + "\n")
+	sb.WriteString("  - DOMAIN-KEYWORD,microsoft," + grpMicrosoft + "\n")
+	// 谷歌
+	sb.WriteString("  - DOMAIN-SUFFIX,google.com," + grpGoogle + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,gstatic.com," + grpGoogle + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,youtube.com," + grpGoogle + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,googleapis.com," + grpGoogle + "\n")
+	sb.WriteString("  - DOMAIN-KEYWORD,google," + grpGoogle + "\n")
+	// 电报
+	sb.WriteString("  - DOMAIN-SUFFIX,telegram.org," + grpTelegram + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,t.me," + grpTelegram + "\n")
+	sb.WriteString("  - IP-CIDR,91.108.4.0/22," + grpTelegram + ",no-resolve\n")
+	sb.WriteString("  - IP-CIDR,149.154.160.0/20," + grpTelegram + ",no-resolve\n")
+	// OpenAI
+	sb.WriteString("  - DOMAIN-SUFFIX,openai.com," + grpOpenAI + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,chatgpt.com," + grpOpenAI + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,ai.com," + grpOpenAI + "\n")
+	// 国际流媒体
+	sb.WriteString("  - DOMAIN-SUFFIX,netflix.com," + grpStreamIntl + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,netflix.net," + grpStreamIntl + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,disneyplus.com," + grpStreamIntl + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,hbo.com," + grpStreamIntl + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,spotify.com," + grpStreamIntl + "\n")
+	// 国内流媒体
+	sb.WriteString("  - DOMAIN-SUFFIX,iqiyi.com," + grpStreamCN + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,bilibili.com," + grpStreamCN + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,youku.com," + grpStreamCN + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,tencentvideo.com," + grpStreamCN + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,qq.com," + grpStreamCN + "\n")
+	// 国内网站直连
+	sb.WriteString("  - GEOIP,CN," + grpChina + "\n")
+	// 国外网站
+	sb.WriteString("  - GEOIP,!CN," + grpForeign + "\n")
+	// 广告拦截
+	sb.WriteString("  - DOMAIN-KEYWORD,adservice," + grpBlock + "\n")
+	sb.WriteString("  - DOMAIN-SUFFIX,doubleclick.net," + grpBlock + "\n")
 	sb.WriteString("  - MATCH," + grpFish + "\n")
 
 	return sb.String()

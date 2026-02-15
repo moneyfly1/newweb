@@ -26,7 +26,8 @@ cboard.db
 cboard.db-shm
 cboard.db-wal
 backups/
-uploads/
+# uploads 目录结构可提交，但模板内可能含节点信息不提交
+uploads/config/temp.yaml
 
 # IDE / 编辑器
 .idea/

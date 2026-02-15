@@ -1,0 +1,1 @@
+# 占位文件，保证 uploads/config 目录被 git 跟踪；实际 Clash 模板 temp.yaml 由部署时放置且不入库

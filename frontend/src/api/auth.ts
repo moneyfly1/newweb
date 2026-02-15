@@ -21,3 +21,5 @@ export const forgotPassword = (data: { email: string }) =>
 
 export const resetPassword = (data: { email: string; code: string; password: string }) =>
   request.post('/auth/reset-password', data)
+
+export const telegramLogin = (data: any) => request.post('/auth/telegram', data)

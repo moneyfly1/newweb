@@ -401,6 +401,9 @@ func RefreshToken(c *gin.Context) {
 	}
 
 	token, err := jwt.ParseWithClaims(req.RefreshToken, &middleware.Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
 		return []byte(config.GetSecretKey()), nil
 	})
 	if err != nil {
@@ -417,6 +420,11 @@ func RefreshToken(c *gin.Context) {
 	var user models.User
 	if err := database.GetDB().First(&user, claims.UserID).Error; err != nil {
 		utils.Unauthorized(c, "用户不存在")
+		return
+	}
+
+	if !user.IsActive {
+		utils.Forbidden(c, "账户已被禁用")
 		return
 	}
 
@@ -549,6 +557,69 @@ func ResetPassword(c *gin.Context) {
 	db.Save(&vc)
 
 	utils.SuccessMessage(c, "密码重置成功")
+}
+
+// TelegramLogin Telegram 登录
+func TelegramLogin(c *gin.Context) {
+	var req services.TelegramLoginData
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	// Check if Telegram login is enabled
+	if !utils.IsBoolSettingDefault("telegram_login_enabled", false) {
+		utils.Forbidden(c, "Telegram 登录未启用")
+		return
+	}
+
+	// Verify Telegram data
+	if !services.VerifyTelegramLogin(&req) {
+		utils.Unauthorized(c, "Telegram 验证失败")
+		return
+	}
+
+	// Check auth_date is not too old (5 minutes)
+	if time.Now().Unix()-req.AuthDate > 300 {
+		utils.Unauthorized(c, "Telegram 授权已过期")
+		return
+	}
+
+	db := database.GetDB()
+	var user models.User
+
+	// Find user by Telegram ID
+	if err := db.Where("telegram_id = ?", req.ID).First(&user).Error; err != nil {
+		utils.NotFound(c, "该 Telegram 账号未绑定任何用户，请先在设置中绑定")
+		return
+	}
+
+	if !user.IsActive {
+		utils.Forbidden(c, "账户已被禁用")
+		return
+	}
+
+	// Update Telegram username if changed
+	if req.Username != "" {
+		db.Model(&user).Update("telegram_username", req.Username)
+	}
+
+	// Update last login
+	db.Model(&user).Update("last_login", time.Now())
+
+	// Generate tokens
+	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
+	refreshToken, _ := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
+
+	utils.Success(c, gin.H{
+		"user": gin.H{
+			"id": user.ID, "username": user.Username, "email": user.Email,
+			"is_admin": user.IsAdmin, "nickname": user.Nickname, "avatar": user.Avatar,
+			"balance": user.Balance, "theme": user.Theme,
+		},
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	})
 }
 
 // generateToken 生成 JWT Token

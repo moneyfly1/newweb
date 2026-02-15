@@ -75,7 +75,7 @@ import {
   CloudOutline, PricetagOutline, ChatbubblesOutline, RibbonOutline,
   KeyOutline, SettingsOutline, MegaphoneOutline, StatsChartOutline,
   DocumentTextOutline, WarningOutline, GitNetworkOutline, MailOutline,
-  RefreshOutline, MenuOutline, EllipsisVertical,
+  RefreshOutline, MenuOutline, EllipsisVertical, GiftOutline,
 } from '@vicons/ionicons5'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -101,7 +101,7 @@ const menuOptions = [
   ]},
   { label: '系统管理', key: 'group-system', icon: renderIcon(SettingsOutline), children: [
     { label: '系统设置', key: 'AdminSettings' }, { label: '公告管理', key: 'AdminAnnouncements' },
-    { label: '优惠券', key: 'AdminCoupons' }, { label: '卡密管理', key: 'AdminRedeem' }, { label: '用户等级', key: 'AdminLevels' },
+    { label: '优惠券', key: 'AdminCoupons' }, { label: '卡密管理', key: 'AdminRedeem' }, { label: '盲盒管理', key: 'AdminMysteryBox' }, { label: '用户等级', key: 'AdminLevels' },
   ]},
   { label: '日志与分析', key: 'group-logs', icon: renderIcon(StatsChartOutline), children: [
     { label: '数据统计', key: 'AdminStats' }, { label: '系统日志', key: 'AdminLogs' }, { label: '邮件队列', key: 'AdminEmailQueue' },

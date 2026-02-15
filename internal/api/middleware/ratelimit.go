@@ -60,7 +60,7 @@ func (rl *rateLimiter) cleanup() {
 func RateLimit(rate int, window time.Duration) gin.HandlerFunc {
 	limiter := newRateLimiter(rate, window)
 	return func(c *gin.Context) {
-		if !limiter.allow(c.ClientIP()) {
+		if !limiter.allow(utils.GetRealClientIP(c)) {
 			utils.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return

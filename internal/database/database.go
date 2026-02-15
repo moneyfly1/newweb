@@ -245,6 +245,14 @@ func AutoMigrate() error {
 		// 卡密（v2 新增）
 		&models.RedeemCode{},
 		&models.RedeemRecord{},
+
+		// 签到
+		&models.CheckIn{},
+
+		// 盲盒
+		&models.MysteryBoxPool{},
+		&models.MysteryBoxPrize{},
+		&models.MysteryBoxRecord{},
 	)
 	if err != nil {
 		return fmt.Errorf("数据库迁移失败: %w", err)

@@ -90,6 +90,25 @@
         </n-card>
       </n-tab-pane>
 
+      <n-tab-pane name="telegram" tab="Telegram 绑定">
+        <n-card :bordered="false">
+          <div v-if="telegramBound" class="telegram-status">
+            <n-space align="center">
+              <n-tag type="success" :bordered="false">已绑定</n-tag>
+              <n-text>@{{ userStore.userInfo?.telegram_username || '未知' }}</n-text>
+            </n-space>
+            <n-button type="error" size="small" :loading="unbindingTelegram" @click="handleUnbindTelegram" style="margin-top: 16px">
+              解绑 Telegram
+            </n-button>
+          </div>
+          <div v-else>
+            <n-text depth="3" style="display: block; margin-bottom: 16px">绑定 Telegram 后可使用 Telegram 快速登录</n-text>
+            <div v-if="telegramBotUsername" ref="telegramBindWidgetRef" class="telegram-widget-container"></div>
+            <n-text v-else depth="3">管理员未配置 Telegram Bot，暂不可用</n-text>
+          </div>
+        </n-card>
+      </n-tab-pane>
+
       <n-tab-pane name="login-history" tab="登录历史">
         <n-card :bordered="false">
           <!-- Desktop table -->
@@ -129,11 +148,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { ref, computed, onMounted, h, nextTick } from 'vue'
 import { useMessage, NTag, type FormInst } from 'naive-ui'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
-import { updateProfile, changePassword, getNotificationSettings, updateNotificationSettings, getPrivacySettings, updatePrivacySettings, getLoginHistory } from '@/api/user'
+import { updateProfile, changePassword, getNotificationSettings, updateNotificationSettings, getPrivacySettings, updatePrivacySettings, getLoginHistory, bindTelegram, unbindTelegram } from '@/api/user'
+import { getPublicConfig } from '@/api/common'
 
 const message = useMessage()
 const userStore = useUserStore()
@@ -167,6 +187,11 @@ const notifForm = ref({ email_notifications: true, abnormal_login_alert_enabled:
 const privacyForm = ref({ data_sharing: true, analytics: true })
 const loginHistory = ref<any[]>([])
 
+// Telegram binding
+const telegramBotUsername = ref('')
+const unbindingTelegram = ref(false)
+const telegramBindWidgetRef = ref<HTMLElement | null>(null)
+const telegramBound = computed(() => !!(userStore.userInfo as any)?.telegram_id)
 const themeOptions = appStore.availableThemes.map((t: any) => ({ label: t.label, value: t.value }))
 const langOptions = [{ label: '简体中文', value: 'zh-CN' }, { label: 'English', value: 'en' }]
 const tzOptions = [
@@ -212,6 +237,42 @@ async function savePrivacy() {
   try { await updatePrivacySettings(privacyForm.value) } catch {}
 }
 
+async function handleUnbindTelegram() {
+  unbindingTelegram.value = true
+  try {
+    await unbindTelegram()
+    message.success('Telegram 已解绑')
+    await userStore.fetchUser()
+  } catch (e: any) {
+    message.error(e.message || '解绑失败')
+  } finally {
+    unbindingTelegram.value = false
+  }
+}
+
+function loadTelegramBindWidget() {
+  if (!telegramBindWidgetRef.value || !telegramBotUsername.value) return
+  ;(window as any).onTelegramBind = async (user: any) => {
+    try {
+      await bindTelegram(user)
+      message.success('Telegram 绑定成功')
+      await userStore.fetchUser()
+    } catch (e: any) {
+      message.error(e.message || '绑定失败')
+    }
+  }
+  const script = document.createElement('script')
+  script.src = 'https://telegram.org/js/telegram-widget.js?22'
+  script.setAttribute('data-telegram-login', telegramBotUsername.value)
+  script.setAttribute('data-size', 'large')
+  script.setAttribute('data-radius', '8')
+  script.setAttribute('data-onauth', 'onTelegramBind(user)')
+  script.setAttribute('data-request-access', 'write')
+  script.async = true
+  telegramBindWidgetRef.value.innerHTML = ''
+  telegramBindWidgetRef.value.appendChild(script)
+}
+
 onMounted(async () => {
   try {
     const res: any = await getNotificationSettings()
@@ -224,13 +285,26 @@ onMounted(async () => {
   loadingHistory.value = true
   try {
     const res: any = await getLoginHistory()
-    loginHistory.value = res.data || []
+    loginHistory.value = res.data?.items || []
   } catch {}
   finally { loadingHistory.value = false }
+  // Load Telegram config
+  try {
+    const cfgRes: any = await getPublicConfig()
+    if (cfgRes.data) {
+      telegramBotUsername.value = cfgRes.data.telegram_bot_username || ''
+      if (!telegramBound.value && telegramBotUsername.value) {
+        await nextTick()
+        setTimeout(loadTelegramBindWidget, 100)
+      }
+    }
+  } catch {}
 })
 </script>
 
 <style scoped>
+.telegram-status { padding: 8px 0; }
+.telegram-widget-container { min-height: 40px; }
 @media (max-width: 767px) {
   .n-card { border-radius: 10px; }
 }

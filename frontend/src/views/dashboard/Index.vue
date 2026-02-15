@@ -10,7 +10,7 @@
     </div>
 
     <!-- User Level & Balance Cards -->
-    <n-grid :x-gap="20" :y-gap="20" cols="1 l:2" responsive="screen" style="margin-top: 20px;">
+    <n-grid :x-gap="20" :y-gap="20" cols="1 l:3" responsive="screen" style="margin-top: 20px;">
       <n-gi>
         <n-card :bordered="false" class="section-card level-card">
           <div class="level-header">
@@ -55,6 +55,31 @@
           </div>
         </n-card>
       </n-gi>
+      <n-gi>
+        <n-card :bordered="false" class="section-card checkin-card">
+          <div class="checkin-content">
+            <div class="checkin-info">
+              <div class="checkin-label">每日签到</div>
+              <div class="checkin-days">
+                <span class="checkin-days-num">{{ checkinStatus.consecutive_days || 0 }}</span>
+                <span class="checkin-days-text">天连续签到</span>
+              </div>
+            </div>
+            <n-button
+              :type="checkinStatus.checked_in_today ? 'default' : 'success'"
+              size="large"
+              :disabled="checkinStatus.checked_in_today || checkinLoading"
+              :loading="checkinLoading"
+              @click="handleCheckIn"
+            >
+              <template #icon>
+                <n-icon :component="CalendarOutline" />
+              </template>
+              {{ checkinStatus.checked_in_today ? '已签到' : '签到' }}
+            </n-button>
+          </div>
+        </n-card>
+      </n-gi>
     </n-grid>
 
     <!-- Subscription Info Card -->
@@ -63,19 +88,37 @@
         <span class="section-title-text">订阅信息</span>
       </template>
       <n-spin :show="subscriptionLoading">
-        <div v-if="subscription.clash_url || subscription.subscription_url" class="subscription-content">
+        <div v-if="subscription.clash_url || subscription.universal_url || subscription.subscription_url" class="subscription-content">
           <div class="subscription-row">
-            <div class="subscription-item">
-              <div class="sub-label">订阅地址</div>
+            <div class="subscription-item" v-if="subscription.clash_url">
+              <div class="sub-label">Clash 订阅地址</div>
               <div class="sub-value-row">
                 <n-input
-                  :value="subscription.clash_url || subscription.subscription_url"
+                  :value="subscription.clash_url"
                   readonly
                   size="small"
                   placeholder="暂无订阅"
                   style="flex: 1; max-width: 400px;"
                 />
-                <n-button size="small" @click="copyText(subscription.clash_url || subscription.subscription_url, '订阅地址')">
+                <n-button size="small" @click="copyText(subscription.clash_url, 'Clash 订阅地址')">
+                  <template #icon>
+                    <n-icon :component="CopyOutline" />
+                  </template>
+                  复制
+                </n-button>
+              </div>
+            </div>
+            <div class="subscription-item" v-if="subscription.universal_url" style="margin-top: 12px;">
+              <div class="sub-label">通用订阅地址 (V2Ray / Shadowrocket / Hiddify)</div>
+              <div class="sub-value-row">
+                <n-input
+                  :value="subscription.universal_url"
+                  readonly
+                  size="small"
+                  placeholder="暂无订阅"
+                  style="flex: 1; max-width: 400px;"
+                />
+                <n-button size="small" @click="copyText(subscription.universal_url, '通用订阅地址')">
                   <template #icon>
                     <n-icon :component="CopyOutline" />
                   </template>
@@ -119,7 +162,7 @@
       <template #header>
         <span class="section-title-text">快速订阅</span>
       </template>
-      <div v-if="subscription.clash_url || subscription.subscription_url" class="quick-sub-links">
+      <div v-if="subscription.clash_url || subscription.universal_url || subscription.subscription_url" class="quick-sub-links">
         <!-- Clash -->
         <div class="quick-sub-item">
           <div class="quick-sub-info">
@@ -346,8 +389,9 @@ import {
   WalletOutline, CloudOutline, PhonePortraitOutline, RibbonOutline,
   CartOutline, LinkOutline, ChatbubblesOutline, PeopleOutline,
   CopyOutline, CloudDownloadOutline, DownloadOutline, QrCodeOutline,
+  CalendarOutline,
 } from '@vicons/ionicons5'
-import { getDashboardInfo } from '@/api/user'
+import { getDashboardInfo, checkIn, getCheckInStatus } from '@/api/user'
 import { listPublicAnnouncements, getPublicConfig } from '@/api/common'
 import { listOrders } from '@/api/order'
 import { getSubscription } from '@/api/subscription'
@@ -364,6 +408,29 @@ const ordersLoading = ref(false)
 const subscriptionLoading = ref(false)
 const showQrCode = ref(false)
 const clientConfig = ref<Record<string, string>>({})
+
+// Check-in
+const checkinStatus = ref<any>({})
+const checkinLoading = ref(false)
+
+async function handleCheckIn() {
+  checkinLoading.value = true
+  try {
+    const res: any = await checkIn()
+    message.success(`签到成功！获得 ${res.data.amount} 元奖励，已连续签到 ${res.data.consecutive_days} 天`)
+    checkinStatus.value.checked_in_today = true
+    checkinStatus.value.consecutive_days = res.data.consecutive_days
+    // Refresh balance
+    try {
+      const dashRes: any = await getDashboardInfo()
+      if (dashRes.data) info.value.balance = dashRes.data.balance
+    } catch {}
+  } catch (error: any) {
+    message.error(error.message || '签到失败')
+  } finally {
+    checkinLoading.value = false
+  }
+}
 
 // Client definitions
 const allClients = {
@@ -539,6 +606,14 @@ onMounted(async () => {
   } catch {} finally {
     ordersLoading.value = false
   }
+
+  // Load check-in status
+  try {
+    const res: any = await getCheckInStatus()
+    if (res.data) {
+      checkinStatus.value = res.data
+    }
+  } catch {}
 })
 </script>
 
@@ -616,6 +691,21 @@ onMounted(async () => {
 }
 .balance-label { font-size: 13px; color: #999; margin-bottom: 8px; }
 .balance-value { font-size: 32px; font-weight: 700; color: #667eea; }
+
+/* Check-in Card */
+.checkin-card {
+  background: linear-gradient(135deg, #18a05808, #18a05820);
+  border: 1px solid #18a05830;
+}
+.checkin-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.checkin-label { font-size: 13px; color: #999; margin-bottom: 8px; }
+.checkin-days { display: flex; align-items: baseline; gap: 4px; }
+.checkin-days-num { font-size: 32px; font-weight: 700; color: #18a058; }
+.checkin-days-text { font-size: 14px; color: #666; }
 
 /* Subscription Info */
 .subscription-content {
@@ -767,6 +857,10 @@ onMounted(async () => {
   .balance-value { font-size: 24px; }
   .balance-content { flex-direction: column; align-items: flex-start; gap: 12px; }
   .balance-content .n-button { width: 100%; }
+
+  .checkin-days-num { font-size: 24px; }
+  .checkin-content { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .checkin-content .n-button { width: 100%; }
 
   .sub-value-row { flex-direction: column; align-items: stretch; }
   .sub-value-row .n-input { max-width: 100% !important; }

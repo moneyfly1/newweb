@@ -44,6 +44,11 @@ instance.interceptors.response.use(
         isLoggingOut = false
       })
     }
+    // Extract server error message if available
+    const serverMsg = error.response?.data?.message
+    if (serverMsg) {
+      return Promise.reject(new Error(serverMsg))
+    }
     return Promise.reject(error)
   }
 )

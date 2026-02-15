@@ -26,3 +26,8 @@ export const cancelRecharge = (id: number) => request.post(`/recharge/${id}/canc
 export const getPaymentMethods = () => request.get('/payment/methods')
 export const listPublicAnnouncements = () => request.get('/announcements')
 export const deleteInviteCode = (id: number) => request.delete(`/invites/${id}`)
+
+// 盲盒
+export const getMysteryBoxPools = () => request.get('/mystery-box/pools')
+export const openMysteryBox = (data: { pool_id: number }) => request.post('/mystery-box/open', data)
+export const getMysteryBoxHistory = (params?: any) => request.get('/mystery-box/history', { params })

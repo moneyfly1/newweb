@@ -15,6 +15,9 @@ export const resetUserPassword = (id: number, data: { password: string }) => req
 export const getAbnormalUsers = (params?: any) => request.get('/admin/users/abnormal', { params })
 export const loginAsUser = (id: number) => request.post(`/admin/users/${id}/login-as`)
 export const deleteUserDevice = (userId: number, deviceId: number) => request.delete(`/admin/users/${userId}/devices/${deviceId}`)
+export const batchUserAction = (data: { user_ids: number[], action: string, data?: any }) => request.post('/admin/users/batch-action', data)
+export const exportUsersCSV = (params?: any) => request.get('/admin/users/export', { params, responseType: 'blob' })
+export const importUsersCSV = (data: FormData) => request.post('/admin/users/import', data, { headers: { 'Content-Type': 'multipart/form-data' } })
 
 // Orders
 export const listAdminOrders = (params?: any) => request.get('/admin/orders', { params })
@@ -76,6 +79,8 @@ export const deleteAnnouncement = (id: number) => request.delete(`/admin/announc
 export const getRevenueStats = () => request.get('/admin/stats/revenue')
 export const getUserStats = () => request.get('/admin/stats/users')
 export const getRegionStats = () => request.get('/admin/stats/regions')
+export const getFinancialReport = (params?: any) => request.get('/admin/stats/financial', { params })
+export const exportFinancialReport = (params?: any) => request.get('/admin/stats/financial/export', { params, responseType: 'blob' })
 
 // Logs
 export const getAuditLogs = (params?: any) => request.get('/admin/logs/audit', { params })
@@ -132,3 +137,16 @@ export const listBackups = () => request.get('/admin/backup')
 // Node Import & Test
 export const importNodes = (data: any) => request.post('/admin/nodes/import', data)
 export const testNode = (id: number) => request.post(`/admin/nodes/${id}/test`)
+
+// 盲盒管理
+export const listAdminMysteryBoxPools = () => request.get('/admin/mystery-box/pools')
+export const createMysteryBoxPool = (data: any) => request.post('/admin/mystery-box/pools', data)
+export const updateMysteryBoxPool = (id: number, data: any) => request.put(`/admin/mystery-box/pools/${id}`, data)
+export const deleteMysteryBoxPool = (id: number) => request.delete(`/admin/mystery-box/pools/${id}`)
+export const addMysteryBoxPrize = (poolId: number, data: any) => request.post(`/admin/mystery-box/pools/${poolId}/prizes`, data)
+export const updateMysteryBoxPrize = (id: number, data: any) => request.put(`/admin/mystery-box/prizes/${id}`, data)
+export const deleteMysteryBoxPrize = (id: number) => request.delete(`/admin/mystery-box/prizes/${id}`)
+export const getMysteryBoxStats = () => request.get('/admin/mystery-box/stats')
+
+// Check-in
+export const getCheckInStats = () => request.get('/admin/checkin/stats')

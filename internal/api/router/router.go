@@ -53,6 +53,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		auth.POST("/verification/verify", handlers.VerifyCode)
 		auth.POST("/forgot-password", middleware.RateLimit(3, time.Minute), handlers.ForgotPassword)
 		auth.POST("/reset-password", handlers.ResetPassword)
+		auth.POST("/telegram", handlers.TelegramLogin)
 	}
 
 	// 公开订阅链接
@@ -98,6 +99,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			users.GET("/dashboard-info", handlers.GetDashboardInfo)
 			users.GET("/subscription-resets", handlers.GetSubscriptionResets)
 			users.GET("/devices", handlers.GetUserDevices)
+			users.POST("/bind-telegram", handlers.BindTelegram)
+			users.POST("/unbind-telegram", handlers.UnbindTelegram)
 		}
 
 		// 订阅
@@ -185,6 +188,19 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			recharge.POST("/:id/pay", handlers.CreateRechargePayment)
 			recharge.POST("/:id/cancel", handlers.CancelRecharge)
 		}
+
+		// 签到
+		authorized.POST("/checkin", handlers.UserCheckIn)
+		authorized.GET("/checkin/status", handlers.GetCheckInStatus)
+		authorized.GET("/checkin/history", handlers.GetCheckInHistory)
+
+		// 盲盒
+		mysteryBox := authorized.Group("/mystery-box")
+		{
+			mysteryBox.GET("/pools", handlers.ListMysteryBoxPools)
+			mysteryBox.POST("/open", handlers.OpenMysteryBox)
+			mysteryBox.GET("/history", handlers.GetMysteryBoxHistory)
+		}
 	}
 
 	// ===== 管理员路由 =====
@@ -208,6 +224,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminUsers.GET("/abnormal", handlers.AdminGetAbnormalUsers)
 			adminUsers.POST("/:id/login-as", handlers.AdminLoginAsUser)
 			adminUsers.POST("/batch-action", handlers.AdminBatchUserAction)
+			adminUsers.GET("/export", handlers.AdminExportUsersCSV)
+			adminUsers.POST("/import", handlers.AdminImportUsersCSV)
 			adminUsers.DELETE("/:id/devices/:deviceId", handlers.AdminDeleteUserDevice)
 		}
 
@@ -343,6 +361,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/stats/revenue", handlers.AdminRevenueStats)
 		admin.GET("/stats/users", handlers.AdminUserStats)
 		admin.GET("/stats/regions", handlers.AdminRegionStats)
+		admin.GET("/stats/financial", handlers.AdminFinancialReport)
+		admin.GET("/stats/financial/export", handlers.AdminExportFinancialReport)
 
 		// 日志
 		admin.GET("/logs/audit", handlers.AdminAuditLogs)
@@ -359,6 +379,22 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		// 备份
 		admin.POST("/backup", handlers.AdminCreateBackup)
 		admin.GET("/backup", handlers.AdminListBackups)
+
+		// 签到管理
+		admin.GET("/checkin/stats", handlers.AdminGetCheckInStats)
+
+		// 盲盒管理
+		adminMysteryBox := admin.Group("/mystery-box")
+		{
+			adminMysteryBox.GET("/pools", handlers.AdminListMysteryBoxPools)
+			adminMysteryBox.POST("/pools", handlers.AdminCreateMysteryBoxPool)
+			adminMysteryBox.PUT("/pools/:id", handlers.AdminUpdateMysteryBoxPool)
+			adminMysteryBox.DELETE("/pools/:id", handlers.AdminDeleteMysteryBoxPool)
+			adminMysteryBox.POST("/pools/:id/prizes", handlers.AdminAddPrize)
+			adminMysteryBox.PUT("/prizes/:id", handlers.AdminUpdatePrize)
+			adminMysteryBox.DELETE("/prizes/:id", handlers.AdminDeletePrize)
+			adminMysteryBox.GET("/stats", handlers.AdminGetMysteryBoxStats)
+		}
 	}
 
 	// Serve frontend static files and SPA fallback

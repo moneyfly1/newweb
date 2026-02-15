@@ -134,11 +134,49 @@
         </n-space>
       </template>
     </n-modal>
+
+    <!-- Crypto Payment Modal -->
+    <n-modal
+      v-model:show="showCryptoModal"
+      preset="card"
+      title="加密货币支付"
+      style="width: 480px; max-width: 92vw;"
+      :bordered="false"
+      :mask-closable="false"
+      @after-leave="stopPolling"
+    >
+      <div v-if="cryptoInfo" style="text-align: center;">
+        <p style="margin-bottom: 16px; color: #666;">请转账以下金额到指定钱包地址</p>
+        <n-descriptions :column="1" bordered size="small" style="text-align: left;">
+          <n-descriptions-item label="网络">{{ cryptoInfo.network }}</n-descriptions-item>
+          <n-descriptions-item label="币种">{{ cryptoInfo.currency }}</n-descriptions-item>
+          <n-descriptions-item label="转账金额">
+            <span style="color: #e03050; font-size: 18px; font-weight: bold;">{{ cryptoInfo.amount_usdt }} {{ cryptoInfo.currency }}</span>
+          </n-descriptions-item>
+          <n-descriptions-item label="收款地址">
+            <div style="word-break: break-all; font-family: monospace; font-size: 13px;">{{ cryptoInfo.wallet_address }}</div>
+          </n-descriptions-item>
+        </n-descriptions>
+        <div style="margin-top: 16px;">
+          <canvas ref="cryptoQrCanvas" style="margin: 0 auto;"></canvas>
+        </div>
+        <n-alert type="warning" :bordered="false" style="margin-top: 12px; text-align: left;" size="small">
+          请务必确认网络和币种正确，转账错误无法找回。转账完成后请点击下方按钮，管理员将在确认到账后为您开通服务。
+        </n-alert>
+        <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
+      </div>
+      <template #footer>
+        <n-space justify="center">
+          <n-button @click="showCryptoModal = false">取消</n-button>
+          <n-button type="primary" @click="handleCryptoTransferred">我已转账</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, onUnmounted } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import QRCode from 'qrcode'
@@ -165,6 +203,7 @@ const paymentMethods = ref<any[]>([])
 const balanceEnabled = ref(true)
 const showQrModal = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
+const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
 const pollingStatus = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -192,6 +231,8 @@ const getPaymentLabel = (payType: string) => {
     alipay: '支付宝',
     wxpay: '微信支付',
     qqpay: 'QQ支付',
+    stripe: 'Stripe (国际卡)',
+    crypto: '加密货币 (USDT)',
   }
   return labels[payType] || payType
 }
@@ -268,6 +309,10 @@ const stopPolling = () => {
   }
 }
 
+const showCryptoModal = ref(false)
+const cryptoInfo = ref<any>(null)
+const cryptoOrderNo = ref('')
+
 const handlePay = async () => {
   if (!orderInfo.value) return
   paying.value = true
@@ -281,6 +326,17 @@ const handlePay = async () => {
       const pmId = parseInt(paymentMethod.value.replace('pm_', ''))
       const res = await createPayment({ order_id: orderInfo.value.id, payment_method_id: pmId })
       const data = res.data
+
+      // Crypto payment: show wallet info modal
+      if (data?.pay_type === 'crypto' && data?.crypto_info) {
+        showPaymentModal.value = false
+        cryptoInfo.value = data.crypto_info
+        cryptoOrderNo.value = data.order_no
+        showCryptoModal.value = true
+        startPolling(data.order_no)
+        return
+      }
+
       if (data?.payment_url) {
         showPaymentModal.value = false
         if (isQrCodeUrl(data.payment_url)) {
@@ -302,6 +358,23 @@ const handlePay = async () => {
   } catch (e: any) {
     message.error(e.message || '支付失败')
   } finally { paying.value = false }
+}
+
+// Render crypto wallet address as QR code when modal opens
+watch(showCryptoModal, async (val) => {
+  if (val && cryptoInfo.value?.wallet_address) {
+    await nextTick()
+    if (cryptoQrCanvas.value) {
+      QRCode.toCanvas(cryptoQrCanvas.value, cryptoInfo.value.wallet_address, { width: 200, margin: 2 })
+    }
+  }
+})
+
+const handleCryptoTransferred = () => {
+  message.success('已记录，管理员确认到账后将为您开通服务')
+  showCryptoModal.value = false
+  stopPolling()
+  router.push('/orders')
 }
 
 onUnmounted(() => { stopPolling() })

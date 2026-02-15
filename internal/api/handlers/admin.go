@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"encoding/csv"
 	"fmt"
 	"io"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"sort"
@@ -1286,8 +1288,8 @@ func AdminCreateCoupon(c *gin.Context) {
 
 func AdminUpdateCoupon(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "无效的优惠券ID")
+	if err != nil || id == 0 {
+		utils.BadRequest(c, "无效的ID")
 		return
 	}
 	db := database.GetDB()
@@ -1298,14 +1300,30 @@ func AdminUpdateCoupon(c *gin.Context) {
 	}
 	var req map[string]interface{}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "参数错误: "+err.Error())
+		utils.BadRequest(c, "参数错误")
 		return
 	}
-
-	if err := db.Model(&coupon).Updates(req).Error; err != nil {
+	allowed := map[string]bool{
+		"name": true, "description": true, "type": true, "discount_value": true,
+		"min_amount": true, "valid_from": true, "valid_until": true,
+		"total_quantity": true, "max_uses_per_user": true, "status": true,
+		"applicable_package_ids": true,
+	}
+	updates := make(map[string]interface{})
+	for k, v := range req {
+		if allowed[k] {
+			updates[k] = v
+		}
+	}
+	if len(updates) == 0 {
+		utils.BadRequest(c, "无有效更新字段")
+		return
+	}
+	if err := db.Model(&coupon).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新优惠券失败")
 		return
 	}
+	db.First(&coupon, id)
 	utils.Success(c, coupon)
 }
 
@@ -1381,12 +1399,29 @@ func AdminUpdateTicket(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	db.Model(&ticket).Updates(req)
+	allowed := map[string]bool{
+		"status": true, "priority": true, "assigned_to": true, "admin_notes": true,
+	}
+	updates := make(map[string]interface{})
+	for k, v := range req {
+		if allowed[k] {
+			updates[k] = v
+		}
+	}
+	if len(updates) == 0 {
+		utils.BadRequest(c, "无有效更新字段")
+		return
+	}
+	db.Model(&ticket).Updates(updates)
 	utils.Success(c, ticket)
 }
 
 func AdminReplyTicket(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
 	adminID := c.GetUint("user_id")
 	var req struct {
 		Content string `json:"content" binding:"required"`
@@ -1435,12 +1470,30 @@ func AdminUpdateUserLevel(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	db.Model(&level).Updates(req)
+	allowed := map[string]bool{
+		"name": true, "level_order": true, "discount_rate": true,
+		"description": true, "required_exp": true, "is_active": true,
+	}
+	updates := make(map[string]interface{})
+	for k, v := range req {
+		if allowed[k] {
+			updates[k] = v
+		}
+	}
+	if len(updates) == 0 {
+		utils.BadRequest(c, "无有效更新字段")
+		return
+	}
+	db.Model(&level).Updates(updates)
 	utils.Success(c, level)
 }
 
 func AdminDeleteUserLevel(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
 	database.GetDB().Delete(&models.UserLevel{}, id)
 	utils.SuccessMessage(c, "等级已删除")
 }
@@ -1504,7 +1557,11 @@ func AdminCreateRedeemCodes(c *gin.Context) {
 }
 
 func AdminDeleteRedeemCode(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
 	database.GetDB().Delete(&models.RedeemCode{}, id)
 	utils.SuccessMessage(c, "卡密已删除")
 }
@@ -1524,7 +1581,11 @@ func AdminListEmailQueue(c *gin.Context) {
 }
 
 func AdminRetryEmail(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
 	db := database.GetDB()
 	db.Model(&models.EmailQueue{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status": "pending",
@@ -1549,8 +1610,25 @@ func AdminGetSettings(c *gin.Context) {
 	var settings []models.SystemConfig
 	database.GetDB().Where("category = ? OR category IS NULL", "").Find(&settings)
 	result := make(map[string]string)
+	sensitiveKeys := map[string]bool{
+		"pay_stripe_secret_key":     true,
+		"pay_stripe_webhook_secret": true,
+		"pay_alipay_private_key":    true,
+		"pay_epay_secret_key":       true,
+		"notify_telegram_bot_token": true,
+		"smtp_password":             true,
+	}
 	for _, s := range settings {
-		result[s.Key] = s.Value
+		if sensitiveKeys[s.Key] && s.Value != "" {
+			// Show only last 4 chars
+			if len(s.Value) > 4 {
+				result[s.Key] = "****" + s.Value[len(s.Value)-4:]
+			} else {
+				result[s.Key] = "****"
+			}
+		} else {
+			result[s.Key] = s.Value
+		}
 	}
 	utils.Success(c, result)
 }
@@ -1616,12 +1694,29 @@ func AdminUpdateAnnouncement(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	database.GetDB().Model(&ann).Updates(req)
+	allowed := map[string]bool{
+		"title": true, "content": true, "type": true, "is_active": true, "sort_order": true,
+	}
+	updates := make(map[string]interface{})
+	for k, v := range req {
+		if allowed[k] {
+			updates[k] = v
+		}
+	}
+	if len(updates) == 0 {
+		utils.BadRequest(c, "无有效更新字段")
+		return
+	}
+	database.GetDB().Model(&ann).Updates(updates)
 	utils.Success(c, ann)
 }
 
 func AdminDeleteAnnouncement(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
 	database.GetDB().Delete(&models.Announcement{}, id)
 	utils.SuccessMessage(c, "公告已删除")
 }
@@ -2193,6 +2288,337 @@ func ListPublicAnnouncements(c *gin.Context) {
 	utils.Success(c, items)
 }
 
+// ==================== Financial Report ====================
+
+func AdminFinancialReport(c *gin.Context) {
+	db := database.GetDB()
+
+	period := c.DefaultQuery("period", "month")
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+	// Default date range
+	now := time.Now()
+	var start, end time.Time
+	if startDate != "" {
+		s, err := time.Parse("2006-01-02", startDate)
+		if err != nil {
+			utils.BadRequest(c, "start_date 格式错误，应为 YYYY-MM-DD")
+			return
+		}
+		start = s
+	} else {
+		start = now.AddDate(0, 0, -29)
+	}
+	if endDate != "" {
+		e, err := time.Parse("2006-01-02", endDate)
+		if err != nil {
+			utils.BadRequest(c, "end_date 格式错误，应为 YYYY-MM-DD")
+			return
+		}
+		end = e.Add(24*time.Hour - time.Second)
+	} else {
+		end = now
+	}
+	startStr := start.Format("2006-01-02")
+	endStr := end.Format("2006-01-02")
+
+	// ---- Summary ----
+	var totalRevenue float64
+	db.Model(&models.Order{}).
+		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", "paid", startStr, endStr).
+		Select("COALESCE(SUM(amount), 0)").Scan(&totalRevenue)
+
+	var totalOrders int64
+	db.Model(&models.Order{}).
+		Where("DATE(created_at) >= ? AND DATE(created_at) <= ?", startStr, endStr).
+		Count(&totalOrders)
+
+	var paidOrders int64
+	db.Model(&models.Order{}).
+		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", "paid", startStr, endStr).
+		Count(&paidOrders)
+	var refundedOrders int64
+	db.Model(&models.Order{}).
+		Where("status = ? AND DATE(updated_at) >= ? AND DATE(updated_at) <= ?", "refunded", startStr, endStr).
+		Count(&refundedOrders)
+
+	var avgOrderAmount float64
+	if paidOrders > 0 {
+		avgOrderAmount = totalRevenue / float64(paidOrders)
+	}
+
+	var totalRecharge float64
+	db.Model(&models.RechargeRecord{}).
+		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", "paid", startStr, endStr).
+		Select("COALESCE(SUM(amount), 0)").Scan(&totalRecharge)
+
+	var totalRechargeCount int64
+	db.Model(&models.RechargeRecord{}).
+		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", "paid", startStr, endStr).
+		Count(&totalRechargeCount)
+
+	var newUsers int64
+	db.Model(&models.User{}).
+		Where("DATE(created_at) >= ? AND DATE(created_at) <= ?", startStr, endStr).
+		Count(&newUsers)
+
+	var newSubscriptions int64
+	db.Model(&models.Subscription{}).
+		Where("DATE(created_at) >= ? AND DATE(created_at) <= ?", startStr, endStr).
+		Count(&newSubscriptions)
+
+	summary := gin.H{
+		"total_revenue":        totalRevenue,
+		"total_orders":         totalOrders,
+		"paid_orders":          paidOrders,
+		"refunded_orders":      refundedOrders,
+		"average_order_amount": avgOrderAmount,
+		"total_recharge":       totalRecharge,
+		"total_recharge_count": totalRechargeCount,
+		"new_users":            newUsers,
+		"new_subscriptions":    newSubscriptions,
+	}
+
+	// ---- Revenue Chart ----
+	var dateExpr string
+	switch period {
+	case "day":
+		dateExpr = "DATE(payment_time)"
+	case "week":
+		dateExpr = "DATE(payment_time, 'weekday 0', '-6 days')"
+	default:
+		dateExpr = "strftime('%Y-%m', payment_time)"
+	}
+
+	type ChartPoint struct {
+		Date    string  `json:"date"`
+		Revenue float64 `json:"revenue"`
+		Orders  int64   `json:"orders"`
+	}
+	var revenueChart []ChartPoint
+	db.Model(&models.Order{}).
+		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", "paid", startStr, endStr).
+		Select(dateExpr+" as date, COALESCE(SUM(amount), 0) as revenue, COUNT(*) as orders").
+		Group(dateExpr).
+		Order("date ASC").
+		Scan(&revenueChart)
+	// Recharge per period for chart
+	type RechargePoint struct {
+		Date     string  `json:"date"`
+		Recharge float64 `json:"recharge"`
+	}
+	var rechargeByDate []RechargePoint
+	var rechargeDateExpr string
+	switch period {
+	case "day":
+		rechargeDateExpr = "DATE(paid_at)"
+	case "week":
+		rechargeDateExpr = "DATE(paid_at, 'weekday 0', '-6 days')"
+	default:
+		rechargeDateExpr = "strftime('%Y-%m', paid_at)"
+	}
+	db.Model(&models.RechargeRecord{}).
+		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", "paid", startStr, endStr).
+		Select(rechargeDateExpr+" as date, COALESCE(SUM(amount), 0) as recharge").
+		Group(rechargeDateExpr).
+		Order("date ASC").
+		Scan(&rechargeByDate)
+
+	rechargeMap := make(map[string]float64)
+	for _, r := range rechargeByDate {
+		rechargeMap[r.Date] = r.Recharge
+	}
+	type ChartPointFull struct {
+		Date     string  `json:"date"`
+		Revenue  float64 `json:"revenue"`
+		Orders   int64   `json:"orders"`
+		Recharge float64 `json:"recharge"`
+	}
+	chartFull := make([]ChartPointFull, 0, len(revenueChart))
+	for _, cp := range revenueChart {
+		chartFull = append(chartFull, ChartPointFull{
+			Date:     cp.Date,
+			Revenue:  cp.Revenue,
+			Orders:   cp.Orders,
+			Recharge: rechargeMap[cp.Date],
+		})
+	}
+
+	// ---- Payment Method Stats ----
+	type PaymentMethodStat struct {
+		Method string  `json:"method"`
+		Count  int64   `json:"count"`
+		Amount float64 `json:"amount"`
+	}
+	var paymentMethodStats []PaymentMethodStat
+	db.Model(&models.Order{}).
+		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ? AND payment_method_name IS NOT NULL", "paid", startStr, endStr).
+		Select("COALESCE(payment_method_name, '未知') as method, COUNT(*) as count, COALESCE(SUM(amount), 0) as amount").
+		Group("payment_method_name").
+		Order("amount DESC").
+		Scan(&paymentMethodStats)
+	// ---- Package Stats ----
+	type PackageStat struct {
+		PackageName string  `json:"package_name"`
+		Count       int64   `json:"count"`
+		Amount      float64 `json:"amount"`
+	}
+	var packageStats []PackageStat
+	db.Model(&models.Order{}).
+		Joins("LEFT JOIN packages ON packages.id = orders.package_id").
+		Where("orders.status = ? AND DATE(orders.payment_time) >= ? AND DATE(orders.payment_time) <= ?", "paid", startStr, endStr).
+		Select("COALESCE(packages.name, '未知套餐') as package_name, COUNT(*) as count, COALESCE(SUM(orders.amount), 0) as amount").
+		Group("orders.package_id").
+		Order("amount DESC").
+		Scan(&packageStats)
+
+	// ---- Top Users ----
+	type TopUser struct {
+		UserID     uint    `json:"user_id"`
+		Username   string  `json:"username"`
+		TotalSpent float64 `json:"total_spent"`
+		OrderCount int64   `json:"order_count"`
+	}
+	var topUsers []TopUser
+	db.Model(&models.Order{}).
+		Joins("LEFT JOIN users ON users.id = orders.user_id").
+		Where("orders.status = ? AND DATE(orders.payment_time) >= ? AND DATE(orders.payment_time) <= ?", "paid", startStr, endStr).
+		Select("orders.user_id, COALESCE(users.username, '未知') as username, COALESCE(SUM(orders.amount), 0) as total_spent, COUNT(*) as order_count").
+		Group("orders.user_id").
+		Order("total_spent DESC").
+		Limit(10).
+		Scan(&topUsers)
+
+	utils.Success(c, gin.H{
+		"summary":              summary,
+		"revenue_chart":        chartFull,
+		"payment_method_stats": paymentMethodStats,
+		"package_stats":        packageStats,
+		"top_users":            topUsers,
+	})
+}
+
+func AdminExportFinancialReport(c *gin.Context) {
+	db := database.GetDB()
+
+	period := c.DefaultQuery("period", "month")
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+	now := time.Now()
+	var start, end time.Time
+	if startDate != "" {
+		s, err := time.Parse("2006-01-02", startDate)
+		if err != nil {
+			utils.BadRequest(c, "start_date 格式错误")
+			return
+		}
+		start = s
+	} else {
+		start = now.AddDate(0, 0, -29)
+	}
+	if endDate != "" {
+		e, err := time.Parse("2006-01-02", endDate)
+		if err != nil {
+			utils.BadRequest(c, "end_date 格式错误")
+			return
+		}
+		end = e.Add(24*time.Hour - time.Second)
+	} else {
+		end = now
+	}
+	startStr := start.Format("2006-01-02")
+	endStr := end.Format("2006-01-02")
+
+	var dateExpr string
+	switch period {
+	case "day":
+		dateExpr = "DATE(payment_time)"
+	case "week":
+		dateExpr = "DATE(payment_time, 'weekday 0', '-6 days')"
+	default:
+		dateExpr = "strftime('%Y-%m', payment_time)"
+	}
+
+	type Row struct {
+		Date    string  `json:"date"`
+		Revenue float64 `json:"revenue"`
+		Orders  int64   `json:"orders"`
+	}
+	var rows []Row
+	db.Model(&models.Order{}).
+		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", "paid", startStr, endStr).
+		Select(dateExpr+" as date, COALESCE(SUM(amount), 0) as revenue, COUNT(*) as orders").
+		Group(dateExpr).
+		Order("date ASC").
+		Scan(&rows)
+
+	// Recharge per period
+	var rechargeDateExpr string
+	switch period {
+	case "day":
+		rechargeDateExpr = "DATE(paid_at)"
+	case "week":
+		rechargeDateExpr = "DATE(paid_at, 'weekday 0', '-6 days')"
+	default:
+		rechargeDateExpr = "strftime('%Y-%m', paid_at)"
+	}
+	type RRow struct {
+		Date     string  `json:"date"`
+		Recharge float64 `json:"recharge"`
+	}
+	var rrows []RRow
+	db.Model(&models.RechargeRecord{}).
+		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", "paid", startStr, endStr).
+		Select(rechargeDateExpr+" as date, COALESCE(SUM(amount), 0) as recharge").
+		Group(rechargeDateExpr).
+		Order("date ASC").
+		Scan(&rrows)
+	rechargeMap := make(map[string]float64)
+	for _, r := range rrows {
+		rechargeMap[r.Date] = r.Recharge
+	}
+
+	// New users per period
+	var userDateExpr string
+	switch period {
+	case "day":
+		userDateExpr = "DATE(created_at)"
+	case "week":
+		userDateExpr = "DATE(created_at, 'weekday 0', '-6 days')"
+	default:
+		userDateExpr = "strftime('%Y-%m', created_at)"
+	}
+	type URow struct {
+		Date     string `json:"date"`
+		NewUsers int64  `json:"new_users"`
+	}
+	var urows []URow
+	db.Model(&models.User{}).
+		Where("DATE(created_at) >= ? AND DATE(created_at) <= ?", startStr, endStr).
+		Select(userDateExpr+" as date, COUNT(*) as new_users").
+		Group(userDateExpr).
+		Order("date ASC").
+		Scan(&urows)
+	userMap := make(map[string]int64)
+	for _, u := range urows {
+		userMap[u.Date] = u.NewUsers
+	}
+
+	filename := fmt.Sprintf("financial_report_%s.csv", now.Format("2006-01-02"))
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	// BOM for Excel UTF-8
+	c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
+	c.Writer.WriteString("日期,收入,订单数,充值,新用户\n")
+	for _, row := range rows {
+		line := fmt.Sprintf("%s,%.2f,%d,%.2f,%d\n",
+			row.Date, row.Revenue, row.Orders, rechargeMap[row.Date], userMap[row.Date])
+		c.Writer.WriteString(line)
+	}
+}
+
 // ==================== Region Statistics ====================
 
 func AdminRegionStats(c *gin.Context) {
@@ -2219,14 +2645,15 @@ func AdminRegionStats(c *gin.Context) {
 
 func AdminBatchUserAction(c *gin.Context) {
 	var req struct {
-		IDs    []uint `json:"ids" binding:"required"`
-		Action string `json:"action" binding:"required"`
+		UserIDs []uint                 `json:"user_ids" binding:"required"`
+		Action  string                 `json:"action" binding:"required"`
+		Data    map[string]interface{} `json:"data"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if len(req.IDs) == 0 {
+	if len(req.UserIDs) == 0 {
 		utils.BadRequest(c, "请选择用户")
 		return
 	}
@@ -2236,13 +2663,70 @@ func AdminBatchUserAction(c *gin.Context) {
 
 	switch req.Action {
 	case "enable":
-		result := db.Model(&models.User{}).Where("id IN ?", req.IDs).Update("is_active", true)
+		result := db.Model(&models.User{}).Where("id IN ?", req.UserIDs).Update("is_active", true)
 		affected = result.RowsAffected
+		// Sync subscription status
+		for _, uid := range req.UserIDs {
+			var sub models.Subscription
+			if db.Where("user_id = ?", uid).First(&sub).Error == nil {
+				updates := map[string]interface{}{"is_active": true}
+				if sub.ExpireTime.After(time.Now()) {
+					updates["status"] = "active"
+				} else {
+					updates["status"] = "expired"
+				}
+				db.Model(&sub).Updates(updates)
+			}
+		}
 	case "disable":
-		result := db.Model(&models.User{}).Where("id IN ? AND is_admin = ?", req.IDs, false).Update("is_active", false)
+		result := db.Model(&models.User{}).Where("id IN ? AND is_admin = ?", req.UserIDs, false).Update("is_active", false)
 		affected = result.RowsAffected
+		db.Model(&models.Subscription{}).Where("user_id IN ?", req.UserIDs).Updates(map[string]interface{}{
+			"is_active": false, "status": "disabled",
+		})
 	case "delete":
-		result := db.Where("id IN ? AND is_admin = ?", req.IDs, false).Delete(&models.User{})
+		result := db.Where("id IN ? AND is_admin = ?", req.UserIDs, false).Delete(&models.User{})
+		affected = result.RowsAffected
+	case "reset_password":
+		password := "123456"
+		if req.Data != nil {
+			if p, ok := req.Data["password"].(string); ok && p != "" {
+				password = p
+			}
+		}
+		hashed, err := utils.HashPassword(password)
+		if err != nil {
+			utils.InternalError(c, "密码加密失败")
+			return
+		}
+		result := db.Model(&models.User{}).Where("id IN ?", req.UserIDs).Update("password", hashed)
+		affected = result.RowsAffected
+	case "set_level":
+		if req.Data == nil {
+			utils.BadRequest(c, "缺少等级参数")
+			return
+		}
+		levelIDRaw, ok := req.Data["level_id"]
+		if !ok {
+			utils.BadRequest(c, "缺少 level_id 参数")
+			return
+		}
+		var levelID uint
+		switch v := levelIDRaw.(type) {
+		case float64:
+			levelID = uint(v)
+		case string:
+			parsed, err := strconv.ParseUint(v, 10, 64)
+			if err != nil {
+				utils.BadRequest(c, "无效的 level_id")
+				return
+			}
+			levelID = uint(parsed)
+		default:
+			utils.BadRequest(c, "无效的 level_id 类型")
+			return
+		}
+		result := db.Model(&models.User{}).Where("id IN ?", req.UserIDs).Update("user_level_id", levelID)
 		affected = result.RowsAffected
 	default:
 		utils.BadRequest(c, "不支持的操作: "+req.Action)
@@ -2251,6 +2735,198 @@ func AdminBatchUserAction(c *gin.Context) {
 
 	utils.CreateAuditLog(c, "batch_user_action", "user", 0, fmt.Sprintf("批量操作用户: %s, 影响 %d 个用户", req.Action, affected))
 	utils.Success(c, gin.H{"affected": affected, "action": req.Action})
+}
+
+// ==================== CSV Export/Import ====================
+
+func AdminExportUsersCSV(c *gin.Context) {
+	db := database.GetDB()
+	query := db.Model(&models.User{})
+
+	if search := c.Query("search"); search != "" {
+		like := "%" + search + "%"
+		query = query.Where("username LIKE ? OR email LIKE ?", like, like)
+	}
+	if status := c.Query("is_active"); status != "" {
+		query = query.Where("is_active = ?", status == "true")
+	}
+
+	var users []models.User
+	query.Order("id ASC").Find(&users)
+
+	filename := fmt.Sprintf("users_%s.csv", time.Now().Format("2006-01-02"))
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+
+	// Write BOM for Excel compatibility
+	c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	writer := csv.NewWriter(c.Writer)
+	defer writer.Flush()
+
+	writer.Write([]string{"ID", "用户名", "邮箱", "余额", "是否激活", "注册时间", "最后登录"})
+
+	for _, u := range users {
+		isActive := "否"
+		if u.IsActive {
+			isActive = "是"
+		}
+		lastLogin := ""
+		if u.LastLogin != nil {
+			lastLogin = u.LastLogin.Format("2006-01-02 15:04:05")
+		}
+		writer.Write([]string{
+			strconv.FormatUint(uint64(u.ID), 10),
+			u.Username,
+			u.Email,
+			fmt.Sprintf("%.2f", u.Balance),
+			isActive,
+			u.CreatedAt.Format("2006-01-02 15:04:05"),
+			lastLogin,
+		})
+	}
+}
+
+func AdminImportUsersCSV(c *gin.Context) {
+	file, _, err := c.Request.FormFile("file")
+	if err != nil {
+		utils.BadRequest(c, "请上传CSV文件")
+		return
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	// Read header
+	header, err := reader.Read()
+	if err != nil {
+		utils.BadRequest(c, "CSV文件格式错误")
+		return
+	}
+
+	// Map column indices
+	colMap := make(map[string]int)
+	for i, h := range header {
+		// Strip BOM from first column
+		h = strings.TrimPrefix(h, "\xEF\xBB\xBF")
+		colMap[strings.TrimSpace(h)] = i
+	}
+
+	// Validate required columns
+	requiredCols := []string{"用户名", "邮箱", "密码"}
+	for _, col := range requiredCols {
+		if _, ok := colMap[col]; !ok {
+			utils.BadRequest(c, fmt.Sprintf("CSV缺少必要列: %s", col))
+			return
+		}
+	}
+
+	db := database.GetDB()
+	var total, imported, skipped int
+	var errors []string
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("第%d行: 读取错误", total+2))
+			total++
+			continue
+		}
+		total++
+		rowNum := total + 1 // 1-indexed, +1 for header
+
+		username := strings.TrimSpace(record[colMap["用户名"]])
+		email := strings.TrimSpace(record[colMap["邮箱"]])
+		password := strings.TrimSpace(record[colMap["密码"]])
+
+		if username == "" || email == "" {
+			errors = append(errors, fmt.Sprintf("第%d行: 用户名或邮箱为空", rowNum))
+			skipped++
+			continue
+		}
+
+		// Validate email
+		if _, err := mail.ParseAddress(email); err != nil {
+			errors = append(errors, fmt.Sprintf("第%d行: 邮箱格式无效 (%s)", rowNum, email))
+			skipped++
+			continue
+		}
+
+		// Check duplicates
+		var count int64
+		db.Model(&models.User{}).Where("email = ? OR username = ?", email, username).Count(&count)
+		if count > 0 {
+			errors = append(errors, fmt.Sprintf("第%d行: 用户名或邮箱已存在 (%s / %s)", rowNum, username, email))
+			skipped++
+			continue
+		}
+
+		if password == "" {
+			password = utils.GenerateRandomString(12)
+		}
+		hashed, err := utils.HashPassword(password)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("第%d行: 密码加密失败", rowNum))
+			skipped++
+			continue
+		}
+
+		user := models.User{
+			Username:   username,
+			Email:      email,
+			Password:   hashed,
+			IsActive:   true,
+			IsVerified: true,
+			Theme:      "light",
+			Language:   "zh-CN",
+			Timezone:   "Asia/Shanghai",
+			SpecialNodeSubscriptionType: "both",
+		}
+
+		// Optional: balance
+		if idx, ok := colMap["余额"]; ok && idx < len(record) {
+			if bal, err := strconv.ParseFloat(strings.TrimSpace(record[idx]), 64); err == nil {
+				user.Balance = bal
+			}
+		}
+		// Optional: is_active
+		if idx, ok := colMap["是否激活"]; ok && idx < len(record) {
+			val := strings.TrimSpace(record[idx])
+			if val == "否" || val == "false" || val == "0" {
+				user.IsActive = false
+			}
+		}
+
+		if err := db.Create(&user).Error; err != nil {
+			errors = append(errors, fmt.Sprintf("第%d行: 创建用户失败 (%s)", rowNum, err.Error()))
+			skipped++
+			continue
+		}
+
+		// Create subscription
+		subURL := utils.GenerateRandomString(32)
+		subscription := models.Subscription{
+			UserID:          user.ID,
+			SubscriptionURL: subURL,
+			DeviceLimit:     3,
+			IsActive:        true,
+			Status:          "active",
+			ExpireTime:      time.Now(),
+		}
+		db.Create(&subscription)
+
+		imported++
+	}
+
+	utils.CreateAuditLog(c, "import_users_csv", "user", 0, fmt.Sprintf("CSV导入用户: 总计%d, 导入%d, 跳过%d", total, imported, skipped))
+	utils.Success(c, gin.H{
+		"total":    total,
+		"imported": imported,
+		"skipped":  skipped,
+		"errors":   errors,
+	})
 }
 
 func AdminBatchNodeAction(c *gin.Context) {
@@ -2293,4 +2969,34 @@ func AdminBatchNodeAction(c *gin.Context) {
 
 	utils.CreateAuditLog(c, "batch_node_action", "node", 0, fmt.Sprintf("批量操作节点: %s, 影响 %d 个节点", req.Action, affected))
 	utils.Success(c, gin.H{"affected": affected, "action": req.Action})
+}
+
+// ==================== Check-In Stats ====================
+
+func AdminGetCheckInStats(c *gin.Context) {
+	db := database.GetDB()
+	today := time.Now().Format("2006-01-02")
+
+	var todayCount, totalCount int64
+	db.Model(&models.CheckIn{}).Where("DATE(created_at) = ?", today).Count(&todayCount)
+	db.Model(&models.CheckIn{}).Count(&totalCount)
+
+	var todayTotalReward float64
+	db.Model(&models.CheckIn{}).Where("DATE(created_at) = ?", today).
+		Select("COALESCE(SUM(amount), 0)").Scan(&todayTotalReward)
+
+	enabled := utils.IsBoolSettingDefault("checkin_enabled", true)
+	minReward := utils.GetIntSetting("checkin_min_reward", 10)
+	maxReward := utils.GetIntSetting("checkin_max_reward", 50)
+
+	utils.Success(c, gin.H{
+		"today_count":        todayCount,
+		"total_count":        totalCount,
+		"today_total_reward": todayTotalReward,
+		"settings": gin.H{
+			"enabled":    enabled,
+			"min_reward": minReward,
+			"max_reward": maxReward,
+		},
+	})
 }

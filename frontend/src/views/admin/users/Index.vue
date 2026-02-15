@@ -34,6 +34,15 @@
               <template #icon><n-icon :component="AddOutline" /></template>
               新增用户
             </n-button>
+            <n-button @click="handleExportCSV">
+              <template #icon><n-icon :component="DownloadOutline" /></template>
+              导出CSV
+            </n-button>
+            <n-button @click="triggerImportCSV">
+              <template #icon><n-icon :component="CloudUploadOutline" /></template>
+              导入CSV
+            </n-button>
+            <input ref="importFileInput" type="file" accept=".csv" style="display:none" @change="handleImportCSV" />
             <n-button @click="fetchUsers">
               <template #icon><n-icon :component="RefreshOutline" /></template>
               刷新
@@ -46,7 +55,13 @@
           <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
           <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
           <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
-          <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
+          <n-popconfirm @positive-click="doBatchDelete">
+            <template #trigger>
+              <n-button size="small" type="error">批量删除</n-button>
+            </template>
+            确定要删除选中的 {{ checkedRowKeys.length }} 个用户吗？此操作不可恢复！
+          </n-popconfirm>
+          <n-button size="small" @click="openSetLevelModal">设置等级</n-button>
         </n-space>
 
         <!-- Data table (Desktop) -->
@@ -251,17 +266,63 @@
         </n-space>
       </template>
     </n-modal>
+
+    <!-- Set Level Modal -->
+    <n-modal v-model:show="showSetLevelModal" preset="card" title="设置用户等级" :style="{ width: appStore.isMobile ? '95%' : '420px' }">
+      <n-form label-placement="left" label-width="80">
+        <n-form-item label="等级">
+          <n-select
+            v-model:value="selectedLevelId"
+            placeholder="请选择等级"
+            :options="userLevels.map(l => ({ label: l.level_name || l.name, value: l.id }))"
+            clearable
+          />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showSetLevelModal = false">取消</n-button>
+          <n-button type="primary" @click="handleBatchSetLevel">确认</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <!-- Import Result Modal -->
+    <n-modal v-model:show="showImportResultModal" preset="card" title="导入结果" :style="{ width: appStore.isMobile ? '95%' : '520px' }">
+      <n-space vertical :size="12">
+        <n-space>
+          <n-tag type="info">总计: {{ importResult.total }}</n-tag>
+          <n-tag type="success">导入: {{ importResult.imported }}</n-tag>
+          <n-tag type="warning">跳过: {{ importResult.skipped }}</n-tag>
+        </n-space>
+        <div v-if="importResult.errors && importResult.errors.length > 0">
+          <div style="font-weight: 600; margin-bottom: 4px;">错误详情:</div>
+          <n-scrollbar style="max-height: 200px">
+            <div v-for="(err, idx) in importResult.errors" :key="idx" style="font-size: 13px; color: #d03050; padding: 2px 0;">
+              {{ err }}
+            </div>
+          </n-scrollbar>
+        </div>
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showImportResultModal = false">关闭</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, h, onMounted, computed } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NDropdown, NSpin, useMessage, useDialog } from 'naive-ui'
-import { SearchOutline, AddOutline, RefreshOutline, EllipsisVertical } from '@vicons/ionicons5'
+import { SearchOutline, AddOutline, RefreshOutline, EllipsisVertical, DownloadOutline, CloudUploadOutline } from '@vicons/ionicons5'
 import {
   listUsers, getUser, updateUser, deleteUser, toggleUserActive,
-  createUser, resetUserPassword, deleteUserDevice
+  createUser, resetUserPassword, deleteUserDevice,
+  batchUserAction, exportUsersCSV, importUsersCSV
 } from '@/api/admin'
+import { listUserLevels } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const message = useMessage()
@@ -279,6 +340,17 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const totalPages = ref(0)
 const checkedRowKeys = ref([])
+
+// Import/Export
+const importFileInput = ref(null)
+const importing = ref(false)
+const showImportResultModal = ref(false)
+const importResult = ref({ total: 0, imported: 0, skipped: 0, errors: [] })
+
+// Levels for batch set_level
+const userLevels = ref([])
+const showSetLevelModal = ref(false)
+const selectedLevelId = ref(null)
 
 // Modals
 const showEditModal = ref(false)
@@ -576,9 +648,8 @@ const handleBatchEnable = () => {
     negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        const inactive = users.value.filter(u => checkedRowKeys.value.includes(u.id) && !u.is_active)
-        await Promise.all(inactive.map(u => toggleUserActive(u.id)))
-        message.success(`已启用 ${inactive.length} 个用户`)
+        const res = await batchUserAction({ user_ids: checkedRowKeys.value, action: 'enable' })
+        message.success(`已启用 ${res.data.affected} 个用户`)
         checkedRowKeys.value = []
         fetchUsers()
       } catch (error) {
@@ -596,9 +667,8 @@ const handleBatchDisable = () => {
     negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        const active = users.value.filter(u => checkedRowKeys.value.includes(u.id) && u.is_active)
-        await Promise.all(active.map(u => toggleUserActive(u.id)))
-        message.success(`已禁用 ${active.length} 个用户`)
+        const res = await batchUserAction({ user_ids: checkedRowKeys.value, action: 'disable' })
+        message.success(`已禁用 ${res.data.affected} 个用户`)
         checkedRowKeys.value = []
         fetchUsers()
       } catch (error) {
@@ -608,23 +678,95 @@ const handleBatchDisable = () => {
   })
 }
 
-const handleBatchDelete = () => {
-  dialog.error({
-    title: '批量删除',
-    content: `确定要删除选中的 ${checkedRowKeys.value.length} 个用户吗？此操作不可恢复！`,
-    positiveText: '删除',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await Promise.all(checkedRowKeys.value.map(id => deleteUser(id)))
-        message.success(`已删除 ${checkedRowKeys.value.length} 个用户`)
-        checkedRowKeys.value = []
-        fetchUsers()
-      } catch (error) {
-        message.error('批量删除失败：' + (error.message || '未知错误'))
-      }
+const doBatchDelete = async () => {
+  try {
+    const res = await batchUserAction({ user_ids: checkedRowKeys.value, action: 'delete' })
+    message.success(`已删除 ${res.data.affected} 个用户`)
+    checkedRowKeys.value = []
+    fetchUsers()
+  } catch (error) {
+    message.error('批量删除失败：' + (error.message || '未知错误'))
+  }
+}
+
+// Set level
+const fetchLevels = async () => {
+  try {
+    const res = await listUserLevels({ page: 1, page_size: 100 })
+    userLevels.value = res.data.items || res.data || []
+  } catch {}
+}
+
+const openSetLevelModal = () => {
+  selectedLevelId.value = null
+  if (userLevels.value.length === 0) fetchLevels()
+  showSetLevelModal.value = true
+}
+
+const handleBatchSetLevel = async () => {
+  if (!selectedLevelId.value) {
+    message.warning('请选择等级')
+    return
+  }
+  try {
+    const res = await batchUserAction({
+      user_ids: checkedRowKeys.value,
+      action: 'set_level',
+      data: { level_id: selectedLevelId.value }
+    })
+    message.success(`已设置 ${res.data.affected} 个用户的等级`)
+    showSetLevelModal.value = false
+    checkedRowKeys.value = []
+    fetchUsers()
+  } catch (error) {
+    message.error('设置等级失败：' + (error.message || '未知错误'))
+  }
+}
+
+// CSV Export
+const handleExportCSV = async () => {
+  try {
+    const params = {
+      search: searchQuery.value || undefined,
+      is_active: statusFilter.value === 'active' ? 'true' : statusFilter.value === 'inactive' ? 'false' : undefined
     }
-  })
+    const res = await exportUsersCSV(params)
+    const blob = new Blob([res.data || res], { type: 'text/csv;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `users_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+    message.success('导出成功')
+  } catch (error) {
+    message.error('导出失败：' + (error.message || '未知错误'))
+  }
+}
+
+// CSV Import
+const triggerImportCSV = () => {
+  importFileInput.value?.click()
+}
+
+const handleImportCSV = async (e) => {
+  const file = e.target.files?.[0]
+  if (!file) return
+  importing.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await importUsersCSV(formData)
+    importResult.value = res.data
+    showImportResultModal.value = true
+    fetchUsers()
+  } catch (error) {
+    message.error('导入失败：' + (error.message || '未知错误'))
+  } finally {
+    importing.value = false
+    // Reset file input so same file can be selected again
+    if (importFileInput.value) importFileInput.value.value = ''
+  }
 }
 
 // View detail

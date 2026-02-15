@@ -764,8 +764,10 @@ install_system() {
     if systemctl is-active --quiet ${SERVICE_NAME}; then
         ok "服务启动成功"
         if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ] && [ -f "$INSTALL_DIR/cboard" ]; then
-            if (cd "$INSTALL_DIR" && ./cboard reset-password --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" 2>/dev/null); then
-                ok "管理员密码已同步到数据库"
+            if (cd "$INSTALL_DIR" && ./cboard reset-password --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD"); then
+                ok "管理员账号/密码已同步到数据库"
+            else
+                warn "管理员密码同步失败，请用菜单 9 重设密码"
             fi
         fi
     else

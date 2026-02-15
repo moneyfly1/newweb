@@ -543,15 +543,85 @@ EOF
     fi
 }
 
+# ---- 写入 Nginx SSL 配置（含 80 跳转 + 443） ----
+write_nginx_ssl_conf() {
+    local NGINX_CONF="/etc/nginx/conf.d/cboard.conf"
+    local FRONTEND_DIR="$INSTALL_DIR/frontend/dist"
+    # 80: 保留 .well-known 供 certbot 续期，其余跳转 https
+    # 443: 证书 + 站点
+    cat > "$NGINX_CONF" <<EOF
+server {
+    listen 80;
+    server_name $DOMAIN;
+    location /.well-known/acme-challenge/ {
+        root $INSTALL_DIR;
+        allow all;
+    }
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name $DOMAIN;
+
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    root $FRONTEND_DIR;
+    index index.html;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
+    gzip_min_length 1024;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:$CBOARD_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    location /assets/ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+}
+EOF
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+        return 0
+    fi
+    return 1
+}
+
 # ---- 申请 SSL 证书 ----
 setup_ssl() {
     if [[ ! "$ENABLE_SSL" =~ ^[Yy]$ ]] || [ -z "$DOMAIN" ]; then
         return 0
     fi
 
-    # 检查是否已有证书
-    if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    # 检查是否已有证书：有则确保 Nginx 已配置 443 并 reload
+    if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/$DOMAIN/privkey.pem" ]; then
         ok "检测到已有 SSL 证书"
+        if write_nginx_ssl_conf; then
+            ok "Nginx 已配置 HTTPS 并重载"
+        else
+            warn "Nginx SSL 配置写入失败，请检查 nginx -t"
+        fi
         return 0
     fi
 
@@ -582,61 +652,7 @@ setup_ssl() {
         if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
             CERT_SUCCESS=true
             ok "SSL 证书申请成功 (standalone 方式)"
-
-            # 更新 Nginx 配置加入 SSL
-            local NGINX_CONF="/etc/nginx/conf.d/cboard.conf"
-            local FRONTEND_DIR="$INSTALL_DIR/frontend/dist"
-            cat > "$NGINX_CONF" <<EOF
-server {
-    listen 80;
-    server_name $DOMAIN;
-    return 301 https://\$host\$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name $DOMAIN;
-
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE:ECDH:AES:HIGH:!NULL:!aNULL:!MD5:!ADH:!RC4;
-    ssl_prefer_server_ciphers on;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
-
-    root $FRONTEND_DIR;
-    index index.html;
-
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
-    gzip_min_length 1024;
-
-    location /.well-known/acme-challenge/ {
-        root $INSTALL_DIR;
-        allow all;
-    }
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:$CBOARD_PORT;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
-    }
-
-    location /assets/ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
-}
-EOF
+            write_nginx_ssl_conf && ok "Nginx 已配置 HTTPS" || true
         fi
     fi
 
@@ -750,10 +766,12 @@ install_system() {
 
     if systemctl is-active --quiet ${SERVICE_NAME}; then
         ok "服务启动成功"
-        # 本次输入的管理员邮箱/密码同步到数据库（.env 已存在时不会重新生成，此处确保密码生效）
+        # 本次输入的管理员邮箱/密码同步到数据库（.env 已存在时不会重新生成；若该邮箱无管理员则自动创建）
         if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ] && [ -f "$INSTALL_DIR/cboard" ]; then
-            if (cd "$INSTALL_DIR" && ./cboard reset-password --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" 2>/dev/null); then
-                ok "管理员密码已同步到数据库"
+            if (cd "$INSTALL_DIR" && ./cboard reset-password --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD"); then
+                ok "管理员账号/密码已同步到数据库"
+            else
+                warn "管理员密码同步失败，请用菜单 9 重设密码"
             fi
         fi
     else

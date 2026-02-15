@@ -1538,21 +1538,61 @@ diagnose_website_access() {
 uninstall_cboard() {
     echo -e "${BLUE}========== 卸载 CBoard v2 ==========${NC}"
     echo ""
-    echo -e "${RED}此操作将停止服务并删除配置 (数据目录保留)${NC}"
-    read -rp "确定要卸载吗? (输入 YES 确认): " confirm
-    [ "$confirm" != "YES" ] && { echo "已取消"; read -rp "按回车键继续..."; return 0; }
 
+    local work_dir="$INSTALL_DIR"
+    [ ! -d "$work_dir" ] && work_dir="$PROJECT_PATH"
+
+    echo -e "${RED}此操作将:${NC}"
+    echo "  - 停止并删除 systemd 服务 (cboard)"
+    echo "  - 删除宝塔 Nginx 站点配置"
+    echo "  - 可选：删除安装目录及全部数据"
+    echo ""
+
+    read -rp "确定要卸载吗? (输入 YES 确认): " confirm
+    if [ "$confirm" != "YES" ]; then
+        echo "已取消"
+        read -rp "按回车键继续..."
+        return 0
+    fi
+
+    # 停止并移除服务
+    info "停止并移除 systemd 服务..."
     systemctl stop ${SERVICE_NAME} 2>/dev/null || true
     systemctl disable ${SERVICE_NAME} 2>/dev/null || true
     rm -f /etc/systemd/system/${SERVICE_NAME}.service
+    systemctl daemon-reload
+    ok "systemd 服务已删除"
+
+    # 删除宝塔 Nginx 配置
+    info "删除宝塔 Nginx 配置..."
     rm -f /www/server/panel/vhost/nginx/cboard.conf
     rm -f /www/server/nginx/conf/vhost/cboard.conf
-    rm -f /usr/local/bin/cboard-ctl
-    systemctl daemon-reload
-    /www/server/nginx/sbin/nginx -s reload 2>/dev/null || true
+    if [ -x /www/server/nginx/sbin/nginx ]; then
+        /www/server/nginx/sbin/nginx -t 2>/dev/null && /www/server/nginx/sbin/nginx -s reload 2>/dev/null || true
+        ok "Nginx 配置已删除并重载"
+    fi
 
-    ok "CBoard 服务已卸载 (数据目录保留)"
-    echo ""; read -rp "按回车键继续..."
+    rm -f /usr/local/bin/cboard-ctl 2>/dev/null || true
+
+    # 是否删除安装目录
+    echo ""
+    read -rp "是否同时删除安装目录及全部数据? $work_dir (y/n) [n]: " del_dir
+    if [[ "${del_dir}" =~ ^[Yy]$ ]]; then
+        if [ -d "$work_dir" ]; then
+            info "正在删除 $work_dir ..."
+            cd / 2>/dev/null || true
+            rm -rf "$work_dir"
+            ok "安装目录已删除"
+        else
+            warn "目录不存在: $work_dir"
+        fi
+    else
+        echo -e "${YELLOW}安装目录已保留: $work_dir${NC}"
+    fi
+
+    echo ""
+    ok "CBoard 已完全卸载"
+    read -rp "按回车键继续..."
 }
 
 # ============================================================================

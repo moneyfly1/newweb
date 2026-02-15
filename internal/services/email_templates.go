@@ -51,11 +51,18 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		subject = fmt.Sprintf("欢迎加入 %s", siteName)
 		title = "欢迎加入"
 		username := html.EscapeString(data["username"])
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">Hi %s，欢迎加入 %s！</p>
-<p style="font-size:14px;color:#666;margin:0 0 8px">您的账户已创建成功，现在可以开始使用我们的服务了。</p>
-<p style="font-size:14px;color:#666;margin:0">如有任何问题，请随时联系客服。</p>`, username, siteName)
-		btnText = "开始使用"
-		btnLink = domain + "/dashboard"
+		email := html.EscapeString(data["email"])
+		password := html.EscapeString(data["password"])
+		loginURL := domain + "/login"
+		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">Hi %s，欢迎加入 %s！您的账户已创建成功。</p>
+<div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
+  <p style="font-size:14px;color:#333;margin:0 0 8px">邮箱：<strong>%s</strong></p>
+  <p style="font-size:14px;color:#333;margin:0 0 8px">密码：<strong>%s</strong></p>
+  <p style="font-size:14px;color:#333;margin:0">登录地址：<a href="%s" style="color:#4F46E5">%s</a></p>
+</div>
+<p style="font-size:13px;color:#E11D48;margin:0">⚠️ 请妥善保管您的账户信息，建议登录后修改密码。</p>`, username, siteName, email, password, loginURL, loginURL)
+		btnText = "立即登录"
+		btnLink = loginURL
 
 	case "subscription":
 		subject = fmt.Sprintf("您的订阅信息 - %s", siteName)
@@ -81,15 +88,23 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		orderNo := html.EscapeString(data["order_no"])
 		amount := html.EscapeString(data["amount"])
 		packageName := html.EscapeString(data["package_name"])
+		subURL := data["subscription_url"]
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的订单已支付成功！</p>
 <div style="background:#F0FDF4;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:14px;color:#333;margin:0 0 8px">订单号：<strong>%s</strong></p>
   <p style="font-size:14px;color:#333;margin:0 0 8px">套餐：<strong>%s</strong></p>
   <p style="font-size:14px;color:#333;margin:0">金额：<strong>¥%s</strong></p>
-</div>
-<p style="font-size:14px;color:#666;margin:0">订阅已自动激活，感谢您的支持！</p>`, orderNo, packageName, amount)
-		btnText = "查看订单"
-		btnLink = domain + "/orders"
+</div>`, orderNo, packageName, amount)
+		if subURL != "" {
+			escapedURL := html.EscapeString(subURL)
+			content += fmt.Sprintf(`<div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
+  <p style="font-size:13px;color:#888;margin:0 0 4px">您的订阅地址</p>
+  <p style="font-size:13px;color:#333;word-break:break-all;margin:0;background:#fff;padding:8px;border-radius:4px;border:1px solid #E5E7EB"><code>%s</code></p>
+</div>`, escapedURL)
+		}
+		content += `<p style="font-size:14px;color:#666;margin:0">订阅已自动激活，感谢您的支持！</p>`
+		btnText = "查看订阅"
+		btnLink = domain + "/subscription"
 
 	case "recharge_success":
 		subject = fmt.Sprintf("充值成功 - %s", siteName)
@@ -142,15 +157,19 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		subject = fmt.Sprintf("账户已创建 - %s", siteName)
 		title = "账户已创建"
 		username := html.EscapeString(data["username"])
+		email := html.EscapeString(data["email"])
 		password := html.EscapeString(data["password"])
+		loginURL := domain + "/login"
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，管理员已为您创建了 %s 账户。</p>
 <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
+  <p style="font-size:14px;color:#333;margin:0 0 8px">邮箱：<strong>%s</strong></p>
   <p style="font-size:14px;color:#333;margin:0 0 8px">用户名：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0">初始密码：<strong>%s</strong></p>
+  <p style="font-size:14px;color:#333;margin:0 0 8px">初始密码：<strong>%s</strong></p>
+  <p style="font-size:14px;color:#333;margin:0">登录地址：<a href="%s" style="color:#4F46E5">%s</a></p>
 </div>
-<p style="font-size:13px;color:#E11D48;margin:0">⚠️ 请登录后立即修改密码。</p>`, siteName, username, password)
+<p style="font-size:13px;color:#E11D48;margin:0">⚠️ 请登录后立即修改密码。</p>`, siteName, email, username, password, loginURL, loginURL)
 		btnText = "立即登录"
-		btnLink = domain + "/login"
+		btnLink = loginURL
 
 	case "account_disabled":
 		subject = fmt.Sprintf("账户已被禁用 - %s", siteName)

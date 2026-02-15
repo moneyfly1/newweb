@@ -4,6 +4,10 @@
       <div class="header">
         <h1 class="title">套餐商城</h1>
         <p class="subtitle">选择适合您的订阅套餐</p>
+        <div v-if="userBalance !== null" class="balance-info">
+          <span>账户余额：</span>
+          <span class="balance-amount">¥{{ userBalance.toFixed(2) }}</span>
+        </div>
       </div>
 
       <n-spin :show="loading">
@@ -33,10 +37,6 @@
                   <div class="feature-item">
                     <n-icon :component="PhonePortraitOutline" :size="18" />
                     <span>设备数：{{ pkg.device_limit }} 台</span>
-                  </div>
-                  <div class="feature-item">
-                    <n-icon :component="CloudDownloadOutline" :size="18" />
-                    <span>流量：{{ formatTraffic(pkg.traffic_limit) }}</span>
                   </div>
                   <div v-if="parseFeatures(pkg.features).length" class="features-list">
                     <div v-for="(f, i) in parseFeatures(pkg.features)" :key="i" class="feature-item feature-extra">
@@ -74,8 +74,19 @@
           <n-descriptions-item v-if="couponInfo" label="优惠">
             <span style="color: #e03050;">-¥{{ (orderInfo?.amount - orderInfo?.final_amount).toFixed(2) }}</span>
           </n-descriptions-item>
+          <n-descriptions-item label="账户余额">
+            <span :style="{ color: userBalance >= (orderInfo?.final_amount || 0) ? '#18a058' : '#e03050' }">
+              ¥{{ userBalance?.toFixed(2) }}
+            </span>
+          </n-descriptions-item>
           <n-descriptions-item label="实付金额">
             <span style="color: #18a058; font-size: 20px; font-weight: bold;">¥{{ orderInfo?.final_amount }}</span>
+          </n-descriptions-item>
+          <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="余额抵扣">
+            <span style="color: #18a058;">-¥{{ balanceDeductAmount.toFixed(2) }}</span>
+          </n-descriptions-item>
+          <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="还需支付">
+            <span style="color: #e03050; font-size: 18px; font-weight: bold;">¥{{ remainingAmount.toFixed(2) }}</span>
           </n-descriptions-item>
         </n-descriptions>
 
@@ -94,13 +105,24 @@
         <div class="payment-method">
           <div class="pm-label">支付方式</div>
           <n-radio-group v-model:value="paymentMethod">
-            <n-space>
-              <n-radio v-if="balanceEnabled" value="balance">余额支付</n-radio>
+            <n-space vertical :size="8">
+              <n-radio v-if="balanceEnabled" value="balance" :disabled="userBalance <= 0">
+                余额支付 (¥{{ userBalance.toFixed(2) }})
+                <span v-if="!canFullBalance && userBalance > 0" style="color: #e03050; font-size: 12px; margin-left: 4px;">余额不足</span>
+              </n-radio>
               <n-radio v-for="pm in paymentMethods" :key="pm.id" :value="'pm_' + pm.id">
                 {{ getPaymentLabel(pm.pay_type) }}
               </n-radio>
             </n-space>
           </n-radio-group>
+          <div v-if="paymentMethod !== 'balance' && userBalance > 0 && balanceEnabled" style="margin-top: 8px;">
+            <n-checkbox v-model:checked="useBalanceDeduct">
+              使用余额抵扣 ¥{{ Math.min(userBalance, finalPayAmount).toFixed(2) }}
+            </n-checkbox>
+            <div v-if="useBalanceDeduct" style="margin-top: 4px; font-size: 13px; color: #666;">
+              余额抵扣：¥{{ balanceDeductAmount.toFixed(2) }}，还需支付：<span style="color: #e03050; font-weight: 600;">¥{{ remainingAmount.toFixed(2) }}</span>
+            </div>
+          </div>
         </div>
       </n-space>
 
@@ -176,15 +198,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, onUnmounted, watch } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import QRCode from 'qrcode'
 import {
-  TimeOutline, PhonePortraitOutline, CloudDownloadOutline, CheckmarkCircleOutline
+  TimeOutline, PhonePortraitOutline, CheckmarkCircleOutline
 } from '@vicons/ionicons5'
 import { listPackages, verifyCoupon, getPaymentMethods } from '@/api/common'
 import { createOrder, payOrder, createPayment, getOrderStatus } from '@/api/order'
+import { getDashboardInfo } from '@/api/user'
 
 const router = useRouter()
 const message = useMessage()
@@ -205,7 +228,20 @@ const showQrModal = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
 const pollingStatus = ref(false)
+const userBalance = ref<number>(0)
+const useBalanceDeduct = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const finalPayAmount = computed(() => orderInfo.value?.final_amount || 0)
+const canFullBalance = computed(() => userBalance.value >= finalPayAmount.value)
+const balanceDeductAmount = computed(() => {
+  if (paymentMethod.value === 'balance') return finalPayAmount.value
+  if (useBalanceDeduct.value) return Math.min(userBalance.value, finalPayAmount.value)
+  return 0
+})
+const remainingAmount = computed(() => {
+  return Math.max(0, finalPayAmount.value - balanceDeductAmount.value)
+})
 
 
 const loadPackages = async () => {
@@ -225,6 +261,13 @@ const loadPackages = async () => {
   } finally { loading.value = false }
 }
 
+const fetchUserBalance = async () => {
+  try {
+    const res = await getDashboardInfo()
+    userBalance.value = res.data?.balance || 0
+  } catch {}
+}
+
 const getPaymentLabel = (payType: string) => {
   const labels: Record<string, string> = {
     epay: '在线支付',
@@ -235,12 +278,6 @@ const getPaymentLabel = (payType: string) => {
     crypto: '加密货币 (USDT)',
   }
   return labels[payType] || payType
-}
-
-const formatTraffic = (bytes: number) => {
-  if (!bytes || bytes === 0) return '无限制'
-  const gb = bytes / (1024 * 1024 * 1024)
-  return `${gb.toFixed(0)} GB`
 }
 
 const parseFeatures = (features: any): string[] => {
@@ -324,7 +361,12 @@ const handlePay = async () => {
       router.push('/orders')
     } else if (paymentMethod.value.startsWith('pm_')) {
       const pmId = parseInt(paymentMethod.value.replace('pm_', ''))
-      const res = await createPayment({ order_id: orderInfo.value.id, payment_method_id: pmId })
+      const paymentData: any = { order_id: orderInfo.value.id, payment_method_id: pmId }
+      if (useBalanceDeduct.value && balanceDeductAmount.value > 0) {
+        paymentData.use_balance = true
+        paymentData.balance_amount = balanceDeductAmount.value
+      }
+      const res = await createPayment(paymentData)
       const data = res.data
 
       // Crypto payment: show wallet info modal
@@ -379,7 +421,10 @@ const handleCryptoTransferred = () => {
 
 onUnmounted(() => { stopPolling() })
 
-onMounted(() => { loadPackages() })
+onMounted(() => {
+  loadPackages()
+  fetchUserBalance()
+})
 </script>
 
 <style scoped>
@@ -391,6 +436,13 @@ onMounted(() => { loadPackages() })
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 .subtitle { font-size: 16px; color: #666; margin: 0; }
+
+.balance-info {
+  text-align: center; margin-top: 8px; font-size: 15px; color: #666;
+}
+.balance-amount {
+  color: #18a058; font-weight: 700; font-size: 18px;
+}
 
 .package-card {
   background: #fff; border-radius: 12px; padding: 24px;

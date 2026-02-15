@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"archive/zip"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -16,9 +17,11 @@ import (
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
+	"cboard/v2/internal/services/git"
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -1904,8 +1907,9 @@ func AdminCreateBackup(c *gin.Context) {
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
-	dstPath := filepath.Join(backupDir, fmt.Sprintf("cboard_backup_%s.db", timestamp))
+	dbBackupPath := filepath.Join(backupDir, fmt.Sprintf("cboard_backup_%s.db", timestamp))
 
+	// Copy database file
 	src, err := os.Open(srcPath)
 	if err != nil {
 		utils.InternalError(c, "打开数据库失败: "+err.Error())
@@ -1913,7 +1917,7 @@ func AdminCreateBackup(c *gin.Context) {
 	}
 	defer src.Close()
 
-	dst, err := os.Create(dstPath)
+	dst, err := os.Create(dbBackupPath)
 	if err != nil {
 		utils.InternalError(c, "创建备份文件失败: "+err.Error())
 		return
@@ -1925,12 +1929,110 @@ func AdminCreateBackup(c *gin.Context) {
 		return
 	}
 
-	info, _ := os.Stat(dstPath)
-	utils.Success(c, gin.H{
-		"filename":   filepath.Base(dstPath),
+	// Create ZIP file containing db + .env
+	zipPath := filepath.Join(backupDir, fmt.Sprintf("cboard_backup_%s.zip", timestamp))
+	zipFile, err := os.Create(zipPath)
+	if err != nil {
+		utils.InternalError(c, "创建ZIP文件失败: "+err.Error())
+		return
+	}
+	defer zipFile.Close()
+
+	zipWriter := zip.NewWriter(zipFile)
+	defer zipWriter.Close()
+
+	// Add database to ZIP
+	if err := addFileToZip(zipWriter, dbBackupPath, filepath.Base(dbBackupPath)); err != nil {
+		utils.InternalError(c, "添加数据库到ZIP失败: "+err.Error())
+		return
+	}
+
+	// Add .env if exists
+	if _, err := os.Stat(".env"); err == nil {
+		if err := addFileToZip(zipWriter, ".env", ".env"); err != nil {
+			utils.InternalError(c, "添加.env到ZIP失败: "+err.Error())
+			return
+		}
+	}
+
+	zipWriter.Close()
+	zipFile.Close()
+
+	info, _ := os.Stat(dbBackupPath)
+	zipInfo, _ := os.Stat(zipPath)
+
+	response := gin.H{
+		"filename":   filepath.Base(dbBackupPath),
 		"size":       info.Size(),
 		"created_at": time.Now(),
-	})
+	}
+
+	// Check if GitHub backup is enabled
+	settings := utils.GetSettings("backup_github_enabled", "backup_github_token", "backup_github_repo")
+	if settings["backup_github_enabled"] == "true" || settings["backup_github_enabled"] == "1" {
+		token := settings["backup_github_token"]
+		repo := settings["backup_github_repo"]
+
+		if token != "" && repo != "" {
+			// Parse owner/repo
+			parts := strings.SplitN(repo, "/", 2)
+			if len(parts) == 2 {
+				owner := parts[0]
+				repoName := parts[1]
+
+				// Generate task ID
+				taskID := uuid.New().String()
+
+				// Create upload status
+				statusManager := git.GetUploadStatusManager()
+				status := &git.UploadStatus{
+					Status:    "uploading",
+					Progress:  0,
+					Message:   "准备上传...",
+					StartTime: time.Now(),
+					FileName:  filepath.Base(zipPath),
+					FileSize:  zipInfo.Size(),
+				}
+				statusManager.SetStatus(taskID, status)
+
+				// Start async upload
+				go func() {
+					client := git.NewClient(git.PlatformGitHub, token, owner, repoName)
+					err := client.UploadBackupWithProgress(zipPath, func(progress int, message string) {
+						statusManager.UpdateStatus(taskID, "uploading", message, progress)
+					})
+
+					if err != nil {
+						statusManager.UpdateError(taskID, err)
+					} else {
+						statusManager.UpdateStatus(taskID, "success", "上传成功", 100)
+					}
+				}()
+
+				response["task_id"] = taskID
+				response["github_upload"] = "started"
+			}
+		}
+	}
+
+	utils.Success(c, response)
+}
+
+// addFileToZip adds a file to the zip archive
+func addFileToZip(zipWriter *zip.Writer, filePath, nameInZip string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer, err := zipWriter.Create(nameInZip)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(writer, file)
+	return err
 }
 
 func AdminListBackups(c *gin.Context) {
@@ -1974,6 +2076,53 @@ func AdminListBackups(c *gin.Context) {
 	})
 
 	utils.Success(c, backups)
+}
+
+func AdminGetUploadStatus(c *gin.Context) {
+	taskID := c.Param("taskId")
+	if taskID == "" {
+		utils.BadRequest(c, "任务ID不能为空")
+		return
+	}
+	statusManager := git.GetUploadStatusManager()
+	status, exists := statusManager.GetStatus(taskID)
+	if !exists {
+		utils.NotFound(c, "未找到该上传任务")
+		return
+	}
+	utils.Success(c, status)
+}
+
+func AdminTestGitHubConnection(c *gin.Context) {
+	var req struct {
+		Token string `json:"token"`
+		Repo  string `json:"repo"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Fall back to saved settings
+		settings := utils.GetSettings("backup_github_token", "backup_github_repo")
+		req.Token = settings["backup_github_token"]
+		req.Repo = settings["backup_github_repo"]
+	}
+	if req.Token == "" {
+		utils.BadRequest(c, "Token不能为空")
+		return
+	}
+	if req.Repo == "" {
+		utils.BadRequest(c, "仓库地址不能为空")
+		return
+	}
+	parts := strings.SplitN(req.Repo, "/", 2)
+	if len(parts) != 2 {
+		utils.BadRequest(c, "仓库地址格式错误，应为 owner/repo")
+		return
+	}
+	client := git.NewClient(git.PlatformGitHub, req.Token, parts[0], parts[1])
+	if err := client.TestConnection(); err != nil {
+		utils.BadRequest(c, "GitHub 连接测试失败: "+err.Error())
+		return
+	}
+	utils.Success(c, gin.H{"message": "GitHub 连接测试成功"})
 }
 
 // ==================== Create User ====================
@@ -2048,7 +2197,7 @@ func AdminCreateUser(c *gin.Context) {
 
 	// 发送账户创建通知邮件（含初始密码）
 	go services.NotifyUserDirect(user.Email, "admin_create_user", map[string]string{
-		"username": user.Username, "password": req.Password,
+		"username": user.Username, "email": user.Email, "password": req.Password,
 	})
 	go services.NotifyAdmin("admin_create_user", map[string]string{
 		"username": user.Username, "email": user.Email,

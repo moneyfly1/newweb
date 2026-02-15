@@ -258,7 +258,11 @@ func Register(c *gin.Context) {
 	utils.CreateRegistrationLog(c, user.ID, user.Username, user.Email, req.InviteCode, inviterIDPtr)
 
 	// 发送欢迎邮件 + 通知管理员
-	welcomeSubject, welcomeBody := services.RenderEmail("welcome", map[string]string{"username": user.Username})
+	welcomeSubject, welcomeBody := services.RenderEmail("welcome", map[string]string{
+		"username": user.Username,
+		"email":    user.Email,
+		"password": req.Password,
+	})
 	go services.QueueEmail(user.Email, welcomeSubject, welcomeBody, "welcome")
 	go services.NotifyAdmin("new_user", map[string]string{"username": user.Username, "email": user.Email})
 

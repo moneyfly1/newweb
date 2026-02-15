@@ -44,10 +44,6 @@
                     <span class="card-label">有效期</span>
                     <span>{{ pkg.duration_days }} 天</span>
                   </div>
-                  <div class="card-row">
-                    <span class="card-label">流量</span>
-                    <span>{{ pkg.traffic_limit && pkg.traffic_limit > 0 ? (pkg.traffic_limit / (1024 * 1024 * 1024)).toFixed(0) + ' GB' : '不限' }}</span>
-                  </div>
                 </div>
                 <div class="card-actions">
                   <n-button size="small" type="primary" @click="handleEdit(pkg)">编辑</n-button>
@@ -133,16 +129,6 @@
             style="width: 100%"
           />
         </n-form-item>
-        <n-form-item label="流量限制" path="traffic_limit">
-          <n-input-number
-            v-model:value="editForm.traffic_limit"
-            placeholder="0 表示不限制，单位：字节"
-            :min="0"
-            style="width: 100%"
-          >
-            <template #suffix>字节（0=不限）</template>
-          </n-input-number>
-        </n-form-item>
         <n-form-item label="速率限制" path="speed_limit">
           <n-input-number
             v-model:value="editForm.speed_limit"
@@ -206,7 +192,6 @@ const editForm = reactive({
   price: 0,
   duration_days: 30,
   device_limit: 3,
-  traffic_limit: 0,
   speed_limit: 0,
   features: '',
   is_active: true,
@@ -256,16 +241,6 @@ const columns = [
     key: 'device_limit',
     width: 100,
     render: (row) => `${row.device_limit} 台`
-  },
-  {
-    title: '流量',
-    key: 'traffic_limit',
-    width: 100,
-    render: (row) => {
-      if (!row.traffic_limit || row.traffic_limit === 0) return '不限'
-      const gb = row.traffic_limit / (1024 * 1024 * 1024)
-      return `${gb.toFixed(0)} GB`
-    }
   },
   {
     title: '状态',
@@ -368,7 +343,6 @@ const handleEdit = (row) => {
   editForm.price = row.price
   editForm.duration_days = row.duration_days
   editForm.device_limit = row.device_limit
-  editForm.traffic_limit = row.traffic_limit || 0
   editForm.speed_limit = row.speed_limit || 0
   // features is stored as JSON array string, convert to newline-separated for editing
   let feat = ''
@@ -393,7 +367,6 @@ const handleSavePackage = async () => {
       price: editForm.price,
       duration_days: editForm.duration_days,
       device_limit: editForm.device_limit,
-      traffic_limit: editForm.traffic_limit || 0,
       speed_limit: editForm.speed_limit || 0,
       features: editForm.features.trim()
         ? JSON.stringify(editForm.features.trim().split('\n').map(s => s.trim()).filter(Boolean))

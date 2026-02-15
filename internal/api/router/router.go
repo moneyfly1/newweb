@@ -379,6 +379,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		// 备份
 		admin.POST("/backup", handlers.AdminCreateBackup)
 		admin.GET("/backup", handlers.AdminListBackups)
+		admin.GET("/backup/upload-status/:taskId", handlers.AdminGetUploadStatus)
+		admin.POST("/backup/test-github", handlers.AdminTestGitHubConnection)
 
 		// 签到管理
 		admin.GET("/checkin/stats", handlers.AdminGetCheckInStats)

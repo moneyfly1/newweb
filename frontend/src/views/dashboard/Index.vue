@@ -417,7 +417,9 @@ async function handleCheckIn() {
   checkinLoading.value = true
   try {
     const res: any = await checkIn()
-    message.success(`签到成功！获得 ${res.data.amount} 元奖励，已连续签到 ${res.data.consecutive_days} 天`)
+    const amt = Number(res.data.amount)
+    const amtStr = amt < 1 ? amt.toFixed(2) : amt.toString()
+    message.success(`签到成功！获得 ${amtStr} 元奖励，已连续签到 ${res.data.consecutive_days} 天`)
     checkinStatus.value.checked_in_today = true
     checkinStatus.value.consecutive_days = res.data.consecutive_days
     // Refresh balance

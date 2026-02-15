@@ -2,8 +2,11 @@
 # ============================================================================
 # CBoard v2 一键安装 & 管理脚本（无宝塔 / 纯净 Linux 环境）
 # 支持: Ubuntu 20.04+, Debian 11+, CentOS 7+, AlmaLinux 8+, Rocky Linux 8+
-# 用法: bash install.sh
+# 用法: bash install.sh   （必须用 bash 运行，不要用 sh install.sh）
+# 全自动安装: CBOARD_UNATTENDED=1 CBOARD_ADMIN_EMAIL=admin@example.com CBOARD_ADMIN_PASSWORD=你的密码 bash install.sh
 # ============================================================================
+# 必须使用 bash，否则 read -rp 等会失败导致脚本静默退出
+[ -n "$BASH_VERSION" ] || exec /usr/bin/env bash "$0" "$@"
 set -e
 
 # ---- 版本 ----
@@ -668,18 +671,40 @@ install_system() {
     echo -e "${BLUE}========== 开始安装 CBoard v2 ==========${NC}"
     echo ""
 
+    info "正在检查 root 权限..."
     check_root
+    ok "root 检查通过"
 
-    # 磁盘空间
+    info "正在检查磁盘空间..."
     if ! check_disk_space; then
-        fatal "磁盘空间不足"
+        fatal "磁盘空间不足，请至少保留 1GB 可用空间"
     fi
 
+    info "正在检测操作系统..."
     detect_os
-    interactive_config
+    ok "系统: $OS $OS_VERSION"
+
+    # 无人值守：使用环境变量或默认值，跳过交互
+    if [ -n "$CBOARD_UNATTENDED" ] && [ "$CBOARD_UNATTENDED" != "0" ]; then
+        INSTALL_DIR=${CBOARD_INSTALL_DIR:-/opt/cboard}
+        CBOARD_PORT=${CBOARD_PORT:-9000}
+        BACKEND_PORT=$CBOARD_PORT
+        DOMAIN=${CBOARD_DOMAIN:-}
+        ENABLE_SSL=${CBOARD_SSL:-n}
+        ADMIN_EMAIL=${CBOARD_ADMIN_EMAIL:-admin@example.com}
+        ADMIN_PASSWORD=${CBOARD_ADMIN_PASSWORD:-}
+        if [ -z "$ADMIN_PASSWORD" ]; then
+            ADMIN_PASSWORD=$(openssl rand -base64 12 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c 12)
+            [ -z "$ADMIN_PASSWORD" ] && ADMIN_PASSWORD="Cboard$(date +%s | tail -c 6)"
+            warn "未设置 CBOARD_ADMIN_PASSWORD，已生成随机密码，安装完成后请查看下方输出"
+        fi
+        ok "无人值守模式：安装目录=$INSTALL_DIR 端口=$CBOARD_PORT 管理员=$ADMIN_EMAIL"
+    else
+        interactive_config
+    fi
 
     echo ""
-    info "开始安装..."
+    info "开始安装依赖与构建..."
     echo ""
 
     install_system_tools
@@ -1765,6 +1790,12 @@ main() {
     fi
 
     check_concurrent
+
+    # 无人值守：直接执行安装后退出，不进入菜单
+    if [ -n "$CBOARD_UNATTENDED" ] && [ "$CBOARD_UNATTENDED" != "0" ]; then
+        install_system
+        exit 0
+    fi
 
     while true; do
         show_menu

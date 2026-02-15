@@ -159,11 +159,53 @@ func runResetPassword() {
 	db := database.GetDB()
 	var user models.User
 	q := db.Model(&models.User{}).Where("is_admin = ?", true)
-	// 指定邮箱则按邮箱查，否则用第一个管理员；"admin" 视为留空
 	if email != "" && email != "admin" {
 		q = q.Where("email = ?", email)
 	}
-	if err := q.First(&user).Error; err != nil {
+	err = q.First(&user).Error
+	if err != nil {
+		// 指定了邮箱但该邮箱没有管理员：创建新管理员（安装脚本常用场景）
+		if email != "" && email != "admin" {
+			localPart := email
+			if idx := strings.Index(email, "@"); idx > 0 {
+				localPart = strings.ReplaceAll(email[:idx], ".", "_")
+			}
+			if len(localPart) > 45 {
+				localPart = localPart[:45]
+			}
+			username := "admin_" + localPart
+			user = models.User{
+				Username:                    username,
+				Email:                       email,
+				Password:                    string(hash),
+				IsActive:                    true,
+				IsVerified:                  true,
+				IsAdmin:                     true,
+				Theme:                       "light",
+				Language:                    "zh-CN",
+				Timezone:                    "Asia/Shanghai",
+				EmailNotifications:          true,
+				AbnormalLoginAlertEnabled:   true,
+				PushNotifications:           true,
+				DataSharing:                 true,
+				Analytics:                   true,
+				SpecialNodeSubscriptionType: "both",
+			}
+			if err := db.Create(&user).Error; err != nil {
+				log.Fatalf("创建管理员失败: %v", err)
+			}
+			subURL := utils.GenerateRandomString(32)
+			db.Create(&models.Subscription{
+				UserID:          user.ID,
+				SubscriptionURL: subURL,
+				DeviceLimit:     3,
+				IsActive:        true,
+				Status:          "active",
+				ExpireTime:      time.Now(),
+			})
+			log.Printf("已创建管理员 %s 并设置密码", user.Email)
+			return
+		}
 		log.Fatalf("未找到管理员账号（可指定 --email 或留空使用第一个管理员）: %v", err)
 	}
 

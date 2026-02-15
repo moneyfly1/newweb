@@ -61,6 +61,8 @@ CBOARD_UNATTENDED=1 CBOARD_ADMIN_EMAIL=admin@example.com CBOARD_ADMIN_PASSWORD=�
 9. 配置 Let's Encrypt SSL 证书（可选）
 10. 配置防火墙放行端口
 
+安装完成后**直接打开域名或 IP 即可访问**（如 `https://你的域名` 或 `http://服务器IP`），**无需在地址后加端口**；Nginx 监听 80/443，自动转发到后端。
+
 安装完成后脚本进入管理菜单，后续再次运行 `bash install.sh` 即可进入菜单。
 
 管理菜单功能列表：

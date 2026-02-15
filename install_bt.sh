@@ -2,8 +2,9 @@
 # ============================================================================
 # CBoard v2 一键安装 & 管理脚本（宝塔面板版）
 # 适用于已安装宝塔面板的 Linux 服务器
-# 用法: bash install_bt.sh
+# 用法: bash install_bt.sh   （必须用 bash 运行，不要用 sh install_bt.sh）
 # ============================================================================
+[ -n "$BASH_VERSION" ] || exec /usr/bin/env bash "$0" "$@"
 set -e
 
 # ---- 版本 ----
@@ -49,7 +50,9 @@ check_concurrent() {
 
 # ---- Root 检查 ----
 check_root() {
-    [[ $EUID -ne 0 ]] && fatal "请使用 root 用户运行此脚本"
+    if [[ $EUID -ne 0 ]]; then
+        fatal "请使用 root 用户运行此脚本"
+    fi
 }
 
 # ---- 宝塔面板检测 ----
@@ -221,8 +224,8 @@ interactive_config() {
     read -rp "安装目录 [$INSTALL_DIR]: " input
     INSTALL_DIR=${input:-$INSTALL_DIR}
 
-    read -rp "后端端口 [$CBOARD_PORT]: " input
-    CBOARD_PORT=${input:-$CBOARD_PORT}
+    # 后端端口固定 9000（仅内部使用，用户直接访问域名即可，无需加端口）
+    CBOARD_PORT=9000
     BACKEND_PORT=$CBOARD_PORT
 
     while true; do
@@ -248,8 +251,7 @@ interactive_config() {
     echo ""
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     info "安装目录: $INSTALL_DIR"
-    info "后端端口: $CBOARD_PORT"
-    info "绑定域名: ${DOMAIN:-无(IP 访问)}"
+    info "绑定域名: ${DOMAIN:-无(IP 访问)}（用户直接打开域名即可，无需加端口）"
     info "SSL 证书: ${ENABLE_SSL}"
     info "管理员邮箱: $ADMIN_EMAIL"
     info "管理员密码: ${ADMIN_PASSWORD:0:2}******"
@@ -257,7 +259,9 @@ interactive_config() {
     echo -e "${YELLOW}提示: SSL 证书也可在宝塔面板中配置${NC}"
     echo ""
     read -rp "确认以上配置? (y/n) [y]: " confirm
-    [[ "${confirm:-y}" != "y" ]] && fatal "安装已取消"
+    if [[ "${confirm:-y}" != "y" ]]; then
+        fatal "安装已取消"
+    fi
 }
 
 # ---- 生成 .env 配置文件 ----
@@ -352,7 +356,9 @@ build_backend() {
             [ $i -lt 2 ] && go clean -cache 2>/dev/null || true
         fi
     done
-    [ "$success" = false ] && fatal "后端构建失败"
+    if [ "$success" = false ]; then
+        fatal "后端构建失败"
+    fi
 
     chmod +x cboard
     ok "后端构建完成"
@@ -373,11 +379,15 @@ build_frontend() {
             [ $i -lt 3 ] && rm -rf node_modules package-lock.json && sleep 3
         fi
     done
-    [ "$npm_success" = false ] && fatal "前端依赖安装失败"
+    if [ "$npm_success" = false ]; then
+        fatal "前端依赖安装失败"
+    fi
 
     export NODE_OPTIONS="--max-old-space-size=4096"
     npx vite build 2>&1 || fatal "前端构建失败"
-    [ ! -f "dist/index.html" ] && fatal "前端构建失败: dist/index.html 不存在"
+    if [ ! -f "dist/index.html" ]; then
+        fatal "前端构建失败: dist/index.html 不存在"
+    fi
 
     ok "前端构建完成"
 }
@@ -601,7 +611,9 @@ setup_ssl() {
         echo "  网站 -> $DOMAIN -> SSL -> Let's Encrypt"
         echo ""
         read -rp "是否继续安装? (y/n) [y]: " cont
-        [[ "${cont:-y}" != "y" ]] && fatal "安装已取消"
+        if [[ "${cont:-y}" != "y" ]]; then
+            fatal "安装已取消"
+        fi
     fi
 }
 
@@ -611,7 +623,9 @@ update_nginx_ssl() {
     local CERT_PATH="/www/server/panel/vhost/cert/$DOMAIN"
     local CONF_FILE="/www/server/panel/vhost/nginx/cboard.conf"
 
-    [ ! -f "$CERT_PATH/fullchain.pem" ] && return
+    if [ ! -f "$CERT_PATH/fullchain.pem" ]; then
+        return 0
+    fi
 
     cat > "$CONF_FILE" <<EOF
 server {
@@ -698,18 +712,24 @@ install_system() {
     echo -e "${BLUE}========== 开始安装 CBoard v2 (宝塔版) ==========${NC}"
     echo ""
 
+    info "正在检查 root 权限..."
     check_root
+    ok "root 检查通过"
+
+    info "正在检测宝塔面板与 Nginx..."
     check_bt
     check_bt_nginx
 
+    info "正在检查磁盘空间..."
     if ! check_disk_space; then
-        fatal "磁盘空间不足"
+        fatal "磁盘空间不足，请至少保留 1GB 可用空间"
     fi
+    ok "磁盘空间充足"
 
     interactive_config
 
     echo ""
-    info "开始安装..."
+    info "开始安装依赖与构建..."
     echo ""
 
     install_go
@@ -758,8 +778,7 @@ print_install_result() {
     echo -e "${GREEN}║   CBoard v2 安装完成! (宝塔面板版)      ║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "  访问地址:    ${CYAN}$BASE_URL${NC}"
-    echo -e "  API 端口:    ${CYAN}$CBOARD_PORT${NC}"
+    echo -e "  访问地址:    ${CYAN}$BASE_URL${NC}  （直接打开即可，无需加端口）"
     echo -e "  安装目录:    ${CYAN}$INSTALL_DIR${NC}"
     echo ""
     echo -e "  管理员邮箱:  ${YELLOW}$ADMIN_EMAIL${NC}"

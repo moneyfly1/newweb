@@ -259,9 +259,8 @@ interactive_config() {
     read -rp "安装目录 [$INSTALL_DIR]: " input
     INSTALL_DIR=${input:-$INSTALL_DIR}
 
-    # 后端端口
-    read -rp "后端端口 [$CBOARD_PORT]: " input
-    CBOARD_PORT=${input:-$CBOARD_PORT}
+    # 后端端口固定为 9000（仅内部使用，Nginx 转发 80/443 到该端口，用户直接访问域名即可，无需加端口）
+    CBOARD_PORT=9000
     BACKEND_PORT=$CBOARD_PORT
 
     # 域名
@@ -292,8 +291,7 @@ interactive_config() {
     echo ""
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     info "安装目录: $INSTALL_DIR"
-    info "后端端口: $CBOARD_PORT"
-    info "绑定域名: ${DOMAIN:-无(IP 访问)}"
+    info "绑定域名: ${DOMAIN:-无(IP 访问)}（用户直接打开域名即可，无需加端口）"
     info "SSL 证书: ${ENABLE_SSL}"
     info "管理员邮箱: $ADMIN_EMAIL"
     info "管理员密码: ${ADMIN_PASSWORD:0:2}******"
@@ -767,8 +765,7 @@ print_install_result() {
     echo -e "${GREEN}║       CBoard v2 安装完成!                ║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "  访问地址:    ${CYAN}$BASE_URL${NC}"
-    echo -e "  API 端口:    ${CYAN}$CBOARD_PORT${NC}"
+    echo -e "  访问地址:    ${CYAN}$BASE_URL${NC}  （直接打开即可，无需加端口）"
     echo -e "  安装目录:    ${CYAN}$INSTALL_DIR${NC}"
     echo ""
     echo -e "  管理员邮箱:  ${YELLOW}$ADMIN_EMAIL${NC}"

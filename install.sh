@@ -52,7 +52,9 @@ check_concurrent() {
 
 # ---- Root 检查 ----
 check_root() {
-    [[ $EUID -ne 0 ]] && fatal "请使用 root 用户运行此脚本"
+    if [[ $EUID -ne 0 ]]; then
+        fatal "请使用 root 用户运行此脚本"
+    fi
 }
 
 # ---- 系统检测 ----
@@ -298,7 +300,9 @@ interactive_config() {
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     read -rp "确认以上配置? (y/n) [y]: " confirm
-    [[ "${confirm:-y}" != "y" ]] && fatal "安装已取消"
+    if [[ "${confirm:-y}" != "y" ]]; then
+        fatal "安装已取消"
+    fi
 }
 
 # ---- 生成 .env 配置文件 ----
@@ -425,7 +429,9 @@ build_frontend() {
             fi
         fi
     done
-    [ "$npm_success" = false ] && fatal "前端依赖安装失败"
+    if [ "$npm_success" = false ]; then
+        fatal "前端依赖安装失败"
+    fi
 
     # 构建
     export NODE_OPTIONS="--max-old-space-size=4096"
@@ -646,7 +652,9 @@ EOF
         echo -e "${YELLOW}建议: 稍后使用菜单选项 2 重新配置域名和 SSL${NC}"
         echo ""
         read -rp "是否继续安装? (y/n) [y]: " cont
-        [[ "${cont:-y}" != "y" ]] && fatal "安装已取消"
+        if [[ "${cont:-y}" != "y" ]]; then
+            fatal "安装已取消"
+        fi
     fi
 }
 
@@ -695,7 +703,9 @@ install_system() {
         ADMIN_PASSWORD=${CBOARD_ADMIN_PASSWORD:-}
         if [ -z "$ADMIN_PASSWORD" ]; then
             ADMIN_PASSWORD=$(openssl rand -base64 12 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c 12)
-            [ -z "$ADMIN_PASSWORD" ] && ADMIN_PASSWORD="Cboard$(date +%s | tail -c 6)"
+            if [ -z "$ADMIN_PASSWORD" ]; then
+                ADMIN_PASSWORD="Cboard$(date +%s | tail -c 6)"
+            fi
             warn "未设置 CBOARD_ADMIN_PASSWORD，已生成随机密码，安装完成后请查看下方输出"
         fi
         ok "无人值守模式：安装目录=$INSTALL_DIR 端口=$CBOARD_PORT 管理员=$ADMIN_EMAIL"

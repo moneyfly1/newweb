@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -223,8 +224,22 @@ func PayOrder(c *gin.Context) {
 		if err := database.GetDB().Model(&models.Package{}).Where("id = ?", order.PackageID).Pluck("name", &pkgName).Error; err != nil {
 			pkgName = "未知套餐"
 		}
+		var subURL string
+		var userSub models.Subscription
+		if database.GetDB().Where("user_id = ?", user.ID).First(&userSub).Error == nil {
+			settings := utils.GetSettings("site_url", "domain_name")
+			siteURL := settings["site_url"]
+			if siteURL == "" {
+				siteURL = settings["domain_name"]
+			}
+			if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
+				siteURL = "https://" + siteURL
+			}
+			siteURL = strings.TrimRight(siteURL, "/")
+			subURL = siteURL + "/api/v1/subscribe/" + userSub.SubscriptionURL
+		}
 		emailSubject, emailBody := services.RenderEmail("payment_success", map[string]string{
-			"order_no": orderNo, "amount": payAmountStr, "package_name": pkgName,
+			"order_no": orderNo, "amount": payAmountStr, "package_name": pkgName, "subscription_url": subURL,
 		})
 		go services.QueueEmail(user.Email, emailSubject, emailBody, "payment_success")
 		go services.NotifyAdmin("payment_success", map[string]string{

@@ -113,7 +113,7 @@ func createDefaultAdmin() {
 		ExpireTime:      time.Now(),
 	})
 
-	log.Println("已创建默认管理员: admin@example.com / admin123")
+	log.Println("已创建默认管理员: admin@example.com（请立即修改密码）")
 }
 
 // runResetPassword 从命令行参数解析 --email 和 --password，重置管理员密码后退出

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"cboard/v2/internal/models"
@@ -60,8 +61,23 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 		if order.FinalAmount != nil {
 			payAmount = fmt.Sprintf("%.2f", *order.FinalAmount)
 		}
+		// Build subscription URL for email
+		var subURL string
+		var userSub models.Subscription
+		if db.Where("user_id = ?", order.UserID).First(&userSub).Error == nil {
+			settings := utils.GetSettings("site_url", "domain_name")
+			siteURL := settings["site_url"]
+			if siteURL == "" {
+				siteURL = settings["domain_name"]
+			}
+			if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
+				siteURL = "https://" + siteURL
+			}
+			siteURL = strings.TrimRight(siteURL, "/")
+			subURL = siteURL + "/api/v1/subscribe/" + userSub.SubscriptionURL
+		}
 		emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
-			"order_no": order.OrderNo, "amount": payAmount, "package_name": pkg.Name,
+			"order_no": order.OrderNo, "amount": payAmount, "package_name": pkg.Name, "subscription_url": subURL,
 		})
 		go QueueEmail(user.Email, emailSubject, emailBody, "payment_success")
 		go NotifyAdmin("payment_success", map[string]string{

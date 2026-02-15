@@ -38,7 +38,9 @@ func UserCheckIn(c *gin.Context) {
 		minReward = maxReward
 	}
 
-	amount := float64(minReward + rand.Intn(maxReward-minReward+1))
+	// Settings are in 分 (cents), convert to 元 (yuan) for balance
+	rewardCents := minReward + rand.Intn(maxReward-minReward+1)
+	amount := float64(rewardCents) / 100.0
 
 	// Get user's current balance for the log
 	var user models.User

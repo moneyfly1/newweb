@@ -416,6 +416,15 @@
                     <n-button type="primary" :loading="backupCreating" @click="handleCreateBackup">创建备份</n-button>
                     <n-button @click="loadBackups" :loading="backupLoading">刷新列表</n-button>
                   </n-space>
+                  <div v-if="uploadStatus" style="margin-top: 4px;">
+                    <n-alert :type="uploadStatus.status === 'success' ? 'success' : uploadStatus.status === 'failed' ? 'error' : 'info'" :bordered="false" size="small">
+                      <template #header>
+                        GitHub 上传{{ uploadStatus.status === 'success' ? '完成' : uploadStatus.status === 'failed' ? '失败' : '中' }}
+                      </template>
+                      {{ uploadStatus.message }}
+                    </n-alert>
+                    <n-progress v-if="uploadStatus.status === 'uploading'" :percentage="uploadStatus.progress || 0" :indicator-placement="'inside'" style="margin-top: 8px;" />
+                  </div>
                 </n-space>
               </n-card>
 
@@ -435,6 +444,7 @@
                   </n-form-item>
                   <n-space justify="center" style="margin-top: 16px">
                     <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
+                    <n-button :loading="testingGitHub" @click="handleTestGitHub" :disabled="!form.backup_github_token || !form.backup_github_repo">测试连接</n-button>
                   </n-space>
                 </n-form>
               </n-card>
@@ -475,7 +485,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useMessage, NH4 } from 'naive-ui'
-import { getSettings, updateSettings, sendTestEmail, testTelegram, createBackup, listBackups } from '@/api/admin'
+import { getSettings, updateSettings, sendTestEmail, testTelegram, createBackup, listBackups, getUploadStatus, testGitHubConnection } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -489,6 +499,10 @@ const backupLoading = ref(false)
 const backupCreating = ref(false)
 const testingTelegram = ref(false)
 const backups = ref<any[]>([])
+const uploadTaskId = ref('')
+const uploadStatus = ref<any>(null)
+const testingGitHub = ref(false)
+let uploadPollTimer: ReturnType<typeof setInterval> | null = null
 
 // Computed URL hints based on site_url
 const siteBase = computed(() => {
@@ -751,14 +765,62 @@ const loadBackups = async () => {
 
 const handleCreateBackup = async () => {
   backupCreating.value = true
+  uploadStatus.value = null
+  uploadTaskId.value = ''
   try {
     const res = await createBackup()
     message.success(res.message || '备份已创建')
     loadBackups()
+    // Check if GitHub upload was started
+    const taskId = res.data?.task_id
+    if (taskId) {
+      uploadTaskId.value = taskId
+      uploadStatus.value = { status: 'uploading', progress: 0, message: '正在上传到 GitHub...' }
+      startUploadPolling(taskId)
+    }
   } catch (error: any) {
     message.error(error.message || '创建备份失败')
   } finally {
     backupCreating.value = false
+  }
+}
+
+const startUploadPolling = (taskId: string) => {
+  stopUploadPolling()
+  uploadPollTimer = setInterval(async () => {
+    try {
+      const res = await getUploadStatus(taskId)
+      uploadStatus.value = res.data
+      if (res.data?.status === 'success' || res.data?.status === 'failed') {
+        stopUploadPolling()
+        if (res.data.status === 'success') {
+          message.success('GitHub 备份上传成功')
+        } else {
+          message.error('GitHub 上传失败: ' + (res.data.error || '未知错误'))
+        }
+      }
+    } catch {
+      stopUploadPolling()
+    }
+  }, 2000)
+}
+
+const stopUploadPolling = () => {
+  if (uploadPollTimer) {
+    clearInterval(uploadPollTimer)
+    uploadPollTimer = null
+  }
+}
+
+const handleTestGitHub = async () => {
+  testingGitHub.value = true
+  try {
+    await testGitHubConnection({ token: form.value.backup_github_token, repo: form.value.backup_github_repo })
+    message.success('GitHub 连接测试成功')
+  } catch (error: any) {
+    message.error(error.message || 'GitHub 连接测试失败')
+  } finally {
+    testingGitHub.value = false
   }
 }
 

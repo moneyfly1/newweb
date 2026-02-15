@@ -133,6 +133,8 @@ export const clearConfigUpdateLogs = () => request.post('/admin/config-update/lo
 // Backup
 export const createBackup = () => request.post('/admin/backup')
 export const listBackups = () => request.get('/admin/backup')
+export const getUploadStatus = (taskId: string) => request.get(`/admin/backup/upload-status/${taskId}`)
+export const testGitHubConnection = (data?: any) => request.post('/admin/backup/test-github', data)
 
 // Node Import & Test
 export const importNodes = (data: any) => request.post('/admin/nodes/import', data)

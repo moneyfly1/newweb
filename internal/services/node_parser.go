@@ -1008,33 +1008,122 @@ func generateFromTemplate(proxies []map[string]interface{}, allNames, realNames 
 		return ""
 	}
 
-	var templateConfig map[string]interface{}
+	var templateConfig yaml.Node
 	if err := yaml.Unmarshal(data, &templateConfig); err != nil {
 		return ""
 	}
 
-	// Set subscription name
-	if subscriptionName != "" {
-		templateConfig["name"] = subscriptionName
+	// templateConfig is a Document node; the actual mapping is its first child
+	if templateConfig.Kind != yaml.DocumentNode || len(templateConfig.Content) == 0 {
+		return ""
+	}
+	root := templateConfig.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return ""
 	}
 
-	// Inject proxies
-	proxyList := make([]interface{}, 0, len(proxies))
+	// Build proxies YAML using our ordered writer for deterministic output
+	var proxiesSB strings.Builder
 	for _, p := range proxies {
-		proxyList = append(proxyList, p)
+		writeClashProxy(&proxiesSB, p)
 	}
-	templateConfig["proxies"] = proxyList
-
-	// Update proxy-groups: inject real node names
-	if groups, ok := templateConfig["proxy-groups"].([]interface{}); ok {
-		updateProxyGroups(groups, allNames, realNames)
+	var proxiesNode yaml.Node
+	if err := yaml.Unmarshal([]byte("proxies:\n"+proxiesSB.String()), &proxiesNode); err != nil {
+		return ""
 	}
 
-	output, err := yaml.Marshal(templateConfig)
+	// Walk the root mapping and update proxies + proxy-groups + inject name
+	for i := 0; i < len(root.Content)-1; i += 2 {
+		keyNode := root.Content[i]
+		valNode := root.Content[i+1]
+
+		if keyNode.Value == "proxies" {
+			// Replace proxies value with our generated proxies
+			if proxiesNode.Kind == yaml.DocumentNode && len(proxiesNode.Content) > 0 {
+				mappingNode := proxiesNode.Content[0]
+				if mappingNode.Kind == yaml.MappingNode && len(mappingNode.Content) >= 2 {
+					*valNode = *mappingNode.Content[1]
+				}
+			}
+		}
+
+		if keyNode.Value == "proxy-groups" && valNode.Kind == yaml.SequenceNode {
+			updateProxyGroupsYAML(valNode, allNames, realNames)
+		}
+	}
+
+	output, err := yaml.Marshal(&templateConfig)
 	if err != nil {
 		return ""
 	}
 	return unescapeUnicode(string(output))
+}
+
+// updateProxyGroupsYAML updates proxy-groups in the YAML node tree.
+func updateProxyGroupsYAML(groupsNode *yaml.Node, allNames, realNames []string) {
+	// Collect group names
+	groupNames := make(map[string]bool)
+	for _, g := range groupsNode.Content {
+		if g.Kind != yaml.MappingNode {
+			continue
+		}
+		for j := 0; j < len(g.Content)-1; j += 2 {
+			if g.Content[j].Value == "name" {
+				groupNames[g.Content[j+1].Value] = true
+			}
+		}
+	}
+
+	for _, g := range groupsNode.Content {
+		if g.Kind != yaml.MappingNode {
+			continue
+		}
+		var gType string
+		var proxiesIdx int = -1
+		for j := 0; j < len(g.Content)-1; j += 2 {
+			if g.Content[j].Value == "type" {
+				gType = g.Content[j+1].Value
+			}
+			if g.Content[j].Value == "proxies" {
+				proxiesIdx = j + 1
+			}
+		}
+		if proxiesIdx < 0 || (gType != "select" && gType != "url-test" && gType != "fallback" && gType != "load-balance") {
+			continue
+		}
+
+		// Collect special entries (DIRECT, REJECT, group references)
+		var specials []string
+		oldVal := g.Content[proxiesIdx]
+		if oldVal.Kind == yaml.SequenceNode {
+			for _, item := range oldVal.Content {
+				if item.Kind == yaml.ScalarNode {
+					if item.Value == "DIRECT" || item.Value == "REJECT" || groupNames[item.Value] {
+						specials = append(specials, item.Value)
+					}
+				}
+			}
+		}
+
+		// Build new proxies list
+		var newItems []*yaml.Node
+		for _, s := range specials {
+			newItems = append(newItems, &yaml.Node{Kind: yaml.ScalarNode, Value: s, Tag: "!!str"})
+		}
+		names := allNames
+		if gType != "select" {
+			names = realNames
+		}
+		for _, n := range names {
+			newItems = append(newItems, &yaml.Node{Kind: yaml.ScalarNode, Value: n, Tag: "!!str"})
+		}
+
+		g.Content[proxiesIdx] = &yaml.Node{
+			Kind:    yaml.SequenceNode,
+			Tag:     "!!seq",
+			Content: newItems,
+		}
+	}
 }
 
 // unescapeUnicode converts \UXXXXXXXX and \uXXXX escape sequences back to actual Unicode characters.
@@ -1073,59 +1162,6 @@ func unescapeUnicode(s string) string {
 }
 
 // updateProxyGroups injects proxy names into each group, preserving special entries.
-func updateProxyGroups(groups []interface{}, allNames, realNames []string) {
-	// Collect all group names for reference
-	groupNames := make(map[string]bool)
-	for _, g := range groups {
-		if m, ok := g.(map[string]interface{}); ok {
-			if name, ok := m["name"].(string); ok {
-				groupNames[name] = true
-			}
-		}
-	}
-
-	for _, g := range groups {
-		group, ok := g.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		gType, _ := group["type"].(string)
-
-		if gType == "select" || gType == "url-test" || gType == "fallback" || gType == "load-balance" {
-			// Keep special entries (DIRECT, REJECT, other group names)
-			existingProxies := make([]string, 0)
-			if oldProxies, ok := group["proxies"].([]interface{}); ok {
-				for _, p := range oldProxies {
-					if pStr, ok := p.(string); ok {
-						if pStr == "DIRECT" || pStr == "REJECT" || groupNames[pStr] {
-							existingProxies = append(existingProxies, pStr)
-						}
-					}
-				}
-			}
-
-			if gType == "select" {
-				// Select groups: keep special entries + append all proxy names
-				newProxies := make([]interface{}, 0, len(existingProxies)+len(allNames))
-				for _, p := range existingProxies {
-					newProxies = append(newProxies, p)
-				}
-				for _, n := range allNames {
-					newProxies = append(newProxies, n)
-				}
-				group["proxies"] = newProxies
-			} else {
-				// url-test/fallback/load-balance: only real nodes
-				newProxies := make([]interface{}, 0, len(realNames))
-				for _, n := range realNames {
-					newProxies = append(newProxies, n)
-				}
-				group["proxies"] = newProxies
-			}
-		}
-	}
-}
-
 // generateDefaultClashYAML is the fallback when no template file exists.
 func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNames []string, siteDomain, subscriptionName string) string {
 	var sb strings.Builder
@@ -1133,12 +1169,46 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 	if subscriptionName != "" {
 		sb.WriteString(fmt.Sprintf("name: %s\n", escapeYAML(subscriptionName)))
 	}
-	sb.WriteString("port: 7890\n")
-	sb.WriteString("socks-port: 7891\n")
+	sb.WriteString("mixed-port: 7890\n")
 	sb.WriteString("allow-lan: true\n")
-	sb.WriteString("mode: Rule\n")
+	sb.WriteString("bind-address: '*'\n")
+	sb.WriteString("mode: rule\n")
 	sb.WriteString("log-level: info\n")
-	sb.WriteString("external-controller: 127.0.0.1:9090\n\n")
+	sb.WriteString("ipv6: false\n")
+	sb.WriteString("external-controller: 127.0.0.1:9090\n")
+	sb.WriteString("find-process-mode: always\n")
+	sb.WriteString("unified-delay: true\n")
+	sb.WriteString("tcp-concurrent: true\n")
+	sb.WriteString("\n")
+	sb.WriteString("profile:\n")
+	sb.WriteString("  store-selected: true\n")
+	sb.WriteString("  store-fake-ip: true\n")
+	sb.WriteString("\n")
+	sb.WriteString("dns:\n")
+	sb.WriteString("  enable: true\n")
+	sb.WriteString("  listen: 0.0.0.0:1053\n")
+	sb.WriteString("  ipv6: false\n")
+	sb.WriteString("  enhanced-mode: fake-ip\n")
+	sb.WriteString("  fake-ip-range: 198.18.0.1/16\n")
+	sb.WriteString("  fake-ip-filter:\n")
+	sb.WriteString("    - '*.lan'\n")
+	sb.WriteString("    - '*.local'\n")
+	sb.WriteString("    - localhost.ptlogin2.qq.com\n")
+	sb.WriteString("    - '+.msftconnecttest.com'\n")
+	sb.WriteString("    - '+.msftncsi.com'\n")
+	sb.WriteString("  default-nameserver:\n")
+	sb.WriteString("    - 223.5.5.5\n")
+	sb.WriteString("    - 119.29.29.29\n")
+	sb.WriteString("  nameserver:\n")
+	sb.WriteString("    - https://dns.alidns.com/dns-query\n")
+	sb.WriteString("    - https://doh.pub/dns-query\n")
+	sb.WriteString("  fallback:\n")
+	sb.WriteString("    - https://1.1.1.1/dns-query\n")
+	sb.WriteString("    - https://dns.google/dns-query\n")
+	sb.WriteString("  fallback-filter:\n")
+	sb.WriteString("    geoip: true\n")
+	sb.WriteString("    geoip-code: CN\n")
+	sb.WriteString("\n")
 
 	sb.WriteString("proxies:\n")
 	for _, p := range proxies {

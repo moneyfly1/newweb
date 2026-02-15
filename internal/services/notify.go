@@ -135,13 +135,13 @@ func NotifyAdmin(eventType string, data map[string]string) {
 		siteName = "CBoard"
 	}
 
-	title, body := buildNotifyMessage(siteName, eventType, data)
+	title, telegramMsg, barkMsg := buildNotifyMessage(siteName, eventType, data)
 
 	// Email channel
 	if email := settings["notify_admin_email"]; email != "" {
 		enabled := settings["notify_email_enabled"]
 		if enabled == "" || enabled == "true" || enabled == "1" {
-			go QueueEmail(email, title, "<h3>"+title+"</h3><pre>"+body+"</pre>", "admin_notify")
+			go QueueEmail(email, title, "<h3>"+title+"</h3><pre>"+barkMsg+"</pre>", "admin_notify")
 		}
 	}
 
@@ -151,7 +151,7 @@ func NotifyAdmin(eventType string, data map[string]string) {
 	if botToken != "" && chatID != "" {
 		enabled := settings["notify_telegram_enabled"]
 		if enabled == "true" || enabled == "1" {
-			go sendTelegram(botToken, chatID, fmt.Sprintf("*%s*\n%s", title, body))
+			go sendTelegram(botToken, chatID, telegramMsg)
 		}
 	}
 
@@ -161,46 +161,222 @@ func NotifyAdmin(eventType string, data map[string]string) {
 	if barkServer != "" && barkKey != "" {
 		enabled := settings["notify_bark_enabled"]
 		if enabled == "true" || enabled == "1" {
-			go sendBark(barkServer, barkKey, title, body)
+			go sendBark(barkServer, barkKey, title, barkMsg)
 		}
 	}
 }
 
-func buildNotifyMessage(siteName, eventType string, data map[string]string) (string, string) {
+func buildNotifyMessage(siteName, eventType string, data map[string]string) (title, telegramBody, barkBody string) {
+	now := time.Now().Format("2006-01-02 15:04:05")
+
 	switch eventType {
 	case "new_order":
-		return fmt.Sprintf("[%s] 新订单", siteName),
-			fmt.Sprintf("用户: %s\n订单号: %s\n套餐: %s\n金额: ¥%s", data["username"], data["order_no"], data["package_name"], data["amount"])
+		title = fmt.Sprintf("[%s] 📦 新订单", siteName)
+		telegramBody = fmt.Sprintf(
+			"📦 <b>新订单</b>\n\n"+
+				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+				"┃  📋 <b>订单详情</b>\n"+
+				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+				"🆔 <b>订单号</b>: <code>%s</code>\n"+
+				"👤 <b>用户</b>: <code>%s</code>\n"+
+				"📦 <b>套餐</b>: <b>%s</b>\n"+
+				"💰 <b>金额</b>: <b>¥%s</b>\n"+
+				"🕐 <b>时间</b>: %s",
+			data["order_no"], data["username"], data["package_name"], data["amount"], now)
+		barkBody = fmt.Sprintf(
+			"📦 新订单\n\n"+
+				"🆔 订单号: %s\n"+
+				"👤 用户: %s\n"+
+				"📦 套餐: %s\n"+
+				"💰 金额: ¥%s\n"+
+				"🕐 时间: %s",
+			data["order_no"], data["username"], data["package_name"], data["amount"], now)
+
 	case "payment_success":
-		return fmt.Sprintf("[%s] 支付成功", siteName),
-			fmt.Sprintf("用户: %s\n订单号: %s\n套餐: %s\n金额: ¥%s", data["username"], data["order_no"], data["package_name"], data["amount"])
+		title = fmt.Sprintf("[%s] 🎉 支付成功", siteName)
+		telegramBody = fmt.Sprintf(
+			"🎉 <b>支付成功</b>\n\n"+
+				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+				"┃  📋 <b>订单详情</b>\n"+
+				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+				"🆔 <b>订单号</b>: <code>%s</code>\n"+
+				"👤 <b>用户</b>: <code>%s</code>\n"+
+				"📦 <b>套餐</b>: <b>%s</b>\n"+
+				"💰 <b>金额</b>: <b>¥%s</b>\n"+
+				"🕐 <b>时间</b>: %s\n\n"+
+				"✅ 订单已自动处理\n"+
+				"📦 订阅已激活",
+			data["order_no"], data["username"], data["package_name"], data["amount"], now)
+		barkBody = fmt.Sprintf(
+			"🎉 支付成功\n\n"+
+				"🆔 订单号: %s\n"+
+				"👤 用户: %s\n"+
+				"📦 套餐: %s\n"+
+				"💰 金额: ¥%s\n"+
+				"🕐 时间: %s\n\n"+
+				"✅ 订单已自动处理\n"+
+				"📦 订阅已激活",
+			data["order_no"], data["username"], data["package_name"], data["amount"], now)
+
 	case "recharge_success":
-		return fmt.Sprintf("[%s] 充值成功", siteName),
-			fmt.Sprintf("用户: %s\n充值单号: %s\n金额: ¥%s", data["username"], data["order_no"], data["amount"])
+		title = fmt.Sprintf("[%s] 💰 充值成功", siteName)
+		telegramBody = fmt.Sprintf(
+			"💰 <b>充值成功</b>\n\n"+
+				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+				"┃  📋 <b>充值详情</b>\n"+
+				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+				"🆔 <b>充值单号</b>: <code>%s</code>\n"+
+				"👤 <b>用户</b>: <code>%s</code>\n"+
+				"💰 <b>金额</b>: <b>¥%s</b>\n"+
+				"🕐 <b>时间</b>: %s",
+			data["order_no"], data["username"], data["amount"], now)
+		barkBody = fmt.Sprintf(
+			"💰 充值成功\n\n"+
+				"🆔 充值单号: %s\n"+
+				"👤 用户: %s\n"+
+				"💰 金额: ¥%s\n"+
+				"🕐 时间: %s",
+			data["order_no"], data["username"], data["amount"], now)
+
 	case "new_ticket":
-		return fmt.Sprintf("[%s] 新工单", siteName),
-			fmt.Sprintf("用户: %s\n工单号: %s\n标题: %s", data["username"], data["ticket_no"], data["title"])
+		title = fmt.Sprintf("[%s] 🎫 新工单", siteName)
+		telegramBody = fmt.Sprintf(
+			"🎫 <b>新工单</b>\n\n"+
+				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+				"┃  📋 <b>工单详情</b>\n"+
+				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+				"🆔 <b>工单号</b>: <code>%s</code>\n"+
+				"👤 <b>用户</b>: <code>%s</code>\n"+
+				"📝 <b>标题</b>: <b>%s</b>\n"+
+				"🕐 <b>时间</b>: %s",
+			data["ticket_no"], data["username"], data["title"], now)
+		barkBody = fmt.Sprintf(
+			"🎫 新工单\n\n"+
+				"🆔 工单号: %s\n"+
+				"👤 用户: %s\n"+
+				"📝 标题: %s\n"+
+				"🕐 时间: %s",
+			data["ticket_no"], data["username"], data["title"], now)
+
 	case "new_user":
-		return fmt.Sprintf("[%s] 新用户注册", siteName),
-			fmt.Sprintf("用户名: %s\n邮箱: %s", data["username"], data["email"])
+		title = fmt.Sprintf("[%s] 👋 新用户注册", siteName)
+		telegramBody = fmt.Sprintf(
+			"👋 <b>新用户注册</b>\n\n"+
+				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+				"┃  📋 <b>用户详情</b>\n"+
+				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+				"👤 <b>用户名</b>: <code>%s</code>\n"+
+				"📧 <b>邮箱</b>: <code>%s</code>\n"+
+				"🕐 <b>时间</b>: %s\n\n"+
+				"✅ 已自动创建默认订阅",
+			data["username"], data["email"], now)
+		barkBody = fmt.Sprintf(
+			"👋 新用户注册\n\n"+
+				"👤 用户名: %s\n"+
+				"📧 邮箱: %s\n"+
+				"🕐 时间: %s\n\n"+
+				"✅ 已自动创建默认订阅",
+			data["username"], data["email"], now)
 	case "admin_create_user":
-		return fmt.Sprintf("[%s] 管理员创建用户", siteName),
-			fmt.Sprintf("用户名: %s\n邮箱: %s", data["username"], data["email"])
+		title = fmt.Sprintf("[%s] 📋 管理员创建用户", siteName)
+		telegramBody = fmt.Sprintf(
+			"📋 <b>管理员创建用户</b>\n\n"+
+				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+				"┃  📋 <b>用户详情</b>\n"+
+				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+				"👤 <b>用户名</b>: <code>%s</code>\n"+
+				"📧 <b>邮箱</b>: <code>%s</code>\n"+
+				"🕐 <b>时间</b>: %s",
+			data["username"], data["email"], now)
+		barkBody = fmt.Sprintf(
+			"📋 管理员创建用户\n\n"+
+				"👤 用户名: %s\n"+
+				"📧 邮箱: %s\n"+
+				"🕐 时间: %s",
+			data["username"], data["email"], now)
+
 	case "subscription_reset":
-		return fmt.Sprintf("[%s] 订阅重置", siteName),
-			fmt.Sprintf("用户: %s\n操作: %s", data["username"], data["reset_by"])
+		title = fmt.Sprintf("[%s] 🔄 订阅重置", siteName)
+		telegramBody = fmt.Sprintf(
+			"🔄 <b>订阅重置</b>\n\n"+
+				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+				"┃  📋 <b>重置详情</b>\n"+
+				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+				"👤 <b>用户</b>: <code>%s</code>\n"+
+				"🔧 <b>操作者</b>: <code>%s</code>\n"+
+				"🕐 <b>时间</b>: %s\n\n"+
+				"⚠️ 旧地址已失效",
+			data["username"], data["reset_by"], now)
+		barkBody = fmt.Sprintf(
+			"🔄 订阅重置\n\n"+
+				"👤 用户: %s\n"+
+				"🔧 操作者: %s\n"+
+				"🕐 时间: %s\n\n"+
+				"⚠️ 旧地址已失效",
+			data["username"], data["reset_by"], now)
+
 	case "abnormal_login":
-		return fmt.Sprintf("[%s] 异常登录", siteName),
-			fmt.Sprintf("用户: %s\nIP: %s\n位置: %s", data["username"], data["ip"], data["location"])
+		title = fmt.Sprintf("[%s] ⚠️ 异常登录", siteName)
+		telegramBody = fmt.Sprintf(
+			"⚠️ <b>异常登录</b>\n\n"+
+				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+				"┃  📋 <b>登录详情</b>\n"+
+				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+				"👤 <b>用户</b>: <code>%s</code>\n"+
+				"🌐 <b>IP</b>: <code>%s</code>\n"+
+				"📍 <b>位置</b>: <b>%s</b>\n"+
+				"🕐 <b>时间</b>: %s",
+			data["username"], data["ip"], data["location"], now)
+		barkBody = fmt.Sprintf(
+			"⚠️ 异常登录\n\n"+
+				"👤 用户: %s\n"+
+				"🌐 IP: %s\n"+
+				"📍 位置: %s\n"+
+				"🕐 时间: %s",
+			data["username"], data["ip"], data["location"], now)
 	case "unpaid_order":
-		return fmt.Sprintf("[%s] 未支付订单", siteName),
-			fmt.Sprintf("用户: %s\n订单号: %s\n金额: ¥%s", data["username"], data["order_no"], data["amount"])
+		title = fmt.Sprintf("[%s] ⏳ 未支付订单", siteName)
+		telegramBody = fmt.Sprintf(
+			"⏳ <b>未支付订单</b>\n\n"+
+				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+				"┃  📋 <b>订单详情</b>\n"+
+				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+				"🆔 <b>订单号</b>: <code>%s</code>\n"+
+				"👤 <b>用户</b>: <code>%s</code>\n"+
+				"💰 <b>金额</b>: <b>¥%s</b>\n"+
+				"🕐 <b>时间</b>: %s",
+			data["order_no"], data["username"], data["amount"], now)
+		barkBody = fmt.Sprintf(
+			"⏳ 未支付订单\n\n"+
+				"🆔 订单号: %s\n"+
+				"👤 用户: %s\n"+
+				"💰 金额: ¥%s\n"+
+				"🕐 时间: %s",
+			data["order_no"], data["username"], data["amount"], now)
+
 	case "expiry_reminder":
-		return fmt.Sprintf("[%s] 订阅到期提醒", siteName),
-			fmt.Sprintf("用户: %s\n到期时间: %s", data["username"], data["expire_time"])
+		title = fmt.Sprintf("[%s] ⏰ 订阅到期提醒", siteName)
+		telegramBody = fmt.Sprintf(
+			"⏰ <b>订阅到期提醒</b>\n\n"+
+				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+				"┃  📋 <b>到期详情</b>\n"+
+				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+				"👤 <b>用户</b>: <code>%s</code>\n"+
+				"⏰ <b>到期时间</b>: <b>%s</b>",
+			data["username"], data["expire_time"])
+		barkBody = fmt.Sprintf(
+			"⏰ 订阅到期提醒\n\n"+
+				"👤 用户: %s\n"+
+				"⏰ 到期时间: %s",
+			data["username"], data["expire_time"])
+
 	default:
-		return fmt.Sprintf("[%s] 通知", siteName), data["message"]
+		title = fmt.Sprintf("[%s] 通知", siteName)
+		telegramBody = data["message"]
+		barkBody = data["message"]
 	}
+
+	return title, telegramBody, barkBody
 }
 
 // SendTestTelegram sends a test message via Telegram using saved settings.
@@ -215,7 +391,17 @@ func SendTestTelegram() error {
 	if siteName == "" {
 		siteName = "CBoard"
 	}
-	return sendTelegramSync(botToken, chatID, fmt.Sprintf("✅ [%s] Telegram 通知测试成功", siteName))
+	now := time.Now().Format("2006-01-02 15:04:05")
+	msg := fmt.Sprintf(
+		"✅ <b>Telegram 通知测试成功</b>\n\n"+
+			"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
+			"┃  📋 <b>测试信息</b>\n"+
+			"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
+			"🏷️ <b>站点</b>: <b>%s</b>\n"+
+			"🕐 <b>时间</b>: %s\n\n"+
+			"📡 通知服务运行正常",
+		siteName, now)
+	return sendTelegramSync(botToken, chatID, msg)
 }
 
 func sendTelegram(botToken, chatID, message string) {
@@ -227,7 +413,7 @@ func sendTelegramSync(botToken, chatID, message string) error {
 	form := url.Values{}
 	form.Set("chat_id", chatID)
 	form.Set("text", message)
-	form.Set("parse_mode", "Markdown")
+	form.Set("parse_mode", "HTML")
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.PostForm(apiURL, form)

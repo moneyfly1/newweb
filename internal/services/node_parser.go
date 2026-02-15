@@ -1032,7 +1032,26 @@ func generateFromTemplate(proxies []map[string]interface{}, allNames, realNames 
 		return ""
 	}
 
-	// Walk the root mapping and update proxies + proxy-groups + inject name
+	// Inject subscription name as YAML "name" field (used by Clash clients as profile display name)
+	if subscriptionName != "" {
+		nameFound := false
+		for i := 0; i < len(root.Content)-1; i += 2 {
+			if root.Content[i].Value == "name" {
+				root.Content[i+1].Value = subscriptionName
+				nameFound = true
+				break
+			}
+		}
+		if !nameFound {
+			// Prepend name field to the root mapping
+			root.Content = append([]*yaml.Node{
+				{Kind: yaml.ScalarNode, Value: "name", Tag: "!!str"},
+				{Kind: yaml.ScalarNode, Value: subscriptionName, Tag: "!!str"},
+			}, root.Content...)
+		}
+	}
+
+	// Walk the root mapping and update proxies + proxy-groups
 	for i := 0; i < len(root.Content)-1; i += 2 {
 		keyNode := root.Content[i]
 		valNode := root.Content[i+1]
@@ -1111,7 +1130,7 @@ func updateProxyGroupsYAML(groupsNode *yaml.Node, allNames, realNames []string) 
 			newItems = append(newItems, &yaml.Node{Kind: yaml.ScalarNode, Value: s, Tag: "!!str"})
 		}
 		names := allNames
-		if gType != "select" {
+		if gType != "select" && len(realNames) > 0 {
 			names = realNames
 		}
 		for _, n := range names {
@@ -1165,6 +1184,12 @@ func unescapeUnicode(s string) string {
 // generateDefaultClashYAML is the fallback when no template file exists.
 func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNames []string, siteDomain, subscriptionName string) string {
 	var sb strings.Builder
+
+	// When no real nodes exist, fall back to allNames to avoid empty proxy groups
+	autoNames := realNames
+	if len(autoNames) == 0 {
+		autoNames = allNames
+	}
 
 	if subscriptionName != "" {
 		sb.WriteString(fmt.Sprintf("name: %s\n", escapeYAML(subscriptionName)))
@@ -1244,7 +1269,7 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 	sb.WriteString("    interval: 300\n")
 	sb.WriteString("    tolerance: 50\n")
 	sb.WriteString("    proxies:\n")
-	for _, name := range realNames {
+	for _, name := range autoNames {
 		sb.WriteString("      - " + escapeYAML(name) + "\n")
 	}
 
@@ -1254,7 +1279,7 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 	sb.WriteString("    url: http://www.gstatic.com/generate_204\n")
 	sb.WriteString("    interval: 300\n")
 	sb.WriteString("    proxies:\n")
-	for _, name := range realNames {
+	for _, name := range autoNames {
 		sb.WriteString("      - " + escapeYAML(name) + "\n")
 	}
 
@@ -1265,7 +1290,7 @@ func generateDefaultClashYAML(proxies []map[string]interface{}, allNames, realNa
 	sb.WriteString("    interval: 300\n")
 	sb.WriteString("    strategy: consistent-hashing\n")
 	sb.WriteString("    proxies:\n")
-	for _, name := range realNames {
+	for _, name := range autoNames {
 		sb.WriteString("      - " + escapeYAML(name) + "\n")
 	}
 

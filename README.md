@@ -41,7 +41,8 @@ cd /opt/cboard
 bash install.sh
 ```
 
-> **注意**：请务必使用 `bash install.sh` 运行，不要使用 `sh install.sh`，否则可能因 shell 兼容导致安装中途静默退出。
+> **注意**：请务必使用 `bash install.sh` 运行，不要使用 `sh install.sh`，否则可能因 shell 兼容导致安装中途静默退出。  
+> **若 `/opt/cboard` 已存在**（已安装过或想更新代码）：不要删除目录、不要重新执行 `git clone`，否则会报「目录已存在」。请直接 `cd /opt/cboard && git pull && bash install.sh`，在菜单中选 **14 更新代码** 或 **12 重装网站(保留数据)**。
 
 **全自动安装（无人值守）**：不进入菜单、不交互，直接完成安装（需预先设置管理员邮箱和密码）：
 ```bash
@@ -110,6 +111,8 @@ cd /www/wwwroot/cboard
 bash install_bt.sh
 ```
 
+> **若 `/www/wwwroot/cboard` 已存在**：不要删除目录、不要重新 `git clone`。请直接 `cd /www/wwwroot/cboard && git pull && bash install_bt.sh`，在菜单中选 **14 更新代码** 或 **12 重装网站(保留数据)**。
+
 安装流程与无宝塔版一致，区别在于：
 - 自动检测宝塔面板和宝塔 Nginx 是否已安装
 - **自动在宝塔 Nginx 中创建站点配置**（`/www/server/panel/vhost/nginx/`），无需在面板里手动添加反向代理
@@ -151,12 +154,14 @@ bash start.sh logs       # 查看日志
 
 ### 版本更新
 
-项目已通过 Git 从 <https://github.com/moneyfly1/newweb> 安装时，更新到最新版本：
+**已安装过的服务器**：**不要删除安装目录、不要重新 `git clone`**。Git 会提示「destination path already exists」，且重复 clone 会覆盖或冲突。正确做法是进入安装目录拉取代码后，用脚本菜单更新或重装：
 
 ```bash
-# 方法 1：通过安装脚本菜单
+# 方法 1：通过安装脚本菜单（推荐）
+cd /opt/cboard   # 无宝塔；宝塔则为 cd /www/wwwroot/cboard
+git pull origin main
 bash install.sh
-# 选择 14「更新代码 (Git)」，脚本会自动从 GitHub 拉取最新代码、重新构建、重启服务
+# 选择 14「更新代码 (Git)」自动拉取、构建、重启；或选 12「重装网站(保留数据)」
 
 # 方法 2：手动更新
 cd /opt/cboard   # 无宝塔；或 /www/wwwroot/cboard（宝塔）

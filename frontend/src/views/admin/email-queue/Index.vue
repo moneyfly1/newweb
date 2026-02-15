@@ -1,8 +1,8 @@
 <template>
   <div class="admin-email-queue-page">
     <!-- Stats Cards -->
-    <n-grid :cols="4" :x-gap="16" :y-gap="16" responsive="screen" style="margin-bottom: 24px">
-      <n-grid-item span="4 s:2 m:1">
+    <n-grid :cols="4" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true" style="margin-bottom: 24px">
+      <n-grid-item span="2 m:1">
         <n-card class="stat-card stat-card-blue" :bordered="false">
           <div class="stat-content">
             <div class="stat-icon">
@@ -18,7 +18,7 @@
         </n-card>
       </n-grid-item>
 
-      <n-grid-item span="4 s:2 m:1">
+      <n-grid-item span="2 m:1">
         <n-card class="stat-card stat-card-orange" :bordered="false">
           <div class="stat-content">
             <div class="stat-icon">
@@ -34,7 +34,7 @@
         </n-card>
       </n-grid-item>
 
-      <n-grid-item span="4 s:2 m:1">
+      <n-grid-item span="2 m:1">
         <n-card class="stat-card stat-card-green" :bordered="false">
           <div class="stat-content">
             <div class="stat-icon">
@@ -50,7 +50,7 @@
         </n-card>
       </n-grid-item>
 
-      <n-grid-item span="4 s:2 m:1">
+      <n-grid-item span="2 m:1">
         <n-card class="stat-card stat-card-red" :bordered="false">
           <div class="stat-content">
             <div class="stat-icon">
@@ -106,6 +106,10 @@
                 <div class="card-row"><span class="card-label">发送时间:</span><span>{{ item.sent_at ? new Date(item.sent_at).toLocaleString('zh-CN') : '-' }}</span></div>
               </div>
               <div class="card-actions">
+                <n-button size="small" type="info" quaternary @click="handleDetail(item)">
+                  <template #icon><n-icon :component="EyeOutline" /></template>
+                  详情
+                </n-button>
                 <n-button v-if="item.status === 'failed'" size="small" type="warning" @click="handleRetry(item)">
                   <template #icon><n-icon :component="RefreshOutline" /></template>
                   重试
@@ -131,19 +135,52 @@
         />
       </n-space>
     </n-card>
+
+    <!-- Detail Modal -->
+    <n-modal v-model:show="showDetail" preset="card" title="邮件详情" style="width: 720px; max-width: 95vw;" :segmented="{ content: 'soft' }">
+      <template v-if="detailItem">
+        <n-descriptions :column="2" label-placement="left" bordered size="small">
+          <n-descriptions-item label="ID">{{ detailItem.id }}</n-descriptions-item>
+          <n-descriptions-item label="状态">
+            <n-tag :type="getStatusType(detailItem.status)" size="small">{{ getStatusText(detailItem.status) }}</n-tag>
+          </n-descriptions-item>
+          <n-descriptions-item label="收件人" :span="2">{{ detailItem.to_email }}</n-descriptions-item>
+          <n-descriptions-item label="主题" :span="2">{{ detailItem.subject }}</n-descriptions-item>
+          <n-descriptions-item label="邮件类型">{{ detailItem.email_type || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="内容类型">{{ detailItem.content_type || 'plain' }}</n-descriptions-item>
+          <n-descriptions-item label="重试次数">{{ detailItem.retry_count || 0 }} / {{ detailItem.max_retries || 3 }}</n-descriptions-item>
+          <n-descriptions-item label="创建时间">{{ formatTime(detailItem.created_at) }}</n-descriptions-item>
+          <n-descriptions-item label="发送时间">{{ formatTime(detailItem.sent_at) }}</n-descriptions-item>
+          <n-descriptions-item label="更新时间">{{ formatTime(detailItem.updated_at) }}</n-descriptions-item>
+          <n-descriptions-item v-if="detailItem.error_message" label="错误信息" :span="2">
+            <n-text type="error" style="word-break: break-all;">{{ detailItem.error_message }}</n-text>
+          </n-descriptions-item>
+        </n-descriptions>
+        <n-divider style="margin: 16px 0 12px;">邮件内容</n-divider>
+        <div v-if="detailItem.content_type === 'html' || (detailItem.content && detailItem.content.includes('<'))" class="email-preview" v-html="detailItem.content" />
+        <n-code v-else :code="detailItem.content || '(空)'" word-wrap style="max-height: 400px; overflow: auto;" />
+      </template>
+      <template #footer>
+        <n-space justify="end">
+          <n-button v-if="detailItem && detailItem.status === 'failed'" type="warning" @click="showDetail = false; handleRetry(detailItem)">重试发送</n-button>
+          <n-button @click="showDetail = false">关闭</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, h, onMounted, computed } from 'vue'
-import { NButton, NTag, NSpace, NIcon, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NText, useMessage, useDialog } from 'naive-ui'
 import {
   MailOutline,
   TimeOutline,
   CheckmarkCircleOutline,
   CloseCircleOutline,
   RefreshOutline,
-  TrashOutline
+  TrashOutline,
+  EyeOutline
 } from '@vicons/ionicons5'
 import { listEmailQueue, retryEmail, deleteEmail } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -161,6 +198,15 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const totalPages = ref(0)
 const totalCount = ref(0)
+const showDetail = ref(false)
+const detailItem = ref(null)
+
+const formatTime = (t) => t ? new Date(t).toLocaleString('zh-CN') : '-'
+
+const handleDetail = (row) => {
+  detailItem.value = row
+  showDetail.value = true
+}
 
 // Stats
 const stats = computed(() => {
@@ -237,13 +283,26 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 150,
+    width: 200,
     fixed: 'right',
     render: (row) => h(
       NSpace,
-      {},
+      { size: 4 },
       {
         default: () => [
+          h(
+            NButton,
+            {
+              size: 'small',
+              type: 'info',
+              quaternary: true,
+              onClick: () => handleDetail(row)
+            },
+            {
+              icon: () => h(NIcon, { component: EyeOutline }),
+              default: () => '详情'
+            }
+          ),
           row.status === 'failed' && h(
             NButton,
             {
@@ -481,5 +540,14 @@ onMounted(() => {
 
 @media (max-width: 767px) {
   .admin-email-queue-page { padding: 8px; }
+}
+
+.email-preview {
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 16px;
+  background: #fff;
 }
 </style>

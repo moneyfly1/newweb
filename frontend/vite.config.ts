@@ -37,5 +37,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'naive-ui': ['naive-ui'],
+          'echarts': ['echarts', 'vue-echarts'],
+          'vendor': ['vue', 'vue-router', 'pinia', 'axios'],
+        },
+      },
+    },
   },
 })

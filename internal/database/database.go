@@ -61,7 +61,12 @@ func InitDatabase(cfg *config.Config) error {
 		return fmt.Errorf("获取底层数据库实例失败: %w", err)
 	}
 	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
+	if DB.Dialector.Name() == "sqlite" {
+		// SQLite with WAL supports limited concurrency; keep pool small
+		sqlDB.SetMaxOpenConns(10)
+	} else {
+		sqlDB.SetMaxOpenConns(100)
+	}
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	// 验证连接可用
@@ -110,8 +115,10 @@ func buildSQLite(dbURL string) (gorm.Dialector, error) {
 		return nil, fmt.Errorf("创建 SQLite 数据库目录失败: %w", err)
 	}
 
+	// WAL mode + pragmas for concurrent web use
+	dsn := dbPath + "?_journal_mode=WAL&_busy_timeout=5000&_cache_size=-20000&_synchronous=NORMAL&_foreign_keys=ON"
 	log.Printf("使用 SQLite 数据库: %s", dbPath)
-	return sqlite.Open(dbPath), nil
+	return sqlite.Open(dsn), nil
 }
 
 // buildMySQL 构建 MySQL DSN

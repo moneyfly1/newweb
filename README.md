@@ -37,8 +37,15 @@ Go (Gin) + Vue 3 (Naive UI) 构建的代理订阅管理面板。支持 SQLite / 
 git clone https://github.com/moneyfly1/newweb.git /opt/cboard
 cd /opt/cboard
 
-# 2. 运行安装脚本（需要 root 权限）
+# 2. 运行安装脚本（必须用 bash，需要 root 权限）
 bash install.sh
+```
+
+> **注意**：请务必使用 `bash install.sh` 运行，不要使用 `sh install.sh`，否则可能因 shell 兼容导致安装中途静默退出。
+
+**全自动安装（无人值守）**：不进入菜单、不交互，直接完成安装（需预先设置管理员邮箱和密码）：
+```bash
+CBOARD_UNATTENDED=1 CBOARD_ADMIN_EMAIL=admin@example.com CBOARD_ADMIN_PASSWORD=你的密码 bash install.sh
 ```
 
 安装脚本会自动完成以下步骤：

@@ -26,8 +26,7 @@ cboard.db
 cboard.db-shm
 cboard.db-wal
 backups/
-# uploads 目录结构可提交，但模板内可能含节点信息不提交
-uploads/config/temp.yaml
+# uploads 目录及模板可提交（temp.yaml 为 Clash 模板）
 
 # IDE / 编辑器
 .idea/

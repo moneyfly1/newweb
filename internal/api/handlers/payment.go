@@ -112,6 +112,7 @@ func CreatePayment(c *gin.Context) {
 	var req struct {
 		OrderID         uint `json:"order_id" binding:"required"`
 		PaymentMethodID uint `json:"payment_method_id" binding:"required"`
+		IsMobile        bool `json:"is_mobile"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -169,7 +170,14 @@ func CreatePayment(c *gin.Context) {
 				alipayCfg, err := services.GetAlipayConfig()
 				if err == nil {
 					notifyURL, returnURL := services.BuildPaymentURLs("alipay", order.OrderNo)
-					paymentURL, err := services.AlipayCreateOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
+					var paymentURL string
+					if req.IsMobile {
+						// Use WAP payment for mobile
+						paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
+					} else {
+						// Use QR code payment for desktop
+						paymentURL, err = services.AlipayCreateOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
+					}
 					if err == nil {
 						utils.Success(c, gin.H{
 							"message":        "支付创建成功",
@@ -319,6 +327,7 @@ func CreateRechargePayment(c *gin.Context) {
 	var req struct {
 		RechargeID      uint `json:"recharge_id" binding:"required"`
 		PaymentMethodID uint `json:"payment_method_id" binding:"required"`
+		IsMobile        bool `json:"is_mobile"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -376,7 +385,14 @@ func CreateRechargePayment(c *gin.Context) {
 				alipayCfg, err := services.GetAlipayConfig()
 				if err == nil {
 					notifyURL, returnURL := services.BuildPaymentURLs("alipay", record.OrderNo)
-					paymentURL, err := services.AlipayCreateOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+					var paymentURL string
+					if req.IsMobile {
+						// Use WAP payment for mobile
+						paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+					} else {
+						// Use QR code payment for desktop
+						paymentURL, err = services.AlipayCreateOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+					}
 					if err == nil {
 						db.Model(&record).Update("payment_url", &paymentURL)
 						utils.Success(c, gin.H{

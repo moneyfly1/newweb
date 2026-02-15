@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"time"
 
@@ -149,12 +150,24 @@ func OpenMysteryBox(c *gin.Context) {
 	}
 
 	// 事务：扣费 + 发奖 + 记录
-	balanceBefore := user.Balance
+	var couponCode string
 	txErr := db.Transaction(func(tx *gorm.DB) error {
-		// 扣除价格
-		if err := tx.Model(&models.User{}).Where("id = ? AND balance >= ?", userID, pool.Price).
-			Update("balance", gorm.Expr("balance - ?", pool.Price)).Error; err != nil {
-			return err
+		// 读取事务内最新余额
+		var lockedUser models.User
+		if err := tx.First(&lockedUser, userID).Error; err != nil {
+			return fmt.Errorf("用户不存在")
+		}
+
+		balanceBefore := lockedUser.Balance
+
+		// 原子扣款：WHERE balance >= price 保证不会超扣
+		result := tx.Model(&models.User{}).Where("id = ? AND balance >= ?", userID, pool.Price).
+			Update("balance", gorm.Expr("balance - ?", pool.Price))
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return fmt.Errorf("余额不足")
 		}
 
 		// 扣费日志
@@ -188,10 +201,12 @@ func OpenMysteryBox(c *gin.Context) {
 			}).Error; err != nil {
 				return err
 			}
+
 		case "subscription_days":
 			days := int(prize.Value)
 			var sub models.Subscription
 			if err := tx.Where("user_id = ?", userID).First(&sub).Error; err != nil {
+				// 没有订阅，创建新的
 				subURL := utils.GenerateRandomString(32)
 				sub = models.Subscription{
 					UserID:          userID,
@@ -205,6 +220,7 @@ func OpenMysteryBox(c *gin.Context) {
 					return err
 				}
 			} else {
+				// 已有订阅，延长到期时间
 				newExpire := sub.ExpireTime
 				if newExpire.Before(time.Now()) {
 					newExpire = time.Now()
@@ -216,12 +232,13 @@ func OpenMysteryBox(c *gin.Context) {
 					return err
 				}
 			}
+
 		case "coupon":
-			code := "MB" + utils.GenerateRandomString(10)
+			couponCode = "MB" + utils.GenerateRandomString(10)
 			validFrom := time.Now()
 			validUntil := validFrom.AddDate(0, 1, 0)
 			coupon := models.Coupon{
-				Code:           code,
+				Code:           couponCode,
 				Name:           fmt.Sprintf("盲盒奖品-%s", prize.Name),
 				Description:    fmt.Sprintf("盲盒「%s」获得的优惠券", pool.Name),
 				Type:           "fixed",
@@ -236,15 +253,20 @@ func OpenMysteryBox(c *gin.Context) {
 			if err := tx.Create(&coupon).Error; err != nil {
 				return err
 			}
+
 		case "nothing":
 			// 谢谢参与
 		}
 
-		// 减少库存
+		// 减少库存（行级条件更新，防止超卖）
 		if prize.Stock != nil {
-			if err := tx.Model(&models.MysteryBoxPrize{}).Where("id = ? AND stock > 0", prize.ID).
-				Update("stock", gorm.Expr("stock - 1")).Error; err != nil {
-				return err
+			result := tx.Model(&models.MysteryBoxPrize{}).Where("id = ? AND stock > 0", prize.ID).
+				Update("stock", gorm.Expr("stock - 1"))
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				return fmt.Errorf("奖品库存不足")
 			}
 		}
 
@@ -261,16 +283,29 @@ func OpenMysteryBox(c *gin.Context) {
 	})
 
 	if txErr != nil {
-		utils.InternalError(c, "开启盲盒失败")
+		log.Printf("[mystery_box] 开启失败 user=%d pool=%d: %v", userID, pool.ID, txErr)
+		errMsg := txErr.Error()
+		if errMsg == "余额不足" {
+			utils.BadRequest(c, "余额不足，无法开启盲盒")
+		} else if errMsg == "奖品库存不足" {
+			utils.BadRequest(c, "奖品库存不足，请稍后再试")
+		} else {
+			utils.InternalError(c, "开启盲盒失败")
+		}
 		return
 	}
 
-	utils.Success(c, gin.H{
+	resp := gin.H{
 		"prize_name":  prize.Name,
 		"prize_type":  prize.Type,
 		"prize_value": prize.Value,
 		"cost":        pool.Price,
-	})
+	}
+	// 优惠券奖品返回券码，让用户能看到并使用
+	if prize.Type == "coupon" && couponCode != "" {
+		resp["coupon_code"] = couponCode
+	}
+	utils.Success(c, resp)
 }
 
 // GetMysteryBoxHistory GET /mystery-box/history

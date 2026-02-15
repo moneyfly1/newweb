@@ -187,8 +187,8 @@
     </n-modal>
 
     <!-- User Detail Drawer -->
-    <n-drawer v-model:show="showDetailDrawer" :width="appStore.isMobile ? '100%' : 780" placement="right">
-      <n-drawer-content :title="'用户详情 - ' + (userDetail.username || userDetail.email || '')">
+    <n-drawer v-model:show="showDetailDrawer" :width="appStore.isMobile ? '100%' : 780" placement="right" closable>
+      <n-drawer-content :title="'用户详情 - ' + (userDetail.username || userDetail.email || '')" closable>>
         <n-descriptions bordered :column="2" label-placement="left" size="small">
           <n-descriptions-item label="ID">{{ userDetail.id }}</n-descriptions-item>
           <n-descriptions-item label="用户名">{{ userDetail.username || '-' }}</n-descriptions-item>
@@ -417,44 +417,46 @@ const actionOptions = (row) => [
 // Table columns
 const columns = [
   { type: 'selection' },
-  { title: 'ID', key: 'id', width: 70, sorter: 'default' },
-  { title: '用户名', key: 'username', ellipsis: { tooltip: true }, width: 130 },
-  { title: '邮箱', key: 'email', ellipsis: { tooltip: true }, width: 200 },
+  { title: 'ID', key: 'id', width: 70, sorter: 'default', resizable: true },
+  { title: '用户名', key: 'username', ellipsis: { tooltip: true }, width: 130, resizable: true },
+  { title: '邮箱', key: 'email', ellipsis: { tooltip: true }, width: 200, resizable: true },
   {
     title: '余额',
     key: 'balance',
-    width: 100,
+    width: 100, resizable: true,
     sorter: (a, b) => a.balance - b.balance,
     render: (row) => `¥${(row.balance ?? 0).toFixed(2)}`
   },
   {
     title: '等级',
     key: 'level',
-    width: 90,
+    width: 90, resizable: true,
     render: (row) => row.level_name || row.level || '无'
   },
   {
     title: '状态',
     key: 'is_active',
-    width: 80,
+    width: 80, resizable: true,
     render: (row) => h(NTag, { type: row.is_active ? 'success' : 'error', size: 'small' }, { default: () => row.is_active ? '激活' : '禁用' })
   },
   {
     title: '管理员',
     key: 'is_admin',
-    width: 80,
+    width: 80, resizable: true,
     render: (row) => row.is_admin ? h(NTag, { type: 'warning', size: 'small' }, { default: () => '管理员' }) : '-'
   },
   {
     title: '注册时间',
     key: 'created_at',
-    width: 170,
+    width: 170, resizable: true,
+    sorter: (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0),
     render: (row) => row.created_at ? new Date(row.created_at).toLocaleString('zh-CN') : '-'
   },
   {
     title: '最后登录',
     key: 'last_login',
-    width: 170,
+    width: 170, resizable: true,
+    sorter: (a, b) => new Date(a.last_login || 0) - new Date(b.last_login || 0),
     render: (row) => row.last_login ? new Date(row.last_login).toLocaleString('zh-CN') : '-'
   },
   {
@@ -697,9 +699,9 @@ const fetchLevels = async () => {
   } catch {}
 }
 
-const openSetLevelModal = () => {
+const openSetLevelModal = async () => {
   selectedLevelId.value = null
-  if (userLevels.value.length === 0) fetchLevels()
+  if (userLevels.value.length === 0) await fetchLevels()
   showSetLevelModal.value = true
 }
 

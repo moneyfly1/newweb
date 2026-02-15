@@ -289,17 +289,18 @@ const formatDateTime = (dateStr: string) => {
 }
 
 const orderColumns: DataTableColumns<any> = [
-  { title: '订单号', key: 'order_no', width: 180, ellipsis: { tooltip: true } },
-  { title: '套餐名称', key: 'package_name', width: 140 },
-  { title: '原价', key: 'amount', width: 90, render: (r) => `¥${r.amount}` },
-  { title: '优惠', key: 'discount_amount', width: 90, render: (r) => r.discount_amount ? `-¥${r.discount_amount}` : '-' },
+  { title: '订单号', key: 'order_no', width: 180, resizable: true, ellipsis: { tooltip: true } },
+  { title: '套餐名称', key: 'package_name', width: 140, resizable: true },
+  { title: '原价', key: 'amount', width: 90, resizable: true, sorter: (a, b) => Number(a.amount) - Number(b.amount), render: (r) => `¥${r.amount}` },
+  { title: '优惠', key: 'discount_amount', width: 90, resizable: true, render: (r) => r.discount_amount ? `-¥${r.discount_amount}` : '-' },
   {
-    title: '实付', key: 'final_amount', width: 90,
+    title: '实付', key: 'final_amount', width: 90, resizable: true,
+    sorter: (a, b) => Number(a.final_amount) - Number(b.final_amount),
     render: (r) => h('span', { style: 'color:#18a058;font-weight:600' }, `¥${r.final_amount}`)
   },
-  { title: '状态', key: 'status', width: 90, render: (r) => h(NTag, { type: getStatusType(r.status), size: 'small' }, { default: () => getStatusText(r.status) }) },
-  { title: '支付方式', key: 'payment_method', width: 90, render: (r) => r.payment_method || '-' },
-  { title: '创建时间', key: 'created_at', width: 170, render: (r) => formatDateTime(r.created_at) },
+  { title: '状态', key: 'status', width: 90, resizable: true, render: (r) => h(NTag, { type: getStatusType(r.status), size: 'small' }, { default: () => getStatusText(r.status) }) },
+  { title: '支付方式', key: 'payment_method', width: 90, resizable: true, render: (r) => r.payment_method || '-' },
+  { title: '创建时间', key: 'created_at', width: 170, resizable: true, sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(), render: (r) => formatDateTime(r.created_at) },
   {
     title: '操作', key: 'actions', width: 200, fixed: 'right',
     render: (row) => {
@@ -317,11 +318,11 @@ const orderColumns: DataTableColumns<any> = [
 
 
 const rechargeColumns: DataTableColumns<any> = [
-  { title: '订单号', key: 'order_no', width: 180, ellipsis: { tooltip: true } },
-  { title: '金额', key: 'amount', width: 100, render: (r) => h('span', { style: 'color:#18a058;font-weight:600' }, `¥${r.amount}`) },
-  { title: '状态', key: 'status', width: 100, render: (r) => h(NTag, { type: getStatusType(r.status), size: 'small' }, { default: () => getStatusText(r.status) }) },
-  { title: '支付方式', key: 'payment_method', width: 100, render: (r) => r.payment_method || '-' },
-  { title: '创建时间', key: 'created_at', width: 170, render: (r) => formatDateTime(r.created_at) },
+  { title: '订单号', key: 'order_no', width: 180, resizable: true, ellipsis: { tooltip: true } },
+  { title: '金额', key: 'amount', width: 100, resizable: true, sorter: (a, b) => Number(a.amount) - Number(b.amount), render: (r) => h('span', { style: 'color:#18a058;font-weight:600' }, `¥${r.amount}`) },
+  { title: '状态', key: 'status', width: 100, resizable: true, render: (r) => h(NTag, { type: getStatusType(r.status), size: 'small' }, { default: () => getStatusText(r.status) }) },
+  { title: '支付方式', key: 'payment_method', width: 100, resizable: true, render: (r) => r.payment_method || '-' },
+  { title: '创建时间', key: 'created_at', width: 170, resizable: true, sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(), render: (r) => formatDateTime(r.created_at) },
   {
     title: '操作', key: 'actions', width: 100, fixed: 'right',
     render: (row) => {

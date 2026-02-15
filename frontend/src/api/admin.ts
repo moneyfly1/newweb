@@ -18,6 +18,7 @@ export const deleteUserDevice = (userId: number, deviceId: number) => request.de
 export const batchUserAction = (data: { user_ids: number[], action: string, data?: any }) => request.post('/admin/users/batch-action', data)
 export const exportUsersCSV = (params?: any) => request.get('/admin/users/export', { params, responseType: 'blob' })
 export const importUsersCSV = (data: FormData) => request.post('/admin/users/import', data, { headers: { 'Content-Type': 'multipart/form-data' } })
+export const updateUserNotes = (userId: number, notes: string) => request.put(`/admin/users/${userId}/notes`, { notes })
 
 // Orders
 export const listAdminOrders = (params?: any) => request.get('/admin/orders', { params })

@@ -55,6 +55,58 @@
           </n-grid-item>
         </n-grid>
       </n-spin>
+
+      <!-- Custom Package -->
+      <div v-if="customEnabled" class="custom-package-section">
+        <h2 class="custom-title">自定义套餐</h2>
+        <p class="custom-subtitle">自由选择设备数量和购买时长，购买越久越优惠</p>
+        <div class="custom-form">
+          <div class="custom-row">
+            <span class="custom-label">设备数量</span>
+            <div class="custom-control">
+              <n-slider v-model:value="customDevices" :min="customMinDevices" :max="customMaxDevices" :step="1" style="flex:1" />
+              <n-input-number v-model:value="customDevices" :min="customMinDevices" :max="customMaxDevices" size="small" style="width:100px;margin-left:12px" />
+              <span class="custom-unit">台</span>
+            </div>
+          </div>
+          <div class="custom-row">
+            <span class="custom-label">购买时长</span>
+            <div class="custom-control">
+              <n-radio-group v-model:value="customMonths">
+                <n-space :size="8" wrap>
+                  <n-radio v-for="tier in customDiscountTiers" :key="tier.months" :value="tier.months">
+                    {{ tier.months }}个月
+                    <n-tag v-if="tier.discount > 0" type="success" size="tiny" style="margin-left:4px">省{{ tier.discount }}%</n-tag>
+                  </n-radio>
+                </n-space>
+              </n-radio-group>
+            </div>
+          </div>
+          <div class="custom-row" v-if="customCouponCode !== undefined">
+            <span class="custom-label">优惠码</span>
+            <div class="custom-control">
+              <n-input v-model:value="customCouponCode" placeholder="可选" size="small" style="max-width:200px" />
+            </div>
+          </div>
+          <div class="custom-price-summary">
+            <div class="price-line">
+              <span>基础价格</span>
+              <span>¥{{ customBasePrice.toFixed(2) }}</span>
+            </div>
+            <div v-if="customDiscountPercent > 0" class="price-line discount">
+              <span>时长优惠 ({{ customDiscountPercent }}%)</span>
+              <span>-¥{{ (customBasePrice - customFinalPrice).toFixed(2) }}</span>
+            </div>
+            <div class="price-line total">
+              <span>合计</span>
+              <span>¥{{ customFinalPrice.toFixed(2) }}</span>
+            </div>
+          </div>
+          <n-button type="primary" size="large" block strong :loading="customOrdering" @click="handleCustomBuy">
+            立即购买 ¥{{ customFinalPrice.toFixed(2) }}
+          </n-button>
+        </div>
+      </div>
     </n-space>
 
     <!-- Purchase Modal -->
@@ -144,7 +196,15 @@
       :mask-closable="false"
       @after-leave="stopPolling"
     >
-      <div style="text-align: center;">
+      <div v-if="isMobile" style="text-align: center;">
+        <p style="margin-bottom: 16px; color: #666;">请点击下方按钮完成支付</p>
+        <n-button type="primary" size="large" block tag="a" :href="mobilePayUrl" target="_blank">
+          打开支付App付款
+        </n-button>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后请返回此页面</p>
+        <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
+      </div>
+      <div v-else style="text-align: center;">
         <p style="margin-bottom: 16px; color: #666;">请使用支付宝扫描下方二维码完成支付</p>
         <canvas ref="qrCanvas" style="margin: 0 auto;"></canvas>
         <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后将自动跳转...</p>
@@ -205,8 +265,8 @@ import QRCode from 'qrcode'
 import {
   TimeOutline, PhonePortraitOutline, CheckmarkCircleOutline
 } from '@vicons/ionicons5'
-import { listPackages, verifyCoupon, getPaymentMethods } from '@/api/common'
-import { createOrder, payOrder, createPayment, getOrderStatus } from '@/api/order'
+import { listPackages, verifyCoupon, getPaymentMethods, getPublicConfig } from '@/api/common'
+import { createOrder, payOrder, createPayment, getOrderStatus, createCustomOrder } from '@/api/order'
 import { getDashboardInfo } from '@/api/user'
 
 const router = useRouter()
@@ -230,7 +290,35 @@ const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
 const pollingStatus = ref(false)
 const userBalance = ref<number>(0)
 const useBalanceDeduct = ref(false)
+const isMobile = ref(window.innerWidth <= 767)
+const mobilePayUrl = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+// Custom package
+const customEnabled = ref(false)
+const customPricePerDeviceYear = ref(40)
+const customMinDevices = ref(1)
+const customMaxDevices = ref(20)
+const customMinMonths = ref(6)
+const customDiscountTiers = ref<{ months: number; discount: number }[]>([])
+const customDevices = ref(5)
+const customMonths = ref(12)
+const customCouponCode = ref('')
+const customOrdering = ref(false)
+
+const customBasePrice = computed(() => {
+  return Math.round(customPricePerDeviceYear.value * customDevices.value * (customMonths.value / 12) * 100) / 100
+})
+const customDiscountPercent = computed(() => {
+  let best = 0
+  for (const tier of customDiscountTiers.value) {
+    if (customMonths.value >= tier.months && tier.discount > best) best = tier.discount
+  }
+  return best
+})
+const customFinalPrice = computed(() => {
+  return Math.round(customBasePrice.value * (1 - customDiscountPercent.value / 100) * 100) / 100
+})
 
 const finalPayAmount = computed(() => orderInfo.value?.final_amount || 0)
 const canFullBalance = computed(() => userBalance.value >= finalPayAmount.value)
@@ -247,7 +335,7 @@ const remainingAmount = computed(() => {
 const loadPackages = async () => {
   loading.value = true
   try {
-    const [pkgRes, pmRes] = await Promise.all([listPackages(), getPaymentMethods()])
+    const [pkgRes, pmRes, cfgRes] = await Promise.all([listPackages(), getPaymentMethods(), getPublicConfig()])
     packages.value = pkgRes.data || []
     const pmData = pmRes.data || {}
     paymentMethods.value = pmData.methods || []
@@ -256,6 +344,18 @@ const loadPackages = async () => {
     if (!balanceEnabled.value && paymentMethods.value.length > 0) {
       paymentMethod.value = 'pm_' + paymentMethods.value[0].id
     }
+    // Custom package config
+    const cfg = cfgRes.data || {}
+    customEnabled.value = cfg.custom_package_enabled === 'true' || cfg.custom_package_enabled === '1'
+    if (cfg.custom_package_price_per_device_year) customPricePerDeviceYear.value = parseFloat(cfg.custom_package_price_per_device_year) || 40
+    if (cfg.custom_package_min_devices) customMinDevices.value = parseInt(cfg.custom_package_min_devices) || 1
+    if (cfg.custom_package_max_devices) customMaxDevices.value = parseInt(cfg.custom_package_max_devices) || 20
+    if (cfg.custom_package_min_months) customMinMonths.value = parseInt(cfg.custom_package_min_months) || 6
+    if (cfg.custom_package_duration_discounts) {
+      try { customDiscountTiers.value = JSON.parse(cfg.custom_package_duration_discounts) } catch {}
+    }
+    customDevices.value = Math.max(customMinDevices.value, Math.min(customDevices.value, customMaxDevices.value))
+    customMonths.value = Math.max(customMinMonths.value, customMonths.value)
   } catch (e: any) {
     message.error(e.message || '加载套餐失败')
   } finally { loading.value = false }
@@ -304,6 +404,20 @@ const handleVerifyCoupon = async () => {
     message.error(e.message || '优惠码无效')
     couponInfo.value = null
   } finally { verifying.value = false }
+}
+
+const handleCustomBuy = async () => {
+  customOrdering.value = true
+  try {
+    const payload: any = { devices: customDevices.value, months: customMonths.value }
+    if (customCouponCode.value.trim()) payload.coupon_code = customCouponCode.value
+    const res = await createCustomOrder(payload)
+    orderInfo.value = res.data
+    selectedPackage.value = { name: `自定义套餐 (${customDevices.value}设备/${customMonths.value}月)`, duration_days: customMonths.value * 30 }
+    showPaymentModal.value = true
+  } catch (e: any) {
+    message.error(e.message || '创建订单失败')
+  } finally { customOrdering.value = false }
 }
 
 const handleBuy = async (pkg: any) => {
@@ -361,7 +475,7 @@ const handlePay = async () => {
       router.push('/orders')
     } else if (paymentMethod.value.startsWith('pm_')) {
       const pmId = parseInt(paymentMethod.value.replace('pm_', ''))
-      const paymentData: any = { order_id: orderInfo.value.id, payment_method_id: pmId }
+      const paymentData: any = { order_id: orderInfo.value.id, payment_method_id: pmId, is_mobile: isMobile.value }
       if (useBalanceDeduct.value && balanceDeductAmount.value > 0) {
         paymentData.use_balance = true
         paymentData.balance_amount = balanceDeductAmount.value
@@ -381,7 +495,13 @@ const handlePay = async () => {
 
       if (data?.payment_url) {
         showPaymentModal.value = false
-        if (isQrCodeUrl(data.payment_url)) {
+        if (isMobile.value) {
+          // Mobile: show button to open payment app
+          mobilePayUrl.value = data.payment_url
+          showQrModal.value = true
+          startPolling(orderInfo.value.order_no)
+        } else if (isQrCodeUrl(data.payment_url)) {
+          // Desktop: show QR code
           showQrModal.value = true
           await nextTick()
           if (qrCanvas.value) {
@@ -489,5 +609,31 @@ onMounted(() => {
   .currency { font-size: 20px; }
   .feature-item { font-size: 14px; }
   .badge { top: -10px; right: 16px; font-size: 12px; padding: 3px 12px; }
+  .custom-package-section { padding: 16px; }
+  .custom-row { flex-direction: column; gap: 6px; }
+  .custom-control { flex-direction: column; gap: 8px; }
 }
+
+/* Custom Package */
+.custom-package-section {
+  margin-top: 32px; padding: 24px; background: #fff;
+  border-radius: 12px; border: 2px solid #e8e8e8;
+}
+.custom-title {
+  font-size: 24px; font-weight: 600; margin: 0 0 4px; text-align: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.custom-subtitle { text-align: center; color: #666; font-size: 14px; margin: 0 0 20px; }
+.custom-form { max-width: 600px; margin: 0 auto; }
+.custom-row { display: flex; align-items: center; margin-bottom: 16px; gap: 12px; }
+.custom-label { min-width: 70px; font-weight: 500; color: #333; flex-shrink: 0; }
+.custom-control { display: flex; align-items: center; flex: 1; }
+.custom-unit { margin-left: 6px; color: #999; font-size: 13px; }
+.custom-price-summary {
+  margin: 20px 0 16px; padding: 16px; background: #f9f9fb; border-radius: 8px;
+}
+.price-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: #666; }
+.price-line.discount { color: #e03050; }
+.price-line.total { font-size: 18px; font-weight: 700; color: #667eea; padding-top: 8px; border-top: 1px dashed #ddd; margin-top: 4px; }
 </style>

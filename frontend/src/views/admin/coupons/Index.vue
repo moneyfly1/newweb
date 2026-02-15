@@ -258,11 +258,12 @@ const formatDateTime = (timestamp) => {
 }
 
 const columns = [
-  { title: 'ID', key: 'id', width: 80 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   {
     title: '优惠券代码',
     key: 'code',
     width: 180,
+    resizable: true,
     render: (row) => {
       return h(NSpace, { align: 'center' }, {
         default: () => [
@@ -284,6 +285,7 @@ const columns = [
     title: '类型',
     key: 'type',
     width: 140,
+    resizable: true,
     render: (row) => {
       const typeMap = {
         discount: { type: 'info', text: '折扣' },
@@ -298,6 +300,7 @@ const columns = [
     title: '优惠值',
     key: 'discount_value',
     width: 120,
+    resizable: true,
     render: (row) => {
       if (row.type === 'discount') return `${row.discount_value}%`
       if (row.type === 'fixed') return `¥${row.discount_value}`
@@ -309,6 +312,7 @@ const columns = [
     title: '状态',
     key: 'status',
     width: 100,
+    resizable: true,
     render: (row) => {
       const statusMap = {
         active: { type: 'success', text: '启用' },
@@ -323,18 +327,23 @@ const columns = [
     title: '使用情况',
     key: 'usage',
     width: 120,
+    resizable: true,
     render: (row) => `${row.used_quantity || 0} / ${row.total_quantity || 0}`
   },
   {
     title: '生效时间',
     key: 'valid_from',
     width: 180,
+    resizable: true,
+    sorter: (a, b) => new Date(a.valid_from).getTime() - new Date(b.valid_from).getTime(),
     render: (row) => formatDateTime(row.valid_from)
   },
   {
     title: '失效时间',
     key: 'valid_until',
     width: 180,
+    resizable: true,
+    sorter: (a, b) => new Date(a.valid_until).getTime() - new Date(b.valid_until).getTime(),
     render: (row) => formatDateTime(row.valid_until)
   },
   {

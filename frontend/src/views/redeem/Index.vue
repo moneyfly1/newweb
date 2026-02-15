@@ -14,7 +14,9 @@
         <n-data-table :columns="columns" :data="history" :loading="loadingHistory" :bordered="false" />
       </template>
       <template v-else>
-        <div class="mobile-card-list">
+        <div v-if="loadingHistory" style="text-align:center;padding:40px"><n-spin size="medium" /></div>
+        <div v-else-if="history.length === 0" style="text-align:center;padding:40px;color:#999">暂无兑换记录</div>
+        <div v-else class="mobile-card-list">
           <div v-for="item in history" :key="item.id" class="mobile-card">
             <div class="card-header">
               <span class="card-title">{{ item.code }}</span>
@@ -92,7 +94,7 @@ const loadHistory = async () => {
   loadingHistory.value = true
   try {
     const res: any = await getRedeemHistory()
-    history.value = res.data || []
+    history.value = res.data?.items || res.data || []
   } catch (error) {
     console.error('Failed to load redeem history:', error)
   } finally {

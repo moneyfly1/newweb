@@ -38,7 +38,7 @@
             <n-text strong>奖品列表</n-text>
             <n-button size="small" type="primary" @click="handleAddPrize(pool.id)">添加奖品</n-button>
           </n-space>
-          <n-data-table :columns="prizeColumns" :data="pool.prizes || []" :bordered="false" size="small" />
+          <n-data-table :columns="getPrizeColumns(pool)" :data="pool.prizes || []" :bordered="false" size="small" />
         </n-collapse-item>
       </n-collapse>
       <div v-if="pools.length === 0 && !loading" style="text-align:center;padding:40px 0;color:#999">暂无奖池</div>
@@ -145,11 +145,19 @@ const prizeTypeLabel = (type: string) => {
   return map[type] || type
 }
 
-const prizeColumns = [
+const getProbability = (pool: any, prize: any) => {
+  if (!pool?.prizes?.length) return '0%'
+  const totalWeight = pool.prizes.reduce((sum: number, p: any) => sum + (p.weight || 0), 0)
+  if (totalWeight <= 0) return '0%'
+  return ((prize.weight / totalWeight) * 100).toFixed(1) + '%'
+}
+
+const getPrizeColumns = (pool: any) => [
   { title: '名称', key: 'name' },
   { title: '类型', key: 'type', width: 100, render: (row: any) => h(NTag, { type: prizeTagType(row.type), size: 'small' }, { default: () => prizeTypeLabel(row.type) }) },
   { title: '数值', key: 'value', width: 80 },
   { title: '权重', key: 'weight', width: 80 },
+  { title: '概率', key: 'probability', width: 80, render: (row: any) => getProbability(pool, row) },
   { title: '库存', key: 'stock', width: 80, render: (row: any) => row.stock === null || row.stock === undefined ? '无限' : row.stock },
   {
     title: '操作', key: 'actions', width: 140,

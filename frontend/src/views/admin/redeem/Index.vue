@@ -217,11 +217,12 @@ const rules = {
 }
 
 const columns = [
-  { title: 'ID', key: 'id', width: 60 },
+  { title: 'ID', key: 'id', width: 60, resizable: true, sorter: 'default' },
   {
     title: '兑换码',
     key: 'code',
     width: 200,
+    resizable: true,
     render: (row: any) => {
       return h(NSpace, { align: 'center' }, {
         default: () => [
@@ -239,18 +240,21 @@ const columns = [
     title: '类型',
     key: 'type',
     width: 100,
+    resizable: true,
     render: (row: any) => h(NTag, { type: row.type === 'balance' ? 'success' : 'info' }, { default: () => row.type === 'balance' ? '余额' : '套餐' })
   },
   {
     title: '数值',
     key: 'value',
     width: 100,
+    resizable: true,
     render: (row: any) => row.type === 'balance' ? `¥${row.value}` : `套餐#${row.value}`
   },
   {
     title: '状态',
     key: 'status',
     width: 100,
+    resizable: true,
     render: (row: any) => {
       const statusMap: Record<string, { text: string; type: any }> = {
         unused: { text: '未使用', type: 'success' },
@@ -261,8 +265,8 @@ const columns = [
       return h(NTag, { type: status.type }, { default: () => status.text })
     }
   },
-  { title: '使用次数', key: 'used_count', width: 100, render: (row: any) => `${row.used_count || 0} / ${row.max_uses || 1}` },
-  { title: '创建时间', key: 'created_at', width: 160, render: (row: any) => formatDate(row.created_at) },
+  { title: '使用次数', key: 'used_count', width: 100, resizable: true, render: (row: any) => `${row.used_count || 0} / ${row.max_uses || 1}` },
+  { title: '创建时间', key: 'created_at', width: 160, resizable: true, render: (row: any) => formatDate(row.created_at) },
   {
     title: '操作',
     key: 'actions',

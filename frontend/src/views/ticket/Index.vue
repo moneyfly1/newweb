@@ -206,7 +206,8 @@ const columns = [
   {
     title: '工单编号',
     key: 'ticket_no',
-    width: 150
+    width: 150,
+    resizable: true
   },
   {
     title: '标题',
@@ -219,24 +220,28 @@ const columns = [
     title: '类型',
     key: 'type',
     width: 120,
+    resizable: true,
     render: (row) => h(NTag, {}, { default: () => getTypeText(row.type) })
   },
   {
     title: '状态',
     key: 'status',
     width: 100,
+    resizable: true,
     render: (row) => getStatusTag(row.status)
   },
   {
     title: '优先级',
     key: 'priority',
     width: 100,
+    resizable: true,
     render: (row) => getPriorityTag(row.priority)
   },
   {
     title: '创建时间',
     key: 'created_at',
-    width: 180
+    width: 180,
+    resizable: true
   },
   {
     title: '操作',

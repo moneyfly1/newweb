@@ -12,6 +12,7 @@ type Device struct {
 	DeviceName        *string   `gorm:"type:varchar(100)" json:"device_name"`
 	DeviceType        *string   `gorm:"type:varchar(50)" json:"device_type"`
 	IPAddress         *string   `gorm:"type:varchar(45)" json:"ip_address"`
+	Region            string    `gorm:"type:varchar(100)" json:"region"`
 	UserAgent         *string   `gorm:"type:text" json:"user_agent"`
 	SoftwareName      *string   `gorm:"type:varchar(100)" json:"software_name"`
 	SoftwareVersion   *string   `gorm:"type:varchar(50)" json:"software_version"`

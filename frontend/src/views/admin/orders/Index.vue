@@ -214,31 +214,37 @@ const getPaymentMethodText = (method) => {
 }
 
 const columns = [
-  { title: 'ID', key: 'id', width: 80, fixed: 'left' },
+  { title: 'ID', key: 'id', width: 80, fixed: 'left', resizable: true, sorter: 'default' },
   {
     title: '订单号',
     key: 'order_no',
     width: 200,
     ellipsis: { tooltip: true },
-    fixed: 'left'
+    fixed: 'left',
+    resizable: true
   },
-  { title: '用户ID', key: 'user_id', width: 100 },
+  { title: '用户ID', key: 'user_id', width: 100, resizable: true },
   {
     title: '订单金额',
     key: 'amount',
     width: 120,
+    resizable: true,
+    sorter: (a, b) => a.amount - b.amount,
     render: (row) => `¥${row.amount.toFixed(2)}`
   },
   {
     title: '优惠金额',
     key: 'discount_amount',
     width: 120,
+    resizable: true,
     render: (row) => row.discount_amount != null ? `¥${Number(row.discount_amount).toFixed(2)}` : '¥0.00'
   },
   {
     title: '实付金额',
     key: 'final_amount',
     width: 120,
+    resizable: true,
+    sorter: (a, b) => (Number(a.final_amount) || 0) - (Number(b.final_amount) || 0),
     render: (row) => h(
       'span',
       { style: 'color: #18a058; font-weight: 600' },
@@ -249,6 +255,7 @@ const columns = [
     title: '状态',
     key: 'status',
     width: 100,
+    resizable: true,
     render: (row) => h(
       NTag,
       { type: getStatusType(row.status), size: 'small' },
@@ -259,12 +266,15 @@ const columns = [
     title: '支付方式',
     key: 'payment_method_name',
     width: 120,
+    resizable: true,
     render: (row) => getPaymentMethodText(row.payment_method_name)
   },
   {
     title: '创建时间',
     key: 'created_at',
     width: 180,
+    resizable: true,
+    sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     render: (row) => new Date(row.created_at).toLocaleString('zh-CN')
   },
   {

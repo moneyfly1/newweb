@@ -216,30 +216,40 @@ const priorityOptions = [
 ]
 
 const columns = [
-  { title: 'ID', key: 'id', width: 60 },
-  { title: '工单编号', key: 'ticket_no', width: 150 },
-  { title: '用户ID', key: 'user_id', width: 80 },
+  { title: 'ID', key: 'id', width: 60, resizable: true, sorter: 'default' },
+  { title: '工单编号', key: 'ticket_no', width: 150, resizable: true },
+  { title: '用户ID', key: 'user_id', width: 80, resizable: true },
   { title: '标题', key: 'title', ellipsis: { tooltip: true } },
   {
     title: '类型',
     key: 'type',
     width: 100,
+    resizable: true,
     render: (row: any) => h(NTag, { type: getTypeTagType(row.type) }, { default: () => getTypeText(row.type) })
   },
   {
     title: '状态',
     key: 'status',
     width: 100,
+    resizable: true,
     render: (row: any) => h(NTag, { type: getStatusTagType(row.status) }, { default: () => getStatusText(row.status) })
   },
   {
     title: '优先级',
     key: 'priority',
     width: 100,
+    resizable: true,
     render: (row: any) => h(NTag, { type: getPriorityTagType(row.priority) }, { default: () => getPriorityText(row.priority) })
   },
-  { title: '分配给', key: 'assigned_to', width: 100 },
-  { title: '创建时间', key: 'created_at', width: 160, render: (row: any) => formatDate(row.created_at) },
+  { title: '分配给', key: 'assigned_to', width: 100, resizable: true },
+  {
+    title: '创建时间',
+    key: 'created_at',
+    width: 160,
+    resizable: true,
+    sorter: (a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(),
+    render: (row: any) => formatDate(row.created_at)
+  },
   {
     title: '操作',
     key: 'actions',

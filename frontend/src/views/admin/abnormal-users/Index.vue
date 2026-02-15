@@ -113,13 +113,14 @@ const getTypeTag = (type) => {
 
 // Table columns
 const columns = [
-  { title: 'User ID', key: 'user_id', width: 80, sorter: 'default' },
-  { title: '用户名', key: 'username', ellipsis: { tooltip: true }, width: 150 },
-  { title: '邮箱', key: 'email', ellipsis: { tooltip: true }, width: 220 },
+  { title: 'User ID', key: 'user_id', width: 80, resizable: true, sorter: 'default' },
+  { title: '用户名', key: 'username', ellipsis: { tooltip: true }, width: 150, resizable: true },
+  { title: '邮箱', key: 'email', ellipsis: { tooltip: true }, width: 220, resizable: true },
   {
     title: '异常类型',
     key: 'abnormal_type',
     width: 150,
+    resizable: true,
     render: (row) => {
       const tag = getTypeTag(row.abnormal_type)
       return h(NTag, { type: tag.type, size: 'small' }, { default: () => tag.label })
@@ -129,12 +130,14 @@ const columns = [
     title: '详情',
     key: 'details',
     ellipsis: { tooltip: true },
-    width: 200
+    width: 200,
+    resizable: true
   },
   {
     title: '最后活跃',
     key: 'last_active',
     width: 170,
+    resizable: true,
     render: (row) => row.last_active ? new Date(row.last_active).toLocaleString('zh-CN') : '-'
   },
   {

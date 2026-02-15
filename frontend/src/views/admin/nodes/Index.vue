@@ -274,22 +274,24 @@ const columns = [
   {
     type: 'selection'
   },
-  { title: 'ID', key: 'id', width: 80 },
+  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '节点名称', key: 'name', ellipsis: { tooltip: true }, minWidth: 200 },
   {
     title: '协议',
     key: 'type',
     width: 120,
+    resizable: true,
     render: (row) => {
       const type = protocolColorMap[row.type] || 'default'
       return h(NTag, { type }, { default: () => (row.type || '').toUpperCase() })
     }
   },
-  { title: '地区', key: 'region', width: 120 },
+  { title: '地区', key: 'region', width: 120, resizable: true },
   {
     title: '状态',
     key: 'status',
     width: 100,
+    resizable: true,
     render: (row) => {
       const statusMap = {
         online: { type: 'success', text: '在线' },
@@ -303,12 +305,14 @@ const columns = [
     title: '来源',
     key: 'is_manual',
     width: 80,
+    resizable: true,
     render: (row) => h(NTag, { type: row.is_manual ? 'info' : 'default', size: 'small' }, { default: () => row.is_manual ? '手动' : '订阅' })
   },
   {
     title: '启用',
     key: 'is_active',
     width: 100,
+    resizable: true,
     render: (row) => {
       return h(NSwitch, {
         value: row.is_active,
@@ -316,7 +320,7 @@ const columns = [
       })
     }
   },
-  { title: '排序', key: 'order_index', width: 80 },
+  { title: '排序', key: 'order_index', width: 80, resizable: true },
   {
     title: '操作',
     key: 'actions',

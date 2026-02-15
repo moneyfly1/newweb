@@ -34,10 +34,6 @@
                 <span class="card-label">最低消费</span>
                 <span>¥{{ row.min_consumption || 0 }}</span>
               </div>
-              <div class="card-row">
-                <span class="card-label">设备限制</span>
-                <span>{{ row.device_limit }}</span>
-              </div>
               <div class="card-row" v-if="row.benefits">
                 <span class="card-label">权益说明</span>
                 <span style="text-align: right; flex: 1; margin-left: 8px;">{{ row.benefits }}</span>
@@ -89,15 +85,6 @@
           >
             <template #suffix>%</template>
           </n-input-number>
-        </n-form-item>
-
-        <n-form-item label="设备限制" path="device_limit">
-          <n-input-number
-            v-model:value="formData.device_limit"
-            placeholder="请输入设备数量限制"
-            :min="1"
-            style="width: 100%"
-          />
         </n-form-item>
 
         <n-form-item label="最低消费" path="min_consumption">
@@ -159,7 +146,6 @@ const formData = reactive({
   level_name: '',
   level_order: 0,
   discount_rate: 100,
-  device_limit: 3,
   min_consumption: 0,
   benefits: '',
   is_active: true
@@ -168,37 +154,39 @@ const formData = reactive({
 const rules = {
   level_name: { required: true, message: '请输入等级名称', trigger: 'blur' },
   level_order: { required: true, type: 'number', message: '请输入等级数值', trigger: 'blur' },
-  discount_rate: { required: true, type: 'number', message: '请输入折扣率', trigger: 'blur' },
-  device_limit: { required: true, type: 'number', message: '请输入设备限制', trigger: 'blur' }
+  discount_rate: { required: true, type: 'number', message: '请输入折扣率', trigger: 'blur' }
 }
 
 const columns = [
-  { title: 'ID', key: 'id', width: 60 },
-  { title: '等级名称', key: 'level_name', width: 120 },
-  { title: '等级数值', key: 'level_order', width: 100 },
+  { title: 'ID', key: 'id', width: 60, resizable: true, sorter: 'default' },
+  { title: '等级名称', key: 'level_name', width: 120, resizable: true },
+  { title: '等级数值', key: 'level_order', width: 100, resizable: true },
   {
     title: '折扣率',
     key: 'discount_rate',
     width: 100,
+    resizable: true,
     render: (row: any) => `${row.discount_rate}%`
   },
-  { title: '设备限制', key: 'device_limit', width: 100 },
   {
     title: '最低消费',
     key: 'min_consumption',
     width: 120,
+    resizable: true,
     render: (row: any) => `¥${row.min_consumption || 0}`
   },
   {
     title: '权益说明',
     key: 'benefits',
     width: 200,
+    resizable: true,
     ellipsis: { tooltip: true }
   },
   {
     title: '状态',
     key: 'is_active',
     width: 80,
+    resizable: true,
     render: (row: any) => h(NTag, { type: row.is_active ? 'success' : 'default' }, { default: () => row.is_active ? '启用' : '禁用' })
   },
   {
@@ -238,7 +226,6 @@ const resetForm = () => {
   formData.level_name = ''
   formData.level_order = 0
   formData.discount_rate = 100
-  formData.device_limit = 3
   formData.min_consumption = 0
   formData.benefits = ''
   formData.is_active = true
@@ -255,7 +242,6 @@ const handleEdit = (row: any) => {
   formData.level_name = row.level_name
   formData.level_order = row.level_order
   formData.discount_rate = row.discount_rate
-  formData.device_limit = row.device_limit
   formData.min_consumption = row.min_consumption || 0
   formData.benefits = row.benefits || ''
   formData.is_active = row.is_active

@@ -119,6 +119,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		{
 			orders.GET("", handlers.ListOrders)
 			orders.POST("", handlers.CreateOrder)
+			orders.POST("/custom", handlers.CreateCustomOrder)
 			orders.POST("/:orderNo/pay", handlers.PayOrder)
 			orders.POST("/:orderNo/cancel", handlers.CancelOrder)
 			orders.GET("/:orderNo/status", handlers.GetOrderStatus)
@@ -227,6 +228,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminUsers.GET("/export", handlers.AdminExportUsersCSV)
 			adminUsers.POST("/import", handlers.AdminImportUsersCSV)
 			adminUsers.DELETE("/:id/devices/:deviceId", handlers.AdminDeleteUserDevice)
+			adminUsers.PUT("/:id/notes", handlers.AdminUpdateUserNotes)
 		}
 
 		// 订单管理

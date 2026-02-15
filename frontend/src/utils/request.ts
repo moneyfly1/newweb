@@ -27,6 +27,10 @@ let isLoggingOut = false
 
 instance.interceptors.response.use(
   (response) => {
+    // Skip JSON code check for blob responses (e.g. CSV export)
+    if (response.config.responseType === 'blob') {
+      return response
+    }
     const data = response.data
     if (data.code !== 0) {
       return Promise.reject(new Error(data.message || '请求失败'))

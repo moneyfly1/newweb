@@ -239,23 +239,26 @@ const getStatusText = (status) => {
 
 // Table columns
 const columns = [
-  { title: 'ID', key: 'id', width: 80, fixed: 'left' },
+  { title: 'ID', key: 'id', width: 80, fixed: 'left', resizable: true, sorter: 'default' },
   {
     title: '收件人',
     key: 'to_email',
     width: 220,
+    resizable: true,
     ellipsis: { tooltip: true }
   },
   {
     title: '主题',
     key: 'subject',
     width: 280,
+    resizable: true,
     ellipsis: { tooltip: true }
   },
   {
     title: '状态',
     key: 'status',
     width: 100,
+    resizable: true,
     render: (row) => h(
       NTag,
       { type: getStatusType(row.status), size: 'small' },
@@ -266,18 +269,23 @@ const columns = [
     title: '重试次数',
     key: 'retry_count',
     width: 100,
+    resizable: true,
     render: (row) => row.retry_count || 0
   },
   {
     title: '创建时间',
     key: 'created_at',
     width: 170,
+    resizable: true,
+    sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     render: (row) => row.created_at ? new Date(row.created_at).toLocaleString('zh-CN') : '-'
   },
   {
     title: '发送时间',
     key: 'sent_at',
     width: 170,
+    resizable: true,
+    sorter: (a, b) => new Date(a.sent_at || 0).getTime() - new Date(b.sent_at || 0).getTime(),
     render: (row) => row.sent_at ? new Date(row.sent_at).toLocaleString('zh-CN') : '-'
   },
   {

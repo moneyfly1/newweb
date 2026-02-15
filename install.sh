@@ -1843,6 +1843,11 @@ main() {
         exit 0
     fi
 
+    # 一键安装：若尚未安装，直接进入安装流程，完成后进入菜单（无需先选 1）
+    if [ ! -f "$work_dir/.env" ] && [ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
+        install_system
+    fi
+
     while true; do
         show_menu
         read -rp "请选择操作 [0-17]: " choice

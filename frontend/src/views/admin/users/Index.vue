@@ -324,10 +324,12 @@ import {
 } from '@/api/admin'
 import { listUserLevels } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { useUserStore } from '@/stores/user'
 
 const message = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
+const userStore = useUserStore()
 
 // State
 const loading = ref(false)
@@ -583,6 +585,10 @@ const handleSaveUser = async () => {
 
 // Toggle active
 const handleToggleActive = (row) => {
+  if (row.is_active && row.id === userStore.userInfo?.id) {
+    message.error('不能禁用自己')
+    return
+  }
   dialog.warning({
     title: '确认操作',
     content: `确定要${row.is_active ? '禁用' : '启用'}用户 ${row.username} 吗？`,
@@ -594,7 +600,8 @@ const handleToggleActive = (row) => {
         message.success(`用户已${row.is_active ? '禁用' : '启用'}`)
         fetchUsers()
       } catch (error) {
-        message.error('操作失败：' + (error.message || '未知错误'))
+        const msg = error?.response?.data?.message || error?.message || '未知错误'
+        message.error('操作失败：' + msg)
       }
     }
   })

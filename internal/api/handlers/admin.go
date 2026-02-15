@@ -377,6 +377,11 @@ func AdminToggleUserActive(c *gin.Context) {
 		utils.BadRequest(c, "无效的用户ID")
 		return
 	}
+	currentID := c.GetUint("user_id")
+	if id == uint64(currentID) {
+		utils.BadRequest(c, "不能禁用自己的账号")
+		return
+	}
 	db := database.GetDB()
 	var user models.User
 	if err := db.First(&user, id).Error; err != nil {
@@ -384,6 +389,10 @@ func AdminToggleUserActive(c *gin.Context) {
 		return
 	}
 	newStatus := !user.IsActive
+	if !newStatus && user.IsAdmin {
+		utils.BadRequest(c, "不能禁用其他管理员账号")
+		return
+	}
 	db.Model(&user).Update("is_active", newStatus)
 
 	// Sync subscription status
@@ -1216,6 +1225,14 @@ func AdminListSubscriptions(c *gin.Context) {
 			var pkg models.Package
 			if db.Select("name").First(&pkg, *sub.PackageID).Error == nil {
 				item.PackageName = pkg.Name
+			}
+		}
+		// 仍在有效期内时，以到期时间为准纠正 status，避免显示“已过期”
+		if sub.IsActive && sub.ExpireTime.After(time.Now()) {
+			if time.Until(sub.ExpireTime) <= 7*24*time.Hour {
+				item.Status = "expiring"
+			} else {
+				item.Status = "active"
 			}
 		}
 		items = append(items, item)

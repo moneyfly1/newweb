@@ -18,10 +18,13 @@
 frontend/node_modules/
 frontend/dist/
 
-# 数据库与备份（按需可改为不忽略）
+# 数据库与备份（不上传至 GitHub）
 *.db
 *.db-shm
 *.db-wal
+cboard.db
+cboard.db-shm
+cboard.db-wal
 backups/
 uploads/
 

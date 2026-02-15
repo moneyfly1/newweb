@@ -95,7 +95,7 @@
                   <div class="sub-action-icon" style="background:#fdf6ec;color:#f0a020"><n-icon :size="20"><MailOutline /></n-icon></div>
                   <span>发邮件</span>
                 </div>
-                <div class="sub-action-item" @click="handleToggleActive(row)">
+                <div class="sub-action-item" :class="{ 'is-disabled': row.is_active && row.user_id === userStore.userInfo?.id }" @click="handleToggleActive(row)">
                   <div class="sub-action-icon" :style="row.is_active ? 'background:#fef0f0;color:#e03050' : 'background:#f0f9eb;color:#18a058'"><n-icon :size="20"><PowerOutline /></n-icon></div>
                   <span>{{ row.is_active ? '禁用' : '启用' }}</span>
                 </div>
@@ -215,6 +215,7 @@ import { SearchOutline, RefreshOutline, PersonOutline, MailOutline, PowerOutline
 import QRCode from 'qrcode'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
+import { useUserStore } from '@/stores/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import {
   listAdminSubscriptions, getAdminSubscription, resetAdminSubscription,
@@ -227,6 +228,7 @@ const message = useMessage()
 const dialog = useDialog()
 const router = useRouter()
 const appStore = useAppStore()
+const userStore = useUserStore()
 
 const loading = ref(false)
 const searchQuery = ref('')
@@ -412,7 +414,7 @@ const columns = [
       h(NButton, { size: 'small', type: 'success', onClick: () => handleLoginAs(row) }, { default: () => '后台' }),
       h(NButton, { size: 'small', type: 'warning', onClick: () => handleReset(row) }, { default: () => '重置' }),
       h(NButton, { size: 'small', type: 'info', onClick: () => handleSendEmail(row) }, { default: () => '发送' }),
-      h(NButton, { size: 'small', type: row.is_active ? 'error' : 'success', onClick: () => handleToggleActive(row) }, { default: () => row.is_active ? '禁用' : '启用' }),
+      h(NButton, { size: 'small', type: row.is_active ? 'error' : 'success', disabled: row.is_active && row.user_id === userStore.userInfo?.id, onClick: () => handleToggleActive(row) }, { default: () => row.is_active ? '禁用' : '启用' }),
       h(NButton, { size: 'small', type: 'error', onClick: () => handleDeleteUser(row) }, { default: () => '删除' }),
       h(NButton, { size: 'small', onClick: () => handleClearDevices(row) }, { default: () => '清理' }),
     ])
@@ -479,9 +481,13 @@ const handleReset = (row) => {
   })
 }
 const handleToggleActive = (row) => {
+  if (row.is_active && row.user_id === userStore.userInfo?.id) {
+    message.error('不能禁用自己')
+    return
+  }
   const a = row.is_active ? '禁用' : '启用'
   dialog.warning({ title: `确认${a}`, content: `确定要${a}该用户吗？`, positiveText: '确定', negativeText: '取消',
-    onPositiveClick: async () => { try { await toggleUserActive(row.user_id); message.success(`已${a}`); fetchData() } catch { message.error(`${a}失败`) } }
+    onPositiveClick: async () => { try { await toggleUserActive(row.user_id); message.success(`已${a}`); fetchData() } catch (e) { message.error(e?.response?.data?.message || `${a}失败`) } }
   })
 }
 const handleSendEmail = async (row) => {
@@ -512,11 +518,17 @@ const handleBatchEnable = () => {
 }
 
 const handleBatchDisable = () => {
-  dialog.warning({ title: '批量禁用', content: `确定禁用选中的 ${checkedRowKeys.value.length} 个用户？`, positiveText: '确定', negativeText: '取消',
+  const selected = tableData.value.filter(r => checkedRowKeys.value.includes(r.id))
+  const toDisable = selected.filter(r => r.is_active && r.user_id !== userStore.userInfo?.id)
+  if (toDisable.length === 0) {
+    message.warning(selected.some(r => r.user_id === userStore.userInfo?.id) ? '不能禁用自己，已跳过' : '没有可禁用的用户')
+    return
+  }
+  if (selected.some(r => r.user_id === userStore.userInfo?.id)) message.info('已排除当前登录账号')
+  dialog.warning({ title: '批量禁用', content: `确定禁用选中的 ${toDisable.length} 个用户？`, positiveText: '确定', negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        const selected = tableData.value.filter(r => checkedRowKeys.value.includes(r.id))
-        await Promise.all(selected.filter(r => r.is_active).map(r => toggleUserActive(r.user_id)))
+        await Promise.all(toDisable.map(r => toggleUserActive(r.user_id)))
         message.success('批量禁用完成'); checkedRowKeys.value = []; fetchData()
       } catch { message.error('批量禁用失败') }
     }
@@ -574,6 +586,7 @@ onMounted(() => fetchData())
 .sub-action-grid { display: grid; grid-template-columns: repeat(4, 1fr); padding: 10px 8px; }
 .sub-action-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; cursor: pointer; border-radius: 8px; }
 .sub-action-item:active { background: #f5f7fa; }
+.sub-action-item.is-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .sub-action-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
 .sub-action-item span { font-size: 11px; color: #606266; }
 .qr-grid { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }

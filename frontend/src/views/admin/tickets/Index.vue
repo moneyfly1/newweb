@@ -1,8 +1,9 @@
 <template>
   <div class="tickets-container">
-    <n-card title="工单管理">
+    <n-card :title="appStore.isMobile ? undefined : '工单管理'">
       <n-space vertical :size="16">
-        <n-space>
+        <!-- Desktop filters -->
+        <n-space v-if="!appStore.isMobile">
           <n-select
             v-model:value="filters.status"
             placeholder="状态筛选"
@@ -20,6 +21,15 @@
             @update:value="handleSearch"
           />
         </n-space>
+
+        <!-- Mobile toolbar -->
+        <div v-if="appStore.isMobile" class="mobile-toolbar">
+          <div class="mobile-toolbar-title">工单管理</div>
+          <div class="mobile-toolbar-row">
+            <n-select v-model:value="filters.status" placeholder="状态" clearable size="small" style="flex:1" :options="statusOptions" @update:value="handleSearch" />
+            <n-select v-model:value="filters.priority" placeholder="优先级" clearable size="small" style="flex:1" :options="priorityOptions" @update:value="handleSearch" />
+          </div>
+        </div>
 
         <template v-if="!appStore.isMobile">
           <n-data-table
@@ -540,4 +550,7 @@ onMounted(() => {
 @media (max-width: 767px) {
   .tickets-container { padding: 8px; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

@@ -1,7 +1,7 @@
 <template>
   <div class="admin-packages-page">
-    <n-card title="套餐管理" :bordered="false" class="page-card">
-      <template #header-extra>
+    <n-card :title="appStore.isMobile ? undefined : '套餐管理'" :bordered="false" class="page-card">
+      <template v-if="!appStore.isMobile" #header-extra>
         <n-button type="primary" @click="handleCreate">
           <template #icon>
             <n-icon :component="AddOutline" />
@@ -9,6 +9,14 @@
           新建套餐
         </n-button>
       </template>
+
+      <div v-if="appStore.isMobile" class="mobile-toolbar">
+        <div class="mobile-toolbar-title">套餐管理</div>
+        <n-button size="small" type="primary" @click="handleCreate">
+          <template #icon><n-icon :component="AddOutline" /></template>
+          新建套餐
+        </n-button>
+      </div>
 
       <n-space vertical :size="16">
         <template v-if="!appStore.isMobile">
@@ -482,4 +490,6 @@ onMounted(() => {
 @media (max-width: 767px) {
   .admin-packages-page { padding: 8px; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
 </style>

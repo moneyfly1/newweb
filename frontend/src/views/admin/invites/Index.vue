@@ -1,6 +1,6 @@
 <template>
   <div class="admin-invites-page">
-    <n-card title="邀请码管理" :bordered="false" class="page-card">
+    <n-card :title="appStore.isMobile ? undefined : '邀请码管理'" :bordered="false" class="page-card">
       <n-space vertical :size="16">
         <!-- Stats -->
         <div class="stats-row">
@@ -26,8 +26,8 @@
           </div>
         </div>
 
-        <!-- Search -->
-        <n-space align="center">
+        <!-- Desktop Search -->
+        <n-space v-if="!appStore.isMobile" align="center">
           <n-input v-model:value="search" placeholder="搜索邀请码或用户" clearable style="width: 240px" @keyup.enter="fetchCodes">
             <template #prefix><n-icon :component="SearchOutline" /></template>
           </n-input>
@@ -37,6 +37,23 @@
             刷新
           </n-button>
         </n-space>
+
+        <!-- Mobile toolbar -->
+        <div v-if="appStore.isMobile" class="mobile-toolbar">
+          <div class="mobile-toolbar-title">邀请码管理</div>
+          <div class="mobile-toolbar-controls">
+            <n-input v-model:value="search" placeholder="搜索邀请码或用户" clearable size="small" @keyup.enter="fetchCodes">
+              <template #prefix><n-icon :component="SearchOutline" /></template>
+            </n-input>
+            <div class="mobile-toolbar-row">
+              <n-button size="small" @click="fetchCodes">搜索</n-button>
+              <n-button size="small" @click="fetchCodes">
+                <template #icon><n-icon :component="RefreshOutline" /></template>
+                刷新
+              </n-button>
+            </div>
+          </div>
+        </div>
 <!-- PLACEHOLDER_TABS -->
         <!-- Tabs -->
         <n-tabs type="line" animated>
@@ -234,4 +251,8 @@ onMounted(() => { fetchStats(); fetchCodes(); fetchRelations() })
   .stats-row { gap: 12px; justify-content: space-around; }
   .stat-val { font-size: 18px; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
+.mobile-toolbar-controls { display: flex; flex-direction: column; gap: 8px; }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

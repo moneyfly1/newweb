@@ -1,9 +1,9 @@
 <template>
   <div class="abnormal-users-page">
-    <n-card title="异常用户检测" :bordered="false" class="page-card">
+    <n-card :title="appStore.isMobile ? undefined : '异常用户检测'" :bordered="false" class="page-card">
       <n-space vertical :size="16">
-        <!-- Header area -->
-        <n-space justify="space-between" align="center" style="width: 100%">
+        <!-- Desktop toolbar -->
+        <n-space v-if="!appStore.isMobile" justify="space-between" align="center" style="width: 100%">
           <n-space>
             <n-select
               v-model:value="typeFilter"
@@ -23,6 +23,20 @@
             刷新
           </n-button>
         </n-space>
+
+        <!-- Mobile toolbar -->
+        <div v-if="appStore.isMobile" class="mobile-toolbar">
+          <div class="mobile-toolbar-title">异常用户检测</div>
+          <div class="mobile-toolbar-row">
+            <n-select v-model:value="typeFilter" placeholder="异常类型" clearable size="small" style="flex:1" :options="typeOptions" @update:value="handleSearch" />
+            <n-button size="small" type="info" @click="handleSearch">
+              <template #icon><n-icon :component="SearchOutline" /></template>
+            </n-button>
+            <n-button size="small" @click="fetchAbnormalUsers">
+              <template #icon><n-icon :component="RefreshOutline" /></template>
+            </n-button>
+          </div>
+        </div>
 
         <!-- Data table -->
         <template v-if="!appStore.isMobile">
@@ -267,4 +281,7 @@ onMounted(() => {
 @media (max-width: 767px) {
   .abnormal-users-page { padding: 8px; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

@@ -1,54 +1,106 @@
 <template>
   <div class="admin-users-page">
-    <n-card title="用户管理" :bordered="false" class="page-card">
+    <n-card :title="appStore.isMobile ? undefined : '用户管理'" :bordered="false" class="page-card">
       <n-space vertical :size="16">
-        <!-- Header area -->
-        <n-space justify="space-between" align="center" style="width: 100%">
-          <n-space>
+        <!-- Desktop Header -->
+        <template v-if="!appStore.isMobile">
+          <n-space justify="space-between" align="center" style="width: 100%">
+            <n-space>
+              <n-input
+                v-model:value="searchQuery"
+                placeholder="搜索邮箱或用户名"
+                clearable
+                style="width: 260px"
+                @keyup.enter="handleSearch"
+              >
+                <template #prefix>
+                  <n-icon :component="SearchOutline" />
+                </template>
+              </n-input>
+              <n-select
+                v-model:value="statusFilter"
+                placeholder="状态筛选"
+                clearable
+                style="width: 140px"
+                :options="statusOptions"
+                @update:value="handleSearch"
+              />
+              <n-button type="info" @click="handleSearch">
+                <template #icon><n-icon :component="SearchOutline" /></template>
+                搜索
+              </n-button>
+            </n-space>
+            <n-space>
+              <n-button type="primary" @click="openCreateModal">
+                <template #icon><n-icon :component="AddOutline" /></template>
+                新增用户
+              </n-button>
+              <n-button @click="handleExportCSV">
+                <template #icon><n-icon :component="DownloadOutline" /></template>
+                导出CSV
+              </n-button>
+              <n-button @click="triggerImportCSV">
+                <template #icon><n-icon :component="CloudUploadOutline" /></template>
+                导入CSV
+              </n-button>
+              <input ref="importFileInput" type="file" accept=".csv" style="display:none" @change="handleImportCSV" />
+              <n-button @click="fetchUsers">
+                <template #icon><n-icon :component="RefreshOutline" /></template>
+                刷新
+              </n-button>
+            </n-space>
+          </n-space>
+        </template>
+
+        <!-- Mobile Header -->
+        <div v-if="appStore.isMobile" class="mobile-toolbar">
+          <div class="mobile-toolbar-title">用户管理</div>
+          <div class="mobile-toolbar-controls">
             <n-input
               v-model:value="searchQuery"
               placeholder="搜索邮箱或用户名"
               clearable
-              style="width: 260px"
+              size="small"
               @keyup.enter="handleSearch"
             >
               <template #prefix>
                 <n-icon :component="SearchOutline" />
               </template>
             </n-input>
-            <n-select
-              v-model:value="statusFilter"
-              placeholder="状态筛选"
-              clearable
-              style="width: 140px"
-              :options="statusOptions"
-              @update:value="handleSearch"
-            />
-            <n-button type="info" @click="handleSearch">
-              <template #icon><n-icon :component="SearchOutline" /></template>
-              搜索
-            </n-button>
-          </n-space>
-          <n-space>
-            <n-button type="primary" @click="openCreateModal">
-              <template #icon><n-icon :component="AddOutline" /></template>
-              新增用户
-            </n-button>
-            <n-button @click="handleExportCSV">
-              <template #icon><n-icon :component="DownloadOutline" /></template>
-              导出CSV
-            </n-button>
-            <n-button @click="triggerImportCSV">
-              <template #icon><n-icon :component="CloudUploadOutline" /></template>
-              导入CSV
-            </n-button>
-            <input ref="importFileInput" type="file" accept=".csv" style="display:none" @change="handleImportCSV" />
-            <n-button @click="fetchUsers">
-              <template #icon><n-icon :component="RefreshOutline" /></template>
-              刷新
-            </n-button>
-          </n-space>
-        </n-space>
+            <div class="mobile-toolbar-row">
+              <n-select
+                v-model:value="statusFilter"
+                placeholder="状态筛选"
+                clearable
+                size="small"
+                style="flex: 1"
+                :options="statusOptions"
+                @update:value="handleSearch"
+              />
+              <n-button size="small" type="info" @click="handleSearch">
+                <template #icon><n-icon :component="SearchOutline" /></template>
+              </n-button>
+              <n-button size="small" @click="fetchUsers">
+                <template #icon><n-icon :component="RefreshOutline" /></template>
+              </n-button>
+            </div>
+            <div class="mobile-toolbar-row">
+              <n-button size="small" type="primary" @click="openCreateModal">
+                <template #icon><n-icon :component="AddOutline" /></template>
+                新增
+              </n-button>
+              <n-button size="small" @click="handleExportCSV">
+                <template #icon><n-icon :component="DownloadOutline" /></template>
+                导出
+              </n-button>
+              <n-button size="small" @click="triggerImportCSV">
+                <template #icon><n-icon :component="CloudUploadOutline" /></template>
+                导入
+              </n-button>
+              <input ref="importFileInput" type="file" accept=".csv" style="display:none" @change="handleImportCSV" />
+            </div>
+          </div>
+        </div>
 
         <!-- Batch operations -->
         <n-space v-if="checkedRowKeys.length > 0" align="center">
@@ -916,6 +968,29 @@ onMounted(() => { fetchUsers() })
 
 @media (max-width: 767px) {
   .admin-users-page { padding: 8px; }
+}
+
+.mobile-toolbar {
+  margin-bottom: 12px;
+}
+
+.mobile-toolbar-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text-color, #333);
+}
+
+.mobile-toolbar-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-toolbar-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 .url-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .url-label { font-size: 12px; color: var(--text-color-secondary, #666); min-width: 40px; }

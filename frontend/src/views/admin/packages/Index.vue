@@ -129,16 +129,6 @@
             style="width: 100%"
           />
         </n-form-item>
-        <n-form-item label="速率限制" path="speed_limit">
-          <n-input-number
-            v-model:value="editForm.speed_limit"
-            placeholder="0 表示不限制，单位：Mbps"
-            :min="0"
-            style="width: 100%"
-          >
-            <template #suffix>Mbps（0=不限）</template>
-          </n-input-number>
-        </n-form-item>
         <n-form-item label="特性列表" path="features">
           <n-input
             v-model:value="editForm.features"
@@ -192,7 +182,6 @@ const editForm = reactive({
   price: 0,
   duration_days: 30,
   device_limit: 3,
-  speed_limit: 0,
   features: '',
   is_active: true,
   is_featured: false,
@@ -328,8 +317,6 @@ const resetForm = () => {
   editForm.price = 0
   editForm.duration_days = 30
   editForm.device_limit = 3
-  editForm.traffic_limit = 0
-  editForm.speed_limit = 0
   editForm.features = ''
   editForm.is_active = true
   editForm.is_featured = false
@@ -349,7 +336,6 @@ const handleEdit = (row) => {
   editForm.price = row.price
   editForm.duration_days = row.duration_days
   editForm.device_limit = row.device_limit
-  editForm.speed_limit = row.speed_limit || 0
   // features is stored as JSON array string, convert to newline-separated for editing
   let feat = ''
   if (row.features) {
@@ -373,7 +359,6 @@ const handleSavePackage = async () => {
       price: editForm.price,
       duration_days: editForm.duration_days,
       device_limit: editForm.device_limit,
-      speed_limit: editForm.speed_limit || 0,
       features: editForm.features.trim()
         ? JSON.stringify(editForm.features.trim().split('\n').map(s => s.trim()).filter(Boolean))
         : null,

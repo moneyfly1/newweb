@@ -673,8 +673,6 @@ func ConvertToBalance(c *gin.Context) {
 		"is_active":    false,
 		"expire_time":  now,
 		"package_id":   nil,
-		"traffic_limit": 0,
-		"traffic_used":  0,
 	})
 	utils.CreateSubscriptionLog(sub.ID, userID, "deactivate", "user", &userID, fmt.Sprintf("订阅转余额: %.2f元", value), nil, nil)
 	utils.Success(c, gin.H{

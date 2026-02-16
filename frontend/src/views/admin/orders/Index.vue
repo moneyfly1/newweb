@@ -416,10 +416,9 @@ onMounted(() => {
 .card-title {
   font-weight: 600;
   font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 200px;
+  word-break: break-all;
+  min-width: 0;
+  flex: 1;
 }
 
 .card-body {
@@ -431,10 +430,18 @@ onMounted(() => {
   justify-content: space-between;
   padding: 4px 0;
   font-size: 13px;
+  gap: 8px;
+}
+
+.card-row > span:last-child {
+  word-break: break-all;
+  text-align: right;
+  min-width: 0;
 }
 
 .card-label {
   color: #999;
+  flex-shrink: 0;
 }
 
 .card-actions {

@@ -260,16 +260,25 @@ func buildDeviceName(info *services.ClientInfo) string {
 	if info.SoftwareName != "Unknown" {
 		parts = append(parts, info.SoftwareName)
 	}
-	if info.OSName != "Unknown" {
-		parts = append(parts, info.OSName)
-	}
 	if info.DeviceModel != "" {
 		parts = append(parts, info.DeviceModel)
+	} else if info.DeviceBrand != "" && info.DeviceBrand != "Android" {
+		parts = append(parts, info.DeviceBrand)
+	}
+	if info.OSName != "Unknown" {
+		osStr := info.OSName
+		if info.OSVersion != "" {
+			osStr += " " + info.OSVersion
+		}
+		parts = append(parts, osStr)
+	}
+	if info.SoftwareVersion != "" {
+		parts = append(parts, "v"+info.SoftwareVersion)
 	}
 	if len(parts) == 0 {
 		return "Unknown Device"
 	}
-	return strings.Join(parts, " / ")
+	return strings.Join(parts, " - ")
 }
 
 // getInfoNodes returns informational nodes to prepend to the proxy list

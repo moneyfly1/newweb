@@ -72,6 +72,8 @@ func detectSoftware(lower, ua string, info *ClientInfo) {
 		{"surge", "Surge"},
 		{"loon", "Loon"},
 		{"stash", "Stash"},
+		{"flclash", "FlClash"},
+		{"clash.party", "Clash Party"},
 		{"clash-verge", "Clash Verge"},
 		{"clash for windows", "Clash for Windows"},
 		{"clash for android", "Clash for Android"},
@@ -79,6 +81,9 @@ func detectSoftware(lower, ua string, info *ClientInfo) {
 		{"clashx pro", "ClashX Pro"},
 		{"clashx", "ClashX"},
 		{"clash for mac", "Clash for Mac"},
+		{"mihomo.party", "Mihomo Party"},
+		{"mihomo/", "Mihomo"},
+		{"mihomo", "Mihomo"},
 		{"clash", "Clash"},
 		{"hiddify", "Hiddify"},
 		{"v2rayn", "v2rayN"},
@@ -158,25 +163,97 @@ func inferOSFromSoftware(info *ClientInfo) {
 	}
 }
 
+// iphoneModelMap maps internal iPhone identifiers to friendly model names
+var iphoneModelMap = map[string]string{
+	// iPhone 12 series
+	"iPhone13,1": "iPhone 12 mini",
+	"iPhone13,2": "iPhone 12",
+	"iPhone13,3": "iPhone 12 Pro",
+	"iPhone13,4": "iPhone 12 Pro Max",
+	// iPhone 13 series
+	"iPhone14,2": "iPhone 13 Pro",
+	"iPhone14,3": "iPhone 13 Pro Max",
+	"iPhone14,4": "iPhone 13 mini",
+	"iPhone14,5": "iPhone 13",
+	// iPhone SE 3rd gen
+	"iPhone14,6": "iPhone SE (3rd)",
+	// iPhone 14 series
+	"iPhone14,7": "iPhone 14",
+	"iPhone14,8": "iPhone 14 Plus",
+	"iPhone15,2": "iPhone 14 Pro",
+	"iPhone15,3": "iPhone 14 Pro Max",
+	"iPhone15,4": "iPhone 15",
+	"iPhone15,5": "iPhone 15 Plus",
+	// iPhone 15 series
+	"iPhone16,1": "iPhone 15 Pro",
+	"iPhone16,2": "iPhone 15 Pro Max",
+	// iPhone 16 series
+	"iPhone17,1": "iPhone 16 Pro",
+	"iPhone17,2": "iPhone 16 Pro Max",
+	"iPhone17,3": "iPhone 16",
+	"iPhone17,4": "iPhone 16 Plus",
+	"iPhone17,5": "iPhone 16e",
+}
+
 func detectDevice(lower, ua string, info *ClientInfo) {
 	// iPhone model
 	if m := regexp.MustCompile(`(?i)iPhone(\d+,\d+)`).FindStringSubmatch(ua); len(m) > 1 {
-		info.DeviceModel = "iPhone " + m[1]
+		modelID := "iPhone" + m[1]
+		if name, ok := iphoneModelMap[modelID]; ok {
+			info.DeviceModel = name
+		} else {
+			info.DeviceModel = "iPhone " + strings.Replace(m[1], ",", ".", -1)
+		}
 		info.DeviceBrand = "Apple"
 	} else if m := regexp.MustCompile(`(?i)iPad(\d+,\d+)`).FindStringSubmatch(ua); len(m) > 1 {
-		info.DeviceModel = "iPad " + m[1]
+		info.DeviceModel = "iPad " + strings.Replace(m[1], ",", ".", -1)
 		info.DeviceBrand = "Apple"
 	} else if strings.Contains(lower, "iphone") {
-		info.DeviceModel = "iPhone"
+		// Try friendly name patterns: "iPhone 15 Pro Max", "iPhone 15 Pro", "iPhone 15 mini", "iPhone 15"
+		if m := regexp.MustCompile(`iPhone\s+(\d+)\s+Pro\s+Max`).FindStringSubmatch(ua); len(m) > 1 {
+			info.DeviceModel = "iPhone " + m[1] + " Pro Max"
+		} else if m := regexp.MustCompile(`iPhone\s+(\d+)\s+Pro`).FindStringSubmatch(ua); len(m) > 1 {
+			info.DeviceModel = "iPhone " + m[1] + " Pro"
+		} else if m := regexp.MustCompile(`iPhone\s+(\d+)\s+mini`).FindStringSubmatch(ua); len(m) > 1 {
+			info.DeviceModel = "iPhone " + m[1] + " mini"
+		} else if m := regexp.MustCompile(`iPhone\s+(\d+)`).FindStringSubmatch(ua); len(m) > 1 {
+			info.DeviceModel = "iPhone " + m[1]
+		} else {
+			info.DeviceModel = "iPhone"
+		}
 		info.DeviceBrand = "Apple"
 	} else if strings.Contains(lower, "ipad") {
 		info.DeviceModel = "iPad"
 		info.DeviceBrand = "Apple"
 	}
-	// Android model: "Build/..." pattern
+
+	// Android model: "Build/..." pattern + brand detection
 	if info.DeviceModel == "" {
-		if m := regexp.MustCompile(`;\s*([^;]+)\s*Build`).FindStringSubmatch(ua); len(m) > 1 {
+		if m := regexp.MustCompile(`;\s*([^;]+)\s*[Bb]uild`).FindStringSubmatch(ua); len(m) > 1 {
 			info.DeviceModel = strings.TrimSpace(m[1])
+			nameLower := strings.ToLower(info.DeviceModel)
+			brands := []struct {
+				brand    string
+				keywords []string
+			}{
+				{"Samsung", []string{"samsung", "galaxy", "sm-"}},
+				{"Huawei", []string{"huawei", "honor"}},
+				{"Xiaomi", []string{"xiaomi", "redmi", "mi ", "poco"}},
+				{"OPPO", []string{"oppo", "oneplus", "realme"}},
+				{"vivo", []string{"vivo", "iqoo"}},
+				{"Google", []string{"pixel"}},
+				{"Sony", []string{"sony", "xperia"}},
+				{"LG", []string{"lg-", "lg "}},
+				{"Motorola", []string{"motorola", "moto"}},
+			}
+			for _, b := range brands {
+				for _, kw := range b.keywords {
+					if strings.Contains(nameLower, kw) {
+						info.DeviceBrand = b.brand
+						return
+					}
+				}
+			}
 			info.DeviceBrand = "Android"
 		}
 	}
@@ -201,6 +278,7 @@ func determineSubscriptionType(info *ClientInfo) string {
 		"Clash": true, "Clash for Windows": true, "Clash for Android": true,
 		"Clash for Mac": true, "ClashX": true, "ClashX Pro": true,
 		"Clash Verge": true, "Stash": true, "Hiddify": true,
+		"FlClash": true, "Clash Party": true, "Mihomo": true, "Mihomo Party": true,
 	}
 	if clashApps[info.SoftwareName] {
 		return "clash"

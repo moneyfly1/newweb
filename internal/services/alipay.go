@@ -8,8 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"cboard/v2/internal/database"
-	"cboard/v2/internal/models"
+	"cboard/v2/internal/utils"
 
 	"github.com/smartwalle/alipay/v3"
 )
@@ -26,16 +25,8 @@ type AlipayConfig struct {
 
 // GetAlipayConfig reads direct Alipay settings from system_configs.
 func GetAlipayConfig() (*AlipayConfig, error) {
-	db := database.GetDB()
-	keys := []string{"pay_alipay_app_id", "pay_alipay_private_key", "pay_alipay_public_key",
-		"pay_alipay_notify_url", "pay_alipay_return_url", "pay_alipay_sandbox"}
-	var configs []models.SystemConfig
-	db.Where("`key` IN ?", keys).Find(&configs)
-
-	m := make(map[string]string)
-	for _, c := range configs {
-		m[c.Key] = c.Value
-	}
+	m := utils.GetSettings("pay_alipay_app_id", "pay_alipay_private_key", "pay_alipay_public_key",
+		"pay_alipay_notify_url", "pay_alipay_return_url", "pay_alipay_sandbox")
 
 	appID := strings.TrimSpace(m["pay_alipay_app_id"])
 	if appID == "" {
@@ -45,17 +36,14 @@ func GetAlipayConfig() (*AlipayConfig, error) {
 	if privateKey == "" {
 		return nil, fmt.Errorf("支付宝应用私钥未配置")
 	}
-	publicKey := strings.TrimSpace(m["pay_alipay_public_key"])
-
-	isProduction := m["pay_alipay_sandbox"] != "true" && m["pay_alipay_sandbox"] != "1"
 
 	return &AlipayConfig{
 		AppID:        appID,
 		PrivateKey:   privateKey,
-		PublicKey:    publicKey,
+		PublicKey:    strings.TrimSpace(m["pay_alipay_public_key"]),
 		NotifyURL:   strings.TrimSpace(m["pay_alipay_notify_url"]),
 		ReturnURL:   strings.TrimSpace(m["pay_alipay_return_url"]),
-		IsProduction: isProduction,
+		IsProduction: m["pay_alipay_sandbox"] != "true" && m["pay_alipay_sandbox"] != "1",
 	}, nil
 }
 
@@ -68,29 +56,33 @@ func IsDirectAlipayConfigured() bool {
 	return cfg.AppID != "" && cfg.PrivateKey != ""
 }
 
-// AlipayCreateOrder creates a payment via direct Alipay API.
-// notifyURL/returnURL are auto-generated defaults; config overrides take priority.
-func AlipayCreateOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notifyURL, returnURL string) (string, error) {
+// newAlipayClient creates and configures an Alipay client from config.
+func newAlipayClient(cfg *AlipayConfig) (*alipay.Client, error) {
 	privateKey := normalizePrivateKey(cfg.PrivateKey)
 	if privateKey == "" {
-		return "", fmt.Errorf("支付宝私钥格式错误")
+		return nil, fmt.Errorf("支付宝私钥格式错误")
 	}
-
 	client, err := alipay.New(cfg.AppID, privateKey, cfg.IsProduction)
 	if err != nil {
-		return "", fmt.Errorf("初始化支付宝客户端失败: %v", err)
+		return nil, fmt.Errorf("初始化支付宝客户端失败: %v", err)
 	}
-
 	if cfg.PublicKey != "" {
-		pubKey := normalizePublicKey(cfg.PublicKey)
-		if pubKey != "" {
+		if pubKey := normalizePublicKey(cfg.PublicKey); pubKey != "" {
 			if err := client.LoadAliPayPublicKey(pubKey); err != nil {
 				log.Printf("[alipay] 加载支付宝公钥失败: %v", err)
 			}
 		}
 	}
+	return client, nil
+}
 
-	// Config overrides take priority over auto-generated URLs
+// AlipayCreateOrder creates a payment via direct Alipay API.
+func AlipayCreateOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notifyURL, returnURL string) (string, error) {
+	client, err := newAlipayClient(cfg)
+	if err != nil {
+		return "", err
+	}
+
 	if cfg.NotifyURL != "" {
 		notifyURL = cfg.NotifyURL
 	}
@@ -115,8 +107,6 @@ func AlipayCreateOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notifyURL
 		log.Printf("[alipay] TradePreCreate成功, QR: %s (订单: %s)", rsp.QRCode, outTradeNo)
 		return rsp.QRCode, nil
 	}
-
-	// Log the pre-create failure
 	if err != nil {
 		log.Printf("[alipay] TradePreCreate失败: %v, 尝试页面支付", err)
 	} else if rsp.IsFailure() {
@@ -146,21 +136,9 @@ func AlipayCreateOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notifyURL
 
 // AlipayVerifyCallback verifies and parses an Alipay async notification.
 func AlipayVerifyCallback(cfg *AlipayConfig, req *http.Request) (*AlipayNotification, error) {
-	privateKey := normalizePrivateKey(cfg.PrivateKey)
-	if privateKey == "" {
-		return nil, fmt.Errorf("支付宝私钥格式错误")
-	}
-
-	client, err := alipay.New(cfg.AppID, privateKey, cfg.IsProduction)
+	client, err := newAlipayClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("初始化支付宝客户端失败: %v", err)
-	}
-
-	if cfg.PublicKey != "" {
-		pubKey := normalizePublicKey(cfg.PublicKey)
-		if pubKey != "" {
-			client.LoadAliPayPublicKey(pubKey)
-		}
+		return nil, err
 	}
 
 	notification, err := client.GetTradeNotification(req)
@@ -253,20 +231,12 @@ func formatPEM(body, keyType string) string {
 	return b.String()
 }
 
-// getSiteURL reads site_url from system_configs
-func getSiteURL() string {
-	db := database.GetDB()
-	var configs []models.SystemConfig
-	db.Where("`key` IN ?", []string{"site_url", "domain_name"}).Find(&configs)
-	var siteURL string
-	for _, c := range configs {
-		if c.Key == "site_url" && c.Value != "" {
-			siteURL = c.Value
-			break
-		}
-		if c.Key == "domain_name" && c.Value != "" && siteURL == "" {
-			siteURL = c.Value
-		}
+// GetSiteURL reads site_url from system_configs.
+func GetSiteURL() string {
+	settings := utils.GetSettings("site_url", "domain_name")
+	siteURL := settings["site_url"]
+	if siteURL == "" {
+		siteURL = settings["domain_name"]
 	}
 	if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
 		siteURL = "https://" + siteURL
@@ -276,23 +246,9 @@ func getSiteURL() string {
 
 // AlipayCreateWapOrder creates a WAP payment for mobile browsers.
 func AlipayCreateWapOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notifyURL, returnURL string) (string, error) {
-	privateKey := normalizePrivateKey(cfg.PrivateKey)
-	if privateKey == "" {
-		return "", fmt.Errorf("支付宝私钥格式错误")
-	}
-
-	client, err := alipay.New(cfg.AppID, privateKey, cfg.IsProduction)
+	client, err := newAlipayClient(cfg)
 	if err != nil {
-		return "", fmt.Errorf("初始化支付宝客户端失败: %v", err)
-	}
-
-	if cfg.PublicKey != "" {
-		pubKey := normalizePublicKey(cfg.PublicKey)
-		if pubKey != "" {
-			if err := client.LoadAliPayPublicKey(pubKey); err != nil {
-				log.Printf("[alipay] 加载支付宝公钥失败: %v", err)
-			}
-		}
+		return "", err
 	}
 
 	if cfg.NotifyURL != "" {
@@ -326,7 +282,7 @@ func AlipayCreateWapOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notify
 
 // BuildPaymentURLs builds notify and return URLs for payment callbacks
 func BuildPaymentURLs(payType, orderNo string) (notifyURL, returnURL string) {
-	siteURL := getSiteURL()
+	siteURL := GetSiteURL()
 	apiBase := siteURL
 	if apiBase == "" {
 		apiBase = "http://localhost:8000"
@@ -342,22 +298,9 @@ func AlipayRefund(tradeNo, outRequestNo, refundAmount string) error {
 	if err != nil {
 		return fmt.Errorf("获取支付宝配置失败: %v", err)
 	}
-
-	privateKey := normalizePrivateKey(cfg.PrivateKey)
-	if privateKey == "" {
-		return fmt.Errorf("支付宝私钥格式错误")
-	}
-
-	client, err := alipay.New(cfg.AppID, privateKey, cfg.IsProduction)
+	client, err := newAlipayClient(cfg)
 	if err != nil {
-		return fmt.Errorf("初始化支付宝客户端失败: %v", err)
-	}
-
-	if cfg.PublicKey != "" {
-		pubKey := normalizePublicKey(cfg.PublicKey)
-		if pubKey != "" {
-			client.LoadAliPayPublicKey(pubKey)
-		}
+		return err
 	}
 
 	refund := alipay.TradeRefund{}
@@ -371,7 +314,6 @@ func AlipayRefund(tradeNo, outRequestNo, refundAmount string) error {
 	if err != nil {
 		return fmt.Errorf("退款请求失败: %v", err)
 	}
-
 	if rsp.IsFailure() {
 		return fmt.Errorf("退款失败: %s - %s", rsp.Msg, rsp.SubMsg)
 	}

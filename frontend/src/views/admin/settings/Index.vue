@@ -765,14 +765,28 @@ const loadSettings = async () => {
   }
 }
 
+const sensitiveKeys = [
+  'smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key',
+  'pay_wechat_api_key', 'pay_epay_secret_key', 'pay_stripe_secret_key',
+  'pay_stripe_webhook_secret', 'backup_github_token', 'notify_telegram_bot_token'
+]
+
 const handleSave = async () => {
   saving.value = true
   try {
-    // Serialize duration discounts
     form.value.custom_package_duration_discounts = JSON.stringify(durationDiscounts.value)
-    const res = await updateSettings(form.value)
+    const dataToSave: Record<string, any> = {}
+    for (const key of Object.keys(form.value)) {
+      const val = form.value[key]
+      if (sensitiveKeys.includes(key) && (typeof val === 'string' && (val === '' || val.includes('****')))) {
+        continue
+      }
+      dataToSave[key] = val
+    }
+    const res = await updateSettings(dataToSave)
     if (res.code === 0) {
       message.success('保存成功')
+      await loadSettings()
     } else {
       message.error(res.message || '保存失败')
     }

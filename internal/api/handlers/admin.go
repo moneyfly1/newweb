@@ -1798,6 +1798,18 @@ func AdminGetSettings(c *gin.Context) {
 	utils.Success(c, result)
 }
 
+var sensitiveSettingKeys = map[string]bool{
+	"smtp_password":             true,
+	"pay_alipay_private_key":    true,
+	"pay_alipay_public_key":     true,
+	"pay_wechat_api_key":        true,
+	"pay_epay_secret_key":       true,
+	"pay_stripe_secret_key":     true,
+	"pay_stripe_webhook_secret": true,
+	"backup_github_token":       true,
+	"notify_telegram_bot_token": true,
+}
+
 func AdminUpdateSettings(c *gin.Context) {
 	var req map[string]interface{}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1807,6 +1819,9 @@ func AdminUpdateSettings(c *gin.Context) {
 	db := database.GetDB()
 	for k, v := range req {
 		strVal := fmt.Sprintf("%v", v)
+		if sensitiveSettingKeys[k] && (strVal == "" || strings.Contains(strVal, "****")) {
+			continue
+		}
 		db.Where("`key` = ?", k).Assign(models.SystemConfig{Key: k, Value: strVal}).FirstOrCreate(&models.SystemConfig{})
 	}
 	utils.CreateAuditLog(c, "update_settings", "settings", 0, "更新系统设置")

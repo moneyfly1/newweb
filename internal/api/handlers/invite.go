@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strconv"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -10,27 +11,126 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ── Admin: invite codes ──
+
+func AdminListInviteCodes(c *gin.Context) {
+	db := database.GetDB()
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	search := c.Query("search")
+	query := db.Model(&models.InviteCode{})
+	if search != "" {
+		query = query.Where("code LIKE ? OR user_id IN (SELECT id FROM users WHERE username LIKE ? OR email LIKE ?)", "%"+search+"%", "%"+search+"%", "%"+search+"%")
+	}
+	var total int64
+	query.Count(&total)
+	var codes []models.InviteCode
+	query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&codes)
+	type R struct {
+		models.InviteCode
+		Username string `json:"username"`
+		Status   string `json:"status"`
+	}
+	var result []R
+	for _, code := range codes {
+		item := R{InviteCode: code}
+		var u models.User
+		if db.Select("username").First(&u, code.UserID).Error == nil {
+			item.Username = u.Username
+		}
+		item.Status = inviteCodeStatus(code)
+		result = append(result, item)
+	}
+	utils.Success(c, gin.H{"items": result, "total": total})
+}
+
+func AdminGetInviteStats(c *gin.Context) {
+	db := database.GetDB()
+	var totalCodes, activeCodes, totalRelations int64
+	db.Model(&models.InviteCode{}).Count(&totalCodes)
+	db.Model(&models.InviteCode{}).Where("is_active = ?", true).Count(&activeCodes)
+	db.Model(&models.InviteRelation{}).Count(&totalRelations)
+	var inviterReward, inviteeReward float64
+	db.Model(&models.InviteRelation{}).Where("inviter_reward_given = ?", true).Select("COALESCE(SUM(inviter_reward_amount), 0)").Scan(&inviterReward)
+	db.Model(&models.InviteRelation{}).Where("invitee_reward_given = ?", true).Select("COALESCE(SUM(invitee_reward_amount), 0)").Scan(&inviteeReward)
+	utils.Success(c, gin.H{
+		"total_codes": totalCodes, "active_codes": activeCodes,
+		"total_invites": totalRelations, "total_inviter_reward": inviterReward, "total_invitee_reward": inviteeReward,
+	})
+}
+
+func AdminDeleteInviteCode(c *gin.Context) {
+	id := c.Param("id")
+	if err := database.GetDB().Delete(&models.InviteCode{}, id).Error; err != nil {
+		utils.InternalError(c, "删除失败")
+		return
+	}
+	utils.SuccessMessage(c, "邀请码已删除")
+}
+
+func AdminToggleInviteCode(c *gin.Context) {
+	id := c.Param("id")
+	db := database.GetDB()
+	var code models.InviteCode
+	if err := db.First(&code, id).Error; err != nil {
+		utils.NotFound(c, "邀请码不存在")
+		return
+	}
+	code.IsActive = !code.IsActive
+	db.Save(&code)
+	msg := "已启用"
+	if !code.IsActive {
+		msg = "已禁用"
+	}
+	utils.SuccessMessage(c, "邀请码"+msg)
+}
+
+func AdminListInviteRelations(c *gin.Context) {
+	db := database.GetDB()
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	var total int64
+	db.Model(&models.InviteRelation{}).Count(&total)
+	var rels []models.InviteRelation
+	db.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&rels)
+	type RR struct {
+		models.InviteRelation
+		InviterUsername string `json:"inviter_username"`
+		InviteeUsername string `json:"invitee_username"`
+		Code           string `json:"invite_code"`
+	}
+	var result []RR
+	for _, rel := range rels {
+		item := RR{InviteRelation: rel}
+		var inviter, invitee models.User
+		if db.Select("username").First(&inviter, rel.InviterID).Error == nil {
+			item.InviterUsername = inviter.Username
+		}
+		if db.Select("username").First(&invitee, rel.InviteeID).Error == nil {
+			item.InviteeUsername = invitee.Username
+		}
+		var ic models.InviteCode
+		if db.Select("code").First(&ic, rel.InviteCodeID).Error == nil {
+			item.Code = ic.Code
+		}
+		result = append(result, item)
+	}
+	utils.Success(c, gin.H{"items": result, "total": total})
+}
+
+// ── User: invite codes ──
+
 func ListInviteCodes(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var codes []models.InviteCode
 	database.GetDB().Where("user_id = ?", userID).Order("created_at DESC").Find(&codes)
-
-	now := time.Now()
 	type codeResponse struct {
 		models.InviteCode
 		Status string `json:"status"`
 	}
 	var result []codeResponse
 	for _, code := range codes {
-		status := "active"
-		if !code.IsActive {
-			status = "disabled"
-		} else if code.ExpiresAt != nil && now.After(*code.ExpiresAt) {
-			status = "expired"
-		} else if code.MaxUses != nil && code.UsedCount >= int(*code.MaxUses) {
-			status = "exhausted"
-		}
-		result = append(result, codeResponse{InviteCode: code, Status: status})
+		result = append(result, codeResponse{InviteCode: code, Status: inviteCodeStatus(code)})
 	}
 	utils.Success(c, result)
 }
@@ -58,13 +158,9 @@ func CreateInviteCode(c *gin.Context) {
 		}
 	}
 	code := models.InviteCode{
-		Code:          codeStr,
-		UserID:        userID,
-		RewardType:    "balance",
-		InviterReward: req.InviterReward,
-		InviteeReward: req.InviteeReward,
-		NewUserOnly:   true,
-		IsActive:      true,
+		Code: codeStr, UserID: userID, RewardType: "balance",
+		InviterReward: req.InviterReward, InviteeReward: req.InviteeReward,
+		NewUserOnly: true, IsActive: true,
 	}
 	if req.MaxUses != nil {
 		code.MaxUses = req.MaxUses
@@ -80,24 +176,15 @@ func CreateInviteCode(c *gin.Context) {
 func GetInviteStats(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	db := database.GetDB()
-
-	// Total invited users
 	var totalInvites int64
 	db.Model(&models.InviteRelation{}).Where("inviter_id = ?", userID).Count(&totalInvites)
-
-	// Purchased invites (has first order)
 	var purchasedInvites int64
 	db.Model(&models.InviteRelation{}).Where("inviter_id = ? AND invitee_first_order_id IS NOT NULL", userID).Count(&purchasedInvites)
-
-	// Total reward earned
 	var totalReward float64
 	db.Model(&models.InviteRelation{}).Where("inviter_id = ? AND inviter_reward_given = ?", userID, true).
 		Select("COALESCE(SUM(inviter_reward_amount), 0)").Scan(&totalReward)
-
-	// Recent invites with invitee info
 	var relations []models.InviteRelation
 	db.Where("inviter_id = ?", userID).Order("created_at DESC").Limit(20).Find(&relations)
-
 	type recentInvite struct {
 		ID                uint    `json:"id"`
 		InviteeUsername   string  `json:"invitee_username"`
@@ -108,7 +195,6 @@ func GetInviteStats(c *gin.Context) {
 		RewardStatus      string  `json:"reward_status"`
 		RewardAmount      float64 `json:"reward_amount"`
 	}
-
 	var recentInvites []recentInvite
 	for _, r := range relations {
 		var user models.User
@@ -118,29 +204,19 @@ func GetInviteStats(c *gin.Context) {
 			status = "paid"
 		}
 		recentInvites = append(recentInvites, recentInvite{
-			ID:                r.ID,
-			InviteeUsername:   user.Username,
-			InviteeEmail:      user.Email,
-			RegisteredAt:      r.CreatedAt.Format("2006-01-02T15:04:05Z"),
-			HasPurchased:      r.InviteeFirstOrderID != nil,
-			ConsumptionAmount: r.InviteeTotalConsumption,
-			RewardStatus:      status,
-			RewardAmount:      r.InviterRewardAmount,
+			ID: r.ID, InviteeUsername: user.Username, InviteeEmail: user.Email,
+			RegisteredAt: r.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			HasPurchased: r.InviteeFirstOrderID != nil, ConsumptionAmount: r.InviteeTotalConsumption,
+			RewardStatus: status, RewardAmount: r.InviterRewardAmount,
 		})
 	}
-
 	utils.Success(c, gin.H{
-		"total_invites":      totalInvites,
-		"registered_invites": totalInvites,
-		"purchased_invites":  purchasedInvites,
-		"total_reward":       totalReward,
-		"recent_invites":     recentInvites,
+		"total_invites": totalInvites, "registered_invites": totalInvites,
+		"purchased_invites": purchasedInvites, "total_reward": totalReward, "recent_invites": recentInvites,
 	})
 }
 
-func GetMyCodes(c *gin.Context) {
-	ListInviteCodes(c)
-}
+func GetMyCodes(c *gin.Context) { ListInviteCodes(c) }
 
 func DeleteInviteCode(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -156,9 +232,9 @@ func DeleteInviteCode(c *gin.Context) {
 }
 
 func ValidateInviteCode(c *gin.Context) {
-	code := c.Param("code")
+	codeStr := c.Param("code")
 	var invite models.InviteCode
-	if err := database.GetDB().Where("UPPER(code) = UPPER(?) AND is_active = ?", code, true).First(&invite).Error; err != nil {
+	if err := database.GetDB().Where("UPPER(code) = UPPER(?) AND is_active = ?", codeStr, true).First(&invite).Error; err != nil {
 		utils.NotFound(c, "邀请码无效")
 		return
 	}
@@ -171,4 +247,19 @@ func ValidateInviteCode(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{"valid": true, "invitee_reward": invite.InviteeReward})
+}
+
+// ── Helpers ──
+
+func inviteCodeStatus(code models.InviteCode) string {
+	if code.ExpiresAt != nil && time.Now().After(*code.ExpiresAt) {
+		return "expired"
+	}
+	if code.MaxUses != nil && code.UsedCount >= int(*code.MaxUses) {
+		return "exhausted"
+	}
+	if !code.IsActive {
+		return "disabled"
+	}
+	return "active"
 }

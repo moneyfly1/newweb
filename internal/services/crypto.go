@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"cboard/v2/internal/database"
-	"cboard/v2/internal/models"
+	"cboard/v2/internal/utils"
 )
 
 // CryptoConfig holds crypto payment configuration
@@ -17,15 +16,7 @@ type CryptoConfig struct {
 
 // GetCryptoConfig reads crypto payment config from system_configs
 func GetCryptoConfig() (*CryptoConfig, error) {
-	db := database.GetDB()
-	keys := []string{"pay_crypto_wallet_address", "pay_crypto_network", "pay_crypto_currency"}
-	var configs []models.SystemConfig
-	db.Where("`key` IN ?", keys).Find(&configs)
-
-	m := make(map[string]string)
-	for _, c := range configs {
-		m[c.Key] = c.Value
-	}
+	m := utils.GetSettings("pay_crypto_wallet_address", "pay_crypto_network", "pay_crypto_currency")
 
 	if strings.TrimSpace(m["pay_crypto_wallet_address"]) == "" {
 		return nil, fmt.Errorf("加密货币钱包地址未配置")

@@ -8,6 +8,20 @@ import (
 	"strings"
 )
 
+// Pre-compiled regexps (avoid recompiling on every ParseUserAgent call)
+var (
+	reIPhoneOS      = regexp.MustCompile(`(?i)iPhone\s*OS\s+([\d_]+)`)
+	reAndroidVer    = regexp.MustCompile(`(?i)Android\s+([\d.]+)`)
+	reIPhoneModel   = regexp.MustCompile(`(?i)iPhone(\d+,\d+)`)
+	reIPadModel     = regexp.MustCompile(`(?i)iPad(\d+,\d+)`)
+	reIPhoneProMax  = regexp.MustCompile(`iPhone\s+(\d+)\s+Pro\s+Max`)
+	reIPhonePro     = regexp.MustCompile(`iPhone\s+(\d+)\s+Pro`)
+	reIPhoneMini    = regexp.MustCompile(`iPhone\s+(\d+)\s+mini`)
+	reIPhoneNum     = regexp.MustCompile(`iPhone\s+(\d+)`)
+	reAndroidBuild  = regexp.MustCompile(`;\s*([^;]+)\s*[Bb]uild`)
+	reVersionPrefix = regexp.MustCompile(`^([\d.]+)`)
+)
+
 // ClientInfo holds parsed User-Agent information
 type ClientInfo struct {
 	SoftwareName    string
@@ -119,12 +133,12 @@ func detectOS(lower, ua string, info *ClientInfo) {
 	switch {
 	case strings.Contains(lower, "iphone") || strings.Contains(lower, "ipad"):
 		info.OSName = "iOS"
-		if m := regexp.MustCompile(`(?i)iPhone\s*OS\s+([\d_]+)`).FindStringSubmatch(ua); len(m) > 1 {
+		if m := reIPhoneOS.FindStringSubmatch(ua); len(m) > 1 {
 			info.OSVersion = strings.ReplaceAll(m[1], "_", ".")
 		}
 	case strings.Contains(lower, "android"):
 		info.OSName = "Android"
-		if m := regexp.MustCompile(`(?i)Android\s+([\d.]+)`).FindStringSubmatch(ua); len(m) > 1 {
+		if m := reAndroidVer.FindStringSubmatch(ua); len(m) > 1 {
 			info.OSVersion = m[1]
 		}
 	case strings.Contains(lower, "windows"):
@@ -197,7 +211,7 @@ var iphoneModelMap = map[string]string{
 
 func detectDevice(lower, ua string, info *ClientInfo) {
 	// iPhone model
-	if m := regexp.MustCompile(`(?i)iPhone(\d+,\d+)`).FindStringSubmatch(ua); len(m) > 1 {
+	if m := reIPhoneModel.FindStringSubmatch(ua); len(m) > 1 {
 		modelID := "iPhone" + m[1]
 		if name, ok := iphoneModelMap[modelID]; ok {
 			info.DeviceModel = name
@@ -205,18 +219,17 @@ func detectDevice(lower, ua string, info *ClientInfo) {
 			info.DeviceModel = "iPhone " + strings.Replace(m[1], ",", ".", -1)
 		}
 		info.DeviceBrand = "Apple"
-	} else if m := regexp.MustCompile(`(?i)iPad(\d+,\d+)`).FindStringSubmatch(ua); len(m) > 1 {
+	} else if m := reIPadModel.FindStringSubmatch(ua); len(m) > 1 {
 		info.DeviceModel = "iPad " + strings.Replace(m[1], ",", ".", -1)
 		info.DeviceBrand = "Apple"
 	} else if strings.Contains(lower, "iphone") {
-		// Try friendly name patterns: "iPhone 15 Pro Max", "iPhone 15 Pro", "iPhone 15 mini", "iPhone 15"
-		if m := regexp.MustCompile(`iPhone\s+(\d+)\s+Pro\s+Max`).FindStringSubmatch(ua); len(m) > 1 {
+		if m := reIPhoneProMax.FindStringSubmatch(ua); len(m) > 1 {
 			info.DeviceModel = "iPhone " + m[1] + " Pro Max"
-		} else if m := regexp.MustCompile(`iPhone\s+(\d+)\s+Pro`).FindStringSubmatch(ua); len(m) > 1 {
+		} else if m := reIPhonePro.FindStringSubmatch(ua); len(m) > 1 {
 			info.DeviceModel = "iPhone " + m[1] + " Pro"
-		} else if m := regexp.MustCompile(`iPhone\s+(\d+)\s+mini`).FindStringSubmatch(ua); len(m) > 1 {
+		} else if m := reIPhoneMini.FindStringSubmatch(ua); len(m) > 1 {
 			info.DeviceModel = "iPhone " + m[1] + " mini"
-		} else if m := regexp.MustCompile(`iPhone\s+(\d+)`).FindStringSubmatch(ua); len(m) > 1 {
+		} else if m := reIPhoneNum.FindStringSubmatch(ua); len(m) > 1 {
 			info.DeviceModel = "iPhone " + m[1]
 		} else {
 			info.DeviceModel = "iPhone"
@@ -229,7 +242,7 @@ func detectDevice(lower, ua string, info *ClientInfo) {
 
 	// Android model: "Build/..." pattern + brand detection
 	if info.DeviceModel == "" {
-		if m := regexp.MustCompile(`;\s*([^;]+)\s*[Bb]uild`).FindStringSubmatch(ua); len(m) > 1 {
+		if m := reAndroidBuild.FindStringSubmatch(ua); len(m) > 1 {
 			info.DeviceModel = strings.TrimSpace(m[1])
 			nameLower := strings.ToLower(info.DeviceModel)
 			brands := []struct {
@@ -329,7 +342,7 @@ func extractVersion(ua, keyword string) string {
 	}
 	rest := ua[idx+len(keyword):]
 	rest = strings.TrimLeft(rest, "/ ")
-	if m := regexp.MustCompile(`^([\d.]+)`).FindString(rest); m != "" {
+	if m := reVersionPrefix.FindString(rest); m != "" {
 		return m
 	}
 	return ""

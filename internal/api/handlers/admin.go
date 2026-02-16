@@ -807,6 +807,7 @@ func AdminCreateNode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
+	node.IsManual = true // 管理员手动创建的节点，自动更新时不会被删除
 	if err := database.GetDB().Create(&node).Error; err != nil {
 		utils.InternalError(c, "创建节点失败")
 		return
@@ -905,6 +906,7 @@ func AdminImportNodes(c *gin.Context) {
 	db := database.GetDB()
 	successCount := 0
 	for _, node := range nodes {
+		node.IsManual = true // 管理员手动导入的节点，自动更新时不会被删除
 		if err := db.Create(&node).Error; err == nil {
 			successCount++
 		}

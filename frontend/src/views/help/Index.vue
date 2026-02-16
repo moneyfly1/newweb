@@ -27,128 +27,42 @@
       </n-card>
 
       <n-card title="使用教程" :bordered="false">
-        <n-tabs type="segment" size="small" animated>
-          <n-tab-pane name="tut-shadowrocket" tab="Shadowrocket (iOS)">
+        <!-- Desktop: segment tabs -->
+        <n-tabs v-if="!appStore.isMobile" type="segment" size="small" animated>
+          <n-tab-pane v-for="t in tutorials" :key="t.key" :name="t.key" :tab="t.tab">
             <div class="tutorial">
-              <h4>Shadowrocket 使用教程</h4>
-              <p class="tut-note">Shadowrocket 需要使用非中国大陆 Apple ID 在 App Store 购买下载（售价约 $2.99）。</p>
-              <ol>
-                <li>打开本站「我的订阅」页面，复制<strong>通用订阅链接</strong>。</li>
-                <li>打开 Shadowrocket，点击右上角 <strong>+</strong> 按钮。</li>
-                <li>类型选择 <strong>Subscribe</strong>（订阅）。</li>
-                <li>在 URL 栏粘贴刚才复制的订阅链接，备注可填写任意名称。</li>
-                <li>点击右上角<strong>完成</strong>保存。</li>
-                <li>回到首页，点击订阅右侧的刷新按钮更新节点列表。</li>
-                <li>选择一个节点，打开顶部的<strong>连接开关</strong>即可使用。</li>
-              </ol>
-              <p class="tut-tip">提示：也可以直接在「我的订阅」页面点击 Shadowrocket 二维码，用 Shadowrocket 扫码一键导入。</p>
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="tut-clash" tab="Clash (Windows)">
-            <div class="tutorial">
-              <h4>Clash for Windows 使用教程</h4>
-              <ol>
-                <li>下载并安装 Clash for Windows（见下方下载区域）。</li>
-                <li>打开本站「我的订阅」页面，复制 <strong>Clash 订阅链接</strong>。</li>
-                <li>打开 Clash for Windows，点击左侧 <strong>Profiles</strong>（配置）。</li>
-                <li>在顶部输入框粘贴 Clash 订阅链接，点击 <strong>Download</strong>。</li>
-                <li>下载完成后，点击该配置文件使其高亮选中。</li>
-                <li>切换到 <strong>Proxies</strong>（代理）页面，选择一个节点。</li>
-                <li>切换到 <strong>General</strong>（常规）页面，打开 <strong>System Proxy</strong>（系统代理）。</li>
-              </ol>
-              <p class="tut-tip">提示：建议开启 Clash 的「开机自启」功能，避免每次手动启动。</p>
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="tut-v2rayn" tab="V2rayN (Windows)">
-            <div class="tutorial">
-              <h4>V2rayN 使用教程</h4>
-              <ol>
-                <li>下载并解压 V2rayN（见下方下载区域）。</li>
-                <li>打开本站「我的订阅」页面，复制<strong>通用订阅链接</strong>。</li>
-                <li>运行 V2rayN，右键系统托盘图标 → <strong>订阅分组设置</strong>。</li>
-                <li>点击<strong>添加</strong>，在地址栏粘贴订阅链接，备注填写任意名称，点击确定。</li>
-                <li>右键托盘图标 → <strong>更新订阅</strong>（不通过代理）。</li>
-                <li>在主界面选择一个节点，右键 → <strong>设为活动服务器</strong>。</li>
-                <li>右键托盘图标 → 系统代理 → <strong>自动配置系统代理</strong>。</li>
-              </ol>
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="tut-android" tab="Android">
-            <div class="tutorial">
-              <h4>V2rayNG / Clash Meta (Android) 使用教程</h4>
-              <h5>V2rayNG</h5>
-              <ol>
-                <li>下载并安装 V2rayNG（见下方下载区域）。</li>
-                <li>打开本站「我的订阅」页面，复制<strong>通用订阅链接</strong>。</li>
-                <li>打开 V2rayNG，点击左上角菜单 → <strong>订阅分组设置</strong>。</li>
-                <li>点击右上角 <strong>+</strong>，在地址栏粘贴订阅链接，点击右上角 ✓ 保存。</li>
-                <li>返回主界面，点击右上角菜单 → <strong>更新订阅</strong>。</li>
-                <li>选择一个节点，点击右下角 <strong>V</strong> 按钮连接。</li>
-              </ol>
-              <h5>Clash Meta for Android</h5>
-              <ol>
-                <li>下载并安装 Clash Meta（见下方下载区域）。</li>
-                <li>打开本站「我的订阅」页面，复制 <strong>Clash 订阅链接</strong>。</li>
-                <li>打开 Clash Meta，点击 <strong>Profile</strong>（配置）。</li>
-                <li>点击右上角 <strong>+</strong> → <strong>URL</strong>，粘贴 Clash 订阅链接，点击保存。</li>
-                <li>选中该配置，返回主页点击<strong>启动</strong>按钮。</li>
-              </ol>
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="tut-stash" tab="Stash (iOS)">
-            <div class="tutorial">
-              <h4>Stash 使用教程</h4>
-              <p class="tut-note">Stash 需要使用非中国大陆 Apple ID 在 App Store 购买下载。</p>
-              <ol>
-                <li>打开本站「我的订阅」页面，复制 <strong>Clash 订阅链接</strong>。</li>
-                <li>打开 Stash，进入<strong>设置</strong> → <strong>配置</strong> → <strong>从 URL 下载</strong>。</li>
-                <li>粘贴 Clash 订阅链接，点击<strong>下载</strong>。</li>
-                <li>下载完成后选中该配置文件。</li>
-                <li>返回首页，选择节点并打开连接开关。</li>
-              </ol>
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="tut-clashparty" tab="Clash Party">
-            <div class="tutorial">
-              <h4>Clash Party 使用教程（Windows / macOS）</h4>
-              <ol>
-                <li>下载并安装 Clash Party（见下方下载区域）。</li>
-                <li>打开本站「我的订阅」页面，复制 <strong>Clash 订阅链接</strong>。</li>
-                <li>打开 Clash Party，进入<strong>订阅管理</strong>。</li>
-                <li>点击<strong>导入</strong>，粘贴 Clash 订阅链接，确认导入。</li>
-                <li>选中导入的配置，返回主页。</li>
-                <li>选择节点，开启<strong>系统代理</strong>即可使用。</li>
-              </ol>
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="tut-flclash" tab="FlClash">
-            <div class="tutorial">
-              <h4>FlClash 使用教程（全平台）</h4>
-              <ol>
-                <li>下载并安装 FlClash（见下方下载区域）。</li>
-                <li>打开本站「我的订阅」页面，复制 <strong>Clash 订阅链接</strong>。</li>
-                <li>打开 FlClash，进入<strong>配置</strong>页面。</li>
-                <li>点击 <strong>+</strong> 添加配置 → 选择 <strong>URL 导入</strong>。</li>
-                <li>粘贴 Clash 订阅链接，点击确认。</li>
-                <li>选中配置后，在<strong>代理</strong>页面选择节点。</li>
-                <li>开启<strong>系统代理</strong>或 <strong>TUN 模式</strong>即可使用。</li>
-              </ol>
-            </div>
-          </n-tab-pane>
-          <n-tab-pane name="tut-hiddify" tab="Hiddify">
-            <div class="tutorial">
-              <h4>Hiddify 使用教程（Windows / Android）</h4>
-              <ol>
-                <li>下载并安装 Hiddify（见下方下载区域）。</li>
-                <li>打开本站「我的订阅」页面，复制<strong>通用订阅链接</strong>。</li>
-                <li>打开 Hiddify，点击 <strong>+</strong> 添加配置。</li>
-                <li>选择<strong>从链接添加</strong>，粘贴订阅链接。</li>
-                <li>等待节点加载完成，选择一个节点。</li>
-                <li>点击底部的<strong>连接</strong>按钮即可使用。</li>
-              </ol>
+              <h4>{{ t.title }}</h4>
+              <p v-if="t.note" class="tut-note">{{ t.note }}</p>
+              <template v-for="(section, si) in t.sections" :key="si">
+                <h5 v-if="section.subtitle">{{ section.subtitle }}</h5>
+                <ol><li v-for="(step, i) in section.steps" :key="i" v-html="step" /></ol>
+              </template>
+              <p v-if="t.tip" class="tut-tip" v-html="t.tip" />
             </div>
           </n-tab-pane>
         </n-tabs>
+
+        <!-- Mobile: card list with collapse -->
+        <div v-else class="tut-card-list">
+          <div v-for="t in tutorials" :key="t.key" class="tut-card" @click="toggleTut(t.key)">
+            <div class="tut-card-header">
+              <span class="tut-card-icon">{{ t.icon }}</span>
+              <div class="tut-card-meta">
+                <span class="tut-card-name">{{ t.tab }}</span>
+                <span class="tut-card-platform">{{ t.platform }}</span>
+              </div>
+              <n-icon :component="expandedTut === t.key ? ChevronUpOutline : ChevronDownOutline" size="18" color="#999" />
+            </div>
+            <div v-if="expandedTut === t.key" class="tut-card-body" @click.stop>
+              <p v-if="t.note" class="tut-note">{{ t.note }}</p>
+              <template v-for="(section, si) in t.sections" :key="si">
+                <div v-if="section.subtitle" class="tut-subtitle">{{ section.subtitle }}</div>
+                <ol><li v-for="(step, i) in section.steps" :key="i" v-html="step" /></ol>
+              </template>
+              <p v-if="t.tip" class="tut-tip" v-html="t.tip" />
+            </div>
+          </div>
+        </div>
       </n-card>
 
       <n-card title="软件下载" :bordered="false">
@@ -235,11 +149,139 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { DownloadOutline } from '@vicons/ionicons5'
+import { DownloadOutline, ChevronDownOutline, ChevronUpOutline } from '@vicons/ionicons5'
 import { getPublicConfig } from '@/api/common'
+import { useAppStore } from '@/stores/app'
 
+const appStore = useAppStore()
 const loadingConfig = ref(false)
 const config = ref<Record<string, string>>({})
+const expandedTut = ref('')
+
+const toggleTut = (key: string) => {
+  expandedTut.value = expandedTut.value === key ? '' : key
+}
+
+interface TutSection { subtitle?: string; steps: string[] }
+interface Tutorial {
+  key: string; tab: string; icon: string; platform: string; title: string;
+  note?: string; tip?: string; sections: TutSection[]
+}
+
+const tutorials: Tutorial[] = [
+  {
+    key: 'shadowrocket', tab: 'Shadowrocket', icon: '🚀', platform: 'iOS',
+    title: 'Shadowrocket 使用教程',
+    note: 'Shadowrocket 需要使用非中国大陆 Apple ID 在 App Store 购买下载（售价约 $2.99）。',
+    sections: [{ steps: [
+      '打开本站「我的订阅」页面，复制<strong>通用订阅链接</strong>。',
+      '打开 Shadowrocket，点击右上角 <strong>+</strong> 按钮。',
+      '类型选择 <strong>Subscribe</strong>（订阅）。',
+      '在 URL 栏粘贴刚才复制的订阅链接，备注可填写任意名称。',
+      '点击右上角<strong>完成</strong>保存。',
+      '回到首页，点击订阅右侧的刷新按钮更新节点列表。',
+      '选择一个节点，打开顶部的<strong>连接开关</strong>即可使用。',
+    ] }],
+    tip: '提示：也可以直接在「我的订阅」页面点击 Shadowrocket 二维码，用 Shadowrocket 扫码一键导入。',
+  },
+  {
+    key: 'clash', tab: 'Clash', icon: '🔵', platform: 'Windows',
+    title: 'Clash for Windows 使用教程',
+    sections: [{ steps: [
+      '下载并安装 Clash for Windows（见下方下载区域）。',
+      '打开本站「我的订阅」页面，复制 <strong>Clash 订阅链接</strong>。',
+      '打开 Clash for Windows，点击左侧 <strong>Profiles</strong>（配置）。',
+      '在顶部输入框粘贴 Clash 订阅链接，点击 <strong>Download</strong>。',
+      '下载完成后，点击该配置文件使其高亮选中。',
+      '切换到 <strong>Proxies</strong>（代理）页面，选择一个节点。',
+      '切换到 <strong>General</strong>（常规）页面，打开 <strong>System Proxy</strong>（系统代理）。',
+    ] }],
+    tip: '提示：建议开启 Clash 的「开机自启」功能，避免每次手动启动。',
+  },
+  {
+    key: 'v2rayn', tab: 'V2rayN', icon: '🟢', platform: 'Windows',
+    title: 'V2rayN 使用教程',
+    sections: [{ steps: [
+      '下载并解压 V2rayN（见下方下载区域）。',
+      '打开本站「我的订阅」页面，复制<strong>通用订阅链接</strong>。',
+      '运行 V2rayN，右键系统托盘图标 → <strong>订阅分组设置</strong>。',
+      '点击<strong>添加</strong>，在地址栏粘贴订阅链接，备注填写任意名称，点击确定。',
+      '右键托盘图标 → <strong>更新订阅</strong>（不通过代理）。',
+      '在主界面选择一个节点，右键 → <strong>设为活动服务器</strong>。',
+      '右键托盘图标 → 系统代理 → <strong>自动配置系统代理</strong>。',
+    ] }],
+  },
+  {
+    key: 'android', tab: 'Android', icon: '🤖', platform: 'Android',
+    title: 'V2rayNG / Clash Meta 使用教程',
+    sections: [
+      { subtitle: 'V2rayNG', steps: [
+        '下载并安装 V2rayNG（见下方下载区域）。',
+        '打开本站「我的订阅」页面，复制<strong>通用订阅链接</strong>。',
+        '打开 V2rayNG，点击左上角菜单 → <strong>订阅分组设置</strong>。',
+        '点击右上角 <strong>+</strong>，在地址栏粘贴订阅链接，点击右上角 ✓ 保存。',
+        '返回主界面，点击右上角菜单 → <strong>更新订阅</strong>。',
+        '选择一个节点，点击右下角 <strong>V</strong> 按钮连接。',
+      ] },
+      { subtitle: 'Clash Meta for Android', steps: [
+        '下载并安装 Clash Meta（见下方下载区域）。',
+        '打开本站「我的订阅」页面，复制 <strong>Clash 订阅链接</strong>。',
+        '打开 Clash Meta，点击 <strong>Profile</strong>（配置）。',
+        '点击右上角 <strong>+</strong> → <strong>URL</strong>，粘贴 Clash 订阅链接，点击保存。',
+        '选中该配置，返回主页点击<strong>启动</strong>按钮。',
+      ] },
+    ],
+  },
+  {
+    key: 'stash', tab: 'Stash', icon: '🟡', platform: 'iOS',
+    title: 'Stash 使用教程',
+    note: 'Stash 需要使用非中国大陆 Apple ID 在 App Store 购买下载。',
+    sections: [{ steps: [
+      '打开本站「我的订阅」页面，复制 <strong>Clash 订阅链接</strong>。',
+      '打开 Stash，进入<strong>设置</strong> → <strong>配置</strong> → <strong>从 URL 下载</strong>。',
+      '粘贴 Clash 订阅链接，点击<strong>下载</strong>。',
+      '下载完成后选中该配置文件。',
+      '返回首页，选择节点并打开连接开关。',
+    ] }],
+  },
+  {
+    key: 'clashparty', tab: 'Clash Party', icon: '🟣', platform: 'Win / macOS',
+    title: 'Clash Party 使用教程',
+    sections: [{ steps: [
+      '下载并安装 Clash Party（见下方下载区域）。',
+      '打开本站「我的订阅」页面，复制 <strong>Clash 订阅链接</strong>。',
+      '打开 Clash Party，进入<strong>订阅管理</strong>。',
+      '点击<strong>导入</strong>，粘贴 Clash 订阅链接，确认导入。',
+      '选中导入的配置，返回主页。',
+      '选择节点，开启<strong>系统代理</strong>即可使用。',
+    ] }],
+  },
+  {
+    key: 'flclash', tab: 'FlClash', icon: '⚡', platform: '全平台',
+    title: 'FlClash 使用教程',
+    sections: [{ steps: [
+      '下载并安装 FlClash（见下方下载区域）。',
+      '打开本站「我的订阅」页面，复制 <strong>Clash 订阅链接</strong>。',
+      '打开 FlClash，进入<strong>配置</strong>页面。',
+      '点击 <strong>+</strong> 添加配置 → 选择 <strong>URL 导入</strong>。',
+      '粘贴 Clash 订阅链接，点击确认。',
+      '选中配置后，在<strong>代理</strong>页面选择节点。',
+      '开启<strong>系统代理</strong>或 <strong>TUN 模式</strong>即可使用。',
+    ] }],
+  },
+  {
+    key: 'hiddify', tab: 'Hiddify', icon: '🟠', platform: 'Win / Android',
+    title: 'Hiddify 使用教程',
+    sections: [{ steps: [
+      '下载并安装 Hiddify（见下方下载区域）。',
+      '打开本站「我的订阅」页面，复制<strong>通用订阅链接</strong>。',
+      '打开 Hiddify，点击 <strong>+</strong> 添加配置。',
+      '选择<strong>从链接添加</strong>，粘贴订阅链接。',
+      '等待节点加载完成，选择一个节点。',
+      '点击底部的<strong>连接</strong>按钮即可使用。',
+    ] }],
+  },
+]
 
 const allClients = {
   windows: [
@@ -349,5 +391,81 @@ onMounted(async () => {
 @media (max-width: 767px) {
   .help-page { padding: 0; }
   .client-card { padding: 12px 14px; }
+}
+
+/* Mobile tutorial cards */
+.tut-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tut-card {
+  border-radius: 10px;
+  background: rgba(0,0,0,0.025);
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tut-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.tut-card-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.tut-card-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tut-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-color, #333);
+}
+
+.tut-card-platform {
+  font-size: 11px;
+  color: #999;
+}
+
+.tut-card-body {
+  padding: 0 14px 14px;
+  cursor: default;
+}
+
+.tut-card-body ol {
+  padding-left: 18px;
+  margin: 0;
+}
+
+.tut-card-body li {
+  margin: 4px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #555;
+}
+
+.tut-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+  margin: 10px 0 4px;
+}
+
+.tut-card-body .tut-note,
+.tut-card-body .tut-tip {
+  font-size: 12px;
+  padding: 6px 10px;
 }
 </style>

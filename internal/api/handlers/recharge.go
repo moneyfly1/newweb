@@ -32,6 +32,10 @@ func CreateRecharge(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	if req.Amount > 100000 {
+		utils.BadRequest(c, "单次充值金额不能超过 100000")
+		return
+	}
 	userID := c.GetUint("user_id")
 	db := database.GetDB()
 	orderNo := fmt.Sprintf("RCH%d%s", time.Now().Unix(), utils.GenerateRandomString(6))

@@ -15,7 +15,7 @@ func SecurityHeaders() gin.HandlerFunc {
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
-		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-src https://telegram.org")
+		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-src https://telegram.org")
 		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		c.Next()
 	}
@@ -40,9 +40,12 @@ func IPWhitelist() gin.HandlerFunc {
 			if strings.Contains(line, "/") {
 				// CIDR
 				_, cidr, err := net.ParseCIDR(line)
-				if err == nil && cidr.Contains(net.ParseIP(clientIP)) {
-					c.Next()
-					return
+				if err == nil {
+					ip := net.ParseIP(clientIP)
+					if ip != nil && cidr.Contains(ip) {
+						c.Next()
+						return
+					}
 				}
 			} else if line == clientIP {
 				c.Next()

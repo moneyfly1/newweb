@@ -47,7 +47,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	{
 		auth.POST("/register", middleware.RateLimit(5, time.Minute), handlers.Register)
 		auth.POST("/login", middleware.RateLimit(10, time.Minute), handlers.Login)
-		auth.POST("/refresh", handlers.RefreshToken)
+		auth.POST("/refresh", middleware.RateLimit(10, time.Minute), handlers.RefreshToken)
 		auth.POST("/logout", middleware.AuthRequired(), handlers.Logout)
 		auth.POST("/verification/send", middleware.RateLimit(3, time.Minute), handlers.SendVerificationCode)
 		auth.POST("/verification/verify", handlers.VerifyCode)

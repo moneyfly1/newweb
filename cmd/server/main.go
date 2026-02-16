@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"cboard/v2/internal/api/router"
@@ -58,12 +62,38 @@ func main() {
 	// 设置路由
 	r := router.SetupRouter(cfg)
 
-	// 启动服务
+	// 启动 HTTP 服务（graceful shutdown）
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
-	log.Printf("服务启动: http://%s", addr)
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("服务启动失败: %v", err)
+	srv := &http.Server{Addr: addr, Handler: r}
+
+	go func() {
+		log.Printf("服务启动: http://%s", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("服务启动失败: %v", err)
+		}
+	}()
+
+	// 等待中断信号
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("正在关闭服务...")
+
+	// 停止后台任务
+	services.GetScheduler().Stop()
+	services.GetConfigUpdateService().Stop()
+
+	// 给活跃请求 10 秒完成
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("服务关闭异常: %v", err)
 	}
+
+	// 关闭数据库连接
+	database.Close()
+
+	log.Println("服务已安全退出")
 }
 
 func createDefaultAdmin() {

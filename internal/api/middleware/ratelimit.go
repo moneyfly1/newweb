@@ -21,6 +21,8 @@ type visitor struct {
 	lastSeen time.Time
 }
 
+const maxVisitors = 10000
+
 func newRateLimiter(rate int, window time.Duration) *rateLimiter {
 	rl := &rateLimiter{visitors: make(map[string]*visitor), rate: rate, window: window}
 	go rl.cleanup()
@@ -30,6 +32,21 @@ func newRateLimiter(rate int, window time.Duration) *rateLimiter {
 func (rl *rateLimiter) allow(key string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
+
+	// Evict oldest entries if map is too large (prevent memory exhaustion from IP rotation attacks)
+	if len(rl.visitors) >= maxVisitors {
+		now := time.Now()
+		for k, v := range rl.visitors {
+			if now.Sub(v.lastSeen) > rl.window {
+				delete(rl.visitors, k)
+			}
+		}
+		// If still over limit after cleanup, reject (under attack)
+		if len(rl.visitors) >= maxVisitors {
+			return false
+		}
+	}
+
 	v, exists := rl.visitors[key]
 	if !exists || time.Since(v.lastSeen) > rl.window {
 		rl.visitors[key] = &visitor{count: 1, lastSeen: time.Now()}
@@ -47,8 +64,9 @@ func (rl *rateLimiter) cleanup() {
 	for {
 		time.Sleep(rl.window)
 		rl.mu.Lock()
+		now := time.Now()
 		for key, v := range rl.visitors {
-			if time.Since(v.lastSeen) > rl.window {
+			if now.Sub(v.lastSeen) > rl.window {
 				delete(rl.visitors, key)
 			}
 		}

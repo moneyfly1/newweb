@@ -95,8 +95,8 @@ const loadHistory = async () => {
   try {
     const res: any = await getRedeemHistory()
     history.value = res.data?.items || res.data || []
-  } catch (error) {
-    console.error('Failed to load redeem history:', error)
+  } catch {
+    // silently ignore
   } finally {
     loadingHistory.value = false
   }

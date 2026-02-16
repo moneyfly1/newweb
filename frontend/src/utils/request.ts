@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AxiosRequestConfig } from 'axios'
+import type { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
 import { useUserStore } from '@/stores/user'
 import router from '@/router'
 
@@ -23,11 +23,27 @@ instance.interceptors.request.use((config) => {
   return config
 })
 
+let isRefreshing = false
+let pendingRequests: Array<{
+  resolve: (config: InternalAxiosRequestConfig) => void
+  reject: (error: any) => void
+}> = []
+
+function processQueue(error: any, newToken: string | null) {
+  pendingRequests.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error)
+    } else if (newToken) {
+      resolve({} as InternalAxiosRequestConfig) // placeholder, actual retry below
+    }
+  })
+  pendingRequests = []
+}
+
 let isLoggingOut = false
 
 instance.interceptors.response.use(
   (response) => {
-    // Skip JSON code check for blob responses (e.g. CSV export)
     if (response.config.responseType === 'blob') {
       return response
     }
@@ -37,17 +53,58 @@ instance.interceptors.response.use(
     }
     return data
   },
-  (error) => {
-    const url = error.config?.url || ''
+  async (error) => {
+    const originalRequest = error.config
+    const url = originalRequest?.url || ''
     const isAuthEndpoint = url.startsWith('/auth/')
-    if (error.response?.status === 401 && !isLoggingOut && !isAuthEndpoint) {
-      isLoggingOut = true
+
+    // Attempt token refresh on 401 (skip for auth endpoints and retried requests)
+    if (error.response?.status === 401 && !isAuthEndpoint && !originalRequest._retry) {
       const userStore = useUserStore()
-      userStore.logout(true)
-      router.push('/login').finally(() => {
-        isLoggingOut = false
-      })
+      const storedRefresh = userStore.refreshTokenVal
+
+      if (storedRefresh) {
+        if (isRefreshing) {
+          // Queue this request until refresh completes
+          return new Promise((resolve, reject) => {
+            pendingRequests.push({ resolve, reject })
+          }).then(() => {
+            originalRequest.headers.Authorization = `Bearer ${userStore.token}`
+            return instance(originalRequest)
+          })
+        }
+
+        isRefreshing = true
+        originalRequest._retry = true
+
+        try {
+          const res = await axios.post('/api/v1/auth/refresh', { refresh_token: storedRefresh })
+          const newToken = res.data?.data?.access_token
+          const newRefresh = res.data?.data?.refresh_token
+          if (newToken) {
+            userStore.token = newToken
+            if (newRefresh) userStore.refreshTokenVal = newRefresh
+            localStorage.setItem('token', newToken)
+            if (newRefresh) localStorage.setItem('refresh_token', newRefresh)
+            processQueue(null, newToken)
+            originalRequest.headers.Authorization = `Bearer ${newToken}`
+            return instance(originalRequest)
+          }
+        } catch {
+          processQueue(error, null)
+        } finally {
+          isRefreshing = false
+        }
+      }
+
+      // Refresh failed or no refresh token — logout
+      if (!isLoggingOut) {
+        isLoggingOut = true
+        userStore.logout(true)
+        router.push('/login').finally(() => { isLoggingOut = false })
+      }
     }
+
     // For blob responses, try to parse the error body as JSON
     if (error.response?.data instanceof Blob) {
       return error.response.data.text().then((text: string) => {
@@ -59,10 +116,12 @@ instance.interceptors.response.use(
         }
       })
     }
-    // Extract server error message if available
     const serverMsg = error.response?.data?.message
     if (serverMsg) {
       return Promise.reject(new Error(serverMsg))
+    }
+    if (!error.response) {
+      return Promise.reject(new Error('网络连接失败，请检查网络'))
     }
     return Promise.reject(error)
   }

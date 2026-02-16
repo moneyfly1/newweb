@@ -204,8 +204,8 @@ const loadHistory = async () => {
     const res: any = await getMysteryBoxHistory({ page: historyPagination.page, page_size: historyPagination.pageSize })
     historyData.value = res.data?.items || []
     historyPagination.itemCount = res.data?.total || 0
-  } catch (e: any) {
-    console.error('Failed to load history:', e)
+  } catch {
+    // silently ignore
   } finally {
     loadingHistory.value = false
   }

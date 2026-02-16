@@ -163,7 +163,7 @@ const menuOptions = [
   ]},
   { label: '系统管理', key: 'group-system', icon: renderIcon(SettingsOutline), children: [
     { label: '系统设置', key: 'AdminSettings' }, { label: '公告管理', key: 'AdminAnnouncements' },
-    { label: '优惠券', key: 'AdminCoupons' }, { label: '卡密管理', key: 'AdminRedeem' }, { label: '盲盒管理', key: 'AdminMysteryBox' }, { label: '用户等级', key: 'AdminLevels' },
+    { label: '优惠券', key: 'AdminCoupons' }, { label: '邀请码管理', key: 'AdminInvites' }, { label: '卡密管理', key: 'AdminRedeem' }, { label: '盲盒管理', key: 'AdminMysteryBox' }, { label: '用户等级', key: 'AdminLevels' },
   ]},
   { label: '日志与分析', key: 'group-logs', icon: renderIcon(StatsChartOutline), children: [
     { label: '数据统计', key: 'AdminStats' }, { label: '系统日志', key: 'AdminLogs' }, { label: '邮件队列', key: 'AdminEmailQueue' },
@@ -213,7 +213,7 @@ function handleUserMenu(key: string) {
 }
 </script>
 <style scoped>
-.logo { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; cursor: pointer; border-bottom: 1px solid var(--n-border-color); }
+.logo { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; cursor: pointer; border-bottom: 1px solid var(--border-color, #e8e8e8); }
 .desktop-header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
 .mobile-header { height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
 .mobile-title { font-size: 16px; font-weight: 600; }
@@ -222,7 +222,7 @@ function handleUserMenu(key: string) {
 .mobile-tabbar {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
   height: 56px; display: flex; align-items: center; justify-content: space-around;
-  background: var(--n-color); border-top: 1px solid var(--n-border-color);
+  background: var(--bg-color, #fff); border-top: 1px solid var(--border-color, #e8e8e8);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .mobile-tab {
@@ -237,7 +237,7 @@ function handleUserMenu(key: string) {
 .theme-picker-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   border-radius: 8px; cursor: pointer; border: 2px solid transparent;
-  transition: all 0.2s; background: var(--n-color-embedded, #f5f5f5);
+  transition: all 0.2s; background: rgba(0,0,0,0.04);
 }
 .theme-picker-item:hover { border-color: var(--primary-color, #667eea)66; }
 .theme-picker-item.active { border-color: var(--primary-color, #667eea); background: var(--primary-color, #667eea)11; }

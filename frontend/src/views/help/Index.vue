@@ -320,14 +320,14 @@ onMounted(async () => {
   gap: 14px;
   padding: 16px 18px;
   border-radius: 10px;
-  background: var(--n-color-embedded, #f5f5f5);
+  background: rgba(0,0,0,0.03);
   cursor: pointer;
   transition: all 0.2s;
   text-decoration: none;
   color: inherit;
 }
 .client-card:hover {
-  background: var(--n-color-hover, #eee);
+  background: rgba(0,0,0,0.04);
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }

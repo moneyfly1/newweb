@@ -345,9 +345,7 @@ onMounted(() => {
 
 <style scoped>
 .admin-dashboard {
-  padding: 24px;
-  min-height: 100vh;
-  background: #f5f7fa;
+  padding: 20px;
 }
 
 .stat-card {
@@ -417,33 +415,16 @@ onMounted(() => {
   width: 56px;
   height: 56px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--bg-color, rgba(255, 255, 255, 0.9));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.stat-card-blue .stat-icon {
-  color: #667eea;
-}
-
-.stat-card-green .stat-icon {
-  color: #11998e;
-}
-
-.stat-card-orange .stat-icon {
-  color: #f5576c;
-}
-
-.stat-card-purple .stat-icon {
-  color: #4facfe;
-}
-
-.stat-card-red .stat-icon {
-  color: #fa709a;
-}
-
-.stat-card-cyan .stat-icon {
-  color: #30cfd0;
-}
+.stat-card-blue .stat-icon { color: #667eea; }
+.stat-card-green .stat-icon { color: #11998e; }
+.stat-card-orange .stat-icon { color: #f5576c; }
+.stat-card-purple .stat-icon { color: #4facfe; }
+.stat-card-red .stat-icon { color: #fa709a; }
+.stat-card-cyan .stat-icon { color: #30cfd0; }
 
 .stat-info {
   flex: 1;
@@ -451,14 +432,14 @@ onMounted(() => {
 
 .stat-label {
   font-size: 14px;
-  color: #666;
+  color: var(--text-color-secondary, #666);
   margin-bottom: 4px;
 }
 
 .stat-value {
   font-size: 28px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-color, #333);
 }
 
 .chart-card,
@@ -484,7 +465,7 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   font-size: 12px;
-  color: #999;
+  color: var(--text-color-secondary, #999);
 }
 
 :deep(.n-card-header) {
@@ -494,11 +475,6 @@ onMounted(() => {
 
 :deep(.n-table) {
   font-size: 13px;
-}
-
-:deep(.n-table th) {
-  font-weight: 600;
-  background: #fafafa;
 }
 
 :deep(.n-list-item) {

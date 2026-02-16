@@ -129,7 +129,8 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	if clientInfo.IsBrowser {
 		var nodes []models.Node
 		db.Where("is_active = ? AND status = ?", true, "online").Order("order_index ASC").Find(&nodes)
-		nodes = append(nodes, fetchUserCustomNodes(db, sub.UserID)...)
+		customNodes := fetchUserCustomNodes(db, sub.UserID, sub.ExpireTime)
+		nodes = append(customNodes, nodes...)
 		ctx.Nodes = nodes
 		ctx.Status = subStatusOK
 		return ctx
@@ -210,14 +211,16 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 	var nodes []models.Node
 	db.Where("is_active = ? AND status = ?", true, "online").Order("order_index ASC").Find(&nodes)
-	nodes = append(nodes, fetchUserCustomNodes(db, sub.UserID)...)
+	customNodes := fetchUserCustomNodes(db, sub.UserID, sub.ExpireTime)
+	nodes = append(customNodes, nodes...)
 	ctx.Nodes = nodes
 	ctx.Status = subStatusOK
 	return ctx
 }
 
 // fetchUserCustomNodes returns custom nodes assigned to a user, converted to models.Node format.
-func fetchUserCustomNodes(db *gorm.DB, userID uint) []models.Node {
+// subExpireTime is the user's subscription expiry, used for FollowUserExpire nodes.
+func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) []models.Node {
 	var assignments []models.UserCustomNode
 	db.Where("user_id = ?", userID).Find(&assignments)
 	if len(assignments) == 0 {
@@ -235,8 +238,12 @@ func fetchUserCustomNodes(db *gorm.DB, userID uint) []models.Node {
 	now := time.Now()
 	var nodes []models.Node
 	for _, cn := range customNodes {
-		// Check custom node expiry
+		// Check custom node's own expiry
 		if cn.ExpireTime != nil && cn.ExpireTime.Before(now) {
+			continue
+		}
+		// If FollowUserExpire is set, also check user's subscription expiry
+		if cn.FollowUserExpire && now.After(subExpireTime) {
 			continue
 		}
 		config := cn.Config

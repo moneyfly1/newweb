@@ -169,13 +169,13 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 48px;
-  background: var(--n-color);
+  background: var(--bg-color, #fff);
 }
 .auth-form-wrapper { width: 100%; max-width: 400px; }
 .auth-form-wrapper h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-.auth-subtitle { color: #999; margin-bottom: 32px; font-size: 15px; }
+.auth-subtitle { color: var(--text-color-secondary, #999); margin-bottom: 32px; font-size: 15px; }
 .form-extra { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.auth-footer { text-align: center; margin-top: 24px; color: #999; font-size: 14px; }
+.auth-footer { text-align: center; margin-top: 24px; color: var(--text-color-secondary, #999); font-size: 14px; }
 .telegram-login-section { margin-top: 16px; }
 .telegram-widget-container { display: flex; justify-content: center; min-height: 40px; }
 

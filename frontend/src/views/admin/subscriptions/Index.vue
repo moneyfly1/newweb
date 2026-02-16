@@ -101,7 +101,11 @@
                 </div>
                 <div class="sub-action-item" @click="copyText(getRowUniversalUrl(row))" v-if="getRowUniversalUrl(row)">
                   <div class="sub-action-icon" style="background:#ecf5ff;color:#2080f0"><n-icon :size="20"><CopyOutline /></n-icon></div>
-                  <span>复制</span>
+                  <span>通用</span>
+                </div>
+                <div class="sub-action-item" @click="copyText(getRowClashUrl(row))" v-if="getRowClashUrl(row)">
+                  <div class="sub-action-icon" style="background:#f0f9eb;color:#18a058"><n-icon :size="20"><CopyOutline /></n-icon></div>
+                  <span>Clash</span>
                 </div>
                 <div class="sub-action-item" @click="showSingleQR(row)" v-if="getRowUniversalUrl(row)">
                   <div class="sub-action-icon" style="background:#f3e8ff;color:#8b5cf6"><n-icon :size="20"><QrCodeOutline /></n-icon></div>
@@ -267,6 +271,14 @@ const getRowUniversalUrl = (row) => {
   if (row?.subscription_url && typeof window !== 'undefined') {
     const base = window.location.origin.replace(/\/$/, '')
     return `${base}/api/v1/sub/${row.subscription_url}`
+  }
+  return ''
+}
+const getRowClashUrl = (row) => {
+  if (row?.clash_url) return row.clash_url
+  if (row?.subscription_url && typeof window !== 'undefined') {
+    const base = window.location.origin.replace(/\/$/, '')
+    return `${base}/api/v1/sub/clash/${row.subscription_url}`
   }
   return ''
 }
@@ -567,28 +579,28 @@ onMounted(() => fetchData())
 :deep(.action-btn-grid) { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 /* Mobile cards */
 .mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.sub-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-.sub-card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+.sub-card { background: var(--bg-color, #fff); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.sub-card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-color, #f0f0f0); }
 .sub-user-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .sub-avatar { width: 36px; height: 36px; border-radius: 50%; background: #667eea; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; flex-shrink: 0; }
 .sub-user-meta { flex: 1; min-width: 0; }
-.sub-user-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sub-user-id { font-size: 12px; color: #999; margin-top: 2px; }
-.sub-section { padding: 10px 14px; border-bottom: 1px solid #f5f5f5; }
-.section-expired { background: #fef0f0; }
-.section-overlimit { background: #fef0f0; }
+.sub-user-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-color, #333); }
+.sub-user-id { font-size: 12px; color: var(--text-color-secondary, #999); margin-top: 2px; }
+.sub-section { padding: 10px 14px; border-bottom: 1px solid var(--border-color, #f5f5f5); }
+.section-expired { background: rgba(224, 48, 80, 0.06); }
+.section-overlimit { background: rgba(224, 48, 80, 0.06); }
 .sub-section-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.sub-section-label { font-size: 13px; color: #909399; }
-.sub-section-value { font-size: 14px; font-weight: 600; }
+.sub-section-label { font-size: 13px; color: var(--text-color-secondary, #909399); }
+.sub-section-value { font-size: 14px; font-weight: 600; color: var(--text-color, #333); }
 .sub-btn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .sub-btn-row-5 { grid-template-columns: repeat(5, 1fr); }
 .sub-btn-row-6 { grid-template-columns: repeat(6, 1fr); }
 .sub-action-grid { display: grid; grid-template-columns: repeat(4, 1fr); padding: 10px 8px; }
 .sub-action-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; cursor: pointer; border-radius: 8px; }
-.sub-action-item:active { background: #f5f7fa; }
+.sub-action-item:active { background: rgba(0,0,0,0.03); }
 .sub-action-item.is-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .sub-action-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-.sub-action-item span { font-size: 11px; color: #606266; }
+.sub-action-item span { font-size: 11px; color: var(--text-color-secondary, #606266); }
 .qr-grid { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
 .qr-item { text-align: center; }
 .qr-title { font-weight: 600; margin-bottom: 8px; }

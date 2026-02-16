@@ -229,7 +229,7 @@ function returnToAdmin() {
 </script>
 <!-- STYLE_SECTION -->
 <style scoped>
-.logo { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; cursor: pointer; border-bottom: 1px solid var(--n-border-color); }
+.logo { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; cursor: pointer; border-bottom: 1px solid var(--border-color, #e8e8e8); }
 .desktop-header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
 
 /* Mobile Header */
@@ -241,7 +241,7 @@ function returnToAdmin() {
 .mobile-tabbar {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
   height: 56px; display: flex; align-items: center; justify-content: space-around;
-  background: var(--n-color); border-top: 1px solid var(--n-border-color);
+  background: var(--bg-color, #fff); border-top: 1px solid var(--border-color, #e8e8e8);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .mobile-tab {
@@ -254,11 +254,11 @@ function returnToAdmin() {
 /* Mobile More Menu */
 .mobile-more-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 12px; padding: 8px 0; }
 .mobile-more-item { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; }
-.mobile-more-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--n-color-embedded, #f5f5f5); color: #667eea; }
+.mobile-more-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.04); color: #667eea; }
 .mobile-more-label { font-size: 12px; color: #666; }
 
 /* Mobile Theme Section */
-.mobile-theme-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--n-border-color, #e8e8e8); }
+.mobile-theme-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color, #e8e8e8); }
 .mobile-theme-label { font-size: 14px; font-weight: 500; margin-bottom: 12px; color: var(--text-color, #333); }
 .mobile-theme-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .mobile-theme-dot {
@@ -274,7 +274,7 @@ function returnToAdmin() {
 .theme-picker-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   border-radius: 8px; cursor: pointer; border: 2px solid transparent;
-  transition: all 0.2s; background: var(--n-color-embedded, #f5f5f5);
+  transition: all 0.2s; background: rgba(0,0,0,0.04);
 }
 .theme-picker-item:hover { border-color: var(--primary-color, #667eea)66; }
 .theme-picker-item.active { border-color: var(--primary-color, #667eea); background: var(--primary-color, #667eea)11; }

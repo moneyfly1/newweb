@@ -144,7 +144,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 .auth-right { flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px; }
 .auth-form-wrapper { width: 100%; max-width: 400px; }
 .auth-form-wrapper h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-.auth-subtitle { color: #999; margin-bottom: 32px; font-size: 15px; }
-.auth-footer { text-align: center; margin-top: 24px; color: #999; font-size: 14px; }
+.auth-subtitle { color: var(--text-color-secondary, #999); margin-bottom: 32px; font-size: 15px; }
+.auth-footer { text-align: center; margin-top: 24px; color: var(--text-color-secondary, #999); font-size: 14px; }
 @media (max-width: 768px) { .auth-left { display: none; } }
 </style>

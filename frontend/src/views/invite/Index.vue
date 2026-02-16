@@ -12,7 +12,7 @@
       </n-alert>
 
       <!-- 统计卡片 - 4个 -->
-      <n-grid cols="1 s:2 m:4" :x-gap="16" :y-gap="16">
+      <n-grid cols="2 m:4" :x-gap="16" :y-gap="16">
         <n-grid-item>
           <n-card :bordered="false" class="stat-card stat-card-1">
             <n-statistic label="累计邀请人数" :value="stats.total_invites || 0">
@@ -639,7 +639,50 @@ onMounted(() => {
   color: white;
 }
 
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  border: 1px solid var(--border-color, #eef0f3);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.card-row .label {
+  font-size: 13px;
+  color: var(--text-color-secondary, #999);
+  flex-shrink: 0;
+}
+
+.card-row .value {
+  font-size: 13px;
+  color: var(--text-color, #333);
+  text-align: right;
+  word-break: break-all;
+}
+
+.card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color, #f0f0f0);
+}
+
 @media (max-width: 767px) {
   .invite-page { padding: 0; }
+  .stat-card :deep(.n-statistic__label) { font-size: 12px; }
+  .stat-card :deep(.n-statistic-value__content) { font-size: 20px; }
 }
 </style>

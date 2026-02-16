@@ -75,6 +75,7 @@
             :single-line="false"
             :row-key="(row) => row.id"
             :checked-row-keys="checkedRowKeys"
+            :row-props="getRowProps"
             @update:checked-row-keys="handleCheck"
           />
         </template>
@@ -188,8 +189,8 @@
 
     <!-- User Detail Drawer -->
     <n-drawer v-model:show="showDetailDrawer" :width="appStore.isMobile ? '100%' : 780" placement="right" closable>
-      <n-drawer-content :title="'用户详情 - ' + (userDetail.username || userDetail.email || '')" closable>>
-        <n-descriptions bordered :column="2" label-placement="left" size="small">
+      <n-drawer-content :title="'用户详情 - ' + (userDetail.username || userDetail.email || '')" closable>
+        <n-descriptions bordered :column="appStore.isMobile ? 1 : 2" label-placement="left" size="small">
           <n-descriptions-item label="ID">{{ userDetail.id }}</n-descriptions-item>
           <n-descriptions-item label="用户名">{{ userDetail.username || '-' }}</n-descriptions-item>
           <n-descriptions-item label="邮箱">{{ userDetail.email || '-' }}</n-descriptions-item>
@@ -503,6 +504,14 @@ const handlePageChange = (page) => { currentPage.value = page; fetchUsers() }
 const handlePageSizeChange = (size) => { pageSize.value = size; currentPage.value = 1; fetchUsers() }
 const handleCheck = (keys) => { checkedRowKeys.value = keys }
 
+const getRowProps = (row) => ({
+  style: 'cursor: pointer',
+  onClick: (e) => {
+    if (e.target.closest('.n-button, .n-dropdown, .n-checkbox')) return
+    handleViewDetail(row)
+  }
+})
+
 // Action dispatcher
 const handleAction = (key, row) => {
   switch (key) {
@@ -740,7 +749,15 @@ const handleExportCSV = async () => {
       is_active: statusFilter.value === 'active' ? 'true' : statusFilter.value === 'inactive' ? 'false' : undefined
     }
     const res = await exportUsersCSV(params)
-    const blob = new Blob([res.data || res], { type: 'text/csv;charset=utf-8' })
+    const blobData = res.data || res
+    // If server returned JSON error as blob, try to parse it
+    if (blobData instanceof Blob && blobData.type && blobData.type.includes('application/json')) {
+      const text = await blobData.text()
+      const json = JSON.parse(text)
+      message.error(json.message || '导出失败')
+      return
+    }
+    const blob = blobData instanceof Blob ? blobData : new Blob([blobData], { type: 'text/csv;charset=utf-8' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -749,6 +766,15 @@ const handleExportCSV = async () => {
     window.URL.revokeObjectURL(url)
     message.success('导出成功')
   } catch (error) {
+    // Handle blob error responses
+    if (error?.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text()
+        const json = JSON.parse(text)
+        message.error('导出失败：' + (json.message || '未知错误'))
+        return
+      } catch {}
+    }
     message.error('导出失败：' + (error.message || '未知错误'))
   }
 }
@@ -892,8 +918,8 @@ onMounted(() => { fetchUsers() })
   .admin-users-page { padding: 8px; }
 }
 .url-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.url-label { font-size: 12px; color: #666; min-width: 40px; }
-.url-text { font-size: 12px; word-break: break-all; color: #333; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
+.url-label { font-size: 12px; color: var(--text-color-secondary, #666); min-width: 40px; }
+.url-text { font-size: 12px; word-break: break-all; color: var(--text-color, #333); background: rgba(0,0,0,0.03); padding: 2px 6px; border-radius: 3px; }
 
 /* Mobile card styles */
 .mobile-card-list {
@@ -903,8 +929,8 @@ onMounted(() => { fetchUsers() })
 }
 
 .mobile-card {
-  background: #fff;
-  border-radius: 10px;
+  background: var(--bg-color, #fff);
+  border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
@@ -914,12 +940,13 @@ onMounted(() => { fetchUsers() })
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color, #f0f0f0);
 }
 
 .card-title {
   font-weight: 600;
   font-size: 14px;
+  color: var(--text-color, #333);
 }
 
 .card-body {
@@ -938,10 +965,11 @@ onMounted(() => { fetchUsers() })
   word-break: break-all;
   text-align: right;
   min-width: 0;
+  color: var(--text-color, #333);
 }
 
 .card-label {
-  color: #999;
+  color: var(--text-color-secondary, #999);
   flex-shrink: 0;
 }
 
@@ -949,7 +977,7 @@ onMounted(() => { fetchUsers() })
   display: flex;
   gap: 8px;
   padding: 10px 14px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color, #f0f0f0);
   flex-wrap: wrap;
 }
 </style>

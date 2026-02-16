@@ -11,8 +11,8 @@
       </div>
 
       <n-spin :show="loading">
-        <n-grid :cols="1" :x-gap="20" :y-gap="20" responsive="screen" :s="2" :l="3">
-          <n-grid-item v-for="pkg in packages" :key="pkg.id">
+        <div class="packages-grid">
+          <div v-for="pkg in packages" :key="pkg.id">
             <div
               class="package-card"
               :class="{ featured: pkg.is_featured }"
@@ -52,74 +52,43 @@
                 <n-button type="primary" size="large" block strong>立即购买</n-button>
               </div>
             </div>
-          </n-grid-item>
-        </n-grid>
-      </n-spin>
+          </div>
 
-      <!-- Custom Package -->
-      <div v-if="customEnabled" class="custom-package-section">
-        <h2 class="custom-title">自定义套餐</h2>
-        <p class="custom-subtitle">自由选择设备数量和购买时长，购买越久越优惠</p>
-        <div class="custom-form">
-          <div class="custom-row">
-            <span class="custom-label">设备数量</span>
-            <div class="custom-control">
-              <n-slider v-model:value="customDevices" :min="customMinDevices" :max="customMaxDevices" :step="1" style="flex:1" />
-              <n-input-number v-model:value="customDevices" :min="customMinDevices" :max="customMaxDevices" size="small" style="width:100px;margin-left:12px" />
-              <span class="custom-unit">台</span>
+          <!-- Custom Package as a grid item -->
+          <div v-if="customEnabled" class="custom-package-card-wrap">
+            <div class="package-card custom-card">
+              <div class="card-header">
+                <h3 class="package-name custom-name">自定义套餐</h3>
+                <p class="custom-card-desc">自由选择设备数量和时长</p>
+              </div>
+              <div class="card-body">
+                <div class="custom-inline-form">
+                  <div class="custom-inline-row">
+                    <span class="custom-inline-label">设备</span>
+                    <n-input-number v-model:value="customDevices" :min="customMinDevices" :max="customMaxDevices" size="small" style="width: 100%" />
+                  </div>
+                  <div class="custom-inline-row">
+                    <span class="custom-inline-label">时长</span>
+                    <n-select v-model:value="customMonths" :options="customMonthOptions" size="small" style="width: 100%" />
+                  </div>
+                  <div v-if="customDiscountPercent > 0" class="custom-inline-discount">
+                    省 {{ customDiscountPercent }}%
+                  </div>
+                </div>
+                <div class="custom-inline-price">
+                  <span class="currency">¥</span>
+                  <span class="price">{{ customFinalPrice.toFixed(0) }}</span>
+                </div>
+              </div>
+              <div class="card-footer">
+                <n-button type="primary" size="large" block strong :loading="customOrdering" @click.stop="handleCustomBuy">
+                  立即购买
+                </n-button>
+              </div>
             </div>
           </div>
-          <div class="custom-row">
-            <span class="custom-label">购买时长</span>
-            <div class="custom-control">
-              <n-radio-group v-model:value="customMonths">
-                <n-space :size="8" wrap>
-                  <n-radio v-for="tier in customDiscountTiers" :key="tier.months" :value="tier.months">
-                    {{ tier.months }}个月
-                    <n-tag v-if="tier.discount > 0" type="success" size="tiny" style="margin-left:4px">省{{ tier.discount }}%</n-tag>
-                  </n-radio>
-                </n-space>
-              </n-radio-group>
-            </div>
-          </div>
-          <div class="custom-row" v-if="customCouponCode !== undefined">
-            <span class="custom-label">优惠码</span>
-            <div class="custom-control">
-              <n-input v-model:value="customCouponCode" placeholder="可选" size="small" style="max-width:200px" />
-            </div>
-          </div>
-          <div class="custom-price-summary">
-            <div class="price-line">
-              <span>基础价格</span>
-              <span>¥{{ customBasePrice.toFixed(2) }}</span>
-            </div>
-            <div v-if="customDiscountPercent > 0" class="price-line discount">
-              <span>时长优惠 ({{ customDiscountPercent }}%)</span>
-              <span>-¥{{ (customBasePrice - customFinalPrice).toFixed(2) }}</span>
-            </div>
-            <div class="price-line total">
-              <span>合计</span>
-              <span>¥{{ customFinalPrice.toFixed(2) }}</span>
-            </div>
-          </div>
-          <div class="payment-method" style="margin-bottom: 16px;">
-            <div class="pm-label">支付方式</div>
-            <n-radio-group v-model:value="paymentMethod">
-              <n-space vertical :size="8">
-                <n-radio v-if="balanceEnabled" value="balance" :disabled="userBalance <= 0">
-                  余额支付 (¥{{ userBalance.toFixed(2) }})
-                </n-radio>
-                <n-radio v-for="pm in paymentMethods" :key="pm.id" :value="'pm_' + pm.id">
-                  {{ getPaymentLabel(pm.pay_type) }}
-                </n-radio>
-              </n-space>
-            </n-radio-group>
-          </div>
-          <n-button type="primary" size="large" block strong :loading="customOrdering" @click="handleCustomBuy">
-            立即购买 ¥{{ customFinalPrice.toFixed(2) }}
-          </n-button>
         </div>
-      </div>
+      </n-spin>
     </n-space>
 
     <!-- Purchase Modal -->
@@ -331,6 +300,12 @@ const customDiscountPercent = computed(() => {
 })
 const customFinalPrice = computed(() => {
   return Math.round(customBasePrice.value * (1 - customDiscountPercent.value / 100) * 100) / 100
+})
+const customMonthOptions = computed(() => {
+  return customDiscountTiers.value.map(tier => ({
+    label: tier.discount > 0 ? `${tier.months}个月 (省${tier.discount}%)` : `${tier.months}个月`,
+    value: tier.months
+  }))
 })
 
 const finalPayAmount = computed(() => orderInfo.value?.final_amount || 0)
@@ -561,92 +536,87 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.shop-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
+.shop-container { padding: 24px; max-width: 1200px; margin: 0 auto; }
 .header { text-align: center; margin-bottom: 16px; }
 .title {
   font-size: 32px; font-weight: 600; margin: 0 0 8px 0;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
-.subtitle { font-size: 16px; color: #666; margin: 0; }
+.subtitle { font-size: 16px; color: var(--text-color-secondary, #666); margin: 0; }
 
 .balance-info {
-  text-align: center; margin-top: 8px; font-size: 15px; color: #666;
+  text-align: center; margin-top: 8px; font-size: 15px; color: var(--text-color-secondary, #666);
 }
 .balance-amount {
   color: #18a058; font-weight: 700; font-size: 18px;
 }
 
+.packages-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
 .package-card {
-  background: #fff; border-radius: 12px; padding: 24px;
-  border: 2px solid #e8e8e8; transition: all 0.3s ease;
+  background: var(--bg-color, #fff); border-radius: 12px; padding: 24px;
+  border: 2px solid var(--border-color, #e8e8e8); transition: all 0.3s ease;
   cursor: pointer; position: relative; height: 100%;
   display: flex; flex-direction: column;
 }
 .package-card:hover { transform: translateY(-8px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); border-color: #667eea; }
-.package-card.featured { border-color: #667eea; border-width: 3px; background: linear-gradient(135deg, #667eea08 0%, #764ba208 100%); }
+.package-card.featured { border-color: #667eea; border-width: 3px; background: linear-gradient(135deg, rgba(102,126,234,0.06) 0%, rgba(118,75,162,0.06) 100%); }
 .badge {
   position: absolute; top: -12px; right: 24px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff; padding: 4px 16px; border-radius: 12px; font-size: 14px; font-weight: 600;
 }
 .card-header { text-align: center; margin-bottom: 24px; }
-.package-name { font-size: 24px; font-weight: 600; margin: 0 0 16px 0; color: #333; }
+.package-name { font-size: 24px; font-weight: 600; margin: 0 0 16px 0; color: var(--text-color, #333); }
 .price-section { display: flex; align-items: baseline; justify-content: center; }
 .currency { font-size: 24px; color: #667eea; font-weight: 600; }
 .price { font-size: 48px; font-weight: 700; color: #667eea; margin-left: 4px; }
 .card-body { flex: 1; margin-bottom: 24px; }
-.feature-item { display: flex; align-items: center; gap: 8px; color: #666; font-size: 15px; }
+.feature-item { display: flex; align-items: center; gap: 8px; color: var(--text-color-secondary, #666); font-size: 15px; }
 .feature-item .n-icon { color: #667eea; }
 .feature-extra .n-icon { color: #18a058; }
-.features-list { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e8e8e8; }
+.features-list { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color, #e8e8e8); }
 .description {
-  margin-top: 8px; padding: 12px; background: #f5f5f5;
-  border-radius: 8px; color: #666; font-size: 14px; line-height: 1.6;
+  margin-top: 8px; padding: 12px; background: rgba(0,0,0,0.03);
+  border-radius: 8px; color: var(--text-color-secondary, #666); font-size: 14px; line-height: 1.6;
 }
 .card-footer { margin-top: auto; }
 
+/* Custom package card */
+.custom-card { border-style: dashed; cursor: default; }
+.custom-card:hover { transform: none; border-color: #667eea; }
+.custom-name { margin-bottom: 4px; }
+.custom-card-desc { font-size: 13px; color: var(--text-color-secondary, #999); margin: 0; }
+.custom-inline-form { display: flex; flex-direction: column; gap: 12px; }
+.custom-inline-row { display: flex; align-items: center; gap: 8px; }
+.custom-inline-label { font-size: 13px; color: var(--text-color-secondary, #666); min-width: 32px; flex-shrink: 0; }
+.custom-inline-discount { text-align: center; font-size: 12px; color: #18a058; font-weight: 500; }
+.custom-inline-price { display: flex; align-items: baseline; justify-content: center; margin-top: 12px; }
+
 .modal-coupon { padding: 8px 0; }
 .payment-method { padding: 4px 0; }
-.pm-label { font-size: 14px; font-weight: 500; margin-bottom: 8px; color: #333; }
+.pm-label { font-size: 14px; font-weight: 500; margin-bottom: 8px; color: var(--text-color, #333); }
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
   .shop-container { padding: 0; }
   .title { font-size: 24px; }
   .subtitle { font-size: 14px; }
-  .package-card { padding: 18px 14px; }
+  .packages-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .package-card { padding: 14px 10px; }
   .package-card:hover { transform: none; }
-  .package-name { font-size: 20px; margin-bottom: 10px; }
-  .price { font-size: 36px; }
-  .currency { font-size: 20px; }
-  .feature-item { font-size: 14px; }
-  .badge { top: -10px; right: 16px; font-size: 12px; padding: 3px 12px; }
-  .custom-package-section { padding: 16px; }
-  .custom-row { flex-direction: column; gap: 6px; }
-  .custom-control { flex-direction: column; gap: 8px; }
+  .card-header { margin-bottom: 14px; }
+  .package-name { font-size: 16px; margin-bottom: 8px; }
+  .price { font-size: 28px; }
+  .currency { font-size: 16px; }
+  .card-body { margin-bottom: 14px; }
+  .feature-item { font-size: 13px; gap: 4px; }
+  .badge { top: -10px; right: 12px; font-size: 11px; padding: 2px 10px; }
+  .description { padding: 8px; font-size: 12px; }
 }
-
-/* Custom Package */
-.custom-package-section {
-  margin-top: 32px; padding: 24px; background: #fff;
-  border-radius: 12px; border: 2px solid #e8e8e8;
-}
-.custom-title {
-  font-size: 24px; font-weight: 600; margin: 0 0 4px; text-align: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-}
-.custom-subtitle { text-align: center; color: #666; font-size: 14px; margin: 0 0 20px; }
-.custom-form { max-width: 600px; margin: 0 auto; }
-.custom-row { display: flex; align-items: center; margin-bottom: 16px; gap: 12px; }
-.custom-label { min-width: 70px; font-weight: 500; color: #333; flex-shrink: 0; }
-.custom-control { display: flex; align-items: center; flex: 1; }
-.custom-unit { margin-left: 6px; color: #999; font-size: 13px; }
-.custom-price-summary {
-  margin: 20px 0 16px; padding: 16px; background: #f9f9fb; border-radius: 8px;
-}
-.price-line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: #666; }
-.price-line.discount { color: #e03050; }
-.price-line.total { font-size: 18px; font-weight: 700; color: #667eea; padding-top: 8px; border-top: 1px dashed #ddd; margin-top: 4px; }
 </style>

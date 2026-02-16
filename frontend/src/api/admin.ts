@@ -16,7 +16,7 @@ export const getAbnormalUsers = (params?: any) => request.get('/admin/users/abno
 export const loginAsUser = (id: number) => request.post(`/admin/users/${id}/login-as`)
 export const deleteUserDevice = (userId: number, deviceId: number) => request.delete(`/admin/users/${userId}/devices/${deviceId}`)
 export const batchUserAction = (data: { user_ids: number[], action: string, data?: any }) => request.post('/admin/users/batch-action', data)
-export const exportUsersCSV = (params?: any) => request.get('/admin/users/export', { params, responseType: 'blob' })
+export const exportUsersCSV = (params?: any) => request.get('/admin/users/export', { params, responseType: 'blob', timeout: 60000 } as any)
 export const importUsersCSV = (data: FormData) => request.post('/admin/users/import', data, { headers: { 'Content-Type': 'multipart/form-data' } })
 export const updateUserNotes = (userId: number, notes: string) => request.put(`/admin/users/${userId}/notes`, { notes })
 
@@ -153,3 +153,10 @@ export const getMysteryBoxStats = () => request.get('/admin/mystery-box/stats')
 
 // Check-in
 export const getCheckInStats = () => request.get('/admin/checkin/stats')
+
+// Invite Management
+export const listAdminInviteCodes = (params?: any) => request.get('/admin/invites', { params })
+export const getAdminInviteStats = () => request.get('/admin/invites/stats')
+export const listAdminInviteRelations = (params?: any) => request.get('/admin/invites/relations', { params })
+export const deleteAdminInviteCode = (id: number) => request.delete(`/admin/invites/${id}`)
+export const toggleAdminInviteCode = (id: number) => request.post(`/admin/invites/${id}/toggle`)

@@ -38,7 +38,7 @@
           <div style="width: 100%">
             <n-dynamic-input v-model:value="config.keywords" placeholder="输入关键词（匹配节点名称）" />
             <n-text depth="3" style="font-size: 12px; margin-top: 4px; display: block">
-              留空表示不过滤，导入所有节点。填写后只导入名称包含关键词的节点。
+              留空表示不过滤，导入所有节点。填写关键词后，名称中包含关键词的节点将被排除。支持地区缩写如 hk、us、jp 等。
             </n-text>
           </div>
         </n-form-item>

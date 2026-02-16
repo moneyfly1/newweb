@@ -1,9 +1,14 @@
 <template>
   <div class="mystery-box-admin">
-    <n-card title="盲盒管理">
-      <template #header-extra>
+    <n-card :title="appStore.isMobile ? undefined : '盲盒管理'">
+      <template v-if="!appStore.isMobile" #header-extra>
         <n-button type="primary" @click="handleAddPool">创建奖池</n-button>
       </template>
+
+      <div v-if="appStore.isMobile" class="mobile-toolbar">
+        <div class="mobile-toolbar-title">盲盒管理</div>
+        <n-button size="small" type="primary" @click="handleAddPool">创建奖池</n-button>
+      </div>
 
       <!-- 统计概览 -->
       <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="12" :y-gap="12" style="margin-bottom:20px">
@@ -305,4 +310,6 @@ onMounted(() => { loadPools(); loadStats() })
 <style scoped>
 .mystery-box-admin { padding: 20px; }
 @media (max-width: 767px) { .mystery-box-admin { padding: 8px; } }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
 </style>

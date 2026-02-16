@@ -1,7 +1,7 @@
 <template>
   <div class="config-update-container">
-    <n-card title="节点自动更新">
-      <template #header-extra>
+    <n-card :title="appStore.isMobile ? undefined : '节点自动更新'">
+      <template v-if="!appStore.isMobile" #header-extra>
         <n-space>
           <n-button @click="fetchStatus">
             <template #icon><n-icon><RefreshOutline /></n-icon></template>
@@ -17,6 +17,24 @@
           </n-button>
         </n-space>
       </template>
+
+      <div v-if="appStore.isMobile" class="mobile-toolbar">
+        <div class="mobile-toolbar-title">节点自动更新</div>
+        <div class="mobile-toolbar-row">
+          <n-button size="small" @click="fetchStatus">
+            <template #icon><n-icon><RefreshOutline /></n-icon></template>
+            刷新
+          </n-button>
+          <n-button size="small" type="primary" :loading="starting" :disabled="status.running" @click="handleStart">
+            <template #icon><n-icon><PlayOutline /></n-icon></template>
+            更新
+          </n-button>
+          <n-button size="small" type="warning" :disabled="!status.running" @click="handleStop">
+            <template #icon><n-icon><StopOutline /></n-icon></template>
+            停止
+          </n-button>
+        </div>
+      </div>
       <n-space>
         <n-tag :type="status.running ? 'success' : 'default'">
           {{ status.running ? '运行中' : '已停止' }}
@@ -244,4 +262,7 @@ onUnmounted(() => {
   .config-update-container { padding: 8px; }
   .log-viewer { font-size: 12px; padding: 12px; max-height: 300px; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

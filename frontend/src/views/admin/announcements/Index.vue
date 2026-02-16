@@ -1,11 +1,16 @@
 <template>
   <div class="announcements-container">
-    <n-card title="公告管理" :bordered="false">
-      <template #header-extra>
+    <n-card :title="appStore.isMobile ? undefined : '公告管理'" :bordered="false">
+      <template v-if="!appStore.isMobile" #header-extra>
         <n-button type="primary" @click="handleCreate">
           发布公告
         </n-button>
       </template>
+
+      <div v-if="appStore.isMobile" class="mobile-toolbar">
+        <div class="mobile-toolbar-title">公告管理</div>
+        <n-button size="small" type="primary" @click="handleCreate">发布公告</n-button>
+      </div>
 
       <template v-if="!appStore.isMobile">
         <n-data-table
@@ -378,4 +383,6 @@ onMounted(() => {
 @media (max-width: 767px) {
   .announcements-container { padding: 8px; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
 </style>

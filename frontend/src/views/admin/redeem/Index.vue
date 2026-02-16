@@ -1,11 +1,16 @@
 <template>
   <div class="redeem-container">
-    <n-card title="兑换码管理">
-      <template #header-extra>
+    <n-card :title="appStore.isMobile ? undefined : '兑换码管理'">
+      <template v-if="!appStore.isMobile" #header-extra>
         <n-button type="primary" @click="handleGenerate">
           批量生成
         </n-button>
       </template>
+
+      <div v-if="appStore.isMobile" class="mobile-toolbar">
+        <div class="mobile-toolbar-title">兑换码管理</div>
+        <n-button size="small" type="primary" @click="handleGenerate">批量生成</n-button>
+      </div>
 
       <template v-if="!appStore.isMobile">
         <n-data-table
@@ -442,4 +447,6 @@ onMounted(() => {
 @media (max-width: 767px) {
   .redeem-container { padding: 8px; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
 </style>

@@ -1,7 +1,7 @@
 <template>
   <div class="subscriptions-container">
-    <n-card title="订阅管理">
-      <template #header-extra>
+    <n-card :title="appStore.isMobile ? undefined : '订阅管理'">
+      <template v-if="!appStore.isMobile" #header-extra>
         <n-space>
           <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注" clearable style="width: 200px" @keyup.enter="handleSearch">
             <template #prefix><n-icon><SearchOutline /></n-icon></template>
@@ -10,6 +10,20 @@
           <n-button @click="handleRefresh"><template #icon><n-icon><RefreshOutline /></n-icon></template></n-button>
         </n-space>
       </template>
+
+      <!-- Mobile: title + search stacked -->
+      <div v-if="appStore.isMobile" class="mobile-toolbar">
+        <div class="mobile-toolbar-title">订阅管理</div>
+        <div class="mobile-toolbar-controls">
+          <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注" clearable size="small" @keyup.enter="handleSearch">
+            <template #prefix><n-icon><SearchOutline /></n-icon></template>
+          </n-input>
+          <div class="mobile-toolbar-row">
+            <n-select v-model:value="statusFilter" :options="statusOptions" size="small" style="flex:1" @update:value="handleSearch" />
+            <n-button size="small" @click="handleRefresh"><template #icon><n-icon><RefreshOutline /></n-icon></template></n-button>
+          </div>
+        </div>
+      </div>
 
       <!-- Desktop Table -->
       <template v-if="!appStore.isMobile">
@@ -611,4 +625,8 @@ onMounted(() => fetchData())
   .subscriptions-container { padding: 8px; }
   .qr-grid { flex-direction: column; align-items: center; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; color: var(--text-color, #333); margin-bottom: 10px; }
+.mobile-toolbar-controls { display: flex; flex-direction: column; gap: 8px; }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

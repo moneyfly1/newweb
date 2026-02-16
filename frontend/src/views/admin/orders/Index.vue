@@ -1,8 +1,9 @@
 <template>
   <div class="admin-orders-page">
-    <n-card title="订单管理" :bordered="false" class="page-card">
+    <n-card :title="appStore.isMobile ? undefined : '订单管理'" :bordered="false" class="page-card">
       <n-space vertical :size="16">
-        <n-space>
+        <!-- Desktop toolbar -->
+        <n-space v-if="!appStore.isMobile">
           <n-input
             v-model:value="searchQuery"
             placeholder="搜索订单号"
@@ -29,6 +30,22 @@
             搜索
           </n-button>
         </n-space>
+
+        <!-- Mobile toolbar -->
+        <div v-if="appStore.isMobile" class="mobile-toolbar">
+          <div class="mobile-toolbar-title">订单管理</div>
+          <div class="mobile-toolbar-controls">
+            <n-input v-model:value="searchQuery" placeholder="搜索订单号" clearable size="small" @keyup.enter="handleSearch">
+              <template #prefix><n-icon :component="SearchOutline" /></template>
+            </n-input>
+            <div class="mobile-toolbar-row">
+              <n-select v-model:value="statusFilter" placeholder="状态筛选" clearable size="small" style="flex:1" :options="statusOptions" @update:value="handleSearch" />
+              <n-button size="small" type="primary" @click="handleSearch">
+                <template #icon><n-icon :component="SearchOutline" /></template>
+              </n-button>
+            </div>
+          </div>
+        </div>
 
         <template v-if="!appStore.isMobile">
           <n-data-table
@@ -456,4 +473,8 @@ onMounted(() => {
 @media (max-width: 767px) {
   .admin-orders-page { padding: 8px; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
+.mobile-toolbar-controls { display: flex; flex-direction: column; gap: 8px; }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

@@ -1,7 +1,7 @@
 <template>
   <div class="nodes-container">
-    <n-card title="节点管理">
-      <template #header-extra>
+    <n-card :title="appStore.isMobile ? undefined : '节点管理'">
+      <template v-if="!appStore.isMobile" #header-extra>
         <n-space>
           <n-button @click="handleRefresh" :loading="refreshing">
             <template #icon>
@@ -34,6 +34,30 @@
         </n-space>
       </template>
 
+      <!-- Mobile toolbar -->
+      <div v-if="appStore.isMobile" class="mobile-toolbar">
+        <div class="mobile-toolbar-title">节点管理</div>
+        <div class="mobile-toolbar-controls">
+          <div class="mobile-toolbar-row">
+            <n-button size="small" @click="handleRefresh" :loading="refreshing">
+              <template #icon><n-icon><RefreshOutline /></n-icon></template>
+              刷新
+            </n-button>
+            <n-button size="small" type="info" @click="showImportLinksModal = true">
+              <template #icon><n-icon><LinkOutline /></n-icon></template>
+              导入链接
+            </n-button>
+            <n-button size="small" type="primary" @click="showImportSubModal = true">
+              <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
+              导入订阅
+            </n-button>
+          </div>
+          <n-button v-if="checkedRowKeys.length > 0" size="small" type="error" @click="handleBatchDelete">
+            批量删除 ({{ checkedRowKeys.length }})
+          </n-button>
+        </div>
+      </div>
+
       <template v-if="!appStore.isMobile">
         <n-data-table
           remote
@@ -50,36 +74,13 @@
       </template>
 
       <template v-else>
-        <div class="mobile-card-list">
-          <div v-for="row in tableData" :key="row.id" class="mobile-card">
-            <div class="card-header">
-              <div style="flex:1;min-width:0">
-                <div class="card-title">{{ row.name }}</div>
-                <div style="margin-top:4px">
-                  <n-tag size="small" :type="protocolColorMap[row.type] || 'default'">{{ (row.type || '').toUpperCase() }}</n-tag>
-                  <n-tag size="small" style="margin-left:4px">{{ row.region }}</n-tag>
-                </div>
-              </div>
-              <n-switch :value="row.is_active" @update:value="(v) => handleToggleActive(row, v)" />
-            </div>
-            <div class="card-body">
-              <div class="card-row">
-                <span class="card-label">状态</span>
-                <n-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</n-tag>
-              </div>
-              <div class="card-row">
-                <span class="card-label">来源</span>
-                <span>{{ row.is_manual ? '手动' : '订阅' }}</span>
-              </div>
-              <div class="card-row">
-                <span class="card-label">排序</span>
-                <span>{{ row.order_index }}</span>
-              </div>
-            </div>
-            <div class="card-actions">
-              <n-button size="small" type="primary" @click="handleEdit(row)">编辑</n-button>
-              <n-button size="small" type="error" @click="handleDelete(row)">删除</n-button>
-            </div>
+        <div class="mobile-node-list">
+          <div v-for="row in tableData" :key="row.id" class="mobile-node-item">
+            <n-checkbox :checked="checkedRowKeys.includes(row.id)" @update:checked="(v) => toggleNodeCheck(row.id, v)" />
+            <div class="node-name">{{ row.name }}</div>
+            <n-switch size="small" :value="row.is_active" @update:value="(v) => handleToggleActive(row, v)" />
+            <n-button size="tiny" type="primary" quaternary @click="handleEdit(row)">编辑</n-button>
+            <n-button size="tiny" type="error" quaternary @click="handleDelete(row)">删除</n-button>
           </div>
         </div>
 
@@ -210,7 +211,7 @@
 
 <script setup>
 import { ref, reactive, h, onMounted } from 'vue'
-import { NButton, NTag, NSpace, NIcon, NSwitch, NPagination, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NSwitch, NCheckbox, NPagination, useMessage, useDialog } from 'naive-ui'
 import {
   CloudDownloadOutline,
   LinkOutline,
@@ -383,6 +384,14 @@ const handleCheck = (keys) => {
   checkedRowKeys.value = keys
 }
 
+const toggleNodeCheck = (id, checked) => {
+  if (checked) {
+    checkedRowKeys.value = [...checkedRowKeys.value, id]
+  } else {
+    checkedRowKeys.value = checkedRowKeys.value.filter(k => k !== id)
+  }
+}
+
 const handleImportSubscription = async () => {
   if (!subscriptionUrl.value.trim()) {
     message.warning('请输入订阅链接')
@@ -535,6 +544,33 @@ onMounted(() => {
   padding: 20px;
 }
 
+.mobile-node-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-node-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-color, #fff);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.node-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-color, #333);
+}
+
 .mobile-card-list {
   display: flex;
   flex-direction: column;
@@ -591,4 +627,8 @@ onMounted(() => {
 @media (max-width: 767px) {
   .nodes-container { padding: 8px; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
+.mobile-toolbar-controls { display: flex; flex-direction: column; gap: 8px; }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

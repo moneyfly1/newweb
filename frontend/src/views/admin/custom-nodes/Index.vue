@@ -1,7 +1,7 @@
 <template>
   <div class="custom-nodes-container">
-    <n-card title="专线节点管理">
-      <template #header-extra>
+    <n-card :title="appStore.isMobile ? undefined : '专线节点管理'">
+      <template v-if="!appStore.isMobile" #header-extra>
         <n-space>
           <n-button type="primary" @click="showImportModal = true">
             <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
@@ -12,6 +12,19 @@
           </n-button>
         </n-space>
       </template>
+
+      <div v-if="appStore.isMobile" class="mobile-toolbar">
+        <div class="mobile-toolbar-title">专线节点管理</div>
+        <div class="mobile-toolbar-row">
+          <n-button size="small" type="primary" @click="showImportModal = true">
+            <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
+            导入链接
+          </n-button>
+          <n-button size="small" type="error" :disabled="checkedRowKeys.length === 0" @click="handleBatchDelete">
+            批量删除 ({{ checkedRowKeys.length }})
+          </n-button>
+        </div>
+      </div>
 
       <template v-if="!appStore.isMobile">
         <n-data-table
@@ -702,4 +715,7 @@ onMounted(() => {
 @media (max-width: 767px) {
   .custom-nodes-container { padding: 8px; }
 }
+.mobile-toolbar { margin-bottom: 12px; }
+.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

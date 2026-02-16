@@ -102,6 +102,19 @@
               <span>¥{{ customFinalPrice.toFixed(2) }}</span>
             </div>
           </div>
+          <div class="payment-method" style="margin-bottom: 16px;">
+            <div class="pm-label">支付方式</div>
+            <n-radio-group v-model:value="paymentMethod">
+              <n-space vertical :size="8">
+                <n-radio v-if="balanceEnabled" value="balance" :disabled="userBalance <= 0">
+                  余额支付 (¥{{ userBalance.toFixed(2) }})
+                </n-radio>
+                <n-radio v-for="pm in paymentMethods" :key="pm.id" :value="'pm_' + pm.id">
+                  {{ getPaymentLabel(pm.pay_type) }}
+                </n-radio>
+              </n-space>
+            </n-radio-group>
+          </div>
           <n-button type="primary" size="large" block strong :loading="customOrdering" @click="handleCustomBuy">
             立即购买 ¥{{ customFinalPrice.toFixed(2) }}
           </n-button>

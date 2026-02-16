@@ -274,11 +274,13 @@ func (s *ConfigUpdateService) runUpdate() {
 		s.addLog("info", "已重置节点ID序列")
 	}
 
-	// Insert new nodes
+	// Insert new nodes (order after manual nodes)
+	var maxOrder int
+	db.Model(&models.Node{}).Where("is_manual = ?", true).Select("COALESCE(MAX(order_index), -1)").Scan(&maxOrder)
 	successCount := 0
 	for i, node := range allNodes {
 		node.IsManual = false
-		node.OrderIndex = i
+		node.OrderIndex = maxOrder + 1 + i
 		if err := db.Create(&node).Error; err == nil {
 			successCount++
 		}

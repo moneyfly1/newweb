@@ -31,15 +31,21 @@
         <template #icon><n-icon :size="22"><menu-outline /></n-icon></template>
       </n-button>
       <span class="mobile-title">管理后台</span>
-      <n-dropdown :options="mobileMenuOptions" @select="handleMobileUserMenu">
+      <n-dropdown trigger="click" :options="mobileMenuOptions" @select="handleMobileUserMenu">
         <n-button quaternary circle size="small">
           <template #icon><n-icon :size="20"><ellipsis-vertical /></n-icon></template>
         </n-button>
       </n-dropdown>
     </n-layout-header>
-    <n-layout-content content-style="padding: 12px 14px;" :native-scrollbar="false">
+    <n-layout-content content-style="padding: 12px 14px; padding-bottom: 72px;" :native-scrollbar="false">
       <router-view />
     </n-layout-content>
+    <div class="mobile-tabbar">
+      <div v-for="tab in mobileTabs" :key="tab.key" class="mobile-tab" :class="{ active: activeKey === tab.key }" @click="handleMenuClick(tab.key)">
+        <n-icon :size="22" :component="tab.icon" />
+        <span class="mobile-tab-label">{{ tab.label }}</span>
+      </div>
+    </div>
     <n-drawer v-model:show="showDrawer" placement="left" :width="260" closable>
       <n-drawer-content title="导航菜单" :native-scrollbar="false">
         <n-menu :options="menuOptions" :value="activeKey" :default-expanded-keys="expandedKeys" @update:value="handleMobileMenuClick" />
@@ -64,12 +70,33 @@
       </div>
     </n-drawer-content>
   </n-drawer>
+
+  <!-- Change Password Modal -->
+  <n-modal v-model:show="showPwdModal" preset="card" title="修改密码" :style="{ width: appStore.isMobile ? '90%' : '420px' }">
+    <n-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-placement="left" label-width="80">
+      <n-form-item label="当前密码" path="old_password">
+        <n-input v-model:value="pwdForm.old_password" type="password" show-password-on="click" placeholder="请输入当前密码" />
+      </n-form-item>
+      <n-form-item label="新密码" path="new_password">
+        <n-input v-model:value="pwdForm.new_password" type="password" show-password-on="click" placeholder="请输入新密码" />
+      </n-form-item>
+      <n-form-item label="确认密码" path="confirm_password">
+        <n-input v-model:value="pwdForm.confirm_password" type="password" show-password-on="click" placeholder="请再次输入新密码" />
+      </n-form-item>
+    </n-form>
+    <template #footer>
+      <n-space justify="end">
+        <n-button @click="showPwdModal = false">取消</n-button>
+        <n-button type="primary" :loading="savingPwd" @click="handleChangePwd">确认修改</n-button>
+      </n-space>
+    </template>
+  </n-modal>
   </div>
 </template>
 <script setup lang="ts">
 import { computed, ref, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { NIcon } from 'naive-ui'
+import { NIcon, useMessage, type FormInst } from 'naive-ui'
 import {
   GridOutline, PeopleOutline, CartOutline, CubeOutline, ServerOutline,
   CloudOutline, PricetagOutline, ChatbubblesOutline, RibbonOutline,
@@ -79,12 +106,47 @@ import {
 } from '@vicons/ionicons5'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
+import { changePassword } from '@/api/user'
 
 const router = useRouter()
 const route = useRoute()
 const appStore = useAppStore()
 const userStore = useUserStore()
+const message = useMessage()
 const showDrawer = ref(false)
+
+// Mobile bottom tabs
+const mobileTabs = [
+  { label: '仪表盘', key: 'AdminDashboard', icon: GridOutline },
+  { label: '用户', key: 'AdminUsers', icon: PeopleOutline },
+  { label: '订阅', key: 'AdminSubscriptions', icon: CloudOutline },
+  { label: '设置', key: 'AdminSettings', icon: SettingsOutline },
+]
+
+// Password change
+const showPwdModal = ref(false)
+const savingPwd = ref(false)
+const pwdFormRef = ref<FormInst | null>(null)
+const pwdForm = ref({ old_password: '', new_password: '', confirm_password: '' })
+const pwdRules = {
+  old_password: { required: true, message: '请输入当前密码', trigger: 'blur' },
+  new_password: [{ required: true, message: '请输入新密码', trigger: 'blur' }, { min: 6, message: '密码至少6个字符', trigger: 'blur' }],
+  confirm_password: [
+    { required: true, message: '请确认密码', trigger: 'blur' },
+    { validator: (_r: any, v: string) => v === pwdForm.value.new_password, message: '两次密码不一致', trigger: 'blur' },
+  ],
+}
+async function handleChangePwd() {
+  try { await pwdFormRef.value?.validate() } catch { return }
+  savingPwd.value = true
+  try {
+    await changePassword({ old_password: pwdForm.value.old_password, new_password: pwdForm.value.new_password })
+    message.success('密码修改成功')
+    showPwdModal.value = false
+    pwdForm.value = { old_password: '', new_password: '', confirm_password: '' }
+  } catch (e: any) { message.error(e.message || '修改失败') }
+  finally { savingPwd.value = false }
+}
 
 function renderIcon(icon: any) { return () => h(NIcon, null, { default: () => h(icon) }) }
 
@@ -122,7 +184,8 @@ function handleMobileMenuClick(key: string) { showDrawer.value = false; router.p
 
 const showThemeDrawer = ref(false)
 
-const mobileMenuOptions = [
+const mobileMenuOptions: any[] = [
+  { label: '修改密码', key: 'change-pwd' },
   { label: '返回前台', key: 'frontend' },
   { label: '切换主题', key: 'theme-picker' },
   { type: 'divider', key: 'd1' },
@@ -133,9 +196,11 @@ function handleMobileUserMenu(key: string) {
   if (key === 'logout') { userStore.logout(); router.push('/login') }
   else if (key === 'frontend') { router.push('/') }
   else if (key === 'theme-picker') { showThemeDrawer.value = true }
+  else if (key === 'change-pwd') { showPwdModal.value = true }
 }
 
 const userMenuOptions = [
+  { label: '修改密码', key: 'change-pwd' },
   { label: '切换主题', key: 'theme-picker' },
   { type: 'divider', key: 'd1' },
   { label: '退出登录', key: 'logout' },
@@ -144,6 +209,7 @@ const userMenuOptions = [
 function handleUserMenu(key: string) {
   if (key === 'logout') { userStore.logout(); router.push('/login') }
   else if (key === 'theme-picker') { showThemeDrawer.value = true }
+  else if (key === 'change-pwd') { showPwdModal.value = true }
 }
 </script>
 <style scoped>
@@ -151,6 +217,20 @@ function handleUserMenu(key: string) {
 .desktop-header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
 .mobile-header { height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
 .mobile-title { font-size: 16px; font-weight: 600; }
+
+/* Mobile Tab Bar */
+.mobile-tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  height: 56px; display: flex; align-items: center; justify-content: space-around;
+  background: var(--n-color); border-top: 1px solid var(--n-border-color);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.mobile-tab {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; flex: 1; padding: 6px 0; cursor: pointer; color: #999; transition: color 0.2s;
+}
+.mobile-tab.active { color: #667eea; }
+.mobile-tab-label { font-size: 10px; line-height: 1; }
 
 /* Theme Picker */
 .theme-picker-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }

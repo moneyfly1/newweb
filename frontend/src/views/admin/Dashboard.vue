@@ -2,12 +2,12 @@
   <div class="admin-dashboard">
     <n-space vertical :size="24">
       <!-- Stats Cards -->
-      <n-grid :cols="2" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true">
-        <n-grid-item span="2 s:3 l:1">
+      <n-grid :cols="3" :x-gap="12" :y-gap="12" responsive="screen" :item-responsive="true">
+        <n-grid-item span="1 l:1">
           <n-card class="stat-card stat-card-blue" :bordered="false">
             <div class="stat-content">
               <div class="stat-icon">
-                <n-icon :size="32">
+                <n-icon :size="28">
                   <PeopleOutline />
                 </n-icon>
               </div>
@@ -19,11 +19,11 @@
           </n-card>
         </n-grid-item>
 
-        <n-grid-item span="2 s:3 l:1">
+        <n-grid-item span="1 l:1">
           <n-card class="stat-card stat-card-green" :bordered="false">
             <div class="stat-content">
               <div class="stat-icon">
-                <n-icon :size="32">
+                <n-icon :size="28">
                   <CheckmarkCircleOutline />
                 </n-icon>
               </div>
@@ -35,11 +35,11 @@
           </n-card>
         </n-grid-item>
 
-        <n-grid-item span="2 s:3 l:1">
+        <n-grid-item span="1 l:1">
           <n-card class="stat-card stat-card-orange" :bordered="false">
             <div class="stat-content">
               <div class="stat-icon">
-                <n-icon :size="32">
+                <n-icon :size="28">
                   <TrendingUpOutline />
                 </n-icon>
               </div>
@@ -51,11 +51,11 @@
           </n-card>
         </n-grid-item>
 
-        <n-grid-item span="2 s:3 l:1">
+        <n-grid-item span="1 l:1">
           <n-card class="stat-card stat-card-purple" :bordered="false">
             <div class="stat-content">
               <div class="stat-icon">
-                <n-icon :size="32">
+                <n-icon :size="28">
                   <WalletOutline />
                 </n-icon>
               </div>
@@ -67,11 +67,11 @@
           </n-card>
         </n-grid-item>
 
-        <n-grid-item span="2 s:3 l:1">
+        <n-grid-item span="1 l:1">
           <n-card class="stat-card stat-card-red" :bordered="false">
             <div class="stat-content">
               <div class="stat-icon">
-                <n-icon :size="32">
+                <n-icon :size="28">
                   <CartOutline />
                 </n-icon>
               </div>
@@ -83,11 +83,11 @@
           </n-card>
         </n-grid-item>
 
-        <n-grid-item span="2 s:3 l:1">
+        <n-grid-item span="1 l:1">
           <n-card class="stat-card stat-card-cyan" :bordered="false">
             <div class="stat-content">
               <div class="stat-icon">
-                <n-icon :size="32">
+                <n-icon :size="28">
                   <ChatbubbleEllipsesOutline />
                 </n-icon>
               </div>
@@ -507,16 +507,35 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .admin-dashboard {
-    padding: 16px;
+    padding: 12px;
   }
 
   .stat-value {
-    font-size: 24px;
+    font-size: 16px;
+  }
+
+  .stat-label {
+    font-size: 11px;
   }
 
   .stat-icon {
-    width: 48px;
-    height: 48px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .stat-content {
+    flex-direction: column;
+    gap: 6px;
+    text-align: center;
+  }
+
+  .stat-info {
+    margin-bottom: 0;
+  }
+
+  :deep(.n-card__content) {
+    padding: 10px 6px !important;
   }
 }
 </style>

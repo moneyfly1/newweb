@@ -23,7 +23,9 @@
               <n-select v-model:value="profileForm.timezone" :options="tzOptions" filterable />
             </n-form-item>
             <n-form-item>
-              <n-button type="primary" :loading="savingProfile" @click="saveProfile">保存</n-button>
+              <n-space justify="center" style="width: 100%">
+                <n-button type="primary" :loading="savingProfile" @click="saveProfile">保存</n-button>
+              </n-space>
             </n-form-item>
           </n-form>
         </n-card>
@@ -42,7 +44,9 @@
               <n-input v-model:value="pwForm.confirm_password" type="password" show-password-on="click" />
             </n-form-item>
             <n-form-item>
-              <n-button type="primary" :loading="savingPw" @click="savePw">修改密码</n-button>
+              <n-space justify="center" style="width: 100%">
+                <n-button type="primary" :loading="savingPw" @click="savePw">修改密码</n-button>
+              </n-space>
             </n-form-item>
           </n-form>
         </n-card>

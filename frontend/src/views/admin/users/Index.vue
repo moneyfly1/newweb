@@ -931,10 +931,18 @@ onMounted(() => { fetchUsers() })
   justify-content: space-between;
   padding: 4px 0;
   font-size: 13px;
+  gap: 8px;
+}
+
+.card-row > span:last-child {
+  word-break: break-all;
+  text-align: right;
+  min-width: 0;
 }
 
 .card-label {
   color: #999;
+  flex-shrink: 0;
 }
 
 .card-actions {

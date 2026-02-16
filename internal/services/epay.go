@@ -9,8 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"cboard/v2/internal/database"
-	"cboard/v2/internal/models"
+	"cboard/v2/internal/utils"
 )
 
 // EpayConfig holds the EasyPay gateway configuration
@@ -21,17 +20,8 @@ type EpayConfig struct {
 }
 
 // GetEpayConfig reads EasyPay gateway settings from system_configs.
-// Only returns config when the epay gateway is fully configured (gateway URL + merchant ID + secret key).
 func GetEpayConfig() (*EpayConfig, error) {
-	db := database.GetDB()
-	keys := []string{"pay_epay_gateway", "pay_epay_merchant_id", "pay_epay_secret_key"}
-	var configs []models.SystemConfig
-	db.Where("`key` IN ?", keys).Find(&configs)
-
-	m := make(map[string]string)
-	for _, c := range configs {
-		m[c.Key] = c.Value
-	}
+	m := utils.GetSettings("pay_epay_gateway", "pay_epay_merchant_id", "pay_epay_secret_key")
 
 	if m["pay_epay_gateway"] == "" || m["pay_epay_merchant_id"] == "" || m["pay_epay_secret_key"] == "" {
 		return nil, fmt.Errorf("易支付网关未配置")

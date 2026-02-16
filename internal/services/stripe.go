@@ -14,8 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"cboard/v2/internal/database"
-	"cboard/v2/internal/models"
+	"cboard/v2/internal/utils"
 )
 
 // StripeConfig holds Stripe configuration
@@ -27,15 +26,7 @@ type StripeConfig struct {
 
 // GetStripeConfig reads Stripe config from system_configs
 func GetStripeConfig() (*StripeConfig, error) {
-	db := database.GetDB()
-	keys := []string{"pay_stripe_secret_key", "pay_stripe_publishable_key", "pay_stripe_webhook_secret"}
-	var configs []models.SystemConfig
-	db.Where("`key` IN ?", keys).Find(&configs)
-
-	m := make(map[string]string)
-	for _, c := range configs {
-		m[c.Key] = c.Value
-	}
+	m := utils.GetSettings("pay_stripe_secret_key", "pay_stripe_publishable_key", "pay_stripe_webhook_secret")
 
 	if m["pay_stripe_secret_key"] == "" || m["pay_stripe_publishable_key"] == "" {
 		return nil, fmt.Errorf("Stripe 未配置")

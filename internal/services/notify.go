@@ -169,212 +169,125 @@ func NotifyAdmin(eventType string, data map[string]string) {
 func buildNotifyMessage(siteName, eventType string, data map[string]string) (title, telegramBody, barkBody string) {
 	now := time.Now().Format("2006-01-02 15:04:05")
 
+	type field struct {
+		emoji, label, value string
+	}
+
+	var emoji, heading, footer string
+	var fields []field
+
 	switch eventType {
 	case "new_order":
-		title = fmt.Sprintf("[%s] 📦 新订单", siteName)
-		telegramBody = fmt.Sprintf(
-			"📦 <b>新订单</b>\n\n"+
-				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-				"┃  📋 <b>订单详情</b>\n"+
-				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-				"🆔 <b>订单号</b>: <code>%s</code>\n"+
-				"👤 <b>用户</b>: <code>%s</code>\n"+
-				"📦 <b>套餐</b>: <b>%s</b>\n"+
-				"💰 <b>金额</b>: <b>¥%s</b>\n"+
-				"🕐 <b>时间</b>: %s",
-			data["order_no"], data["username"], data["package_name"], data["amount"], now)
-		barkBody = fmt.Sprintf(
-			"📦 新订单\n\n"+
-				"🆔 订单号: %s\n"+
-				"👤 用户: %s\n"+
-				"📦 套餐: %s\n"+
-				"💰 金额: ¥%s\n"+
-				"🕐 时间: %s",
-			data["order_no"], data["username"], data["package_name"], data["amount"], now)
-
+		emoji, heading = "📦", "新订单"
+		fields = []field{
+			{"🆔", "订单号", data["order_no"]},
+			{"👤", "用户", data["username"]},
+			{"📦", "套餐", data["package_name"]},
+			{"💰", "金额", "¥" + data["amount"]},
+			{"🕐", "时间", now},
+		}
 	case "payment_success":
-		title = fmt.Sprintf("[%s] 🎉 支付成功", siteName)
-		telegramBody = fmt.Sprintf(
-			"🎉 <b>支付成功</b>\n\n"+
-				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-				"┃  📋 <b>订单详情</b>\n"+
-				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-				"🆔 <b>订单号</b>: <code>%s</code>\n"+
-				"👤 <b>用户</b>: <code>%s</code>\n"+
-				"📦 <b>套餐</b>: <b>%s</b>\n"+
-				"💰 <b>金额</b>: <b>¥%s</b>\n"+
-				"🕐 <b>时间</b>: %s\n\n"+
-				"✅ 订单已自动处理\n"+
-				"📦 订阅已激活",
-			data["order_no"], data["username"], data["package_name"], data["amount"], now)
-		barkBody = fmt.Sprintf(
-			"🎉 支付成功\n\n"+
-				"🆔 订单号: %s\n"+
-				"👤 用户: %s\n"+
-				"📦 套餐: %s\n"+
-				"💰 金额: ¥%s\n"+
-				"🕐 时间: %s\n\n"+
-				"✅ 订单已自动处理\n"+
-				"📦 订阅已激活",
-			data["order_no"], data["username"], data["package_name"], data["amount"], now)
-
+		emoji, heading = "🎉", "支付成功"
+		fields = []field{
+			{"🆔", "订单号", data["order_no"]},
+			{"👤", "用户", data["username"]},
+			{"📦", "套餐", data["package_name"]},
+			{"💰", "金额", "¥" + data["amount"]},
+			{"🕐", "时间", now},
+		}
+		footer = "✅ 订单已自动处理\n📦 订阅已激活"
 	case "recharge_success":
-		title = fmt.Sprintf("[%s] 💰 充值成功", siteName)
-		telegramBody = fmt.Sprintf(
-			"💰 <b>充值成功</b>\n\n"+
-				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-				"┃  📋 <b>充值详情</b>\n"+
-				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-				"🆔 <b>充值单号</b>: <code>%s</code>\n"+
-				"👤 <b>用户</b>: <code>%s</code>\n"+
-				"💰 <b>金额</b>: <b>¥%s</b>\n"+
-				"🕐 <b>时间</b>: %s",
-			data["order_no"], data["username"], data["amount"], now)
-		barkBody = fmt.Sprintf(
-			"💰 充值成功\n\n"+
-				"🆔 充值单号: %s\n"+
-				"👤 用户: %s\n"+
-				"💰 金额: ¥%s\n"+
-				"🕐 时间: %s",
-			data["order_no"], data["username"], data["amount"], now)
-
+		emoji, heading = "💰", "充值成功"
+		fields = []field{
+			{"🆔", "充值单号", data["order_no"]},
+			{"👤", "用户", data["username"]},
+			{"💰", "金额", "¥" + data["amount"]},
+			{"🕐", "时间", now},
+		}
 	case "new_ticket":
-		title = fmt.Sprintf("[%s] 🎫 新工单", siteName)
-		telegramBody = fmt.Sprintf(
-			"🎫 <b>新工单</b>\n\n"+
-				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-				"┃  📋 <b>工单详情</b>\n"+
-				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-				"🆔 <b>工单号</b>: <code>%s</code>\n"+
-				"👤 <b>用户</b>: <code>%s</code>\n"+
-				"📝 <b>标题</b>: <b>%s</b>\n"+
-				"🕐 <b>时间</b>: %s",
-			data["ticket_no"], data["username"], data["title"], now)
-		barkBody = fmt.Sprintf(
-			"🎫 新工单\n\n"+
-				"🆔 工单号: %s\n"+
-				"👤 用户: %s\n"+
-				"📝 标题: %s\n"+
-				"🕐 时间: %s",
-			data["ticket_no"], data["username"], data["title"], now)
-
+		emoji, heading = "🎫", "新工单"
+		fields = []field{
+			{"🆔", "工单号", data["ticket_no"]},
+			{"👤", "用户", data["username"]},
+			{"📝", "标题", data["title"]},
+			{"🕐", "时间", now},
+		}
 	case "new_user":
-		title = fmt.Sprintf("[%s] 👋 新用户注册", siteName)
-		telegramBody = fmt.Sprintf(
-			"👋 <b>新用户注册</b>\n\n"+
-				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-				"┃  📋 <b>用户详情</b>\n"+
-				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-				"👤 <b>用户名</b>: <code>%s</code>\n"+
-				"📧 <b>邮箱</b>: <code>%s</code>\n"+
-				"🕐 <b>时间</b>: %s\n\n"+
-				"✅ 已自动创建默认订阅",
-			data["username"], data["email"], now)
-		barkBody = fmt.Sprintf(
-			"👋 新用户注册\n\n"+
-				"👤 用户名: %s\n"+
-				"📧 邮箱: %s\n"+
-				"🕐 时间: %s\n\n"+
-				"✅ 已自动创建默认订阅",
-			data["username"], data["email"], now)
+		emoji, heading = "👋", "新用户注册"
+		fields = []field{
+			{"👤", "用户名", data["username"]},
+			{"📧", "邮箱", data["email"]},
+			{"🕐", "时间", now},
+		}
+		footer = "✅ 已自动创建默认订阅"
 	case "admin_create_user":
-		title = fmt.Sprintf("[%s] 📋 管理员创建用户", siteName)
-		telegramBody = fmt.Sprintf(
-			"📋 <b>管理员创建用户</b>\n\n"+
-				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-				"┃  📋 <b>用户详情</b>\n"+
-				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-				"👤 <b>用户名</b>: <code>%s</code>\n"+
-				"📧 <b>邮箱</b>: <code>%s</code>\n"+
-				"🕐 <b>时间</b>: %s",
-			data["username"], data["email"], now)
-		barkBody = fmt.Sprintf(
-			"📋 管理员创建用户\n\n"+
-				"👤 用户名: %s\n"+
-				"📧 邮箱: %s\n"+
-				"🕐 时间: %s",
-			data["username"], data["email"], now)
-
+		emoji, heading = "📋", "管理员创建用户"
+		fields = []field{
+			{"👤", "用户名", data["username"]},
+			{"📧", "邮箱", data["email"]},
+			{"🕐", "时间", now},
+		}
 	case "subscription_reset":
-		title = fmt.Sprintf("[%s] 🔄 订阅重置", siteName)
-		telegramBody = fmt.Sprintf(
-			"🔄 <b>订阅重置</b>\n\n"+
-				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-				"┃  📋 <b>重置详情</b>\n"+
-				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-				"👤 <b>用户</b>: <code>%s</code>\n"+
-				"🔧 <b>操作者</b>: <code>%s</code>\n"+
-				"🕐 <b>时间</b>: %s\n\n"+
-				"⚠️ 旧地址已失效",
-			data["username"], data["reset_by"], now)
-		barkBody = fmt.Sprintf(
-			"🔄 订阅重置\n\n"+
-				"👤 用户: %s\n"+
-				"🔧 操作者: %s\n"+
-				"🕐 时间: %s\n\n"+
-				"⚠️ 旧地址已失效",
-			data["username"], data["reset_by"], now)
-
+		emoji, heading = "🔄", "订阅重置"
+		fields = []field{
+			{"👤", "用户", data["username"]},
+			{"🔧", "操作者", data["reset_by"]},
+			{"🕐", "时间", now},
+		}
+		footer = "⚠️ 旧地址已失效"
 	case "abnormal_login":
-		title = fmt.Sprintf("[%s] ⚠️ 异常登录", siteName)
-		telegramBody = fmt.Sprintf(
-			"⚠️ <b>异常登录</b>\n\n"+
-				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-				"┃  📋 <b>登录详情</b>\n"+
-				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-				"👤 <b>用户</b>: <code>%s</code>\n"+
-				"🌐 <b>IP</b>: <code>%s</code>\n"+
-				"📍 <b>位置</b>: <b>%s</b>\n"+
-				"🕐 <b>时间</b>: %s",
-			data["username"], data["ip"], data["location"], now)
-		barkBody = fmt.Sprintf(
-			"⚠️ 异常登录\n\n"+
-				"👤 用户: %s\n"+
-				"🌐 IP: %s\n"+
-				"📍 位置: %s\n"+
-				"🕐 时间: %s",
-			data["username"], data["ip"], data["location"], now)
+		emoji, heading = "⚠️", "异常登录"
+		fields = []field{
+			{"👤", "用户", data["username"]},
+			{"🌐", "IP", data["ip"]},
+			{"📍", "位置", data["location"]},
+			{"🕐", "时间", now},
+		}
 	case "unpaid_order":
-		title = fmt.Sprintf("[%s] ⏳ 未支付订单", siteName)
-		telegramBody = fmt.Sprintf(
-			"⏳ <b>未支付订单</b>\n\n"+
-				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-				"┃  📋 <b>订单详情</b>\n"+
-				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-				"🆔 <b>订单号</b>: <code>%s</code>\n"+
-				"👤 <b>用户</b>: <code>%s</code>\n"+
-				"💰 <b>金额</b>: <b>¥%s</b>\n"+
-				"🕐 <b>时间</b>: %s",
-			data["order_no"], data["username"], data["amount"], now)
-		barkBody = fmt.Sprintf(
-			"⏳ 未支付订单\n\n"+
-				"🆔 订单号: %s\n"+
-				"👤 用户: %s\n"+
-				"💰 金额: ¥%s\n"+
-				"🕐 时间: %s",
-			data["order_no"], data["username"], data["amount"], now)
-
+		emoji, heading = "⏳", "未支付订单"
+		fields = []field{
+			{"🆔", "订单号", data["order_no"]},
+			{"👤", "用户", data["username"]},
+			{"💰", "金额", "¥" + data["amount"]},
+			{"🕐", "时间", now},
+		}
 	case "expiry_reminder":
-		title = fmt.Sprintf("[%s] ⏰ 订阅到期提醒", siteName)
-		telegramBody = fmt.Sprintf(
-			"⏰ <b>订阅到期提醒</b>\n\n"+
-				"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-				"┃  📋 <b>到期详情</b>\n"+
-				"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-				"👤 <b>用户</b>: <code>%s</code>\n"+
-				"⏰ <b>到期时间</b>: <b>%s</b>",
-			data["username"], data["expire_time"])
-		barkBody = fmt.Sprintf(
-			"⏰ 订阅到期提醒\n\n"+
-				"👤 用户: %s\n"+
-				"⏰ 到期时间: %s",
-			data["username"], data["expire_time"])
-
+		emoji, heading = "⏰", "订阅到期提醒"
+		fields = []field{
+			{"👤", "用户", data["username"]},
+			{"⏰", "到期时间", data["expire_time"]},
+		}
 	default:
 		title = fmt.Sprintf("[%s] 通知", siteName)
-		telegramBody = data["message"]
-		barkBody = data["message"]
+		return title, data["message"], data["message"]
 	}
+
+	title = fmt.Sprintf("[%s] %s %s", siteName, emoji, heading)
+
+	// Telegram (HTML)
+	var tg strings.Builder
+	tg.WriteString(fmt.Sprintf("%s <b>%s</b>\n\n", emoji, heading))
+	tg.WriteString("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n")
+	tg.WriteString(fmt.Sprintf("┃  📋 <b>%s详情</b>\n", heading))
+	tg.WriteString("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n")
+	for _, f := range fields {
+		tg.WriteString(fmt.Sprintf("%s <b>%s</b>: <code>%s</code>\n", f.emoji, f.label, f.value))
+	}
+	if footer != "" {
+		tg.WriteString("\n" + footer)
+	}
+	telegramBody = tg.String()
+
+	// Bark (plain text)
+	var bk strings.Builder
+	bk.WriteString(fmt.Sprintf("%s %s\n\n", emoji, heading))
+	for _, f := range fields {
+		bk.WriteString(fmt.Sprintf("%s %s: %s\n", f.emoji, f.label, f.value))
+	}
+	if footer != "" {
+		bk.WriteString("\n" + footer)
+	}
+	barkBody = bk.String()
 
 	return title, telegramBody, barkBody
 }

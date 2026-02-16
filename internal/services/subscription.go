@@ -1,9 +1,11 @@
 package services
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -14,15 +16,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// ── Subscription activation ──
+
 // ActivateSubscription creates or extends a subscription after successful payment.
-// It also sends payment success email and notifies admin.
 func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string) {
 	var deviceLimit int
 	var durationDays int
 	var pkgName string
 
 	if order.PackageID == 0 && order.ExtraData != nil {
-		// Custom package order
 		var extra map[string]interface{}
 		if err := json.Unmarshal([]byte(*order.ExtraData), &extra); err != nil {
 			return
@@ -47,7 +49,6 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 
 	var sub models.Subscription
 	if err := db.Where("user_id = ?", order.UserID).First(&sub).Error; err != nil {
-		// Create new subscription
 		sub = models.Subscription{
 			UserID:          order.UserID,
 			SubscriptionURL: utils.GenerateRandomString(32),
@@ -63,7 +64,6 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 		db.Create(&sub)
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "activate", "system", nil, fmt.Sprintf("购买套餐激活订阅: %s", pkgName), nil, nil)
 	} else {
-		// Extend existing subscription
 		newExpire := sub.ExpireTime
 		if newExpire.Before(time.Now()) {
 			newExpire = time.Now()
@@ -83,27 +83,18 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "extend", "system", nil, fmt.Sprintf("购买套餐续期订阅: %s, +%d天", pkgName, durationDays), nil, nil)
 	}
 
-	// Send payment success email + notify admin
 	var user models.User
 	if db.First(&user, order.UserID).Error == nil {
 		payAmount := fmt.Sprintf("%.2f", order.Amount)
 		if order.FinalAmount != nil {
 			payAmount = fmt.Sprintf("%.2f", *order.FinalAmount)
 		}
-		// Build subscription URL for email
 		var subURL string
 		var userSub models.Subscription
 		if db.Where("user_id = ?", order.UserID).First(&userSub).Error == nil {
-			settings := utils.GetSettings("site_url", "domain_name")
-			siteURL := settings["site_url"]
-			if siteURL == "" {
-				siteURL = settings["domain_name"]
+			if siteURL := GetSiteURL(); siteURL != "" {
+				subURL = siteURL + "/api/v1/subscribe/" + userSub.SubscriptionURL
 			}
-			if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
-				siteURL = "https://" + siteURL
-			}
-			siteURL = strings.TrimRight(siteURL, "/")
-			subURL = siteURL + "/api/v1/subscribe/" + userSub.SubscriptionURL
 		}
 		emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
 			"order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL,
@@ -114,19 +105,14 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 		})
 	}
 
-	// 邀请人返佣
 	distributeInviteCommission(db, order)
 }
 
-// distributeInviteCommission gives commission to the inviter when invitee makes a purchase.
 func distributeInviteCommission(db *gorm.DB, order *models.Order) {
-	// Find invite relation for this user
 	var relation models.InviteRelation
 	if err := db.Where("invitee_id = ?", order.UserID).First(&relation).Error; err != nil {
 		return
 	}
-
-	// Get commission rate from system config
 	rateStr := utils.GetSetting("invite_commission_rate")
 	if rateStr == "" {
 		return
@@ -135,8 +121,6 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 	if err != nil || rate <= 0 {
 		return
 	}
-
-	// Calculate commission
 	payAmount := order.Amount
 	if order.FinalAmount != nil {
 		payAmount = *order.FinalAmount
@@ -145,15 +129,11 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 	if commission <= 0 {
 		return
 	}
-
-	// Credit inviter
 	var inviter models.User
 	if err := db.First(&inviter, relation.InviterID).Error; err != nil {
 		return
 	}
 	db.Model(&inviter).UpdateColumn("balance", gorm.Expr("balance + ?", commission))
-
-	// Log balance change
 	desc := fmt.Sprintf("邀请用户购买返佣 (订单: %s, 比例: %.1f%%)", order.OrderNo, rate)
 	db.Create(&models.BalanceLog{
 		UserID:         inviter.ID,
@@ -164,8 +144,6 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 		RelatedOrderID: func() *int64 { id := int64(order.ID); return &id }(),
 		Description:    &desc,
 	})
-
-	// Log commission
 	orderID := int64(order.ID)
 	relationID := int64(relation.ID)
 	db.Create(&models.CommissionLog{
@@ -178,10 +156,170 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 		Status:           "settled",
 		Description:      &desc,
 	})
-
-	// Update relation consumption total
 	db.Model(&relation).Updates(map[string]interface{}{
 		"invitee_total_consumption": gorm.Expr("invitee_total_consumption + ?", payAmount),
 		"invitee_first_order_id":    gorm.Expr("COALESCE(invitee_first_order_id, ?)", order.ID),
 	})
+}
+
+// ── Subscription format generators ──
+
+// GenerateSurgeConfig generates Surge-compatible proxy list
+func GenerateSurgeConfig(nodes []models.Node, siteName string) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("# %s Surge Config\n", siteName))
+	sb.WriteString("[Proxy]\n")
+	sb.WriteString("DIRECT = direct\n")
+	for _, node := range nodes {
+		if node.Config == nil || *node.Config == "" {
+			continue
+		}
+		line := convertNodeToSurgeLine(node)
+		if line != "" {
+			sb.WriteString(line + "\n")
+		}
+	}
+	sb.WriteString("\n[Proxy Group]\n")
+	sb.WriteString("Proxy = select, ")
+	var names []string
+	for _, node := range nodes {
+		if node.Config != nil && *node.Config != "" {
+			names = append(names, node.Name)
+		}
+	}
+	sb.WriteString(strings.Join(names, ", "))
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+func convertNodeToSurgeLine(node models.Node) string {
+	if node.Config == nil {
+		return ""
+	}
+	config := *node.Config
+	if strings.HasPrefix(config, "ss://") {
+		return convertSSToSurge(node.Name, config)
+	}
+	if strings.HasPrefix(config, "trojan://") {
+		return convertTrojanToSurge(node.Name, config)
+	}
+	return ""
+}
+
+func convertSSToSurge(name, config string) string {
+	config = strings.TrimPrefix(config, "ss://")
+	if idx := strings.Index(config, "#"); idx >= 0 {
+		config = config[:idx]
+	}
+	method, password, host, port := parseSSConfig(config)
+	if method == "" || host == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s = ss, %s, %s, encrypt-method=%s, password=%s", name, host, port, method, password)
+}
+
+func convertTrojanToSurge(name, config string) string {
+	config = strings.TrimPrefix(config, "trojan://")
+	if idx := strings.Index(config, "#"); idx >= 0 {
+		config = config[:idx]
+	}
+	u, err := url.Parse("trojan://" + config)
+	if err != nil {
+		return ""
+	}
+	password := u.User.Username()
+	host := u.Hostname()
+	port := u.Port()
+	if port == "" {
+		port = "443"
+	}
+	sni := u.Query().Get("sni")
+	if sni == "" {
+		sni = host
+	}
+	return fmt.Sprintf("%s = trojan, %s, %s, password=%s, sni=%s", name, host, port, password, sni)
+}
+
+// GenerateShadowrocketBase64 generates Shadowrocket-compatible base64 subscription
+func GenerateShadowrocketBase64(nodes []models.Node) string {
+	return GenerateUniversalBase64(nodes)
+}
+
+// GenerateQuantumultXConfig generates QuantumultX server_remote format
+func GenerateQuantumultXConfig(nodes []models.Node) string {
+	var lines []string
+	for _, node := range nodes {
+		if node.Config == nil || *node.Config == "" {
+			continue
+		}
+		config := *node.Config
+		if strings.HasPrefix(config, "ss://") {
+			line := convertSSToQuantumultX(node.Name, config)
+			if line != "" {
+				lines = append(lines, line)
+			}
+		} else if strings.HasPrefix(config, "trojan://") {
+			line := convertTrojanToQuantumultX(node.Name, config)
+			if line != "" {
+				lines = append(lines, line)
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func convertSSToQuantumultX(name, config string) string {
+	config = strings.TrimPrefix(config, "ss://")
+	if idx := strings.Index(config, "#"); idx >= 0 {
+		config = config[:idx]
+	}
+	method, password, host, port := parseSSConfig(config)
+	if method == "" || host == "" {
+		return ""
+	}
+	return fmt.Sprintf("shadowsocks=%s:%s, method=%s, password=%s, tag=%s", host, port, method, password, name)
+}
+
+func convertTrojanToQuantumultX(name, config string) string {
+	config = strings.TrimPrefix(config, "trojan://")
+	if idx := strings.Index(config, "#"); idx >= 0 {
+		config = config[:idx]
+	}
+	u, err := url.Parse("trojan://" + config)
+	if err != nil {
+		return ""
+	}
+	password := u.User.Username()
+	host := u.Hostname()
+	port := u.Port()
+	if port == "" {
+		port = "443"
+	}
+	return fmt.Sprintf("trojan=%s:%s, password=%s, over-tls=true, tls-verification=false, tag=%s", host, port, password, name)
+}
+
+// parseSSConfig extracts method, password, host, port from an SS URI (without ss:// prefix and fragment).
+func parseSSConfig(config string) (method, password, host, port string) {
+	atIdx := strings.LastIndex(config, "@")
+	if atIdx < 0 {
+		return
+	}
+	userInfo := config[:atIdx]
+	serverInfo := config[atIdx+1:]
+	if decoded, err := base64.RawURLEncoding.DecodeString(userInfo); err == nil {
+		userInfo = string(decoded)
+	} else if decoded, err := base64.StdEncoding.DecodeString(userInfo); err == nil {
+		userInfo = string(decoded)
+	}
+	parts := strings.SplitN(userInfo, ":", 2)
+	if len(parts) == 2 {
+		method = parts[0]
+		password = parts[1]
+	}
+	hostPort := strings.SplitN(serverInfo, ":", 2)
+	if len(hostPort) == 2 {
+		host = hostPort[0]
+		port = hostPort[1]
+	}
+	return
 }

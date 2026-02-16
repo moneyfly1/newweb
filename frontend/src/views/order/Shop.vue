@@ -250,6 +250,7 @@ import {
 import { listPackages, verifyCoupon, getPaymentMethods, getPublicConfig } from '@/api/common'
 import { createOrder, payOrder, createPayment, getOrderStatus, createCustomOrder } from '@/api/order'
 import { getDashboardInfo } from '@/api/user'
+import { safeRedirect } from '@/utils/security'
 
 const router = useRouter()
 const message = useMessage()
@@ -497,7 +498,7 @@ const handlePay = async () => {
           }
           startPolling(orderInfo.value.order_no)
         } else {
-          window.location.href = data.payment_url
+          safeRedirect(data.payment_url)
         }
       } else {
         message.info('支付已创建，请等待处理')

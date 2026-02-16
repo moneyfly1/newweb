@@ -26,7 +26,7 @@ func ListDevices(c *gin.Context) {
 
 	var devices []models.Device
 	db.Where("subscription_id IN ? AND is_active = ?", subIDs, true).
-		Order("last_access DESC").Find(&devices)
+		Order("last_access DESC").Limit(200).Find(&devices)
 
 	utils.Success(c, devices)
 }

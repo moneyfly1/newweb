@@ -37,9 +37,20 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  let fetchingUser: Promise<void> | null = null
+
   async function fetchUser() {
-    const res: any = await getCurrentUser()
-    userInfo.value = res.data
+    // Deduplicate concurrent fetchUser calls
+    if (fetchingUser) return fetchingUser
+    fetchingUser = (async () => {
+      const res: any = await getCurrentUser()
+      userInfo.value = res.data
+    })()
+    try {
+      await fetchingUser
+    } finally {
+      fetchingUser = null
+    }
   }
 
   async function loginWithTelegram(data: any) {
@@ -62,6 +73,8 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('refresh_token')
+    localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_user')
     if (!skipApi && oldToken) {
       try {
         request.post('/auth/logout', null, {

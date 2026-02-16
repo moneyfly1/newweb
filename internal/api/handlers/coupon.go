@@ -74,7 +74,7 @@ func GetMyCoupons(c *gin.Context) {
 	db := database.GetDB()
 
 	var usages []models.CouponUsage
-	db.Where("user_id = ?", userID).Order("used_at DESC").Find(&usages)
+	db.Where("user_id = ?", userID).Order("used_at DESC").Limit(200).Find(&usages)
 
 	utils.Success(c, usages)
 }

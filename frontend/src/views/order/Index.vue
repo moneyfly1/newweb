@@ -206,6 +206,7 @@ import QRCode from 'qrcode'
 import { listOrders, payOrder, cancelOrder, createPayment, getOrderStatus } from '@/api/order'
 import { listRechargeRecords, cancelRecharge, getPaymentMethods } from '@/api/common'
 import { useAppStore } from '@/stores/app'
+import { safeRedirect } from '@/utils/security'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -411,7 +412,7 @@ const handlePay = async () => {
           }
           startPolling(currentOrder.value.order_no)
         } else {
-          window.location.href = data.payment_url
+          safeRedirect(data.payment_url)
         }
       } else {
         message.info('支付已创建，请等待处理')

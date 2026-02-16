@@ -80,6 +80,7 @@ import { useMessage } from 'naive-ui'
 import QRCode from 'qrcode'
 import { getPaymentMethods, createRecharge } from '@/api/common'
 import { getDashboardInfo } from '@/api/user'
+import { safeRedirect } from '@/utils/security'
 
 const message = useMessage()
 
@@ -169,7 +170,7 @@ const handleRecharge = async () => {
         }
         startPolling(data?.record?.id || 0)
       } else {
-        window.location.href = payUrl
+        safeRedirect(payUrl)
       }
     } else {
       message.success('充值订单已创建')

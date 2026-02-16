@@ -273,7 +273,9 @@ function loadTelegramBindWidget() {
   script.setAttribute('data-onauth', 'onTelegramBind(user)')
   script.setAttribute('data-request-access', 'write')
   script.async = true
-  telegramBindWidgetRef.value.innerHTML = ''
+  while (telegramBindWidgetRef.value.firstChild) {
+    telegramBindWidgetRef.value.removeChild(telegramBindWidgetRef.value.firstChild)
+  }
   telegramBindWidgetRef.value.appendChild(script)
 }
 

@@ -115,7 +115,9 @@ function loadTelegramWidget() {
   script.setAttribute('data-onauth', 'onTelegramAuth(user)')
   script.setAttribute('data-request-access', 'write')
   script.async = true
-  telegramWidgetRef.value.innerHTML = ''
+  while (telegramWidgetRef.value.firstChild) {
+    telegramWidgetRef.value.removeChild(telegramWidgetRef.value.firstChild)
+  }
   telegramWidgetRef.value.appendChild(script)
 }
 

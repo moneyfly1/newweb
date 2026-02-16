@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	"cboard/v2/internal/utils"
 )
@@ -115,7 +116,8 @@ func EpayQueryOrder(cfg *EpayConfig, outTradeNo string) (map[string]string, erro
 	}
 	u.RawQuery = q.Encode()
 
-	resp, err := http.Get(u.String())
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(u.String())
 	if err != nil {
 		return nil, err
 	}

@@ -223,15 +223,13 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		title = "欢迎加入"
 		username := html.EscapeString(data["username"])
 		email := html.EscapeString(data["email"])
-		password := html.EscapeString(data["password"])
 		loginURL := domain + "/login"
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">Hi %s，欢迎加入 %s！您的账户已创建成功。</p>
 <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:14px;color:#333;margin:0 0 8px">邮箱：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0 0 8px">密码：<strong>%s</strong></p>
   <p style="font-size:14px;color:#333;margin:0">登录地址：<a href="%s" style="color:#4F46E5">%s</a></p>
 </div>
-<p style="font-size:13px;color:#E11D48;margin:0">⚠️ 请妥善保管您的账户信息，建议登录后修改密码。</p>`, username, siteName, email, password, loginURL, loginURL)
+<p style="font-size:13px;color:#E11D48;margin:0">⚠️ 请使用注册时设置的密码登录，建议登录后定期修改密码。</p>`, username, siteName, email, loginURL, loginURL)
 		btnText = "立即登录"
 		btnLink = loginURL
 	case "subscription":
@@ -323,16 +321,15 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		title = "账户已创建"
 		username := html.EscapeString(data["username"])
 		email := html.EscapeString(data["email"])
-		password := html.EscapeString(data["password"])
 		loginURL := domain + "/login"
+		resetURL := domain + "/forgot-password"
 		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，管理员已为您创建了 %s 账户。</p>
 <div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
   <p style="font-size:14px;color:#333;margin:0 0 8px">邮箱：<strong>%s</strong></p>
   <p style="font-size:14px;color:#333;margin:0 0 8px">用户名：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0 0 8px">初始密码：<strong>%s</strong></p>
   <p style="font-size:14px;color:#333;margin:0">登录地址：<a href="%s" style="color:#4F46E5">%s</a></p>
 </div>
-<p style="font-size:13px;color:#E11D48;margin:0">⚠️ 请登录后立即修改密码。</p>`, siteName, email, username, password, loginURL, loginURL)
+<p style="font-size:13px;color:#E11D48;margin:0">⚠️ 请通过<a href="%s" style="color:#4F46E5">忘记密码</a>设置您的登录密码。</p>`, siteName, email, username, loginURL, loginURL, resetURL)
 		btnText = "立即登录"
 		btnLink = loginURL
 	// TEMPLATE_PLACEHOLDER_3

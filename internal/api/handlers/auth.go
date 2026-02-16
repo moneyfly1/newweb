@@ -261,7 +261,6 @@ func Register(c *gin.Context) {
 	welcomeSubject, welcomeBody := services.RenderEmail("welcome", map[string]string{
 		"username": user.Username,
 		"email":    user.Email,
-		"password": req.Password,
 	})
 	go services.QueueEmail(user.Email, welcomeSubject, welcomeBody, "welcome")
 	go services.NotifyAdmin("new_user", map[string]string{"username": user.Username, "email": user.Email})
@@ -316,14 +315,15 @@ func Login(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := db.Where("email = ? OR username = ?", req.Email, req.Email).First(&user).Error; err != nil {
-		attempt.Success = false
-		db.Create(&attempt)
-		utils.Unauthorized(c, "用户名或密码错误")
-		return
-	}
+	userNotFound := db.Where("email = ? OR username = ?", req.Email, req.Email).First(&user).Error != nil
 
-	if !utils.CheckPassword(req.Password, user.Password) {
+	// Always run bcrypt to prevent timing-based user enumeration
+	passwordToCheck := user.Password
+	if userNotFound {
+		// Use a dummy hash so bcrypt still runs in constant time
+		passwordToCheck = "$2a$10$dummyhashfortimingattttttttttttttttttttttttttttttttttt"
+	}
+	if userNotFound || !utils.CheckPassword(req.Password, passwordToCheck) {
 		attempt.Success = false
 		db.Create(&attempt)
 		utils.Unauthorized(c, "用户名或密码错误")

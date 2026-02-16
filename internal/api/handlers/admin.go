@@ -2343,9 +2343,9 @@ func AdminCreateUser(c *gin.Context) {
 	}
 	db.Create(&subscription)
 
-	// 发送账户创建通知邮件（含初始密码）
+	// 发送账户创建通知邮件
 	go services.NotifyUserDirect(user.Email, "admin_create_user", map[string]string{
-		"username": user.Username, "email": user.Email, "password": req.Password,
+		"username": user.Username, "email": user.Email,
 	})
 	go services.NotifyAdmin("admin_create_user", map[string]string{
 		"username": user.Username, "email": user.Email,
@@ -3119,14 +3119,21 @@ func AdminExportUsersCSV(c *gin.Context) {
 }
 
 func AdminImportUsersCSV(c *gin.Context) {
-	file, _, err := c.Request.FormFile("file")
+	file, fileHeader, err := c.Request.FormFile("file")
 	if err != nil {
 		utils.BadRequest(c, "请上传CSV文件")
 		return
 	}
 	defer file.Close()
 
-	reader := csv.NewReader(file)
+	// 限制文件大小 10MB
+	const maxCSVSize = 10 * 1024 * 1024
+	if fileHeader.Size > maxCSVSize {
+		utils.BadRequest(c, "文件过大，最大允许 10MB")
+		return
+	}
+
+	reader := csv.NewReader(io.LimitReader(file, maxCSVSize))
 	// Read header
 	header, err := reader.Read()
 	if err != nil {
@@ -3154,6 +3161,7 @@ func AdminImportUsersCSV(c *gin.Context) {
 	db := database.GetDB()
 	var total, imported, skipped int
 	var errors []string
+	const maxRows = 5000
 
 	for {
 		record, err := reader.Read()
@@ -3166,7 +3174,17 @@ func AdminImportUsersCSV(c *gin.Context) {
 			continue
 		}
 		total++
+		if total > maxRows {
+			errors = append(errors, fmt.Sprintf("超过最大行数限制 %d 行，后续行已忽略", maxRows))
+			break
+		}
 		rowNum := total + 1 // 1-indexed, +1 for header
+
+		if len(record) <= colMap["用户名"] || len(record) <= colMap["邮箱"] || len(record) <= colMap["密码"] {
+			errors = append(errors, fmt.Sprintf("第%d行: 列数不足", rowNum))
+			skipped++
+			continue
+		}
 
 		username := strings.TrimSpace(record[colMap["用户名"]])
 		email := strings.TrimSpace(record[colMap["邮箱"]])

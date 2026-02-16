@@ -78,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useMessage, type FormInst } from 'naive-ui'
 import { PersonOutline, MailOutline, LockClosedOutline, GiftOutline, ShieldCheckmarkOutline } from '@vicons/ionicons5'
@@ -96,6 +96,7 @@ const validatingInvite = ref(false)
 const inviteValid = ref<boolean | null>(null)
 const inviteReward = ref(0)
 const inviteError = ref('')
+let codeTimer: ReturnType<typeof setInterval> | null = null
 
 const siteConfig = ref<Record<string, string>>({})
 const registerDisabled = computed(() => {
@@ -140,9 +141,9 @@ const handleSendCode = async () => {
     await sendVerificationCode({ email: form.value.email, purpose: 'register' })
     message.success('验证码已发送')
     codeCooldown.value = 60
-    const timer = setInterval(() => {
+    codeTimer = setInterval(() => {
       codeCooldown.value--
-      if (codeCooldown.value <= 0) clearInterval(timer)
+      if (codeCooldown.value <= 0 && codeTimer) { clearInterval(codeTimer); codeTimer = null }
     }, 1000)
   } catch (e: any) {
     message.error(e.message || '发送失败')
@@ -201,6 +202,8 @@ onMounted(async () => {
     handleValidateInvite()
   }
 })
+
+onUnmounted(() => { if (codeTimer) clearInterval(codeTimer) })
 </script>
 
 <style scoped>

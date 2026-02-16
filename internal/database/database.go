@@ -68,6 +68,7 @@ func InitDatabase(cfg *config.Config) error {
 		sqlDB.SetMaxOpenConns(100)
 	}
 	sqlDB.SetConnMaxLifetime(time.Hour)
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 
 	// 验证连接可用
 	if err := sqlDB.Ping(); err != nil {
@@ -272,4 +273,14 @@ func AutoMigrate() error {
 // GetDB 获取全局数据库实例
 func GetDB() *gorm.DB {
 	return DB
+}
+
+// Close closes the underlying database connection pool.
+func Close() {
+	if DB == nil {
+		return
+	}
+	if sqlDB, err := DB.DB(); err == nil {
+		sqlDB.Close()
+	}
 }

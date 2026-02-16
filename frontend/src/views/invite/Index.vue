@@ -563,8 +563,8 @@ const fetchStats = async () => {
       }
       recentInvites.value = res.data.recent_invites || []
     }
-  } catch (error: any) {
-    console.error('获取统计数据失败:', error)
+  } catch {
+    // silently ignore
   } finally {
     loadingRecent.value = false
   }
@@ -576,8 +576,8 @@ const fetchSiteConfig = async () => {
     if (res.data && res.data.site_url) {
       siteUrl.value = res.data.site_url
     }
-  } catch (error: any) {
-    console.error('获取站点配置失败:', error)
+  } catch {
+    // silently ignore
   }
 }
 

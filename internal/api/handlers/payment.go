@@ -1001,14 +1001,17 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 		return
 	}
 
-	// Verify webhook signature if webhook secret is set
-	if stripeCfg.WebhookSecret != "" {
-		sigHeader := c.GetHeader("Stripe-Signature")
-		if !services.StripeVerifyWebhook(rawBody, sigHeader, stripeCfg.WebhookSecret) {
-			fmt.Printf("[stripe] webhook 签名验证失败\n")
-			c.String(400, "signature verification failed")
-			return
-		}
+	// Verify webhook signature (required)
+	if stripeCfg.WebhookSecret == "" {
+		fmt.Printf("[stripe] webhook secret 未配置，拒绝处理\n")
+		c.String(400, "webhook secret not configured")
+		return
+	}
+	sigHeader := c.GetHeader("Stripe-Signature")
+	if !services.StripeVerifyWebhook(rawBody, sigHeader, stripeCfg.WebhookSecret) {
+		fmt.Printf("[stripe] webhook 签名验证失败\n")
+		c.String(400, "signature verification failed")
+		return
 	}
 
 	// Parse event JSON
@@ -1084,6 +1087,15 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 			var txn models.PaymentTransaction
 			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
 				return err // Already processed or not found
+			}
+
+			// 金额校验: Stripe amount_total 单位为分
+			if amountTotal, ok := obj["amount_total"].(float64); ok {
+				expectedCents := int64(txn.Amount * 100)
+				actualCents := int64(amountTotal)
+				if actualCents != expectedCents {
+					return fmt.Errorf("金额不匹配: 期望 %d, 实际 %d (分)", expectedCents, actualCents)
+				}
 			}
 
 			// Extract Stripe payment intent ID as external transaction ID

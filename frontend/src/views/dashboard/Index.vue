@@ -474,10 +474,22 @@ const hasAnyClientUrl = computed(() =>
   Object.values(allClients).flat().some(c => clientConfig.value[c.key])
 )
 
+const subscriptionDisplayName = computed(() => {
+  const et = subscription.value.expire_time
+  if (et) {
+    const d = new Date(et)
+    if (!isNaN(d.getTime())) {
+      return `到期: ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    }
+  }
+  return '无限期'
+})
+
 const qrCodeUrl = computed(() => {
   const url = subscription.value.universal_url || subscription.value.subscription_url
   if (!url) return ''
-  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}&ecc=M&margin=10`
+  const urlWithName = url + (url.includes('#') ? '' : `#${encodeURIComponent(subscriptionDisplayName.value)}`)
+  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(urlWithName)}&ecc=M&margin=10`
 })
 
 const greetingText = computed(() => {
@@ -549,16 +561,16 @@ function oneClickImport(client: string) {
     message.warning('暂无订阅地址')
     return
   }
-  const siteName = info.value.site_name || 'CBoard'
+  const subName = subscriptionDisplayName.value
   switch (client) {
     case 'clash':
-      window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(siteName)}`
+      window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(subName)}`
       break
     case 'shadowrocket':
-      window.location.href = `shadowrocket://add/sub://${btoa(universalUrl)}#${encodeURIComponent(siteName)}`
+      window.location.href = `shadowrocket://add/sub://${btoa(universalUrl)}#${encodeURIComponent(subName)}`
       break
     case 'stash':
-      window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(siteName)}`
+      window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(subName)}`
       break
     default:
       copyText(universalUrl, '订阅地址')

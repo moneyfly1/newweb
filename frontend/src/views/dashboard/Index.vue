@@ -690,8 +690,8 @@ onMounted(async () => {
   align-items: center;
   font-size: 13px;
 }
-.progress-label { color: #999; }
-.progress-text { font-weight: 600; color: #333; }
+.progress-label { color: var(--text-color-secondary); }
+.progress-text { font-weight: 600; color: var(--text-color); }
 
 /* Balance Card */
 .balance-card {
@@ -703,7 +703,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
 }
-.balance-label { font-size: 13px; color: #999; margin-bottom: 8px; }
+.balance-label { font-size: 13px; color: var(--text-color-secondary); margin-bottom: 8px; }
 .balance-value { font-size: 32px; font-weight: 700; color: #667eea; }
 
 /* Check-in Card */
@@ -716,10 +716,10 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
 }
-.checkin-label { font-size: 13px; color: #999; margin-bottom: 8px; }
+.checkin-label { font-size: 13px; color: var(--text-color-secondary); margin-bottom: 8px; }
 .checkin-days { display: flex; align-items: baseline; gap: 4px; }
 .checkin-days-num { font-size: 32px; font-weight: 700; color: #18a058; }
-.checkin-days-text { font-size: 14px; color: #666; }
+.checkin-days-text { font-size: 14px; color: var(--text-color-secondary); }
 
 /* Subscription Info */
 .subscription-content {
@@ -739,7 +739,7 @@ onMounted(async () => {
 }
 .sub-label {
   font-size: 13px;
-  color: #999;
+  color: var(--text-color-secondary);
   font-weight: 500;
 }
 .sub-value-row {
@@ -759,14 +759,14 @@ onMounted(async () => {
 }
 .sub-stat-label {
   font-size: 13px;
-  color: #999;
+  color: var(--text-color-secondary);
 }
 .sub-stat-value {
   font-size: 16px;
   font-weight: 600;
 }
 .device-usage {
-  color: #333;
+  color: var(--text-color);
   font-size: 18px;
 }
 
@@ -782,11 +782,11 @@ onMounted(async () => {
   align-items: center;
   padding: 16px;
   border-radius: 10px;
-  background: var(--n-color-embedded);
+  background: rgba(0,0,0,0.03);
   transition: background 0.2s;
 }
 .quick-sub-item:hover {
-  background: var(--n-color-hover);
+  background: rgba(0,0,0,0.04);
 }
 .quick-sub-info {
   display: flex;
@@ -817,12 +817,12 @@ onMounted(async () => {
   gap: 10px;
   padding: 14px 16px;
   border-radius: 10px;
-  background: var(--n-color-embedded);
+  background: rgba(0,0,0,0.03);
   cursor: pointer;
   transition: all 0.2s;
 }
 .client-card:hover {
-  background: var(--n-color-hover);
+  background: rgba(0,0,0,0.04);
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
@@ -832,29 +832,29 @@ onMounted(async () => {
 /* QR Code Modal */
 .qr-modal-content { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 12px 0; }
 .qr-image { width: 200px; height: 200px; border-radius: 8px; }
-.qr-tip { font-size: 13px; color: #999; text-align: center; margin: 0; }
+.qr-tip { font-size: 13px; color: var(--text-color-secondary); text-align: center; margin: 0; }
 
 .quick-action {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 20px 12px; border-radius: 10px; cursor: pointer;
-  transition: background 0.2s; background: var(--n-color-embedded);
+  transition: background 0.2s; background: rgba(0,0,0,0.03);
 }
-.quick-action:hover { background: var(--n-color-hover); }
-.quick-action span { font-size: 13px; color: #666; }
+.quick-action:hover { background: rgba(0,0,0,0.04); }
+.quick-action span { font-size: 13px; color: var(--text-color-secondary); }
 
 .announcement-list { display: flex; flex-direction: column; gap: 12px; }
 .announcement-item { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .announcement-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.announcement-time { font-size: 12px; color: #bbb; flex-shrink: 0; }
+.announcement-time { font-size: 12px; color: var(--text-color-secondary); flex-shrink: 0; }
 
 .order-list { display: flex; flex-direction: column; gap: 12px; }
 .order-item {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 12px; border-radius: 8px; background: var(--n-color-embedded);
+  padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,0.03);
 }
 .order-item-left { display: flex; flex-direction: column; gap: 4px; }
 .order-name { font-size: 14px; font-weight: 500; }
-.order-time { font-size: 12px; color: #999; }
+.order-time { font-size: 12px; color: var(--text-color-secondary); }
 .order-item-right { display: flex; align-items: center; gap: 10px; }
 .order-amount { font-size: 15px; font-weight: 600; color: #18a058; }
 

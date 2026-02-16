@@ -51,10 +51,19 @@
               </n-input>
             </n-form-item>
             <n-form-item path="invite_code">
-              <n-input v-model:value="form.invite_code" :placeholder="inviteRequired ? '邀请码（必填）' : '邀请码（选填）'" size="large">
-                <template #prefix><n-icon :component="GiftOutline" /></template>
-              </n-input>
+              <n-input-group>
+                <n-input v-model:value="form.invite_code" :placeholder="inviteRequired ? '邀请码（必填）' : '邀请码（选填）'" size="large" style="flex: 1" @blur="autoValidateInvite">
+                  <template #prefix><n-icon :component="GiftOutline" /></template>
+                </n-input>
+                <n-button size="large" :loading="validatingInvite" @click="handleValidateInvite" style="width: 80px">验证</n-button>
+              </n-input-group>
             </n-form-item>
+            <n-alert v-if="inviteValid === true" type="success" :bordered="false" size="small" style="margin-bottom: 16px">
+              邀请码有效{{ inviteReward > 0 ? `，注册后可获得 ¥${inviteReward} 奖励` : '' }}
+            </n-alert>
+            <n-alert v-else-if="inviteValid === false" type="error" :bordered="false" size="small" style="margin-bottom: 16px">
+              {{ inviteError }}
+            </n-alert>
             <n-button type="primary" block size="large" :loading="loading" @click="handleRegister" style="border-radius: 8px; height: 44px;">
               注 册
             </n-button>
@@ -70,18 +79,23 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useMessage, type FormInst } from 'naive-ui'
 import { PersonOutline, MailOutline, LockClosedOutline, GiftOutline, ShieldCheckmarkOutline } from '@vicons/ionicons5'
 import { register, sendVerificationCode } from '@/api/auth'
-import { getPublicConfig } from '@/api/common'
+import { getPublicConfig, validateInviteCode } from '@/api/common'
 
 const router = useRouter()
+const route = useRoute()
 const message = useMessage()
 const formRef = ref<FormInst | null>(null)
 const loading = ref(false)
 const sendingCode = ref(false)
 const codeCooldown = ref(0)
+const validatingInvite = ref(false)
+const inviteValid = ref<boolean | null>(null)
+const inviteReward = ref(0)
+const inviteError = ref('')
 
 const siteConfig = ref<Record<string, string>>({})
 const registerDisabled = computed(() => {
@@ -151,11 +165,41 @@ async function handleRegister() {
   }
 }
 
+const handleValidateInvite = async () => {
+  const code = form.value.invite_code.trim()
+  if (!code) { inviteValid.value = null; return }
+  validatingInvite.value = true
+  try {
+    const res = await validateInviteCode(code)
+    inviteValid.value = true
+    inviteReward.value = res.data?.invitee_reward || 0
+    inviteError.value = ''
+  } catch (e: any) {
+    inviteValid.value = false
+    inviteError.value = e.message || '邀请码无效'
+    inviteReward.value = 0
+  } finally {
+    validatingInvite.value = false
+  }
+}
+
+const autoValidateInvite = () => {
+  if (form.value.invite_code.trim() && inviteValid.value === null) {
+    handleValidateInvite()
+  }
+}
+
 onMounted(async () => {
   try {
     const res = await getPublicConfig()
     siteConfig.value = res.data || {}
   } catch {}
+  // Read invite code from URL
+  const code = route.query.code as string
+  if (code) {
+    form.value.invite_code = code
+    handleValidateInvite()
+  }
 })
 </script>
 
@@ -177,11 +221,11 @@ onMounted(async () => {
 .feature-item { display: flex; align-items: center; gap: 12px; font-size: 15px; opacity: 0.9; }
 .feature-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.7); flex-shrink: 0; }
 .auth-right {
-  flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px; background: var(--n-color);
+  flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px; background: var(--bg-color, #fff);
 }
 .auth-form-wrapper { width: 100%; max-width: 400px; }
 .auth-form-wrapper h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-.auth-subtitle { color: #999; margin-bottom: 32px; font-size: 15px; }
-.auth-footer { text-align: center; margin-top: 24px; color: #999; font-size: 14px; }
+.auth-subtitle { color: var(--text-color-secondary, #999); margin-bottom: 32px; font-size: 15px; }
+.auth-footer { text-align: center; margin-top: 24px; color: var(--text-color-secondary, #999); font-size: 14px; }
 @media (max-width: 768px) { .auth-left { display: none; } }
 </style>

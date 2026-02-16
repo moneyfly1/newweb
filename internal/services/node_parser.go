@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"cboard/v2/internal/models"
 	"gopkg.in/yaml.v3"
@@ -18,7 +19,13 @@ import (
 
 // FetchSubscriptionContent fetches and base64-decodes subscription content from a URL.
 func FetchSubscriptionContent(urlStr string) (string, error) {
-	resp, err := http.Get(urlStr)
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "ClashForAndroid/2.5.12")
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -29,16 +36,39 @@ func FetchSubscriptionContent(urlStr string) (string, error) {
 		return "", err
 	}
 
-	content := string(body)
-	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(content))
-	if err == nil {
-		content = string(decoded)
+	content := strings.TrimSpace(string(body))
+	// Try standard base64
+	if decoded, err := base64.StdEncoding.DecodeString(content); err == nil {
+		return string(decoded), nil
 	}
+	// Try URL-safe base64 (with padding)
+	if decoded, err := base64.URLEncoding.DecodeString(content); err == nil {
+		return string(decoded), nil
+	}
+	// Try raw standard base64 (no padding)
+	if decoded, err := base64.RawStdEncoding.DecodeString(content); err == nil {
+		return string(decoded), nil
+	}
+	// Try raw URL-safe base64 (no padding)
+	if decoded, err := base64.RawURLEncoding.DecodeString(content); err == nil {
+		return string(decoded), nil
+	}
+	// Return raw content (could be Clash YAML or plain links)
 	return content, nil
 }
 
-// ParseNodeLinks parses multi-line node links into Node models.
+// ParseNodeLinks parses multi-line node links or Clash YAML into Node models.
 func ParseNodeLinks(content string) ([]models.Node, error) {
+	// Detect Clash YAML format — try parsing if content contains "proxies:" key
+	trimmed := strings.TrimSpace(content)
+	if strings.Contains(trimmed, "proxies:") {
+		nodes, err := ParseClashYAML(content)
+		if err == nil && len(nodes) > 0 {
+			return nodes, nil
+		}
+		// Fall through to line-based parsing if Clash parsing fails
+	}
+
 	lines := strings.Split(content, "\n")
 	var nodes []models.Node
 
@@ -81,6 +111,335 @@ func ParseNodeLinks(content string) ([]models.Node, error) {
 	}
 
 	return nodes, nil
+}
+
+// ParseClashYAML parses Clash YAML config and extracts proxy nodes.
+func ParseClashYAML(content string) ([]models.Node, error) {
+	var config struct {
+		Proxies []map[string]interface{} `yaml:"proxies"`
+	}
+	if err := yaml.Unmarshal([]byte(content), &config); err != nil {
+		return nil, err
+	}
+
+	var nodes []models.Node
+	for _, proxy := range config.Proxies {
+		node := clashProxyToNode(proxy)
+		if node != nil {
+			nodes = append(nodes, *node)
+		}
+	}
+	return nodes, nil
+}
+
+// clashProxyToNode converts a Clash proxy map to a Node, generating a protocol link as Config.
+func clashProxyToNode(proxy map[string]interface{}) *models.Node {
+	proxyType, _ := proxy["type"].(string)
+	name, _ := proxy["name"].(string)
+	server, _ := proxy["server"].(string)
+	if proxyType == "" || server == "" {
+		return nil
+	}
+	if name == "" {
+		name = server
+	}
+
+	var config string
+	switch proxyType {
+	case "vmess":
+		config = clashVmessToLink(proxy)
+	case "vless":
+		config = clashVlessToLink(proxy)
+	case "trojan":
+		config = clashTrojanToLink(proxy)
+	case "ss":
+		config = clashSSToLink(proxy)
+	case "ssr":
+		config = clashSSRToLink(proxy)
+	case "hysteria2":
+		config = clashHysteria2ToLink(proxy)
+	case "hysteria":
+		config = clashHysteriaToLink(proxy)
+	case "tuic":
+		config = clashTUICToLink(proxy)
+	case "socks5":
+		config = clashSocks5ToLink(proxy)
+	default:
+		return nil
+	}
+
+	if config == "" {
+		return nil
+	}
+
+	region := DetectRegion(name)
+	return &models.Node{
+		Name:     name,
+		Region:   region,
+		Type:     proxyType,
+		Status:   "online",
+		Config:   &config,
+		IsActive: true,
+		IsManual: false,
+	}
+}
+
+func clashStr(m map[string]interface{}, key string) string {
+	v, _ := m[key].(string)
+	return v
+}
+
+func clashInt(m map[string]interface{}, key string) int {
+	switch v := m[key].(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	case string:
+		n, _ := strconv.Atoi(v)
+		return n
+	}
+	return 0
+}
+
+func clashBool(m map[string]interface{}, key string) bool {
+	switch v := m[key].(type) {
+	case bool:
+		return v
+	case string:
+		return v == "true" || v == "1"
+	}
+	return false
+}
+
+func clashVmessToLink(p map[string]interface{}) string {
+	cfg := map[string]interface{}{
+		"v":    "2",
+		"ps":   clashStr(p, "name"),
+		"add":  clashStr(p, "server"),
+		"port": clashInt(p, "port"),
+		"id":   clashStr(p, "uuid"),
+		"aid":  clashInt(p, "alterId"),
+		"net":  clashStr(p, "network"),
+		"type": "none",
+	}
+	cipher := clashStr(p, "cipher")
+	if cipher == "" {
+		cipher = "auto"
+	}
+	cfg["scy"] = cipher
+	if clashBool(p, "tls") {
+		cfg["tls"] = "tls"
+		if sni := clashStr(p, "servername"); sni != "" {
+			cfg["sni"] = sni
+		}
+	}
+	if wsOpts, ok := p["ws-opts"].(map[string]interface{}); ok {
+		if path := clashStr(wsOpts, "path"); path != "" {
+			cfg["path"] = path
+		}
+		if headers, ok := wsOpts["headers"].(map[string]interface{}); ok {
+			if host := clashStr(headers, "Host"); host != "" {
+				cfg["host"] = host
+			}
+		}
+	}
+	data, _ := json.Marshal(cfg)
+	return "vmess://" + base64.StdEncoding.EncodeToString(data)
+}
+
+func clashVlessToLink(p map[string]interface{}) string {
+	uuid := clashStr(p, "uuid")
+	server := clashStr(p, "server")
+	port := clashInt(p, "port")
+	name := clashStr(p, "name")
+
+	q := url.Values{}
+	if net := clashStr(p, "network"); net != "" {
+		q.Set("type", net)
+	}
+	sec := "none"
+	if clashBool(p, "tls") {
+		sec = "tls"
+		if sni := clashStr(p, "servername"); sni != "" {
+			q.Set("sni", sni)
+		}
+	}
+	if realityOpts, ok := p["reality-opts"].(map[string]interface{}); ok {
+		sec = "reality"
+		if pbk := clashStr(realityOpts, "public-key"); pbk != "" {
+			q.Set("pbk", pbk)
+		}
+		if sid := clashStr(realityOpts, "short-id"); sid != "" {
+			q.Set("sid", sid)
+		}
+	}
+	q.Set("security", sec)
+	if flow := clashStr(p, "flow"); flow != "" {
+		q.Set("flow", flow)
+	}
+	if fp := clashStr(p, "client-fingerprint"); fp != "" {
+		q.Set("fp", fp)
+	}
+	if wsOpts, ok := p["ws-opts"].(map[string]interface{}); ok {
+		if path := clashStr(wsOpts, "path"); path != "" {
+			q.Set("path", path)
+		}
+		if headers, ok := wsOpts["headers"].(map[string]interface{}); ok {
+			if host := clashStr(headers, "Host"); host != "" {
+				q.Set("host", host)
+			}
+		}
+	}
+	if grpcOpts, ok := p["grpc-opts"].(map[string]interface{}); ok {
+		if sn := clashStr(grpcOpts, "grpc-service-name"); sn != "" {
+			q.Set("serviceName", sn)
+		}
+	}
+	return fmt.Sprintf("vless://%s@%s:%d?%s#%s", uuid, server, port, q.Encode(), url.PathEscape(name))
+}
+
+func clashTrojanToLink(p map[string]interface{}) string {
+	password := clashStr(p, "password")
+	server := clashStr(p, "server")
+	port := clashInt(p, "port")
+	name := clashStr(p, "name")
+
+	q := url.Values{}
+	if sni := clashStr(p, "sni"); sni != "" {
+		q.Set("sni", sni)
+	}
+	if net := clashStr(p, "network"); net != "" && net != "tcp" {
+		q.Set("type", net)
+		if net == "ws" {
+			if wsOpts, ok := p["ws-opts"].(map[string]interface{}); ok {
+				if path := clashStr(wsOpts, "path"); path != "" {
+					q.Set("path", path)
+				}
+				if headers, ok := wsOpts["headers"].(map[string]interface{}); ok {
+					if host := clashStr(headers, "Host"); host != "" {
+						q.Set("host", host)
+					}
+				}
+			}
+		}
+	}
+	if clashBool(p, "skip-cert-verify") {
+		q.Set("allowInsecure", "1")
+	}
+	return fmt.Sprintf("trojan://%s@%s:%d?%s#%s", url.PathEscape(password), server, port, q.Encode(), url.PathEscape(name))
+}
+
+func clashSSToLink(p map[string]interface{}) string {
+	cipher := clashStr(p, "cipher")
+	password := clashStr(p, "password")
+	server := clashStr(p, "server")
+	port := clashInt(p, "port")
+	name := clashStr(p, "name")
+
+	userInfo := base64.StdEncoding.EncodeToString([]byte(cipher + ":" + password))
+	return fmt.Sprintf("ss://%s@%s:%d#%s", userInfo, server, port, url.PathEscape(name))
+}
+
+func clashSSRToLink(p map[string]interface{}) string {
+	server := clashStr(p, "server")
+	port := clashInt(p, "port")
+	protocol := clashStr(p, "protocol")
+	cipher := clashStr(p, "cipher")
+	obfs := clashStr(p, "obfs")
+	password := clashStr(p, "password")
+	name := clashStr(p, "name")
+
+	passwordB64 := base64.RawURLEncoding.EncodeToString([]byte(password))
+	main := fmt.Sprintf("%s:%d:%s:%s:%s:%s", server, port, protocol, cipher, obfs, passwordB64)
+
+	params := url.Values{}
+	if pp := clashStr(p, "protocol-param"); pp != "" {
+		params.Set("protoparam", base64.RawURLEncoding.EncodeToString([]byte(pp)))
+	}
+	if op := clashStr(p, "obfs-param"); op != "" {
+		params.Set("obfsparam", base64.RawURLEncoding.EncodeToString([]byte(op)))
+	}
+	params.Set("remarks", base64.RawURLEncoding.EncodeToString([]byte(name)))
+
+	raw := main + "/?" + params.Encode()
+	return "ssr://" + base64.StdEncoding.EncodeToString([]byte(raw))
+}
+
+func clashHysteria2ToLink(p map[string]interface{}) string {
+	password := clashStr(p, "password")
+	server := clashStr(p, "server")
+	port := clashInt(p, "port")
+	name := clashStr(p, "name")
+
+	q := url.Values{}
+	if sni := clashStr(p, "sni"); sni != "" {
+		q.Set("sni", sni)
+	}
+	if clashBool(p, "skip-cert-verify") {
+		q.Set("insecure", "1")
+	}
+	return fmt.Sprintf("hysteria2://%s@%s:%d?%s#%s", url.PathEscape(password), server, port, q.Encode(), url.PathEscape(name))
+}
+
+func clashHysteriaToLink(p map[string]interface{}) string {
+	server := clashStr(p, "server")
+	port := clashInt(p, "port")
+	name := clashStr(p, "name")
+
+	q := url.Values{}
+	if auth := clashStr(p, "auth-str"); auth != "" {
+		q.Set("auth", auth)
+	}
+	if sni := clashStr(p, "sni"); sni != "" {
+		q.Set("peer", sni)
+	}
+	if clashBool(p, "skip-cert-verify") {
+		q.Set("insecure", "1")
+	}
+	if up := clashStr(p, "up"); up != "" {
+		q.Set("upmbps", up)
+	}
+	if down := clashStr(p, "down"); down != "" {
+		q.Set("downmbps", down)
+	}
+	if proto := clashStr(p, "protocol"); proto != "" {
+		q.Set("protocol", proto)
+	}
+	return fmt.Sprintf("hysteria://%s:%d?%s#%s", server, port, q.Encode(), url.PathEscape(name))
+}
+
+func clashTUICToLink(p map[string]interface{}) string {
+	uuid := clashStr(p, "uuid")
+	password := clashStr(p, "password")
+	server := clashStr(p, "server")
+	port := clashInt(p, "port")
+	name := clashStr(p, "name")
+
+	q := url.Values{}
+	if cc := clashStr(p, "congestion-controller"); cc != "" {
+		q.Set("congestion_control", cc)
+	}
+	if sni := clashStr(p, "sni"); sni != "" {
+		q.Set("sni", sni)
+	}
+	return fmt.Sprintf("tuic://%s:%s@%s:%d?%s#%s", uuid, password, server, port, q.Encode(), url.PathEscape(name))
+}
+
+func clashSocks5ToLink(p map[string]interface{}) string {
+	server := clashStr(p, "server")
+	port := clashInt(p, "port")
+	name := clashStr(p, "name")
+
+	userInfo := ""
+	if username := clashStr(p, "username"); username != "" {
+		if pw := clashStr(p, "password"); pw != "" {
+			userInfo = url.PathEscape(username) + ":" + url.PathEscape(pw) + "@"
+		} else {
+			userInfo = url.PathEscape(username) + "@"
+		}
+	}
+	return fmt.Sprintf("socks5://%s%s:%d#%s", userInfo, server, port, url.PathEscape(name))
 }
 
 func ParseVmessLink(link string) (*models.Node, error) {

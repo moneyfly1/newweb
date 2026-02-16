@@ -399,8 +399,8 @@ onMounted(() => {
 }
 
 .mobile-card {
-  background: #fff;
-  border-radius: 10px;
+  background: var(--bg-color, #fff);
+  border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   overflow: hidden;
 }
@@ -410,7 +410,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color, #f0f0f0);
 }
 
 .card-title {
@@ -419,6 +419,7 @@ onMounted(() => {
   word-break: break-all;
   min-width: 0;
   flex: 1;
+  color: var(--text-color, #333);
 }
 
 .card-body {
@@ -437,10 +438,11 @@ onMounted(() => {
   word-break: break-all;
   text-align: right;
   min-width: 0;
+  color: var(--text-color, #333);
 }
 
 .card-label {
-  color: #999;
+  color: var(--text-color-secondary, #999);
   flex-shrink: 0;
 }
 
@@ -448,7 +450,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   padding: 10px 14px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color, #f0f0f0);
 }
 
 @media (max-width: 767px) {

@@ -42,6 +42,16 @@
               <n-form-item label="注册需要邀请码">
                 <n-switch v-model:value="form.register_invite_required" />
               </n-form-item>
+              <n-form-item label="默认邀请人奖励">
+                <n-input-number v-model:value="form.invite_default_inviter_reward" :min="0" :precision="2" style="width: 200px">
+                  <template #suffix>元</template>
+                </n-input-number>
+              </n-form-item>
+              <n-form-item label="默认受邀人奖励">
+                <n-input-number v-model:value="form.invite_default_invitee_reward" :min="0" :precision="2" style="width: 200px">
+                  <template #suffix>元</template>
+                </n-input-number>
+              </n-form-item>
               <n-form-item label="新用户默认设备数限制">
                 <n-input-number v-model:value="form.default_device_limit" :min="1" :max="100" />
               </n-form-item>
@@ -594,7 +604,8 @@ const numberKeys = [
   'backup_interval_hours', 'pay_stripe_exchange_rate', 'pay_crypto_exchange_rate',
   'checkin_min_reward', 'checkin_max_reward',
   'custom_package_price_per_device_year', 'custom_package_min_devices',
-  'custom_package_max_devices', 'custom_package_min_months'
+  'custom_package_max_devices', 'custom_package_min_months',
+  'invite_default_inviter_reward', 'invite_default_invitee_reward'
 ]
 
 const form = ref<Record<string, any>>({
@@ -609,6 +620,8 @@ const form = ref<Record<string, any>>({
   register_enabled: true,
   register_email_verify: false,
   register_invite_required: false,
+  invite_default_inviter_reward: 5,
+  invite_default_invitee_reward: 5,
   default_device_limit: 3,
   default_subscribe_days: 0,
   min_password_length: 8,

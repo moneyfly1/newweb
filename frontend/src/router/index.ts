@@ -67,6 +67,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'tickets', name: 'AdminTickets', component: () => import('@/views/admin/tickets/Index.vue') },
       { path: 'levels', name: 'AdminLevels', component: () => import('@/views/admin/levels/Index.vue') },
       { path: 'redeem', name: 'AdminRedeem', component: () => import('@/views/admin/redeem/Index.vue') },
+      { path: 'invites', name: 'AdminInvites', component: () => import('@/views/admin/invites/Index.vue') },
       { path: 'mystery-box', name: 'AdminMysteryBox', component: () => import('@/views/admin/mystery-box/Index.vue') },
       { path: 'settings', name: 'AdminSettings', component: () => import('@/views/admin/settings/Index.vue') },
       { path: 'announcements', name: 'AdminAnnouncements', component: () => import('@/views/admin/announcements/Index.vue') },

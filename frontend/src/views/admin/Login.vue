@@ -110,7 +110,7 @@ async function handleLogin() {
 .login-card {
   width: 100%;
   max-width: 420px;
-  background: var(--n-color);
+  background: var(--bg-color, #fff);
   border-radius: 16px;
   padding: 48px 40px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);

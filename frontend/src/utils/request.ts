@@ -48,6 +48,17 @@ instance.interceptors.response.use(
         isLoggingOut = false
       })
     }
+    // For blob responses, try to parse the error body as JSON
+    if (error.response?.data instanceof Blob) {
+      return error.response.data.text().then((text: string) => {
+        try {
+          const json = JSON.parse(text)
+          return Promise.reject(new Error(json.message || '请求失败'))
+        } catch {
+          return Promise.reject(new Error('请求失败'))
+        }
+      })
+    }
     // Extract server error message if available
     const serverMsg = error.response?.data?.message
     if (serverMsg) {

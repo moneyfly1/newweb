@@ -387,6 +387,16 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		// 签到管理
 		admin.GET("/checkin/stats", handlers.AdminGetCheckInStats)
 
+		// 邀请码管理
+		adminInvites := admin.Group("/invites")
+		{
+			adminInvites.GET("", handlers.AdminListInviteCodes)
+			adminInvites.GET("/stats", handlers.AdminGetInviteStats)
+			adminInvites.GET("/relations", handlers.AdminListInviteRelations)
+			adminInvites.DELETE("/:id", handlers.AdminDeleteInviteCode)
+			adminInvites.POST("/:id/toggle", handlers.AdminToggleInviteCode)
+		}
+
 		// 盲盒管理
 		adminMysteryBox := admin.Group("/mystery-box")
 		{

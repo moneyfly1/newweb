@@ -1792,25 +1792,8 @@ func AdminGetSettings(c *gin.Context) {
 	var settings []models.SystemConfig
 	database.GetDB().Where("category = ? OR category IS NULL", "").Find(&settings)
 	result := make(map[string]string)
-	sensitiveKeys := map[string]bool{
-		"pay_stripe_secret_key":     true,
-		"pay_stripe_webhook_secret": true,
-		"pay_alipay_private_key":    true,
-		"pay_epay_secret_key":       true,
-		"notify_telegram_bot_token": true,
-		"smtp_password":             true,
-	}
 	for _, s := range settings {
-		if sensitiveKeys[s.Key] && s.Value != "" {
-			// Show only last 4 chars
-			if len(s.Value) > 4 {
-				result[s.Key] = "****" + s.Value[len(s.Value)-4:]
-			} else {
-				result[s.Key] = "****"
-			}
-		} else {
-			result[s.Key] = s.Value
-		}
+		result[s.Key] = s.Value
 	}
 	utils.Success(c, result)
 }
@@ -3081,9 +3064,13 @@ func AdminExportUsersCSV(c *gin.Context) {
 	}
 
 	var users []models.User
-	query.Order("id ASC").Find(&users)
+	if err := query.Order("id ASC").Find(&users).Error; err != nil {
+		utils.InternalError(c, "查询用户失败: "+err.Error())
+		return
+	}
 
 	filename := fmt.Sprintf("users_%s.csv", time.Now().Format("2006-01-02"))
+	c.Status(200)
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 

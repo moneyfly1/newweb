@@ -286,7 +286,7 @@ onMounted(() => { fetchNodes() })
 </script>
 
 <style scoped>
-.node-page { padding: 20px; max-width: 1400px; margin: 0 auto; }
+.node-page { padding: 20px; }
 .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
 .stat-card {
   display: flex; align-items: center; gap: 14px; padding: 18px 20px;

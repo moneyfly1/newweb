@@ -39,7 +39,8 @@
           :checked-row-keys="checkedRowKeys"
           @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
           @update:page="(p) => { pagination.page = p; fetchData() }"
-          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }" />
+          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+          @update:sorter="handleSorterChange" />
       </template>
 
       <!-- Mobile Card List -->
@@ -91,6 +92,12 @@
                   <span class="sub-section-label">备注</span>
                 </div>
                 <n-input v-model:value="row.user_notes" type="text" size="small" placeholder="输入备注..." @blur="saveNotes(row)" @keyup.enter="saveNotes(row)" />
+              </div>
+              <div class="sub-section">
+                <div class="sub-section-row">
+                  <span class="sub-section-label">订阅次数</span>
+                  <span class="sub-section-value">通用 {{ row.universal_count || 0 }} · Clash {{ row.clash_count || 0 }}</span>
+                </div>
               </div>
               <div class="sub-action-grid">
                 <div class="sub-action-item" @click="handleViewDetail(row)">
@@ -252,6 +259,7 @@ const loading = ref(false)
 const searchQuery = ref('')
 const statusFilter = ref(null)
 const tableData = ref([])
+const sortState = ref({ sort: 'id', order: 'desc' })
 const pagination = ref({ page: 1, pageSize: 20, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
 const showDetailDrawer = ref(false)
 const showQRModal = ref(false)
@@ -435,6 +443,14 @@ const columns = [
     render: (row) => h(NTag, { type: getStatusType(row.status), size: 'small' }, { default: () => getStatusText(row.status) })
   },
   {
+    title: '订阅次数', key: 'sub_count', width: 130, resizable: true,
+    sorter: (a, b) => ((a.universal_count || 0) + (a.clash_count || 0)) - ((b.universal_count || 0) + (b.clash_count || 0)),
+    render: (row) => h('div', { style: 'font-size:12px;line-height:1.6' }, [
+      h('div', {}, `通用: ${row.universal_count || 0}`),
+      h('div', {}, `Clash: ${row.clash_count || 0}`),
+    ])
+  },
+  {
     title: '操作', key: 'actions', width: 200, fixed: 'right',
     render: (row) => h('div', { class: 'action-btn-grid' }, [
       h(NButton, { size: 'small', type: 'success', onClick: () => handleLoginAs(row) }, { default: () => '后台' }),
@@ -451,7 +467,7 @@ const columns = [
 const fetchData = async () => {
   loading.value = true
   try {
-    const params = { page: pagination.value.page, page_size: pagination.value.pageSize, search: searchQuery.value || undefined, status: statusFilter.value || undefined }
+    const params = { page: pagination.value.page, page_size: pagination.value.pageSize, search: searchQuery.value || undefined, status: statusFilter.value || undefined, sort: sortState.value.sort, order: sortState.value.order }
     const res = await listAdminSubscriptions(params)
     const items = res.data.items || []
     items.forEach(r => { r._expireTs = r.expire_time ? new Date(r.expire_time).getTime() : null })
@@ -462,6 +478,18 @@ const fetchData = async () => {
 }
 const handleSearch = () => { pagination.value.page = 1; fetchData() }
 const handleRefresh = () => fetchData()
+const handleSorterChange = (sorter) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    const keyMap = { id: 'id', expire_time: 'expire_time', device_limit: 'device_limit', status: 'status', sub_count: 'universal_count' }
+    sortState.value.sort = keyMap[sorter.columnKey] || 'id'
+    sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    sortState.value.sort = 'id'
+    sortState.value.order = 'desc'
+  }
+  pagination.value.page = 1
+  fetchData()
+}
 
 // Inline time operations
 const inlineAddTime = async (row, days) => {

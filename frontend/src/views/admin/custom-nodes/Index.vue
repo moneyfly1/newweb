@@ -36,6 +36,7 @@
           :bordered="false"
           :row-key="(row) => row.id"
           v-model:checked-row-keys="checkedRowKeys"
+          @update:sorter="handleSorterChange"
           @update:page="(p) => { pagination.page = p; fetchData() }"
           @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
         />
@@ -309,6 +310,7 @@ const importing = ref(false)
 const importLinks = ref('')
 const checkedRowKeys = ref([])
 const linkData = reactive({ link: '', name: '', protocol: '' })
+const sortState = ref({ sort: 'id', order: 'desc' })
 
 const formData = reactive({
   name: '',
@@ -437,7 +439,9 @@ const fetchData = async () => {
   try {
     const res = await listCustomNodes({
       page: pagination.page,
-      page_size: pagination.pageSize
+      page_size: pagination.pageSize,
+      sort: sortState.value.sort,
+      order: sortState.value.order,
     })
     tableData.value = res.data.items || []
     pagination.itemCount = res.data.total || 0
@@ -446,6 +450,18 @@ const fetchData = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSorterChange = (sorter) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    sortState.value.sort = sorter.columnKey
+    sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    sortState.value.sort = 'id'
+    sortState.value.order = 'desc'
+  }
+  pagination.page = 1
+  fetchData()
 }
 
 const fetchUsers = async () => {

@@ -187,7 +187,7 @@ onUnmounted(() => { stopPolling() })
 onMounted(() => { loadData() })
 </script>
 <style scoped>
-.recharge-container { padding: 24px; max-width: 600px; margin: 0 auto; }
+.recharge-container { padding: 24px; }
 .header { text-align: center; margin-bottom: 16px; }
 .title {
   font-size: 32px; font-weight: 600; margin: 0 0 8px 0;

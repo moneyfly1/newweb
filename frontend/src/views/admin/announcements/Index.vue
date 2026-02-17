@@ -22,6 +22,7 @@
           :bordered="false"
           @update:page="(p) => { pagination.page = p; fetchData() }"
           @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+          @update:sorter="handleSorterChange"
         />
       </template>
 
@@ -149,6 +150,7 @@ const showModal = ref(false)
 const modalTitle = ref('发布公告')
 const tableData = ref<any[]>([])
 const isEdit = ref(false)
+const sortState = ref({ sort: 'id', order: 'desc' })
 
 const pagination = reactive({
   page: 1,
@@ -248,6 +250,8 @@ const loadData = async () => {
     const res = await listAnnouncements({
       page: pagination.page,
       page_size: pagination.pageSize,
+      sort: sortState.value.sort,
+      order: sortState.value.order,
     })
     tableData.value = res.data?.items || []
     pagination.itemCount = res.data?.total || 0
@@ -259,6 +263,18 @@ const loadData = async () => {
 }
 
 const fetchData = loadData
+
+const handleSorterChange = (sorter) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    sortState.value.sort = sorter.columnKey
+    sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    sortState.value.sort = 'id'
+    sortState.value.order = 'desc'
+  }
+  pagination.page = 1
+  loadData()
+}
 
 const handleCreate = () => {
   isEdit.value = false

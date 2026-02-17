@@ -11,6 +11,7 @@
               :loading="auditLoading"
               :pagination="auditPagination"
               :bordered="false"
+              @update:sorter="handleAuditSorterChange"
             />
           </template>
           <template v-else>
@@ -49,6 +50,7 @@
               :loading="loginLoading"
               :pagination="loginPagination"
               :bordered="false"
+              @update:sorter="handleLoginSorterChange"
             />
           </template>
           <template v-else>
@@ -87,6 +89,7 @@
               :loading="registrationLoading"
               :pagination="registrationPagination"
               :bordered="false"
+              @update:sorter="handleRegistrationSorterChange"
             />
           </template>
           <template v-else>
@@ -123,6 +126,7 @@
               :loading="subscriptionLoading"
               :pagination="subscriptionPagination"
               :bordered="false"
+              @update:sorter="handleSubscriptionSorterChange"
             />
           </template>
           <template v-else>
@@ -159,6 +163,7 @@
               :loading="balanceLoading"
               :pagination="balancePagination"
               :bordered="false"
+              @update:sorter="handleBalanceSorterChange"
             />
           </template>
           <template v-else>
@@ -197,6 +202,7 @@
               :loading="commissionLoading"
               :pagination="commissionPagination"
               :bordered="false"
+              @update:sorter="handleCommissionSorterChange"
             />
           </template>
           <template v-else>
@@ -238,6 +244,7 @@
               :loading="systemLoading"
               :pagination="systemPagination"
               :bordered="false"
+              @update:sorter="handleSystemSorterChange"
             />
           </template>
           <template v-else>
@@ -279,6 +286,15 @@ const appStore = useAppStore()
 
 const message = useMessage()
 const currentTab = ref('audit')
+
+// Sort states for each tab
+const auditSortState = ref({ sort: 'id', order: 'desc' })
+const loginSortState = ref({ sort: 'id', order: 'desc' })
+const registrationSortState = ref({ sort: 'id', order: 'desc' })
+const subscriptionSortState = ref({ sort: 'id', order: 'desc' })
+const balanceSortState = ref({ sort: 'id', order: 'desc' })
+const commissionSortState = ref({ sort: 'id', order: 'desc' })
+const systemSortState = ref({ sort: 'id', order: 'desc' })
 
 // Audit logs
 const auditLoading = ref(false)
@@ -468,6 +484,8 @@ const loadAuditLogs = async () => {
     const res = await getAuditLogs({
       page: auditPagination.page,
       page_size: auditPagination.pageSize,
+      sort: auditSortState.value.sort,
+      order: auditSortState.value.order,
     })
     auditData.value = res.data?.items || res.data || []
     auditPagination.itemCount = res.data?.total || 0
@@ -484,6 +502,8 @@ const loadLoginLogs = async () => {
     const res = await getLoginLogs({
       page: loginPagination.page,
       page_size: loginPagination.pageSize,
+      sort: loginSortState.value.sort,
+      order: loginSortState.value.order,
     })
     loginData.value = res.data?.items || res.data || []
     loginPagination.itemCount = res.data?.total || 0
@@ -500,6 +520,8 @@ const loadRegistrationLogs = async () => {
     const res = await getRegistrationLogs({
       page: registrationPagination.page,
       page_size: registrationPagination.pageSize,
+      sort: registrationSortState.value.sort,
+      order: registrationSortState.value.order,
     })
     registrationData.value = res.data?.items || res.data || []
     registrationPagination.itemCount = res.data?.total || 0
@@ -516,6 +538,8 @@ const loadSubscriptionLogs = async () => {
     const res = await getSubscriptionLogs({
       page: subscriptionPagination.page,
       page_size: subscriptionPagination.pageSize,
+      sort: subscriptionSortState.value.sort,
+      order: subscriptionSortState.value.order,
     })
     subscriptionData.value = res.data?.items || res.data || []
     subscriptionPagination.itemCount = res.data?.total || 0
@@ -532,6 +556,8 @@ const loadBalanceLogs = async () => {
     const res = await getBalanceLogs({
       page: balancePagination.page,
       page_size: balancePagination.pageSize,
+      sort: balanceSortState.value.sort,
+      order: balanceSortState.value.order,
     })
     balanceData.value = res.data?.items || res.data || []
     balancePagination.itemCount = res.data?.total || 0
@@ -548,6 +574,8 @@ const loadCommissionLogs = async () => {
     const res = await getCommissionLogs({
       page: commissionPagination.page,
       page_size: commissionPagination.pageSize,
+      sort: commissionSortState.value.sort,
+      order: commissionSortState.value.order,
     })
     commissionData.value = res.data?.items || res.data || []
     commissionPagination.itemCount = res.data?.total || 0
@@ -607,7 +635,7 @@ const systemColumns: DataTableColumns = [
 const loadSystemLogs = async () => {
   systemLoading.value = true
   try {
-    const params: any = { page: systemPagination.page, page_size: systemPagination.pageSize }
+    const params: any = { page: systemPagination.page, page_size: systemPagination.pageSize, sort: systemSortState.value.sort, order: systemSortState.value.order }
     if (systemLevelFilter.value) params.level = systemLevelFilter.value
     if (systemModuleFilter.value) params.module = systemModuleFilter.value
     const res = await getSystemLogs(params)
@@ -618,6 +646,90 @@ const loadSystemLogs = async () => {
   } finally {
     systemLoading.value = false
   }
+}
+
+const handleAuditSorterChange = (sorter: any) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    auditSortState.value.sort = sorter.columnKey
+    auditSortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    auditSortState.value.sort = 'id'
+    auditSortState.value.order = 'desc'
+  }
+  auditPagination.page = 1
+  loadAuditLogs()
+}
+
+const handleLoginSorterChange = (sorter: any) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    loginSortState.value.sort = sorter.columnKey
+    loginSortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    loginSortState.value.sort = 'id'
+    loginSortState.value.order = 'desc'
+  }
+  loginPagination.page = 1
+  loadLoginLogs()
+}
+
+const handleRegistrationSorterChange = (sorter: any) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    registrationSortState.value.sort = sorter.columnKey
+    registrationSortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    registrationSortState.value.sort = 'id'
+    registrationSortState.value.order = 'desc'
+  }
+  registrationPagination.page = 1
+  loadRegistrationLogs()
+}
+
+const handleSubscriptionSorterChange = (sorter: any) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    subscriptionSortState.value.sort = sorter.columnKey
+    subscriptionSortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    subscriptionSortState.value.sort = 'id'
+    subscriptionSortState.value.order = 'desc'
+  }
+  subscriptionPagination.page = 1
+  loadSubscriptionLogs()
+}
+
+const handleBalanceSorterChange = (sorter: any) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    balanceSortState.value.sort = sorter.columnKey
+    balanceSortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    balanceSortState.value.sort = 'id'
+    balanceSortState.value.order = 'desc'
+  }
+  balancePagination.page = 1
+  loadBalanceLogs()
+}
+
+const handleCommissionSorterChange = (sorter: any) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    commissionSortState.value.sort = sorter.columnKey
+    commissionSortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    commissionSortState.value.sort = 'id'
+    commissionSortState.value.order = 'desc'
+  }
+  commissionPagination.page = 1
+  loadCommissionLogs()
+}
+
+const handleSystemSorterChange = (sorter: any) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    systemSortState.value.sort = sorter.columnKey
+    systemSortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    systemSortState.value.sort = 'id'
+    systemSortState.value.order = 'desc'
+  }
+  systemPagination.page = 1
+  loadSystemLogs()
 }
 
 const handleTabChange = (value: string) => {

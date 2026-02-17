@@ -41,6 +41,7 @@
             :bordered="false"
             @update:page="(p: number) => { pagination.page = p; loadTickets() }"
             @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; loadTickets() }"
+            @update:sorter="handleSorterChange"
           />
         </template>
 
@@ -186,6 +187,7 @@ const currentTicket = ref<any>(null)
 const showDetailModal = ref(false)
 const replyContent = ref('')
 const updateStatus = ref('')
+const sortState = ref({ sort: 'id', order: 'desc' })
 
 const filters = reactive({
   status: null,
@@ -348,7 +350,7 @@ const formatDate = (date: string) => {
 const loadTickets = async () => {
   loading.value = true
   try {
-    const params: any = { ...filters }
+    const params: any = { ...filters, sort: sortState.value.sort, order: sortState.value.order }
     if (!params.status) delete params.status
     if (!params.priority) delete params.priority
     
@@ -360,6 +362,19 @@ const loadTickets = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSorterChange = (sorter: any) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    sortState.value.sort = sorter.columnKey
+    sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    sortState.value.sort = 'id'
+    sortState.value.order = 'desc'
+  }
+  pagination.page = 1
+  filters.page = 1
+  loadTickets()
 }
 
 const handleSearch = () => {

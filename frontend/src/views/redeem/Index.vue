@@ -108,7 +108,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.redeem-page { padding: 20px; }
+.redeem-page { padding: 24px; }
 .mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
 .mobile-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
 .card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
@@ -116,5 +116,5 @@ onMounted(() => {
 .card-body { padding: 10px 14px; }
 .card-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
 .card-label { color: #999; }
-@media (max-width: 767px) { .redeem-page { padding: 8px; } }
+@media (max-width: 767px) { .redeem-page { padding: 0; } }
 </style>

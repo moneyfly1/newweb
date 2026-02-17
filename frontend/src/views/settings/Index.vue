@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="settings-page">
     <n-tabs type="line" animated>
       <n-tab-pane name="profile" tab="个人资料">
         <n-card :bordered="false">
@@ -309,9 +309,11 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.settings-page { padding: 24px; }
 .telegram-status { padding: 8px 0; }
 .telegram-widget-container { min-height: 40px; }
 @media (max-width: 767px) {
+  .settings-page { padding: 0; }
   .n-card { border-radius: 10px; }
 }
 </style>

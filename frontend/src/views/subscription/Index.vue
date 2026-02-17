@@ -345,7 +345,7 @@ onMounted(() => { loadData() })
 </script>
 
 <style scoped>
-.subscription-page { max-width: 1200px; margin: 0 auto; padding: 24px; }
+.subscription-page { padding: 24px; }
 
 .empty-state { padding: 80px 0; text-align: center; }
 

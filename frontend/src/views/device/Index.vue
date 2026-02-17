@@ -30,15 +30,19 @@
             <div v-for="device in devices" :key="device.id" class="mobile-card">
               <div class="card-row">
                 <span class="label">设备名称</span>
-                <span class="value">{{ device.device_name || '未知设备' }}</span>
+                <span class="value">{{ device.device_name || device.software_name || '未知设备' }}</span>
               </div>
               <div class="card-row">
                 <span class="label">IP 地址</span>
-                <span class="value" style="font-family: monospace;">{{ device.ip || '-' }}</span>
+                <span class="value" style="font-family: monospace;">{{ device.ip_address || '-' }}</span>
+              </div>
+              <div class="card-row">
+                <span class="label">地区</span>
+                <span class="value">{{ device.region || '-' }}</span>
               </div>
               <div class="card-row">
                 <span class="label">最后访问</span>
-                <span class="value">{{ device.last_access_at ? new Date(device.last_access_at).toLocaleString('zh-CN') : '-' }}</span>
+                <span class="value">{{ device.last_access ? new Date(device.last_access).toLocaleString('zh-CN') : '-' }}</span>
               </div>
               <div class="card-actions">
                 <n-button size="small" type="error" @click="handleDelete(device.id)">删除</n-button>
@@ -63,17 +67,19 @@
 
 <script setup lang="tsx">
 import { ref, h, onMounted } from 'vue'
-import { NButton, NSpace, NTag, NTime, NEllipsis, useMessage } from 'naive-ui'
+import { NButton, NTime, useMessage } from 'naive-ui'
 import { getSubscriptionDevices, deleteDevice } from '@/api/subscription'
 import { useAppStore } from '@/stores/app'
 
 interface Device {
   id: number
   device_name: string
+  software_name: string
   user_agent: string
-  ip: string
-  fingerprint: string
-  last_access_at: string
+  ip_address: string
+  region: string
+  device_fingerprint: string
+  last_access: string
   created_at: string
 }
 
@@ -102,46 +108,34 @@ const columns = [
   {
     title: '设备名称',
     key: 'device_name',
+    minWidth: 120,
     render: (row: Device) => {
-      const deviceName = row.device_name || parseDeviceName(row.user_agent)
-      return h(
-        NSpace,
-        { align: 'center' },
-        {
-          default: () => [
-            h('span', deviceName),
-            row.device_name && h(NTag, { size: 'small', type: 'info', bordered: false }, { default: () => '已命名' })
-          ]
-        }
-      )
+      const name = row.device_name || row.software_name || parseDeviceName(row.user_agent)
+      return h('span', name)
     }
   },
   {
     title: 'IP 地址',
-    key: 'ip',
-    width: 150,
-    resizable: true
+    key: 'ip_address',
+    width: 140,
+    resizable: true,
+    render: (row: Device) => row.ip_address || '-'
   },
   {
-    title: '设备指纹',
-    key: 'fingerprint',
-    width: 180,
+    title: '地区',
+    key: 'region',
+    width: 120,
     resizable: true,
-    render: (row: Device) => {
-      return h(
-        NEllipsis,
-        { style: 'max-width: 160px' },
-        { default: () => row.fingerprint || '-' }
-      )
-    }
+    render: (row: Device) => row.region || '-'
   },
   {
     title: '最后访问',
-    key: 'last_access_at',
+    key: 'last_access',
     width: 180,
     resizable: true,
     render: (row: Device) => {
-      return h(NTime, { time: new Date(row.last_access_at), type: 'relative' })
+      if (!row.last_access) return '-'
+      return h(NTime, { time: new Date(row.last_access), type: 'relative' })
     }
   },
   {
@@ -156,7 +150,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 100,
+    width: 80,
     render: (row: Device) => {
       return h(
         NButton,
@@ -210,10 +204,17 @@ onMounted(() => {
 
 <style scoped>
 .device-page {
-  padding: 20px;
+  padding: 24px;
 }
 
 @media (max-width: 767px) {
-  .device-page { padding: 0; }
+  .device-page { padding: 0; max-width: none; }
 }
+
+.mobile-card-list { display: flex; flex-direction: column; gap: 10px; }
+.mobile-card { background: var(--bg-color, #fff); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 12px 14px; }
+.card-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
+.card-row .label { color: var(--text-color-secondary, #999); flex-shrink: 0; }
+.card-row .value { text-align: right; word-break: break-all; color: var(--text-color, #333); }
+.card-actions { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border-color, #f0f0f0); margin-top: 6px; }
 </style>

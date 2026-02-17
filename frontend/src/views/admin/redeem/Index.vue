@@ -22,6 +22,7 @@
           :bordered="false"
           @update:page="(p: number) => { pagination.page = p; loadCodes() }"
           @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; loadCodes() }"
+          @update:sorter="handleSorterChange"
         />
       </template>
 
@@ -186,6 +187,7 @@ const showGenerateModal = ref(false)
 const showCodesModal = ref(false)
 const generatedCodes = ref<string[]>([])
 const formRef = ref()
+const sortState = ref({ sort: 'id', order: 'desc' })
 
 const formData = reactive({
   type: 'balance',
@@ -298,7 +300,9 @@ const loadCodes = async () => {
   try {
     const res = await listRedeemCodes({
       page: pagination.page,
-      page_size: pagination.pageSize
+      page_size: pagination.pageSize,
+      sort: sortState.value.sort,
+      order: sortState.value.order,
     })
     codes.value = res.data.items || []
     pagination.itemCount = res.data.total || 0
@@ -307,6 +311,18 @@ const loadCodes = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSorterChange = (sorter: any) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    sortState.value.sort = sorter.columnKey
+    sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    sortState.value.sort = 'id'
+    sortState.value.order = 'desc'
+  }
+  pagination.page = 1
+  loadCodes()
 }
 
 const handleGenerate = () => {

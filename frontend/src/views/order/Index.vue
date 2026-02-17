@@ -454,7 +454,7 @@ onMounted(() => { loadOrders(); loadPaymentMethods() })
 </script>
 
 <style scoped>
-.order-container { padding: 24px; max-width: 1400px; margin: 0 auto; }
+.order-container { padding: 24px; }
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .title {
   font-size: 28px; font-weight: 600; margin: 0;

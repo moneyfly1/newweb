@@ -608,7 +608,7 @@ onMounted(() => {
 
 <style scoped>
 .invite-page {
-  padding: 20px;
+  padding: 24px;
 }
 
 .stat-card {

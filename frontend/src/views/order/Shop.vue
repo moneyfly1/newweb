@@ -537,7 +537,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.shop-container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+.shop-container { padding: 24px; }
 .header { text-align: center; margin-bottom: 16px; }
 .title {
   font-size: 32px; font-weight: 600; margin: 0 0 8px 0;

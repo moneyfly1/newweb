@@ -632,7 +632,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.dashboard { max-width: 1200px; margin: 0 auto; }
+.dashboard { }
 
 .welcome-banner {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

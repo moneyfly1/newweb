@@ -28,6 +28,7 @@
           :bordered="false"
           @update:page="(p) => { pagination.page = p; fetchData() }"
           @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+          @update:sorter="handleSorterChange"
         />
       </template>
 
@@ -195,6 +196,7 @@ const tableData = ref([])
 const formRef = ref(null)
 const isEdit = ref(false)
 const editId = ref(null)
+const sortState = ref({ sort: 'id', order: 'desc' })
 
 const typeOptions = [
   { label: '折扣（百分比）', value: 'discount' },
@@ -385,7 +387,9 @@ const fetchData = async () => {
   try {
     const res = await listAdminCoupons({
       page: pagination.page,
-      page_size: pagination.pageSize
+      page_size: pagination.pageSize,
+      sort: sortState.value.sort,
+      order: sortState.value.order,
     })
     tableData.value = res.data.items || []
     pagination.itemCount = res.data.total || 0
@@ -394,6 +398,18 @@ const fetchData = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSorterChange = (sorter) => {
+  if (sorter && sorter.columnKey && sorter.order) {
+    sortState.value.sort = sorter.columnKey
+    sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  } else {
+    sortState.value.sort = 'id'
+    sortState.value.order = 'desc'
+  }
+  pagination.page = 1
+  fetchData()
 }
 
 const handlePageChange = (page) => {

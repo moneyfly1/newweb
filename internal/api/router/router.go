@@ -120,6 +120,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			orders.GET("", handlers.ListOrders)
 			orders.POST("", handlers.CreateOrder)
 			orders.POST("/custom", handlers.CreateCustomOrder)
+			orders.POST("/upgrade/calc", handlers.CalcUpgradePrice)
+			orders.POST("/upgrade", handlers.CreateUpgradeOrder)
 			orders.POST("/:orderNo/pay", handlers.PayOrder)
 			orders.POST("/:orderNo/cancel", handlers.CancelOrder)
 			orders.GET("/:orderNo/status", handlers.GetOrderStatus)

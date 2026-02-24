@@ -40,10 +40,19 @@ func ListOrders(c *gin.Context) {
 		item := OrderItem{Order: o}
 		if o.PackageID == 0 && o.ExtraData != nil {
 			var extra map[string]interface{}
-			if json.Unmarshal([]byte(*o.ExtraData), &extra) == nil && extra["type"] == "custom_package" {
-				devices, _ := extra["devices"].(float64)
-				months, _ := extra["months"].(float64)
-				item.PackageName = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
+			if json.Unmarshal([]byte(*o.ExtraData), &extra) == nil {
+				if extra["type"] == "custom_package" {
+					devices, _ := extra["devices"].(float64)
+					months, _ := extra["months"].(float64)
+					item.PackageName = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
+				} else if extra["type"] == "subscription_upgrade" {
+					addDevices, _ := extra["add_devices"].(float64)
+					extendMonths, _ := extra["extend_months"].(float64)
+					item.PackageName = fmt.Sprintf("订阅升级: +%d设备", int(addDevices))
+					if int(extendMonths) > 0 {
+						item.PackageName = fmt.Sprintf("订阅升级: +%d设备, 续期%d月", int(addDevices), int(extendMonths))
+					}
+				}
 			}
 		} else if name, ok := pkgNameCache[o.PackageID]; ok {
 			item.PackageName = name
@@ -183,19 +192,31 @@ func PayOrder(c *gin.Context) {
 		var durationDays int
 		var pkgName string
 
+		isUpgradeOrder := false
+		var upgradeAddDevices int
+		var upgradeExtendMonths int
 		if order.PackageID == 0 && order.ExtraData != nil {
-			// Custom package
 			var extra map[string]interface{}
 			if err := json.Unmarshal([]byte(*order.ExtraData), &extra); err != nil {
 				tx.Rollback()
 				utils.InternalError(c, "订单数据异常")
 				return
 			}
-			devices, _ := extra["devices"].(float64)
-			months, _ := extra["months"].(float64)
-			deviceLimit = int(devices)
-			durationDays = int(months) * 30
-			pkgName = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
+			if extra["type"] == "subscription_upgrade" {
+				isUpgradeOrder = true
+				if v, ok := extra["add_devices"].(float64); ok {
+					upgradeAddDevices = int(v)
+				}
+				if v, ok := extra["extend_months"].(float64); ok {
+					upgradeExtendMonths = int(v)
+				}
+			} else {
+				devices, _ := extra["devices"].(float64)
+				months, _ := extra["months"].(float64)
+				deviceLimit = int(devices)
+				durationDays = int(months) * 30
+				pkgName = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
+			}
 		} else {
 			var pkg models.Package
 			if err := tx.First(&pkg, order.PackageID).Error; err != nil {
@@ -210,6 +231,11 @@ func PayOrder(c *gin.Context) {
 
 		var sub models.Subscription
 		if err := tx.Where("user_id = ?", userID).First(&sub).Error; err != nil {
+			if isUpgradeOrder {
+				tx.Rollback()
+				utils.BadRequest(c, "升级订单需要已有订阅")
+				return
+			}
 			sub = models.Subscription{
 				UserID:          userID,
 				SubscriptionURL: utils.GenerateRandomString(32),
@@ -228,25 +254,47 @@ func PayOrder(c *gin.Context) {
 				return
 			}
 		} else {
-			newExpire := sub.ExpireTime
-			if newExpire.Before(time.Now()) {
-				newExpire = time.Now()
-			}
-			newExpire = newExpire.AddDate(0, 0, durationDays)
-			updates := map[string]interface{}{
-				"device_limit": deviceLimit,
-				"expire_time":  newExpire,
-				"is_active":    true,
-				"status":       "active",
-			}
-			if order.PackageID > 0 {
-				pkgID := int64(order.PackageID)
-				updates["package_id"] = &pkgID
-			}
-			if err := tx.Model(&sub).Updates(updates).Error; err != nil {
-				tx.Rollback()
-				utils.InternalError(c, "续期订阅失败")
-				return
+			if isUpgradeOrder {
+				pkgName = fmt.Sprintf("订阅升级: +%d设备", upgradeAddDevices)
+				if upgradeExtendMonths > 0 {
+					pkgName = fmt.Sprintf("订阅升级: +%d设备, 续期%d月", upgradeAddDevices, upgradeExtendMonths)
+				}
+				newLimit := sub.DeviceLimit + upgradeAddDevices
+				newExpire := sub.ExpireTime
+				if upgradeExtendMonths > 0 {
+					newExpire = newExpire.AddDate(0, upgradeExtendMonths, 0)
+				}
+				if err := tx.Model(&sub).Updates(map[string]interface{}{
+					"device_limit": newLimit,
+					"expire_time":  newExpire,
+					"is_active":    true,
+					"status":       "active",
+				}).Error; err != nil {
+					tx.Rollback()
+					utils.InternalError(c, "订阅升级失败")
+					return
+				}
+			} else {
+				newExpire := sub.ExpireTime
+				if newExpire.Before(time.Now()) {
+					newExpire = time.Now()
+				}
+				newExpire = newExpire.AddDate(0, 0, durationDays)
+				updates := map[string]interface{}{
+					"device_limit": deviceLimit,
+					"expire_time":  newExpire,
+					"is_active":    true,
+					"status":       "active",
+				}
+				if order.PackageID > 0 {
+					pkgID := int64(order.PackageID)
+					updates["package_id"] = &pkgID
+				}
+				if err := tx.Model(&sub).Updates(updates).Error; err != nil {
+					tx.Rollback()
+					utils.InternalError(c, "续期订阅失败")
+					return
+				}
 			}
 		}
 		if err := tx.Commit().Error; err != nil {
@@ -315,10 +363,19 @@ func GetOrderStatus(c *gin.Context) {
 	// Get package name
 	if order.PackageID == 0 && order.ExtraData != nil {
 		var extra map[string]interface{}
-		if json.Unmarshal([]byte(*order.ExtraData), &extra) == nil && extra["type"] == "custom_package" {
-			devices, _ := extra["devices"].(float64)
-			months, _ := extra["months"].(float64)
-			result["package_name"] = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
+		if json.Unmarshal([]byte(*order.ExtraData), &extra) == nil {
+			if extra["type"] == "custom_package" {
+				devices, _ := extra["devices"].(float64)
+				months, _ := extra["months"].(float64)
+				result["package_name"] = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
+			} else if extra["type"] == "subscription_upgrade" {
+				addDevices, _ := extra["add_devices"].(float64)
+				extendMonths, _ := extra["extend_months"].(float64)
+				result["package_name"] = fmt.Sprintf("订阅升级: +%d设备", int(addDevices))
+				if int(extendMonths) > 0 {
+					result["package_name"] = fmt.Sprintf("订阅升级: +%d设备, 续期%d月", int(addDevices), int(extendMonths))
+				}
+			}
 		}
 	} else {
 		var pkg models.Package
@@ -437,6 +494,171 @@ func CreateCustomOrder(c *gin.Context) {
 	db.Create(&order)
 
 	pkgName := fmt.Sprintf("自定义套餐 (%d设备/%d月)", req.Devices, req.Months)
+	user := c.MustGet("user").(*models.User)
+	go services.NotifyUser(userID, "new_order", map[string]string{
+		"order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
+	})
+	go services.NotifyAdmin("new_order", map[string]string{
+		"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
+	})
+
+	utils.Success(c, order)
+}
+
+// CalcUpgradePrice 计算「增加设备 + 可选续期」应付金额（按剩余时间与续期分别计费）
+// 单价：custom_package_price_per_device_year 元/设备/年（如 40）
+// - 仅增加设备：新增设备数 × 单价 × (剩余天数/365)
+// - 仅续期：原设备数 × 单价 × (续期月数/12)
+// - 增加设备且续期：原设备续期费 + 新增设备 × 单价 × (剩余天数/365 + 续期月数/12)
+func CalcUpgradePrice(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	db := database.GetDB()
+	var sub models.Subscription
+	if err := db.Where("user_id = ?", userID).First(&sub).Error; err != nil {
+		utils.NotFound(c, "暂无有效订阅")
+		return
+	}
+	var req struct {
+		AddDevices   int `json:"add_devices" binding:"required,min=1"`
+		ExtendMonths int `json:"extend_months"` // 0 表示不续期
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	pricePerDeviceYear := utils.GetFloatSetting("custom_package_price_per_device_year", 40)
+	now := time.Now()
+	remainingDays := 0.0
+	if sub.ExpireTime.After(now) {
+		remainingDays = math.Max(0, sub.ExpireTime.Sub(now).Hours()/24)
+	}
+
+	currentDevices := sub.DeviceLimit
+	currentExpire := sub.ExpireTime
+
+	var feeExtend float64
+	if req.ExtendMonths > 0 {
+		feeExtend = float64(currentDevices) * pricePerDeviceYear * (float64(req.ExtendMonths) / 12.0)
+		feeExtend = math.Round(feeExtend*100) / 100
+	}
+
+	remainingYears := remainingDays / 365.0
+	extendYears := float64(req.ExtendMonths) / 12.0
+	totalYearsForNewDevices := remainingYears + extendYears
+	feeNewDevices := float64(req.AddDevices) * pricePerDeviceYear * totalYearsForNewDevices
+	feeNewDevices = math.Round(feeNewDevices*100) / 100
+
+	total := feeExtend + feeNewDevices
+	total = math.Round(total*100) / 100
+
+	utils.Success(c, gin.H{
+		"price_per_device_year": pricePerDeviceYear,
+		"current_device_limit":  currentDevices,
+		"current_expire_time":   currentExpire.Format("2006-01-02 15:04:05"),
+		"remaining_days":        int(math.Ceil(remainingDays)),
+		"add_devices":           req.AddDevices,
+		"extend_months":         req.ExtendMonths,
+		"fee_extend":            feeExtend,
+		"fee_new_devices":       feeNewDevices,
+		"total":                 total,
+	})
+}
+
+// CreateUpgradeOrder 创建「增加设备 + 可选续期」订单
+func CreateUpgradeOrder(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	db := database.GetDB()
+	var sub models.Subscription
+	if err := db.Where("user_id = ?", userID).First(&sub).Error; err != nil {
+		utils.NotFound(c, "暂无有效订阅")
+		return
+	}
+	var req struct {
+		AddDevices   int    `json:"add_devices" binding:"required,min=1"`
+		ExtendMonths int    `json:"extend_months"`
+		CouponCode   string `json:"coupon_code"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	pricePerDeviceYear := utils.GetFloatSetting("custom_package_price_per_device_year", 40)
+	now := time.Now()
+	remainingDays := 0.0
+	if sub.ExpireTime.After(now) {
+		remainingDays = math.Max(0, sub.ExpireTime.Sub(now).Hours()/24)
+	}
+
+	var feeExtend float64
+	if req.ExtendMonths > 0 {
+		feeExtend = float64(sub.DeviceLimit) * pricePerDeviceYear * (float64(req.ExtendMonths) / 12.0)
+		feeExtend = math.Round(feeExtend*100) / 100
+	}
+	remainingYears := remainingDays / 365.0
+	extendYears := float64(req.ExtendMonths) / 12.0
+	feeNewDevices := float64(req.AddDevices) * pricePerDeviceYear * (remainingYears + extendYears)
+	feeNewDevices = math.Round(feeNewDevices*100) / 100
+	basePrice := feeExtend + feeNewDevices
+	basePrice = math.Round(basePrice*100) / 100
+
+	var couponDiscount float64
+	var couponID *int64
+	if req.CouponCode != "" {
+		var coupon models.Coupon
+		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
+			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil) {
+				switch coupon.Type {
+				case "discount":
+					couponDiscount = basePrice * coupon.DiscountValue / 100
+				case "fixed":
+					couponDiscount = coupon.DiscountValue
+				}
+				if couponDiscount > basePrice {
+					couponDiscount = basePrice
+				}
+				cid := int64(coupon.ID)
+				couponID = &cid
+			}
+		}
+	}
+	finalPrice := basePrice - couponDiscount
+	if finalPrice < 0 {
+		finalPrice = 0
+	}
+	finalPrice = math.Round(finalPrice*100) / 100
+	totalDiscount := basePrice - finalPrice
+
+	extraData, _ := json.Marshal(map[string]interface{}{
+		"type":                 "subscription_upgrade",
+		"add_devices":          req.AddDevices,
+		"extend_months":        req.ExtendMonths,
+		"current_device_limit": sub.DeviceLimit,
+		"current_expire_time":  sub.ExpireTime.Format(time.RFC3339),
+	})
+	extraStr := string(extraData)
+
+	orderNo := fmt.Sprintf("ORD%d%s", time.Now().Unix(), utils.GenerateRandomString(6))
+	expireTime := time.Now().Add(30 * time.Minute)
+	order := models.Order{
+		OrderNo:        orderNo,
+		UserID:         userID,
+		PackageID:      0,
+		Amount:         basePrice,
+		Status:         "pending",
+		CouponID:       couponID,
+		DiscountAmount: &totalDiscount,
+		FinalAmount:    &finalPrice,
+		ExpireTime:     &expireTime,
+		ExtraData:      &extraStr,
+	}
+	db.Create(&order)
+
+	pkgName := fmt.Sprintf("订阅升级: +%d设备", req.AddDevices)
+	if req.ExtendMonths > 0 {
+		pkgName = fmt.Sprintf("订阅升级: +%d设备, 续期%d月", req.AddDevices, req.ExtendMonths)
+	}
 	user := c.MustGet("user").(*models.User)
 	go services.NotifyUser(userID, "new_order", map[string]string{
 		"order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),

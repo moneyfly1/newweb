@@ -29,6 +29,58 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 		if err := json.Unmarshal([]byte(*order.ExtraData), &extra); err != nil {
 			return
 		}
+		if extra["type"] == "subscription_upgrade" {
+			var sub models.Subscription
+			if err := db.Where("user_id = ?", order.UserID).First(&sub).Error; err != nil {
+				return
+			}
+			addDevices := 0
+			extendMonths := 0
+			if v, ok := extra["add_devices"].(float64); ok {
+				addDevices = int(v)
+			}
+			if v, ok := extra["extend_months"].(float64); ok {
+				extendMonths = int(v)
+			}
+			newLimit := sub.DeviceLimit + addDevices
+			newExpire := sub.ExpireTime
+			if extendMonths > 0 {
+				newExpire = newExpire.AddDate(0, extendMonths, 0)
+			}
+			db.Model(&sub).Updates(map[string]interface{}{
+				"device_limit": newLimit,
+				"expire_time":  newExpire,
+				"is_active":    true,
+				"status":       "active",
+			})
+			pkgName = fmt.Sprintf("订阅升级: +%d设备", addDevices)
+			if extendMonths > 0 {
+				pkgName = fmt.Sprintf("订阅升级: +%d设备, 续期%d月", addDevices, extendMonths)
+			}
+			var user models.User
+			if db.First(&user, order.UserID).Error == nil {
+				payAmount := fmt.Sprintf("%.2f", order.Amount)
+				if order.FinalAmount != nil {
+					payAmount = fmt.Sprintf("%.2f", *order.FinalAmount)
+				}
+				var subURL string
+				var userSub models.Subscription
+				if db.Where("user_id = ?", order.UserID).First(&userSub).Error == nil {
+					if siteURL := GetSiteURL(); siteURL != "" {
+						subURL = siteURL + "/api/v1/subscribe/" + userSub.SubscriptionURL
+					}
+				}
+				emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
+					"order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL,
+				})
+				go QueueEmail(user.Email, emailSubject, emailBody, "payment_success")
+				go NotifyAdmin("payment_success", map[string]string{
+					"username": user.Username, "order_no": order.OrderNo, "package_name": pkgName, "amount": payAmount,
+				})
+			}
+			distributeInviteCommission(db, order)
+			return
+		}
 		if extra["type"] != "custom_package" {
 			return
 		}

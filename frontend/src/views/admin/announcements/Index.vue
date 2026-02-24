@@ -264,7 +264,7 @@ const loadData = async () => {
 
 const fetchData = loadData
 
-const handleSorterChange = (sorter) => {
+const handleSorterChange = (sorter: { columnKey?: string; order?: 'ascend' | 'descend' } | null) => {
   if (sorter && sorter.columnKey && sorter.order) {
     sortState.value.sort = sorter.columnKey
     sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'

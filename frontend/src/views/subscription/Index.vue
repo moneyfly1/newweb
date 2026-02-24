@@ -130,6 +130,166 @@
             </n-space>
           </n-card>
 
+          <!-- 升级订阅：增加设备 / 续期 -->
+          <n-card :bordered="false" class="section-card">
+            <template #header><span class="section-title">升级订阅</span></template>
+            <n-form label-placement="left" label-width="120" :disabled="upgradeSubmitting">
+              <n-form-item label="增加设备数">
+                <n-input-number v-model:value="upgradeAddDevices" :min="1" :max="50" style="width: 140px;" />
+              </n-form-item>
+              <n-form-item label="续期月数（0=不续期）">
+                <n-input-number v-model:value="upgradeExtendMonths" :min="0" :max="120" style="width: 140px;" />
+              </n-form-item>
+              <n-form-item v-if="upgradeResult" label="费用明细">
+                <div class="upgrade-detail">
+                  <template v-if="upgradeResult.fee_extend > 0">
+                    <span>原设备续期：¥{{ upgradeResult.fee_extend.toFixed(2) }}</span>
+                    <br />
+                  </template>
+                  <span>新增设备：¥{{ upgradeResult.fee_new_devices.toFixed(2) }}</span>
+                  <div class="upgrade-total">应付：¥{{ upgradeResult.total.toFixed(2) }}</div>
+                </div>
+              </n-form-item>
+              <n-form-item label="">
+                <n-space>
+                  <n-button type="primary" :loading="upgradeCalcLoading" @click="handleCalcUpgrade">计算金额</n-button>
+                  <n-button type="success" :loading="upgradeSubmitting" :disabled="!upgradeResult || upgradeResult.total <= 0" @click="handleOpenUpgradePay">去支付</n-button>
+                </n-space>
+              </n-form-item>
+            </n-form>
+          </n-card>
+
+    <!-- 升级支付弹窗：支付方式、混合支付、确认支付 -->
+    <n-modal
+      v-model:show="showUpgradePayModal"
+      preset="card"
+      title="确认支付 - 升级订阅"
+      style="width: 520px; max-width: 92vw;"
+      :bordered="false"
+      :segmented="{ content: true }"
+    >
+      <n-space vertical :size="16">
+        <n-descriptions :column="1" bordered>
+          <n-descriptions-item label="升级内容">
+            增加 {{ upgradeAddDevices }} 台设备<span v-if="upgradeExtendMonths > 0">，续期 {{ upgradeExtendMonths }} 月</span>
+          </n-descriptions-item>
+          <n-descriptions-item label="应付金额">
+            <span style="color: #18a058; font-size: 20px; font-weight: bold;">¥{{ (upgradeOrderInfo?.final_amount ?? upgradeOrderInfo?.amount ?? 0).toFixed(2) }}</span>
+          </n-descriptions-item>
+          <n-descriptions-item label="账户余额">
+            <span :style="{ color: (userBalance ?? 0) >= (upgradeOrderInfo?.final_amount ?? upgradeOrderInfo?.amount ?? 0) ? '#18a058' : '#e03050' }">
+              ¥{{ (userBalance ?? 0).toFixed(2) }}
+            </span>
+          </n-descriptions-item>
+          <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="余额抵扣">
+            <span style="color: #18a058;">-¥{{ balanceDeductAmount.toFixed(2) }}</span>
+          </n-descriptions-item>
+          <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="还需支付">
+            <span style="color: #e03050; font-size: 18px; font-weight: bold;">¥{{ remainingAmount.toFixed(2) }}</span>
+          </n-descriptions-item>
+        </n-descriptions>
+
+        <div class="payment-method">
+          <div class="pm-label">支付方式</div>
+          <n-radio-group v-model:value="paymentMethod">
+            <n-space vertical :size="8">
+              <n-radio v-if="balanceEnabled" value="balance" :disabled="(userBalance ?? 0) <= 0">
+                余额支付 (¥{{ (userBalance ?? 0).toFixed(2) }})
+                <span v-if="!canFullBalance && (userBalance ?? 0) > 0" style="color: #e03050; font-size: 12px; margin-left: 4px;">余额不足</span>
+              </n-radio>
+              <n-radio v-for="pm in paymentMethods" :key="pm.id" :value="'pm_' + pm.id">
+                {{ getPaymentLabel(pm.pay_type) }}
+              </n-radio>
+            </n-space>
+          </n-radio-group>
+          <div v-if="paymentMethod !== 'balance' && (userBalance ?? 0) > 0 && balanceEnabled" style="margin-top: 8px;">
+            <n-checkbox v-model:checked="useBalanceDeduct">
+              使用余额抵扣 ¥{{ Math.min(userBalance ?? 0, finalPayAmount).toFixed(2) }}
+            </n-checkbox>
+            <div v-if="useBalanceDeduct" style="margin-top: 4px; font-size: 13px; color: #666;">
+              余额抵扣：¥{{ balanceDeductAmount.toFixed(2) }}，还需支付：<span style="color: #e03050; font-weight: 600;">¥{{ remainingAmount.toFixed(2) }}</span>
+            </div>
+          </div>
+        </div>
+      </n-space>
+
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showUpgradePayModal = false">取消</n-button>
+          <n-button type="primary" :loading="paying" @click="handleUpgradePay">确认支付</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <!-- 支付二维码弹窗 -->
+    <n-modal
+      v-model:show="showPayQrModal"
+      preset="card"
+      title="扫码支付"
+      style="width: 400px; max-width: 92vw;"
+      :bordered="false"
+      :mask-closable="false"
+      @after-leave="stopPayPolling"
+    >
+      <div v-if="isMobile" style="text-align: center;">
+        <p style="margin-bottom: 16px; color: #666;">请点击下方按钮完成支付</p>
+        <n-button type="primary" size="large" block tag="a" :href="mobilePayUrl" target="_blank">
+          打开支付App付款
+        </n-button>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后请返回此页面</p>
+        <n-spin v-if="payPollingStatus" size="small" style="margin-top: 8px;" />
+      </div>
+      <div v-else style="text-align: center;">
+        <p style="margin-bottom: 16px; color: #666;">请使用支付宝扫描下方二维码完成支付</p>
+        <canvas ref="payQrCanvas" style="margin: 0 auto;"></canvas>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后将自动刷新...</p>
+        <n-spin v-if="payPollingStatus" size="small" style="margin-top: 8px;" />
+      </div>
+      <template #footer>
+        <n-space justify="center">
+          <n-button @click="showPayQrModal = false">取消支付</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <!-- 加密货币支付弹窗 -->
+    <n-modal
+      v-model:show="showCryptoModal"
+      preset="card"
+      title="加密货币支付"
+      style="width: 480px; max-width: 92vw;"
+      :bordered="false"
+      :mask-closable="false"
+      @after-leave="stopPayPolling"
+    >
+      <div v-if="cryptoInfo" style="text-align: center;">
+        <p style="margin-bottom: 16px; color: #666;">请转账以下金额到指定钱包地址</p>
+        <n-descriptions :column="1" bordered size="small" style="text-align: left;">
+          <n-descriptions-item label="网络">{{ cryptoInfo.network }}</n-descriptions-item>
+          <n-descriptions-item label="币种">{{ cryptoInfo.currency }}</n-descriptions-item>
+          <n-descriptions-item label="转账金额">
+            <span style="color: #e03050; font-size: 18px; font-weight: bold;">{{ cryptoInfo.amount_usdt }} {{ cryptoInfo.currency }}</span>
+          </n-descriptions-item>
+          <n-descriptions-item label="收款地址">
+            <div style="word-break: break-all; font-family: monospace; font-size: 13px;">{{ cryptoInfo.wallet_address }}</div>
+          </n-descriptions-item>
+        </n-descriptions>
+        <div style="margin-top: 16px;">
+          <canvas ref="cryptoQrCanvas" style="margin: 0 auto;"></canvas>
+        </div>
+        <n-alert type="warning" :bordered="false" style="margin-top: 12px; text-align: left;" size="small">
+          请务必确认网络和币种正确，转账错误无法找回。转账完成后请点击下方按钮，管理员将在确认到账后为您开通服务。
+        </n-alert>
+        <n-spin v-if="payPollingStatus" size="small" style="margin-top: 8px;" />
+      </div>
+      <template #footer>
+        <n-space justify="center">
+          <n-button @click="showCryptoModal = false">取消</n-button>
+          <n-button type="primary" @click="handleCryptoTransferred">我已转账</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
           <!-- Action Buttons -->
           <div class="action-section">
             <n-space :size="16" :wrap="true">
@@ -177,7 +337,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import QRCode from 'qrcode'
 import {
@@ -189,9 +349,15 @@ import {
   getSubscription, getSubscriptionDevices, deleteDevice,
   resetSubscription, convertToBalance, sendSubscriptionEmail
 } from '@/api/subscription'
+import { calcUpgradePrice, createUpgradeOrder, payOrder, createPayment, getOrderStatus } from '@/api/order'
+import { getPaymentMethods } from '@/api/common'
+import { getDashboardInfo } from '@/api/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { safeRedirect } from '@/utils/security'
+import { useRouter } from 'vue-router'
 
 const message = useMessage()
+const router = useRouter()
 
 const subscription = ref<any>(null)
 const devices = ref<any[]>([])
@@ -206,6 +372,42 @@ const selectedFormat = ref('clash')
 const showQrModal = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const qrTitle = ref('')
+
+// 升级订阅
+const upgradeAddDevices = ref(1)
+const upgradeExtendMonths = ref(0)
+const upgradeResult = ref<{ fee_extend: number; fee_new_devices: number; total: number } | null>(null)
+const upgradeCalcLoading = ref(false)
+const upgradeSubmitting = ref(false)
+const upgradeOrderInfo = ref<any>(null)
+
+// 支付弹窗与支付方式（与 Shop 一致）
+const showUpgradePayModal = ref(false)
+const paymentMethod = ref('balance')
+const paymentMethods = ref<any[]>([])
+const balanceEnabled = ref(true)
+const userBalance = ref<number>(0)
+const useBalanceDeduct = ref(false)
+const paying = ref(false)
+const showPayQrModal = ref(false)
+const payQrCanvas = ref<HTMLCanvasElement | null>(null)
+const payPollingStatus = ref(false)
+const mobilePayUrl = ref('')
+const isMobile = ref(typeof window !== 'undefined' && window.innerWidth <= 767)
+const showCryptoModal = ref(false)
+const cryptoInfo = ref<any>(null)
+const cryptoOrderNo = ref('')
+const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
+let payPollTimer: ReturnType<typeof setInterval> | null = null
+
+const finalPayAmount = computed(() => upgradeOrderInfo.value?.final_amount ?? upgradeOrderInfo.value?.amount ?? 0)
+const canFullBalance = computed(() => (userBalance.value ?? 0) >= finalPayAmount.value)
+const balanceDeductAmount = computed(() => {
+  if (paymentMethod.value === 'balance') return finalPayAmount.value
+  if (useBalanceDeduct.value) return Math.min(userBalance.value ?? 0, finalPayAmount.value)
+  return 0
+})
+const remainingAmount = computed(() => Math.max(0, finalPayAmount.value - balanceDeductAmount.value))
 
 const formats = [
   { type: 'clash', name: 'Clash', icon: '\u2694\uFE0F', desc: 'Clash 系列客户端' },
@@ -304,12 +506,74 @@ const showQrCode = async (url: string, label: string) => {
   }
 }
 
+const getPaymentLabel = (payType: string) => {
+  const labels: Record<string, string> = {
+    epay: '在线支付',
+    alipay: '支付宝',
+    wxpay: '微信支付',
+    qqpay: 'QQ支付',
+    stripe: 'Stripe (国际卡)',
+    crypto: '加密货币 (USDT)',
+  }
+  return labels[payType] || payType
+}
+
+const isQrCodeUrl = (url: string) => {
+  return url.includes('qr.alipay.com') || (url.startsWith('https://qr.') && url.length < 200)
+}
+
+const fetchUserBalance = async () => {
+  try {
+    const res = await getDashboardInfo()
+    userBalance.value = res.data?.balance ?? 0
+  } catch {}
+}
+
+const loadPaymentMethods = async () => {
+  try {
+    const pmRes = await getPaymentMethods()
+    const pmData = pmRes.data || {}
+    paymentMethods.value = pmData.methods || []
+    balanceEnabled.value = pmData.balance_enabled !== false
+    if (!balanceEnabled.value && paymentMethods.value.length > 0) {
+      paymentMethod.value = 'pm_' + paymentMethods.value[0].id
+    }
+  } catch {}
+}
+
+const startPayPolling = (orderNo: string) => {
+  payPollingStatus.value = true
+  payPollTimer = setInterval(async () => {
+    try {
+      const res = await getOrderStatus(orderNo)
+      if (res.data?.status === 'paid') {
+        stopPayPolling()
+        showPayQrModal.value = false
+        showCryptoModal.value = false
+        message.success('支付成功，订阅已更新')
+        await loadData()
+      }
+    } catch {}
+  }, 3000)
+}
+
+const stopPayPolling = () => {
+  payPollingStatus.value = false
+  if (payPollTimer) {
+    clearInterval(payPollTimer)
+    payPollTimer = null
+  }
+}
+
 const loadData = async () => {
   loading.value = true
   try {
     const [subRes, devRes] = await Promise.all([getSubscription(), getSubscriptionDevices()])
     subscription.value = subRes.data
     devices.value = devRes.data || []
+    if (subscription.value) {
+      await Promise.all([fetchUserBalance(), loadPaymentMethods()])
+    }
   } catch (e: any) {
     if (e?.response?.status !== 404) message.error(e.message || '加载数据失败')
   } finally { loading.value = false }
@@ -341,7 +605,127 @@ const handleSendEmail = async () => {
   finally { sendingEmail.value = false }
 }
 
+const handleCalcUpgrade = async () => {
+  upgradeCalcLoading.value = true
+  upgradeResult.value = null
+  try {
+    const res: any = await calcUpgradePrice({
+      add_devices: upgradeAddDevices.value,
+      extend_months: upgradeExtendMonths.value || 0
+    })
+    const d = res?.data ?? res
+    if (d && typeof d.total === 'number') {
+      upgradeResult.value = {
+        fee_extend: d.fee_extend ?? 0,
+        fee_new_devices: d.fee_new_devices ?? 0,
+        total: d.total ?? 0
+      }
+    }
+  } catch (e: any) {
+    message.error(e.message || '计算失败')
+  } finally {
+    upgradeCalcLoading.value = false
+  }
+}
+
+const handleOpenUpgradePay = async () => {
+  if (!upgradeResult.value || upgradeResult.value.total <= 0) {
+    message.warning('请先计算金额')
+    return
+  }
+  upgradeSubmitting.value = true
+  try {
+    const res: any = await createUpgradeOrder({
+      add_devices: upgradeAddDevices.value,
+      extend_months: upgradeExtendMonths.value || 0
+    })
+    upgradeOrderInfo.value = res.data
+    useBalanceDeduct.value = false
+    if (balanceEnabled.value) paymentMethod.value = 'balance'
+    else if (paymentMethods.value.length > 0) paymentMethod.value = 'pm_' + paymentMethods.value[0].id
+    showUpgradePayModal.value = true
+  } catch (e: any) {
+    message.error(e.message || '创建订单失败')
+  } finally {
+    upgradeSubmitting.value = false
+  }
+}
+
+const handleUpgradePay = async () => {
+  if (!upgradeOrderInfo.value) return
+  paying.value = true
+  try {
+    if (paymentMethod.value === 'balance') {
+      await payOrder(upgradeOrderInfo.value.order_no, { payment_method: 'balance' })
+      message.success('支付成功，订阅已更新')
+      showUpgradePayModal.value = false
+      await loadData()
+    } else if (paymentMethod.value.startsWith('pm_')) {
+      const pmId = parseInt(paymentMethod.value.replace('pm_', ''))
+      const paymentData: any = { order_id: upgradeOrderInfo.value.id, payment_method_id: pmId, is_mobile: isMobile.value }
+      if (useBalanceDeduct.value && balanceDeductAmount.value > 0) {
+        paymentData.use_balance = true
+        paymentData.balance_amount = balanceDeductAmount.value
+      }
+      const res = await createPayment(paymentData)
+      const data = res.data
+
+      if (data?.pay_type === 'crypto' && data?.crypto_info) {
+        showUpgradePayModal.value = false
+        cryptoInfo.value = data.crypto_info
+        cryptoOrderNo.value = data.order_no
+        showCryptoModal.value = true
+        startPayPolling(data.order_no)
+        return
+      }
+
+      if (data?.payment_url) {
+        showUpgradePayModal.value = false
+        if (isMobile.value) {
+          mobilePayUrl.value = data.payment_url
+          showPayQrModal.value = true
+          startPayPolling(upgradeOrderInfo.value.order_no)
+        } else if (isQrCodeUrl(data.payment_url)) {
+          showPayQrModal.value = true
+          await nextTick()
+          if (payQrCanvas.value) {
+            QRCode.toCanvas(payQrCanvas.value, data.payment_url, { width: 240, margin: 2 })
+          }
+          startPayPolling(upgradeOrderInfo.value.order_no)
+        } else {
+          safeRedirect(data.payment_url)
+        }
+      } else {
+        message.info('支付已创建，请等待处理')
+        showUpgradePayModal.value = false
+        await loadData()
+      }
+    }
+  } catch (e: any) {
+    message.error(e.message || '支付失败')
+  } finally {
+    paying.value = false
+  }
+}
+
+const handleCryptoTransferred = () => {
+  message.success('已记录，管理员确认到账后将为您开通服务')
+  showCryptoModal.value = false
+  stopPayPolling()
+  loadData()
+}
+
+watch(showCryptoModal, async (val) => {
+  if (val && cryptoInfo.value?.wallet_address) {
+    await nextTick()
+    if (cryptoQrCanvas.value) {
+      QRCode.toCanvas(cryptoQrCanvas.value, cryptoInfo.value.wallet_address, { width: 200, margin: 2 })
+    }
+  }
+})
+
 onMounted(() => { loadData() })
+onUnmounted(() => { stopPayPolling() })
 </script>
 
 <style scoped>
@@ -401,6 +785,13 @@ onMounted(() => { loadData() })
 .device-name { font-size: 14px; font-weight: 500; color: #333; margin-bottom: 2px; }
 .device-meta { font-size: 12px; color: #999; }
 .sep { margin: 0 6px; }
+
+.upgrade-detail { font-size: 14px; color: #333; }
+.upgrade-detail span { margin-right: 12px; }
+.upgrade-total { margin-top: 8px; font-weight: 600; font-size: 16px; color: #18a058; }
+
+.payment-method { padding: 4px 0; }
+.pm-label { font-size: 14px; font-weight: 500; margin-bottom: 8px; color: var(--text-color, #333); }
 
 .action-section { margin-top: 8px; padding-top: 20px; border-top: 1px solid #e8e8e8; }
 

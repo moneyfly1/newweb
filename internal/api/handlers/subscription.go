@@ -653,25 +653,29 @@ func ConvertToBalance(c *gin.Context) {
 		utils.NotFound(c, "暂无有效订阅")
 		return
 	}
-	if sub.PackageID == nil {
-		utils.BadRequest(c, "无法计算订阅价值")
-		return
-	}
-	var pkg models.Package
-	if err := db.First(&pkg, *sub.PackageID).Error; err != nil {
-		utils.BadRequest(c, "套餐不存在")
-		return
-	}
 	remaining := time.Until(sub.ExpireTime).Hours() / 24
 	if remaining <= 0 {
 		utils.BadRequest(c, "订阅已过期")
 		return
 	}
-	if pkg.DurationDays <= 0 {
-		utils.BadRequest(c, "套餐天数配置异常")
+
+	// Convert remaining subscription time to balance.
+	//
+	// Prefer the unified pricing model used by custom packages / upgrades:
+	// price_per_device_year (default 40) × device_limit × (remaining_days / 365)
+	// This works even when PackageID is nil (custom package) or when device_limit
+	// has been upgraded beyond the original package.
+	pricePerDeviceYear := utils.GetFloatSetting("custom_package_price_per_device_year", 40)
+	if pricePerDeviceYear <= 0 {
+		utils.BadRequest(c, "无法计算订阅价值")
 		return
 	}
-	value := math.Round(pkg.Price/float64(pkg.DurationDays)*remaining*100) / 100
+	value := math.Round(float64(sub.DeviceLimit)*pricePerDeviceYear*(remaining/365.0)*100) / 100
+	if value <= 0 {
+		utils.BadRequest(c, "无法计算订阅价值")
+		return
+	}
+
 	now := time.Now()
 	db.Model(user).Update("balance", user.Balance+value)
 	utils.CreateBalanceLogEntry(userID, "refund", value, user.Balance, user.Balance+value, nil, fmt.Sprintf("订阅转余额 (剩余%d天)", int(math.Ceil(remaining))), c)

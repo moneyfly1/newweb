@@ -526,6 +526,10 @@ func CalcUpgradePrice(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	if req.AddDevices%5 != 0 {
+		utils.BadRequest(c, "增加设备数只能为 5 的倍数")
+		return
+	}
 
 	pricePerDeviceYear := utils.GetFloatSetting("custom_package_price_per_device_year", 40)
 	now := time.Now()
@@ -581,6 +585,10 @@ func CreateUpgradeOrder(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
+		return
+	}
+	if req.AddDevices%5 != 0 {
+		utils.BadRequest(c, "增加设备数只能为 5 的倍数")
 		return
 	}
 

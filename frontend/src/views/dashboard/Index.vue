@@ -1,395 +1,196 @@
 <template>
   <div class="dashboard">
-    <!-- Welcome Banner -->
-    <div class="welcome-banner">
-      <div class="welcome-text">
+    <!-- Compact Welcome + Stats Bar -->
+    <div class="top-bar">
+      <div class="welcome-section">
         <h1 class="welcome-title">{{ greetingText }}，{{ info.username || '用户' }}</h1>
-        <p class="welcome-sub">欢迎回来，祝您使用愉快</p>
+        <div class="top-stats">
+          <div class="top-stat">
+            <div class="level-badge" :style="{ background: levelColor }">
+              <n-icon size="14" :component="RibbonOutline" />
+              <span>{{ info.level_name || 'Lv.0' }}</span>
+            </div>
+            <n-tag v-if="info.discount_rate" type="success" size="small" :bordered="false">{{ (info.discount_rate * 100).toFixed(0) }}%折扣</n-tag>
+          </div>
+          <div class="top-stat-divider"></div>
+          <div class="top-stat">
+            <span class="top-stat-label">余额</span>
+            <span class="top-stat-val">¥{{ info.balance?.toFixed(2) || '0.00' }}</span>
+            <n-button text type="primary" size="tiny" @click="$router.push('/recharge')">充值</n-button>
+          </div>
+          <div class="top-stat-divider"></div>
+          <div class="top-stat">
+            <span class="top-stat-label">签到</span>
+            <span class="top-stat-val">{{ checkinStatus.consecutive_days || 0 }}天</span>
+            <n-button
+              :type="checkinStatus.checked_in_today ? 'default' : 'success'"
+              size="tiny" text
+              :disabled="checkinStatus.checked_in_today || checkinLoading"
+              :loading="checkinLoading"
+              @click="handleCheckIn"
+            >{{ checkinStatus.checked_in_today ? '已签到' : '签到' }}</n-button>
+          </div>
+        </div>
       </div>
       <div class="welcome-decoration"></div>
     </div>
 
-    <!-- User Level & Balance Cards -->
-    <n-grid :x-gap="20" :y-gap="20" cols="1 l:3" responsive="screen" style="margin-top: 20px;">
-      <n-gi>
-        <n-card :bordered="false" class="section-card level-card">
-          <div class="level-header">
-            <div class="level-badge" :style="{ background: levelColor }">
-              <n-icon size="20" :component="RibbonOutline" />
-              <span>{{ info.level_name || 'Lv.0' }}</span>
-            </div>
-            <n-tag v-if="info.discount_rate" type="success" size="small" :bordered="false">
-              {{ (info.discount_rate * 100).toFixed(0) }}% 折扣
-            </n-tag>
+    <!-- Main Two-Column -->
+    <div class="main-grid">
+      <!-- Left Column -->
+      <div class="left-col">
+        <!-- Subscription Info -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">订阅信息</span>
+            <n-button text type="primary" size="small" @click="$router.push('/subscription')">管理</n-button>
           </div>
-          <div class="level-progress">
-            <div class="progress-info">
-              <span class="progress-label">升级进度</span>
-              <span class="progress-text">{{ info.current_exp || 0 }} / {{ info.next_level_exp || 100 }}</span>
-            </div>
-            <n-progress
-              type="line"
-              :percentage="levelProgress"
-              :show-indicator="false"
-              :color="levelColor"
-              :rail-color="'rgba(0,0,0,0.06)'"
-              :height="8"
-              border-radius="4px"
-            />
-          </div>
-        </n-card>
-      </n-gi>
-      <n-gi>
-        <n-card :bordered="false" class="section-card balance-card">
-          <div class="balance-content">
-            <div class="balance-info">
-              <div class="balance-label">账户余额</div>
-              <div class="balance-value">¥{{ info.balance?.toFixed(2) || '0.00' }}</div>
-            </div>
-            <n-button type="primary" size="large" @click="$router.push('/recharge')">
-              <template #icon>
-                <n-icon :component="WalletOutline" />
-              </template>
-              充值
-            </n-button>
-          </div>
-        </n-card>
-      </n-gi>
-      <n-gi>
-        <n-card :bordered="false" class="section-card checkin-card">
-          <div class="checkin-content">
-            <div class="checkin-info">
-              <div class="checkin-label">每日签到</div>
-              <div class="checkin-days">
-                <span class="checkin-days-num">{{ checkinStatus.consecutive_days || 0 }}</span>
-                <span class="checkin-days-text">天连续签到</span>
+          <n-spin :show="subscriptionLoading">
+            <div v-if="subscription.clash_url || subscription.universal_url || subscription.subscription_url" class="sub-info">
+              <div class="sub-stats-row">
+                <div class="sub-stat"><span class="sub-stat-label">剩余</span><n-tag :type="remainingDaysType" size="small" :bordered="false">{{ remainingDays }}天</n-tag></div>
+                <div class="sub-stat"><span class="sub-stat-label">设备</span><span class="sub-stat-val">{{ subscription.current_devices || 0 }}/{{ subscription.device_limit || 0 }}</span></div>
+                <div class="sub-stat"><span class="sub-stat-label">状态</span><n-tag :type="subscription.is_active ? 'success' : 'error'" size="small" :bordered="false">{{ subscription.is_active ? '使用中' : '未激活' }}</n-tag></div>
+              </div>
+              <div class="sub-urls">
+                <div class="sub-url-row" v-if="subscription.clash_url">
+                  <span class="sub-url-label">Clash</span>
+                  <n-input :value="subscription.clash_url" readonly size="tiny" style="flex:1" />
+                  <n-button size="tiny" @click="copyText(subscription.clash_url, 'Clash')"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
+                </div>
+                <div class="sub-url-row" v-if="subscription.universal_url">
+                  <span class="sub-url-label">通用</span>
+                  <n-input :value="subscription.universal_url" readonly size="tiny" style="flex:1" />
+                  <n-button size="tiny" @click="copyText(subscription.universal_url, '通用')"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
+                </div>
               </div>
             </div>
-            <n-button
-              :type="checkinStatus.checked_in_today ? 'default' : 'success'"
-              size="large"
-              :disabled="checkinStatus.checked_in_today || checkinLoading"
-              :loading="checkinLoading"
-              @click="handleCheckIn"
-            >
-              <template #icon>
-                <n-icon :component="CalendarOutline" />
-              </template>
-              {{ checkinStatus.checked_in_today ? '已签到' : '签到' }}
-            </n-button>
-          </div>
-        </n-card>
-      </n-gi>
-    </n-grid>
-
-    <!-- Subscription Info Card -->
-    <n-card :bordered="false" class="section-card" style="margin-top: 20px;">
-      <template #header>
-        <span class="section-title-text">订阅信息</span>
-      </template>
-      <n-spin :show="subscriptionLoading">
-        <div v-if="subscription.clash_url || subscription.universal_url || subscription.subscription_url" class="subscription-content">
-          <div class="subscription-row">
-            <div class="subscription-item" v-if="subscription.clash_url">
-              <div class="sub-label">Clash 订阅地址</div>
-              <div class="sub-value-row">
-                <n-input
-                  :value="subscription.clash_url"
-                  readonly
-                  size="small"
-                  placeholder="暂无订阅"
-                  style="flex: 1; max-width: 400px;"
-                />
-                <n-button size="small" @click="copyText(subscription.clash_url, 'Clash 订阅地址')">
-                  <template #icon>
-                    <n-icon :component="CopyOutline" />
-                  </template>
-                  复制
-                </n-button>
-              </div>
-            </div>
-            <div class="subscription-item" v-if="subscription.universal_url" style="margin-top: 12px;">
-              <div class="sub-label">通用订阅地址 (V2Ray / Shadowrocket / Hiddify)</div>
-              <div class="sub-value-row">
-                <n-input
-                  :value="subscription.universal_url"
-                  readonly
-                  size="small"
-                  placeholder="暂无订阅"
-                  style="flex: 1; max-width: 400px;"
-                />
-                <n-button size="small" @click="copyText(subscription.universal_url, '通用订阅地址')">
-                  <template #icon>
-                    <n-icon :component="CopyOutline" />
-                  </template>
-                  复制
-                </n-button>
-              </div>
-            </div>
-          </div>
-          <n-divider style="margin: 16px 0;" />
-          <div class="subscription-stats">
-            <div class="sub-stat-item">
-              <div class="sub-stat-label">剩余天数</div>
-              <div class="sub-stat-value">
-                <n-tag :type="remainingDaysType" size="medium" :bordered="false">
-                  {{ remainingDays }} 天
-                </n-tag>
-              </div>
-            </div>
-            <div class="sub-stat-item">
-              <div class="sub-stat-label">设备使用</div>
-              <div class="sub-stat-value">
-                <span class="device-usage">{{ subscription.current_devices || 0 }} / {{ subscription.device_limit || 0 }}</span>
-              </div>
-            </div>
-            <div class="sub-stat-item">
-              <div class="sub-stat-label">订阅状态</div>
-              <div class="sub-stat-value">
-                <n-tag :type="subscription.is_active ? 'success' : 'error'" size="medium" :bordered="false">
-                  {{ subscription.is_active ? '使用中' : '未激活' }}
-                </n-tag>
-              </div>
-            </div>
-          </div>
-        </div>
-        <n-empty v-else description="暂无订阅信息" />
-      </n-spin>
-    </n-card>
-
-    <!-- Quick Subscription Links -->
-    <n-card :bordered="false" class="section-card" style="margin-top: 20px;">
-      <template #header>
-        <span class="section-title-text">快速订阅</span>
-      </template>
-      <div v-if="subscription.clash_url || subscription.universal_url || subscription.subscription_url" class="quick-sub-links">
-        <!-- Clash -->
-        <div class="quick-sub-item">
-          <div class="quick-sub-info">
-            <span class="client-icon">🔵</span>
-            <span class="quick-sub-name">Clash 订阅</span>
-          </div>
-          <div class="quick-sub-actions">
-            <n-button size="small" @click="copyText(subscription.clash_url || subscription.subscription_url, 'Clash 订阅地址')">
-              <template #icon><n-icon :component="CopyOutline" /></template>
-              复制
-            </n-button>
-            <n-button size="small" type="primary" @click="oneClickImport('clash')">
-              <template #icon><n-icon :component="CloudDownloadOutline" /></template>
-              导入
-            </n-button>
-          </div>
-        </div>
-        <!-- Shadowrocket -->
-        <div class="quick-sub-item">
-          <div class="quick-sub-info">
-            <span class="client-icon">🚀</span>
-            <span class="quick-sub-name">Shadowrocket</span>
-          </div>
-          <div class="quick-sub-actions">
-            <n-button size="small" @click="copyText(subscription.universal_url || subscription.subscription_url, 'Shadowrocket 订阅地址')">
-              <template #icon><n-icon :component="CopyOutline" /></template>
-              复制
-            </n-button>
-            <n-button size="small" type="primary" @click="oneClickImport('shadowrocket')">
-              <template #icon><n-icon :component="CloudDownloadOutline" /></template>
-              导入
-            </n-button>
-            <n-button size="small" @click="showQrCode = true">
-              <template #icon><n-icon :component="QrCodeOutline" /></template>
-              二维码
-            </n-button>
-          </div>
-        </div>
-        <!-- V2Ray / Hiddify -->
-        <div class="quick-sub-item">
-          <div class="quick-sub-info">
-            <span class="client-icon">🟢</span>
-            <span class="quick-sub-name">V2Ray / Hiddify 通用</span>
-          </div>
-          <div class="quick-sub-actions">
-            <n-button size="small" @click="copyText(subscription.universal_url || subscription.subscription_url, '通用订阅地址')">
-              <template #icon><n-icon :component="CopyOutline" /></template>
-              复制
-            </n-button>
-          </div>
-        </div>
-        <!-- Stash -->
-        <div class="quick-sub-item">
-          <div class="quick-sub-info">
-            <span class="client-icon">🟡</span>
-            <span class="quick-sub-name">Stash</span>
-          </div>
-          <div class="quick-sub-actions">
-            <n-button size="small" @click="copyText(subscription.clash_url || subscription.subscription_url, 'Stash 订阅地址')">
-              <template #icon><n-icon :component="CopyOutline" /></template>
-              复制
-            </n-button>
-            <n-button size="small" type="primary" @click="oneClickImport('stash')">
-              <template #icon><n-icon :component="CloudDownloadOutline" /></template>
-              导入
-            </n-button>
-          </div>
-        </div>
-      </div>
-      <n-empty v-else description="暂无订阅，请先购买套餐" />
-    </n-card>
-
-    <!-- Client Downloads -->
-    <n-card :bordered="false" class="section-card" style="margin-top: 20px;" v-if="hasAnyClientUrl">
-      <template #header>
-        <span class="section-title-text">客户端下载</span>
-      </template>
-      <n-tabs type="segment" size="small" animated>
-        <n-tab-pane name="windows" tab="Windows" v-if="windowsClients.length">
-          <div class="client-grid">
-            <div v-for="c in windowsClients" :key="c.key" class="client-card" @click="openUrl(c.url)">
-              <span class="client-card-icon">{{ c.icon }}</span>
-              <span class="client-card-name">{{ c.name }}</span>
-              <n-icon :component="DownloadOutline" size="16" color="#999" />
-            </div>
-          </div>
-        </n-tab-pane>
-        <n-tab-pane name="android" tab="Android" v-if="androidClients.length">
-          <div class="client-grid">
-            <div v-for="c in androidClients" :key="c.key" class="client-card" @click="openUrl(c.url)">
-              <span class="client-card-icon">{{ c.icon }}</span>
-              <span class="client-card-name">{{ c.name }}</span>
-              <n-icon :component="DownloadOutline" size="16" color="#999" />
-            </div>
-          </div>
-        </n-tab-pane>
-        <n-tab-pane name="macos" tab="macOS" v-if="macClients.length">
-          <div class="client-grid">
-            <div v-for="c in macClients" :key="c.key" class="client-card" @click="openUrl(c.url)">
-              <span class="client-card-icon">{{ c.icon }}</span>
-              <span class="client-card-name">{{ c.name }}</span>
-              <n-icon :component="DownloadOutline" size="16" color="#999" />
-            </div>
-          </div>
-        </n-tab-pane>
-        <n-tab-pane name="ios" tab="iOS" v-if="iosClients.length">
-          <div class="client-grid">
-            <div v-for="c in iosClients" :key="c.key" class="client-card" @click="openUrl(c.url)">
-              <span class="client-card-icon">{{ c.icon }}</span>
-              <span class="client-card-name">{{ c.name }}</span>
-              <n-icon :component="DownloadOutline" size="16" color="#999" />
-            </div>
-          </div>
-        </n-tab-pane>
-        <n-tab-pane name="linux" tab="Linux" v-if="linuxClients.length">
-          <div class="client-grid">
-            <div v-for="c in linuxClients" :key="c.key" class="client-card" @click="openUrl(c.url)">
-              <span class="client-card-icon">{{ c.icon }}</span>
-              <span class="client-card-name">{{ c.name }}</span>
-              <n-icon :component="DownloadOutline" size="16" color="#999" />
-            </div>
-          </div>
-        </n-tab-pane>
-      </n-tabs>
-    </n-card>
-
-    <!-- QR Code Modal -->
-    <n-modal v-model:show="showQrCode" preset="card" title="Shadowrocket 二维码" style="max-width: 360px;">
-      <div class="qr-modal-content">
-        <img v-if="qrCodeUrl" :src="qrCodeUrl" alt="订阅二维码" class="qr-image" />
-        <p class="qr-tip">使用 Shadowrocket 扫描二维码即可添加订阅</p>
-      </div>
-    </n-modal>
-
-    <!-- Quick Actions -->
-    <n-card :bordered="false" class="section-card" style="margin-top: 20px;">
-      <template #header>
-        <span class="section-title-text">快捷操作</span>
-      </template>
-      <n-grid :x-gap="12" :y-gap="12" cols="2 s:4" responsive="screen">
-        <n-gi>
-          <div class="quick-action" @click="$router.push('/shop')">
-            <n-icon size="24" :component="CartOutline" color="#667eea" />
-            <span>购买套餐</span>
-          </div>
-        </n-gi>
-        <n-gi>
-          <div class="quick-action" @click="$router.push('/subscription')">
-            <n-icon size="24" :component="LinkOutline" color="#764ba2" />
-            <span>获取订阅</span>
-          </div>
-        </n-gi>
-        <n-gi>
-          <div class="quick-action" @click="$router.push('/tickets')">
-            <n-icon size="24" :component="ChatbubblesOutline" color="#f093fb" />
-            <span>提交工单</span>
-          </div>
-        </n-gi>
-        <n-gi>
-          <div class="quick-action" @click="$router.push('/invite')">
-            <n-icon size="24" :component="PeopleOutline" color="#4facfe" />
-            <span>邀请好友</span>
-          </div>
-        </n-gi>
-      </n-grid>
-    </n-card>
-
-    <!-- Announcements & Recent Orders -->
-    <n-grid :x-gap="20" :y-gap="20" cols="1 l:2" responsive="screen" style="margin-top: 20px;">
-      <n-gi>
-        <n-card :bordered="false" class="section-card">
-          <template #header>
-            <span class="section-title-text">最近公告</span>
-          </template>
-          <n-spin :show="announcementsLoading">
-            <n-empty v-if="!announcements.length" description="暂无公告" />
-            <div v-else class="announcement-list">
-              <div v-for="a in announcements" :key="a.id" class="announcement-item">
-                <n-tag :type="a.type === 'warning' ? 'warning' : 'info'" size="small" :bordered="false">
-                  {{ a.type === 'warning' ? '重要' : '通知' }}
-                </n-tag>
-                <span class="announcement-title">{{ a.title }}</span>
-                <span class="announcement-time">{{ formatDate(a.created_at) }}</span>
-              </div>
-            </div>
+            <n-empty v-else description="暂无订阅" size="small">
+              <template #extra><n-button size="small" type="primary" @click="$router.push('/shop')">购买套餐</n-button></template>
+            </n-empty>
           </n-spin>
-        </n-card>
-      </n-gi>
-      <n-gi>
-        <n-card :bordered="false" class="section-card">
-          <template #header>
-            <div class="section-header-row">
-              <span class="section-title-text">最近订单</span>
-              <n-button text type="primary" @click="$router.push('/orders')">查看全部</n-button>
+        </div>
+
+        <!-- Quick Subscription -->
+        <div class="card">
+          <div class="card-header"><span class="card-title">快速订阅</span></div>
+          <div v-if="quickSubItems.length" class="quick-sub-grid">
+            <div v-for="item in quickSubItems" :key="item.name" class="quick-sub-item">
+              <span class="qs-icon">
+                <img
+                  v-if="canShowIcon(`qs:${item.name}`, item.iconUrl)"
+                  class="app-icon"
+                  :src="item.iconUrl"
+                  :alt="item.name"
+                  loading="lazy"
+                  @error="markIconFailed(`qs:${item.name}`)"
+                />
+                <span v-else>{{ item.icon }}</span>
+              </span>
+              <span class="qs-name">{{ item.name }}</span>
+              <div class="qs-actions">
+                <n-button size="tiny" @click="copyText(item.url, item.name)"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
+                <n-button v-if="item.importable" size="tiny" type="primary" @click="oneClickImport(item.client)"><template #icon><n-icon :component="CloudDownloadOutline" /></template></n-button>
+              </div>
             </div>
-          </template>
+          </div>
+          <n-empty v-else description="暂无订阅" size="small" />
+        </div>
+
+        <!-- Announcements -->
+        <div class="card">
+          <div class="card-header"><span class="card-title">最近公告</span></div>
+          <n-spin :show="announcementsLoading">
+            <div v-if="announcements.length" class="announcement-list">
+              <div v-for="a in announcements" :key="a.id" class="announcement-item">
+                <n-tag :type="a.type === 'warning' ? 'warning' : 'info'" size="small" :bordered="false">{{ a.type === 'warning' ? '重要' : '通知' }}</n-tag>
+                <span class="announcement-title">{{ a.title }}</span>
+              </div>
+            </div>
+            <n-empty v-else description="暂无公告" size="small" />
+          </n-spin>
+        </div>
+      </div>
+      <!-- Right Column -->
+      <div class="right-col">
+        <!-- Client Downloads -->
+        <div class="card" v-if="hasAnyClientUrl">
+          <div class="card-header"><span class="card-title">客户端下载</span></div>
+          <n-tabs type="segment" size="small" animated>
+            <n-tab-pane v-for="tab in clientTabs" :key="tab.name" :name="tab.name" :tab="tab.label">
+              <div class="client-grid">
+                <div v-for="c in tab.clients" :key="c.key" class="client-card" @click="openUrl(c.url)">
+                  <span class="client-icon">
+                    <img
+                      v-if="canShowIcon(`client:${c.key}`, c.iconUrl)"
+                      class="app-icon"
+                      :src="c.iconUrl"
+                      :alt="c.name"
+                      loading="lazy"
+                      @error="markIconFailed(`client:${c.key}`)"
+                    />
+                    <span v-else>{{ c.icon }}</span>
+                  </span>
+                  <span class="client-name">{{ c.name }}</span>
+                  <n-icon :component="DownloadOutline" size="14" color="#999" />
+                </div>
+              </div>
+            </n-tab-pane>
+          </n-tabs>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+          <div class="card-header"><span class="card-title">快捷操作</span></div>
+          <div class="quick-actions-grid">
+            <div class="quick-action" @click="$router.push('/shop')"><n-icon size="18" :component="CartOutline" color="#667eea" /><span>购买套餐</span></div>
+            <div class="quick-action" @click="$router.push('/subscription')"><n-icon size="18" :component="LinkOutline" color="#764ba2" /><span>获取订阅</span></div>
+            <div class="quick-action" @click="$router.push('/tickets')"><n-icon size="18" :component="ChatbubblesOutline" color="#f093fb" /><span>提交工单</span></div>
+            <div class="quick-action" @click="$router.push('/invite')"><n-icon size="18" :component="PeopleOutline" color="#4facfe" /><span>邀请好友</span></div>
+          </div>
+        </div>
+
+        <!-- Recent Orders -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">最近订单</span>
+            <n-button text type="primary" size="small" @click="$router.push('/orders')">查看全部</n-button>
+          </div>
           <n-spin :show="ordersLoading">
-            <n-empty v-if="!recentOrders.length" description="暂无订单" />
-            <div v-else class="order-list">
+            <div v-if="recentOrders.length" class="order-list">
               <div v-for="o in recentOrders" :key="o.id" class="order-item">
-                <div class="order-item-left">
+                <div class="order-left">
                   <span class="order-name">{{ o.package_name || '订单' }}</span>
                   <span class="order-time">{{ formatDate(o.created_at) }}</span>
                 </div>
-                <div class="order-item-right">
+                <div class="order-right">
                   <span class="order-amount">¥{{ o.final_amount }}</span>
-                  <n-tag :type="orderStatusType(o.status)" size="small" :bordered="false">
-                    {{ orderStatusText(o.status) }}
-                  </n-tag>
+                  <n-tag :type="orderStatusType(o.status)" size="small" :bordered="false">{{ orderStatusText(o.status) }}</n-tag>
                 </div>
               </div>
             </div>
+            <n-empty v-else description="暂无订单" size="small" />
           </n-spin>
-        </n-card>
-      </n-gi>
-    </n-grid>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR Code Modal -->
+    <n-modal v-model:show="showQrCode" preset="card" title="Shadowrocket 二维码" style="max-width: 360px;">
+      <div style="text-align: center;">
+        <img v-if="qrCodeUrl" :src="qrCodeUrl" alt="订阅二维码" style="max-width: 200px; border-radius: 8px;" />
+        <p style="margin-top: 10px; font-size: 13px; color: #999;">使用 Shadowrocket 扫描二维码即可添加订阅</p>
+      </div>
+    </n-modal>
   </div>
 </template>
-
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import {
-  WalletOutline, CloudOutline, PhonePortraitOutline, RibbonOutline,
-  CartOutline, LinkOutline, ChatbubblesOutline, PeopleOutline,
-  CopyOutline, CloudDownloadOutline, DownloadOutline, QrCodeOutline,
-  CalendarOutline,
+  WalletOutline, RibbonOutline, CartOutline, LinkOutline,
+  ChatbubblesOutline, PeopleOutline, CopyOutline, CloudDownloadOutline,
+  DownloadOutline, QrCodeOutline, CalendarOutline,
 } from '@vicons/ionicons5'
 import { getDashboardInfo, checkIn, getCheckInStatus } from '@/api/user'
 import { listPublicAnnouncements, getPublicConfig } from '@/api/common'
@@ -408,8 +209,6 @@ const ordersLoading = ref(false)
 const subscriptionLoading = ref(false)
 const showQrCode = ref(false)
 const clientConfig = ref<Record<string, string>>({})
-
-// Check-in
 const checkinStatus = ref<any>({})
 const checkinLoading = ref(false)
 
@@ -422,42 +221,34 @@ async function handleCheckIn() {
     message.success(`签到成功！获得 ${amtStr} 元奖励，已连续签到 ${res.data.consecutive_days} 天`)
     checkinStatus.value.checked_in_today = true
     checkinStatus.value.consecutive_days = res.data.consecutive_days
-    // Refresh balance
-    try {
-      const dashRes: any = await getDashboardInfo()
-      if (dashRes.data) info.value.balance = dashRes.data.balance
-    } catch {}
-  } catch (error: any) {
-    message.error(error.message || '签到失败')
-  } finally {
-    checkinLoading.value = false
-  }
+    try { const dashRes: any = await getDashboardInfo(); if (dashRes.data) info.value.balance = dashRes.data.balance } catch {}
+  } catch (error: any) { message.error(error.message || '签到失败') }
+  finally { checkinLoading.value = false }
 }
 
-// Client definitions
 const allClients = {
   windows: [
-    { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵' },
-    { key: 'client_v2rayn_url', name: 'V2rayN', icon: '🟢' },
-    { key: 'client_clashparty_windows_url', name: 'Clash Party', icon: '🟣' },
+    { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
+    { key: 'client_v2rayn_url', name: 'V2rayN', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
+    { key: 'client_clashparty_windows_url', name: 'Clash Party', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
     { key: 'client_hiddify_windows_url', name: 'Hiddify', icon: '🟠' },
-    { key: 'client_flclash_windows_url', name: 'FlClash', icon: '⚡' },
+    { key: 'client_flclash_windows_url', name: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
   ],
   android: [
-    { key: 'client_clash_android_url', name: 'Clash Meta', icon: '🔵' },
-    { key: 'client_v2rayng_url', name: 'V2rayNG', icon: '🟢' },
+    { key: 'client_clash_android_url', name: 'Clash Meta', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
+    { key: 'client_v2rayng_url', name: 'V2rayNG', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
     { key: 'client_hiddify_android_url', name: 'Hiddify', icon: '🟠' },
   ],
   macos: [
-    { key: 'client_flclash_macos_url', name: 'FlClash', icon: '⚡' },
-    { key: 'client_clashparty_macos_url', name: 'Clash Party', icon: '🟣' },
+    { key: 'client_flclash_macos_url', name: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
+    { key: 'client_clashparty_macos_url', name: 'Clash Party', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
   ],
   ios: [
-    { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀' },
-    { key: 'client_stash_url', name: 'Stash', icon: '🟡' },
+    { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png' },
+    { key: 'client_stash_url', name: 'Stash', icon: '🟡', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/stash.png' },
   ],
   linux: [
-    { key: 'client_clash_linux_url', name: 'Clash', icon: '🐧' },
+    { key: 'client_clash_linux_url', name: 'Clash', icon: '🐧', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
     { key: 'client_singbox_url', name: 'Sing-box', icon: '📦' },
   ],
 }
@@ -471,26 +262,35 @@ const macClients = computed(() => filterClients(allClients.macos))
 const iosClients = computed(() => filterClients(allClients.ios))
 const linuxClients = computed(() => filterClients(allClients.linux))
 const hasAnyClientUrl = computed(() =>
-  Object.values(allClients).flat().some(c => clientConfig.value[c.key])
+  windowsClients.value.length || androidClients.value.length || macClients.value.length || iosClients.value.length || linuxClients.value.length
 )
 
-const subscriptionDisplayName = computed(() => {
-  const et = subscription.value.expire_time
-  if (et) {
-    const d = new Date(et)
-    if (!isNaN(d.getTime())) {
-      return `到期: ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    }
-  }
-  return '无限期'
+const clientTabs = computed(() => [
+  { name: 'windows', label: 'Windows', clients: windowsClients.value },
+  { name: 'android', label: 'Android', clients: androidClients.value },
+  { name: 'macos', label: 'macOS', clients: macClients.value },
+  { name: 'ios', label: 'iOS', clients: iosClients.value },
+  { name: 'linux', label: 'Linux', clients: linuxClients.value },
+].filter(t => t.clients.length))
+
+const quickSubItems = computed(() => {
+  const clash = subscription.value.clash_url || subscription.value.subscription_url
+  const universal = subscription.value.universal_url || subscription.value.subscription_url
+  return [
+    { name: 'Clash', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png', url: clash, client: 'clash', importable: true },
+    { name: 'Shadowrocket', icon: '🚀', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png', url: universal, client: 'shadowrocket', importable: true },
+    { name: 'V2Ray / Hiddify', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png', url: universal, client: 'v2ray', importable: false },
+    { name: 'Stash', icon: '🟡', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/stash.png', url: clash, client: 'stash', importable: true },
+  ].filter(i => i.url)
 })
 
-const qrCodeUrl = computed(() => {
-  const url = subscription.value.universal_url || subscription.value.subscription_url
-  if (!url) return ''
-  const urlWithName = url + (url.includes('#') ? '' : `#${encodeURIComponent(subscriptionDisplayName.value)}`)
-  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(urlWithName)}&ecc=M&margin=10`
-})
+const iconFailed = ref<Record<string, boolean>>({})
+function markIconFailed(key: string) {
+  iconFailed.value[key] = true
+}
+function canShowIcon(key: string, url?: string) {
+  return !!url && !iconFailed.value[key]
+}
 
 const greetingText = computed(() => {
   const h = new Date().getHours()
@@ -503,12 +303,8 @@ const greetingText = computed(() => {
 
 const levelColor = computed(() => {
   const colors: Record<string, string> = {
-    'Lv.0': '#999999',
-    'Lv.1': '#52c41a',
-    'Lv.2': '#1890ff',
-    'Lv.3': '#722ed1',
-    'Lv.4': '#eb2f96',
-    'Lv.5': '#fa8c16',
+    'Lv.0': '#999999', 'Lv.1': '#52c41a', 'Lv.2': '#1890ff',
+    'Lv.3': '#722ed1', 'Lv.4': '#eb2f96', 'Lv.5': '#fa8c16',
   }
   return colors[info.value.level_name] || '#667eea'
 })
@@ -521,382 +317,153 @@ const levelProgress = computed(() => {
 
 const remainingDays = computed(() => {
   if (!subscription.value.expire_time) return 0
-  const now = new Date().getTime()
-  const expire = new Date(subscription.value.expire_time).getTime()
-  const days = Math.ceil((expire - now) / (1000 * 60 * 60 * 24))
+  const days = Math.ceil((new Date(subscription.value.expire_time).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
   return Math.max(days, 0)
 })
 
 const remainingDaysType = computed(() => {
-  const days = remainingDays.value
-  if (days > 30) return 'success'
-  if (days >= 7) return 'warning'
+  if (remainingDays.value > 30) return 'success'
+  if (remainingDays.value >= 7) return 'warning'
   return 'error'
+})
+
+const qrCodeUrl = computed(() => {
+  const url = subscription.value.universal_url || subscription.value.subscription_url
+  if (!url) return ''
+  const subName = info.value.site_name || '订阅'
+  const urlWithName = url + (url.includes('#') ? '' : `#${encodeURIComponent(subName)}`)
+  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(urlWithName)}&ecc=M&margin=10`
 })
 
 const orderStatusType = (status: string) => {
   const map: Record<string, string> = { pending: 'warning', paid: 'success', cancelled: 'default', expired: 'error', refunded: 'info' }
   return (map[status] || 'default') as any
 }
-
 const orderStatusText = (status: string) => {
   const map: Record<string, string> = { pending: '待支付', paid: '已支付', cancelled: '已取消', expired: '已过期', refunded: '已退款' }
   return map[status] || status
 }
 
-function formatDate(d: string) {
-  if (!d) return ''
-  return new Date(d).toLocaleDateString('zh-CN')
-}
+function formatDate(d: string) { if (!d) return ''; return new Date(d).toLocaleDateString('zh-CN') }
 
 async function copyText(text: string, label: string) {
   const ok = await clipboardCopy(text)
   ok ? message.success(`${label}已复制到剪贴板`) : message.error('复制失败，请手动复制')
 }
-
 function oneClickImport(client: string) {
   const clashUrl = subscription.value.clash_url || subscription.value.subscription_url
   const universalUrl = subscription.value.universal_url || subscription.value.subscription_url
-  if (!clashUrl && !universalUrl) {
-    message.warning('暂无订阅地址')
-    return
-  }
-  const subName = subscriptionDisplayName.value
+  if (!clashUrl && !universalUrl) { message.warning('暂无订阅地址'); return }
+  const subName = info.value.site_name || '订阅'
   switch (client) {
-    case 'clash':
-      window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(subName)}`
-      break
-    case 'shadowrocket':
-      window.location.href = `shadowrocket://add/sub://${btoa(universalUrl)}#${encodeURIComponent(subName)}`
-      break
-    case 'stash':
-      window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(subName)}`
-      break
-    default:
-      copyText(universalUrl, '订阅地址')
-      return
+    case 'clash': window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(subName)}`; break
+    case 'shadowrocket': window.location.href = `shadowrocket://add/sub://${btoa(universalUrl)}#${encodeURIComponent(subName)}`; break
+    case 'stash': window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(subName)}`; break
+    default: copyText(universalUrl, '订阅地址'); return
   }
   message.info(`正在打开 ${client} 客户端...`)
 }
 
-function openUrl(url: string) {
-  if (url) window.open(url, '_blank')
-}
+function openUrl(url: string) { if (url) window.open(url, '_blank') }
 
 onMounted(async () => {
-  try {
-    const res: any = await getDashboardInfo()
-    info.value = res.data || {}
-  } catch {}
-
+  try { const res: any = await getDashboardInfo(); info.value = res.data || {} } catch {}
   try {
     const res: any = await getPublicConfig()
-    if (res.data) {
-      clientConfig.value = res.data
-      if (res.data.site_name) info.value.site_name = res.data.site_name
-    }
+    if (res.data) { clientConfig.value = res.data; if (res.data.site_name) info.value.site_name = res.data.site_name }
   } catch {}
-
   subscriptionLoading.value = true
-  try {
-    const res: any = await getSubscription()
-    subscription.value = res.data || {}
-  } catch {} finally {
-    subscriptionLoading.value = false
-  }
-
+  try { const res: any = await getSubscription(); subscription.value = res.data || {} } catch {} finally { subscriptionLoading.value = false }
   announcementsLoading.value = true
-  try {
-    const res: any = await listPublicAnnouncements()
-    announcements.value = (res.data?.items || res.data || []).slice(0, 5)
-  } catch {} finally {
-    announcementsLoading.value = false
-  }
-
+  try { const res: any = await listPublicAnnouncements(); announcements.value = (res.data?.items || res.data || []).slice(0, 5) } catch {} finally { announcementsLoading.value = false }
   ordersLoading.value = true
-  try {
-    const res: any = await listOrders({ page: 1, page_size: 5 })
-    recentOrders.value = (res.data?.items || []).slice(0, 5)
-  } catch {} finally {
-    ordersLoading.value = false
-  }
-
-  // Load check-in status
-  try {
-    const res: any = await getCheckInStatus()
-    if (res.data) {
-      checkinStatus.value = res.data
-    }
-  } catch {}
+  try { const res: any = await listOrders({ page: 1, page_size: 5 }); recentOrders.value = (res.data?.items || []).slice(0, 5) } catch {} finally { ordersLoading.value = false }
+  try { const res: any = await getCheckInStatus(); if (res.data) checkinStatus.value = res.data } catch {}
 })
 </script>
-
 <style scoped>
-.dashboard { }
+.dashboard { padding: 0; }
 
-.welcome-banner {
+/* Top Bar */
+.top-bar {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 16px;
-  padding: 32px;
-  color: white;
-  position: relative;
-  overflow: hidden;
+  border-radius: 10px; padding: 14px 20px; color: white; position: relative; overflow: hidden;
+  display: flex; justify-content: space-between; align-items: center;
 }
-.welcome-decoration {
-  position: absolute;
-  right: -20px;
-  top: -20px;
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.1);
-}
-.welcome-title { font-size: 26px; font-weight: 700; margin: 0 0 6px 0; }
-.welcome-sub { font-size: 14px; opacity: 0.85; margin: 0; }
+.welcome-section { display: flex; align-items: center; gap: 24px; flex: 1; z-index: 1; }
+.welcome-title { font-size: 18px; font-weight: 700; margin: 0; white-space: nowrap; }
+.welcome-decoration { position: absolute; right: -20px; top: -20px; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,0.1); }
+.top-stats { display: flex; align-items: center; gap: 16px; }
+.top-stat { display: flex; align-items: center; gap: 6px; }
+.top-stat-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.3); }
+.top-stat-label { font-size: 12px; opacity: 0.8; }
+.top-stat-val { font-size: 15px; font-weight: 700; }
+.level-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 12px; color: white; font-weight: 600; font-size: 12px; }
 
-.section-card { border-radius: 12px; }
-.section-title-text { font-weight: 600; }
-.section-header-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+/* Main Grid */
+.main-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; margin-top: 12px; }
+.left-col, .right-col { display: flex; flex-direction: column; gap: 12px; }
 
-/* Level Card */
-.level-card {
-  background: linear-gradient(135deg, #f5af1908, #f5af1920);
-  border: 1px solid #f5af1930;
-}
-.level-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-.level-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 20px;
-  color: white;
-  font-weight: 600;
-  font-size: 16px;
-}
-.level-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.progress-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-}
-.progress-label { color: var(--text-color-secondary); }
-.progress-text { font-weight: 600; color: var(--text-color); }
-
-/* Balance Card */
-.balance-card {
-  background: linear-gradient(135deg, #667eea08, #667eea20);
-  border: 1px solid #667eea30;
-}
-.balance-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.balance-label { font-size: 13px; color: var(--text-color-secondary); margin-bottom: 8px; }
-.balance-value { font-size: 32px; font-weight: 700; color: #667eea; }
-
-/* Check-in Card */
-.checkin-card {
-  background: linear-gradient(135deg, #18a05808, #18a05820);
-  border: 1px solid #18a05830;
-}
-.checkin-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.checkin-label { font-size: 13px; color: var(--text-color-secondary); margin-bottom: 8px; }
-.checkin-days { display: flex; align-items: baseline; gap: 4px; }
-.checkin-days-num { font-size: 32px; font-weight: 700; color: #18a058; }
-.checkin-days-text { font-size: 14px; color: var(--text-color-secondary); }
+/* Card */
+.card { background: white; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.card-title { font-size: 14px; font-weight: 600; color: #333; }
 
 /* Subscription Info */
-.subscription-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.subscription-row {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.subscription-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sub-label {
-  font-size: 13px;
-  color: var(--text-color-secondary);
-  font-weight: 500;
-}
-.sub-value-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.subscription-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 20px;
-}
-.sub-stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sub-stat-label {
-  font-size: 13px;
-  color: var(--text-color-secondary);
-}
-.sub-stat-value {
-  font-size: 16px;
-  font-weight: 600;
-}
-.device-usage {
-  color: var(--text-color);
-  font-size: 18px;
-}
+.sub-stats-row { display: flex; gap: 16px; margin-bottom: 10px; }
+.sub-stat { display: flex; align-items: center; gap: 6px; }
+.sub-stat-label { font-size: 12px; color: #999; }
+.sub-stat-val { font-size: 13px; font-weight: 600; }
+.sub-urls { display: flex; flex-direction: column; gap: 6px; }
+.sub-url-row { display: flex; align-items: center; gap: 6px; }
+.sub-url-label { font-size: 12px; color: #666; min-width: 36px; font-weight: 500; }
 
-/* Quick Subscription Links */
-.quick-sub-links {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.quick-sub-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  border-radius: 10px;
-  background: rgba(0,0,0,0.03);
-  transition: background 0.2s;
-}
-.quick-sub-item:hover {
-  background: rgba(0,0,0,0.04);
-}
-.quick-sub-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.quick-sub-name {
-  font-size: 15px;
-  font-weight: 500;
-}
-.quick-sub-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.client-icon { font-size: 20px; }
+/* Quick Subscription */
+.quick-sub-grid { display: flex; flex-direction: column; gap: 6px; }
+.quick-sub-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: #f8f8fa; }
+.qs-icon { font-size: 16px; }
+.qs-name { flex: 1; font-size: 13px; font-weight: 500; }
+.qs-actions { display: flex; gap: 4px; }
 
 /* Client Downloads */
-.client-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
-  padding: 12px 0;
-}
-.client-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 10px;
-  background: rgba(0,0,0,0.03);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.client-card:hover {
-  background: rgba(0,0,0,0.04);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-.client-card-icon { font-size: 20px; }
-.client-card-name { flex: 1; font-size: 14px; font-weight: 500; }
+.client-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
+.client-card { display: flex; align-items: center; gap: 6px; padding: 8px; border-radius: 6px; background: #f8f8fa; cursor: pointer; transition: background 0.2s; }
+.client-card:hover { background: #eef0f5; }
+.client-icon { font-size: 16px; }
+.client-name { flex: 1; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* QR Code Modal */
-.qr-modal-content { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 12px 0; }
-.qr-image { width: 200px; height: 200px; border-radius: 8px; }
-.qr-tip { font-size: 13px; color: var(--text-color-secondary); text-align: center; margin: 0; }
+.app-icon { width: 18px; height: 18px; object-fit: contain; border-radius: 4px; }
 
-.quick-action {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 20px 12px; border-radius: 10px; cursor: pointer;
-  transition: background 0.2s; background: rgba(0,0,0,0.03);
-}
-.quick-action:hover { background: rgba(0,0,0,0.04); }
-.quick-action span { font-size: 13px; color: var(--text-color-secondary); }
+/* Quick Actions */
+.quick-actions-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.quick-action { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 8px; background: #f8f8fa; cursor: pointer; transition: background 0.2s; }
+.quick-action:hover { background: #eef0f5; }
+.quick-action span { font-size: 11px; color: #555; }
 
-.announcement-list { display: flex; flex-direction: column; gap: 12px; }
-.announcement-item { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+/* Announcements */
+.announcement-list { display: flex; flex-direction: column; gap: 6px; }
+.announcement-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .announcement-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.announcement-time { font-size: 12px; color: var(--text-color-secondary); flex-shrink: 0; }
 
-.order-list { display: flex; flex-direction: column; gap: 12px; }
-.order-item {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,0.03);
-}
-.order-item-left { display: flex; flex-direction: column; gap: 4px; }
-.order-name { font-size: 14px; font-weight: 500; }
-.order-time { font-size: 12px; color: var(--text-color-secondary); }
-.order-item-right { display: flex; align-items: center; gap: 10px; }
-.order-amount { font-size: 15px; font-weight: 600; color: #18a058; }
+/* Orders */
+.order-list { display: flex; flex-direction: column; gap: 6px; }
+.order-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 6px; background: #f8f8fa; }
+.order-left { display: flex; flex-direction: column; gap: 2px; }
+.order-name { font-size: 13px; font-weight: 500; }
+.order-time { font-size: 11px; color: #999; }
+.order-right { display: flex; align-items: center; gap: 8px; }
+.order-amount { font-size: 14px; font-weight: 600; color: #18a058; }
 
-/* Mobile Responsive */
+/* Mobile */
 @media (max-width: 767px) {
   .dashboard { padding: 0; }
-  .welcome-banner { padding: 20px 16px; border-radius: 12px; }
-  .welcome-title { font-size: 20px; }
-  .welcome-sub { font-size: 13px; }
-  .welcome-decoration { width: 100px; height: 100px; right: -10px; top: -10px; }
-
-  .section-card { border-radius: 10px; }
-
-  .balance-value { font-size: 24px; }
-  .balance-content { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .balance-content .n-button { width: 100%; }
-
-  .checkin-days-num { font-size: 24px; }
-  .checkin-content { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .checkin-content .n-button { width: 100%; }
-
-  .sub-value-row { flex-direction: column; align-items: stretch; }
-  .sub-value-row .n-input { max-width: 100% !important; }
-
-  .subscription-stats { grid-template-columns: repeat(3, 1fr); gap: 12px; }
-
-  .quick-sub-item { flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px; }
-  .quick-sub-actions { width: 100%; flex-wrap: wrap; }
-  .quick-sub-actions .n-button { flex: 1; min-width: 70px; }
-
-  .client-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .client-card { padding: 10px 12px; }
-  .client-card-name { font-size: 13px; }
-
-  .quick-action { padding: 14px 8px; }
-  .quick-action span { font-size: 12px; }
-
-  .announcement-item { font-size: 13px; }
-  .announcement-time { display: none; }
-
-  .order-item { padding: 8px 10px; }
-  .order-name { font-size: 13px; }
-  .order-amount { font-size: 14px; }
+  .top-bar { flex-direction: column; align-items: flex-start; padding: 14px 16px; }
+  .welcome-section { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .welcome-title { font-size: 16px; }
+  .top-stats { flex-wrap: wrap; gap: 10px; }
+  .main-grid { grid-template-columns: 1fr; }
+  .client-grid { grid-template-columns: repeat(2, 1fr); }
+  .quick-actions-grid { grid-template-columns: repeat(2, 1fr); }
+  .sub-stats-row { flex-wrap: wrap; }
 }
 </style>

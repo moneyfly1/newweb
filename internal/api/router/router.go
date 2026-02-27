@@ -428,6 +428,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 				c.JSON(http.StatusNotFound, gin.H{"code": 1, "message": "not found"})
 				return
 			}
+			// Ensure SPA shell always updates (avoid stale cached index.html)
+			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+			c.Header("Pragma", "no-cache")
+			c.Header("Expires", "0")
 			c.File(indexHTML)
 		})
 	}

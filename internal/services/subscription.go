@@ -165,6 +165,10 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 	if err := db.Where("invitee_id = ?", order.UserID).First(&relation).Error; err != nil {
 		return
 	}
+	// Only pay commission on first order
+	if relation.InviteeFirstOrderID != nil {
+		return
+	}
 	rateStr := utils.GetSetting("invite_commission_rate")
 	if rateStr == "" {
 		return
@@ -185,14 +189,18 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 	if err := db.First(&inviter, relation.InviterID).Error; err != nil {
 		return
 	}
-	db.Model(&inviter).UpdateColumn("balance", gorm.Expr("balance + ?", commission))
+	if err := db.Model(&inviter).UpdateColumn("balance", gorm.Expr("balance + ?", commission)).Error; err != nil {
+		return
+	}
+	// Re-read balance for accurate log
+	db.First(&inviter, inviter.ID)
 	desc := fmt.Sprintf("邀请用户购买返佣 (订单: %s, 比例: %.1f%%)", order.OrderNo, rate)
 	db.Create(&models.BalanceLog{
 		UserID:         inviter.ID,
 		ChangeType:     "invite_commission",
 		Amount:         commission,
-		BalanceBefore:  inviter.Balance,
-		BalanceAfter:   inviter.Balance + commission,
+		BalanceBefore:  inviter.Balance - commission,
+		BalanceAfter:   inviter.Balance,
 		RelatedOrderID: func() *int64 { id := int64(order.ID); return &id }(),
 		Description:    &desc,
 	})
@@ -210,7 +218,7 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 	})
 	db.Model(&relation).Updates(map[string]interface{}{
 		"invitee_total_consumption": gorm.Expr("invitee_total_consumption + ?", payAmount),
-		"invitee_first_order_id":    gorm.Expr("COALESCE(invitee_first_order_id, ?)", order.ID),
+		"invitee_first_order_id":    order.ID,
 	})
 }
 

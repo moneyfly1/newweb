@@ -94,16 +94,33 @@ func CreateOrder(c *gin.Context) {
 	if req.CouponCode != "" {
 		var coupon models.Coupon
 		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
-			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
+			now := time.Now()
+			if now.After(coupon.ValidFrom) && now.Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
+				// Check total quantity
+				if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
+					utils.BadRequest(c, "优惠券已被领完")
+					return
+				}
+				// Check per-user usage
+				var usageCount int64
+				db.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_id = ?", coupon.ID, userID).Count(&usageCount)
+				if int(usageCount) >= coupon.MaxUsesPerUser {
+					utils.BadRequest(c, "您已达到该优惠券的使用上限")
+					return
+				}
 				switch coupon.Type {
 				case "discount":
-					discountAmount = amount * coupon.DiscountValue / 100
+					discountAmount = math.Round(amount*coupon.DiscountValue) / 100
 				case "fixed":
 					discountAmount = coupon.DiscountValue
+				}
+				if coupon.MaxDiscount != nil && discountAmount > *coupon.MaxDiscount {
+					discountAmount = *coupon.MaxDiscount
 				}
 				if discountAmount > amount {
 					discountAmount = amount
 				}
+				discountAmount = math.Round(discountAmount*100) / 100
 				cid := int64(coupon.ID)
 				couponID = &cid
 			}
@@ -126,6 +143,11 @@ func CreateOrder(c *gin.Context) {
 	if err := db.Create(&order).Error; err != nil {
 		utils.InternalError(c, "创建订单失败")
 		return
+	}
+	// Record coupon usage
+	if couponID != nil {
+		db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: discountAmount})
+		db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1"))
 	}
 
 	// 通知用户新订单 + 通知管理员
@@ -171,6 +193,13 @@ func PayOrder(c *gin.Context) {
 			return
 		}
 		tx := db.Begin()
+		// Re-check order status inside transaction to prevent double-spend
+		var freshOrder models.Order
+		if err := tx.Where("id = ? AND status = ?", order.ID, "pending").First(&freshOrder).Error; err != nil {
+			tx.Rollback()
+			utils.BadRequest(c, "订单已支付或已取消")
+			return
+		}
 		if err := tx.Model(user).UpdateColumn("balance", gorm.Expr("balance - ?", payAmount)).Error; err != nil {
 			tx.Rollback()
 			utils.InternalError(c, "扣减余额失败")
@@ -452,16 +481,31 @@ func CreateCustomOrder(c *gin.Context) {
 	if req.CouponCode != "" {
 		var coupon models.Coupon
 		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
-			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
+			now := time.Now()
+			if now.After(coupon.ValidFrom) && now.Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
+				if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
+					utils.BadRequest(c, "优惠券已被领完")
+					return
+				}
+				var usageCount int64
+				db.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_id = ?", coupon.ID, userID).Count(&usageCount)
+				if int(usageCount) >= coupon.MaxUsesPerUser {
+					utils.BadRequest(c, "您已达到该优惠券的使用上限")
+					return
+				}
 				switch coupon.Type {
 				case "discount":
-					couponDiscount = finalPrice * coupon.DiscountValue / 100
+					couponDiscount = math.Round(finalPrice*coupon.DiscountValue) / 100
 				case "fixed":
 					couponDiscount = coupon.DiscountValue
+				}
+				if coupon.MaxDiscount != nil && couponDiscount > *coupon.MaxDiscount {
+					couponDiscount = *coupon.MaxDiscount
 				}
 				if couponDiscount > finalPrice {
 					couponDiscount = finalPrice
 				}
+				couponDiscount = math.Round(couponDiscount*100) / 100
 				cid := int64(coupon.ID)
 				couponID = &cid
 			}
@@ -494,7 +538,14 @@ func CreateCustomOrder(c *gin.Context) {
 		ExpireTime:     &expireTime,
 		ExtraData:      &extraStr,
 	}
-	db.Create(&order)
+	if err := db.Create(&order).Error; err != nil {
+		utils.InternalError(c, "创建订单失败")
+		return
+	}
+	if couponID != nil {
+		db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount})
+		db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1"))
+	}
 
 	pkgName := fmt.Sprintf("自定义套餐 (%d设备/%d月)", req.Devices, req.Months)
 	user := c.MustGet("user").(*models.User)
@@ -620,15 +671,29 @@ func CreateUpgradeOrder(c *gin.Context) {
 		var coupon models.Coupon
 		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
 			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
+				if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
+					utils.BadRequest(c, "优惠券已被领完")
+					return
+				}
+				var usageCount int64
+				db.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_id = ?", coupon.ID, userID).Count(&usageCount)
+				if int(usageCount) >= coupon.MaxUsesPerUser {
+					utils.BadRequest(c, "您已达到该优惠券的使用上限")
+					return
+				}
 				switch coupon.Type {
 				case "discount":
-					couponDiscount = basePrice * coupon.DiscountValue / 100
+					couponDiscount = math.Round(basePrice*coupon.DiscountValue) / 100
 				case "fixed":
 					couponDiscount = coupon.DiscountValue
+				}
+				if coupon.MaxDiscount != nil && couponDiscount > *coupon.MaxDiscount {
+					couponDiscount = *coupon.MaxDiscount
 				}
 				if couponDiscount > basePrice {
 					couponDiscount = basePrice
 				}
+				couponDiscount = math.Round(couponDiscount*100) / 100
 				cid := int64(coupon.ID)
 				couponID = &cid
 			}
@@ -664,7 +729,14 @@ func CreateUpgradeOrder(c *gin.Context) {
 		ExpireTime:     &expireTime,
 		ExtraData:      &extraStr,
 	}
-	db.Create(&order)
+	if err := db.Create(&order).Error; err != nil {
+		utils.InternalError(c, "创建订单失败")
+		return
+	}
+	if couponID != nil {
+		db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount})
+		db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1"))
+	}
 
 	pkgName := fmt.Sprintf("订阅升级: +%d设备", req.AddDevices)
 	if req.ExtendMonths > 0 {

@@ -40,9 +40,15 @@ func ListNodes(c *gin.Context) {
 	var nodes []models.Node
 	query.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&nodes)
 
-	// If unauthenticated, strip sensitive config
+	// Only show node configs to users with an active subscription
 	userID := c.GetUint("user_id")
-	if userID == 0 {
+	showConfig := false
+	if userID > 0 {
+		var activeSub int64
+		db.Model(&models.Subscription{}).Where("user_id = ? AND status = ?", userID, "active").Count(&activeSub)
+		showConfig = activeSub > 0
+	}
+	if !showConfig {
 		for i := range nodes {
 			nodes[i].Config = nil
 		}

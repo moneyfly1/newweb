@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
@@ -17,7 +18,7 @@ func CreateRegistrationLog(c *gin.Context, userID uint, username, email, inviteC
 	ua := c.GetHeader("User-Agent")
 	location := GetIPLocation(ip)
 
-	log := models.RegistrationLog{
+	entry := models.RegistrationLog{
 		UserID:    userID,
 		Username:  username,
 		Email:     email,
@@ -27,59 +28,67 @@ func CreateRegistrationLog(c *gin.Context, userID uint, username, email, inviteC
 		Status:    "success",
 	}
 	if inviteCode != "" {
-		log.InviteCode = &inviteCode
+		entry.InviteCode = &inviteCode
 		source := "invite_code"
-		log.RegisterSource = &source
+		entry.RegisterSource = &source
 	} else {
 		source := "direct"
-		log.RegisterSource = &source
+		entry.RegisterSource = &source
 	}
 	if inviterID != nil {
 		id := int64(*inviterID)
-		log.InviterID = &id
+		entry.InviterID = &id
 	}
 
-	go func() { db.Create(&log) }()
+	go func() {
+		if err := db.Create(&entry).Error; err != nil {
+			log.Printf("[logs] failed to create registration log: %v", err)
+		}
+	}()
 }
 
 // CreateSubscriptionLog records a subscription change event.
 func CreateSubscriptionLog(subID, userID uint, actionType, actionBy string, actionByUserID *uint, description string, beforeData, afterData map[string]interface{}) {
 	db := database.GetDB()
-	log := models.SubscriptionLog{
+	entry := models.SubscriptionLog{
 		SubscriptionID: subID,
 		UserID:         userID,
 		ActionType:     actionType,
 	}
 	if actionBy != "" {
-		log.ActionBy = &actionBy
+		entry.ActionBy = &actionBy
 	}
 	if actionByUserID != nil {
 		id := int64(*actionByUserID)
-		log.ActionByUserID = &id
+		entry.ActionByUserID = &id
 	}
 	if description != "" {
-		log.Description = &description
+		entry.Description = &description
 	}
 	if beforeData != nil {
 		if b, err := json.Marshal(beforeData); err == nil {
 			s := string(b)
-			log.BeforeData = &s
+			entry.BeforeData = &s
 		}
 	}
 	if afterData != nil {
 		if b, err := json.Marshal(afterData); err == nil {
 			s := string(b)
-			log.AfterData = &s
+			entry.AfterData = &s
 		}
 	}
 
-	go func() { db.Create(&log) }()
+	go func() {
+		if err := db.Create(&entry).Error; err != nil {
+			log.Printf("[logs] failed to create subscription log: %v", err)
+		}
+	}()
 }
 
 // CreateBalanceLogEntry records a balance change event.
 func CreateBalanceLogEntry(userID uint, changeType string, amount, balanceBefore, balanceAfter float64, relatedOrderID *uint, description string, c *gin.Context) {
 	db := database.GetDB()
-	log := models.BalanceLog{
+	entry := models.BalanceLog{
 		UserID:        userID,
 		ChangeType:    changeType,
 		Amount:        amount,
@@ -88,20 +97,24 @@ func CreateBalanceLogEntry(userID uint, changeType string, amount, balanceBefore
 	}
 	if relatedOrderID != nil {
 		id := int64(*relatedOrderID)
-		log.RelatedOrderID = &id
+		entry.RelatedOrderID = &id
 	}
 	if description != "" {
 		desc := description
-		log.Description = &desc
+		entry.Description = &desc
 	}
 	if c != nil {
 		ip := GetRealClientIP(c)
-		log.IPAddress = &ip
+		entry.IPAddress = &ip
 		location := GetIPLocation(ip)
-		log.Location = &location
+		entry.Location = &location
 	}
 
-	go func() { db.Create(&log) }()
+	go func() {
+		if err := db.Create(&entry).Error; err != nil {
+			log.Printf("[logs] failed to create balance log: %v", err)
+		}
+	}()
 }
 
 // CreateBalanceLogSimple records a balance change without gin context (for background tasks).
@@ -126,7 +139,11 @@ func SysLog(level, module, message string, detail ...string) {
 	if len(detail) > 0 && detail[0] != "" {
 		entry.Detail = &detail[0]
 	}
-	go func() { db.Create(&entry) }()
+	go func() {
+		if err := db.Create(&entry).Error; err != nil {
+			log.Printf("[logs] failed to create system log: %v", err)
+		}
+	}()
 }
 
 // SysInfo logs an info-level system event.

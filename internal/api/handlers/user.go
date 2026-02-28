@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"net/url"
+	"strings"
+
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
@@ -42,6 +45,11 @@ func UpdateCurrentUser(c *gin.Context) {
 		updates["nickname"] = &req.Nickname
 	}
 	if req.Avatar != "" {
+		parsed, err := url.Parse(req.Avatar)
+		if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || strings.Contains(req.Avatar, "javascript:") {
+			utils.BadRequest(c, "头像链接格式不正确")
+			return
+		}
 		updates["avatar"] = &req.Avatar
 	}
 	if req.Theme != "" {

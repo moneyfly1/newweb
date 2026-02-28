@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"cboard/v2/internal/utils"
 )
@@ -27,6 +28,11 @@ type TelegramLoginData struct {
 func VerifyTelegramLogin(data *TelegramLoginData) bool {
 	botToken := utils.GetSetting("notify_telegram_bot_token")
 	if botToken == "" {
+		return false
+	}
+
+	// Reject stale login data (older than 24 hours) to prevent replay attacks
+	if time.Now().Unix()-data.AuthDate > 86400 {
 		return false
 	}
 

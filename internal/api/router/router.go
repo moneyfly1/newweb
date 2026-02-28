@@ -50,10 +50,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		auth.POST("/refresh", middleware.RateLimit(10, time.Minute), handlers.RefreshToken)
 		auth.POST("/logout", middleware.AuthRequired(), handlers.Logout)
 		auth.POST("/verification/send", middleware.RateLimit(3, time.Minute), handlers.SendVerificationCode)
-		auth.POST("/verification/verify", handlers.VerifyCode)
+		auth.POST("/verification/verify", middleware.RateLimit(5, time.Minute), handlers.VerifyCode)
 		auth.POST("/forgot-password", middleware.RateLimit(3, time.Minute), handlers.ForgotPassword)
-		auth.POST("/reset-password", handlers.ResetPassword)
-		auth.POST("/telegram", handlers.TelegramLogin)
+		auth.POST("/reset-password", middleware.RateLimit(5, time.Minute), handlers.ResetPassword)
+		auth.POST("/telegram", middleware.RateLimit(10, time.Minute), handlers.TelegramLogin)
 	}
 
 	// 公开订阅链接
@@ -72,7 +72,6 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	// 支付回调（无需认证）
 	api.POST("/payment/notify/:type", handlers.PaymentNotify)
-	api.GET("/payment/notify/:type", handlers.PaymentNotify)
 	api.GET("/payment/methods", handlers.GetPaymentMethods)
 
 	// 邀请码验证（公开）

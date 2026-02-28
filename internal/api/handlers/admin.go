@@ -303,9 +303,28 @@ func AdminUpdateUser(c *gin.Context) {
 		return
 	}
 
+	// If balance is being changed, log it properly
+	oldBalance := user.Balance
 	if err := db.Model(&user).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新用户失败")
 		return
+	}
+	if newBal, ok := updates["balance"]; ok {
+		var newBalance float64
+		switch v := newBal.(type) {
+		case float64:
+			newBalance = v
+		case int:
+			newBalance = float64(v)
+		default:
+			newBalance = oldBalance
+		}
+		diff := newBalance - oldBalance
+		if diff != 0 {
+			changeType := "admin_adjust"
+			desc := fmt.Sprintf("管理员调整余额: %+.2f", diff)
+			utils.CreateBalanceLogEntry(user.ID, changeType, diff, oldBalance, newBalance, nil, desc, c)
+		}
 	}
 	utils.CreateAuditLog(c, "update_user", "user", uint(id), fmt.Sprintf("更新用户: %s", user.Username))
 	utils.Success(c, user)
@@ -326,8 +345,23 @@ func AdminDeleteUser(c *gin.Context) {
 	}
 	// Send notification before deleting
 	go services.NotifyUserDirect(user.Email, "account_deleted", nil)
-	// Actually delete the user record
-	if err := db.Delete(&user).Error; err != nil {
+	// Delete user and all related data in a transaction
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		uid := user.ID
+		// Clean up related records
+		tx.Where("user_id = ?", uid).Delete(&models.Subscription{})
+		tx.Where("user_id = ?", uid).Delete(&models.Order{})
+		tx.Where("user_id = ?", uid).Delete(&models.Device{})
+		tx.Where("user_id = ?", uid).Delete(&models.InviteCode{})
+		tx.Where("inviter_id = ? OR invitee_id = ?", uid, uid).Delete(&models.InviteRelation{})
+		tx.Where("user_id = ?", uid).Delete(&models.Ticket{})
+		tx.Where("user_id = ?", uid).Delete(&models.TicketReply{})
+		tx.Where("user_id = ?", uid).Delete(&models.CheckIn{})
+		tx.Where("user_id = ?", uid).Delete(&models.BalanceLog{})
+		tx.Where("user_id = ?", uid).Delete(&models.MysteryBoxRecord{})
+		tx.Where("user_id = ?", uid).Delete(&models.CouponUsage{})
+		return tx.Delete(&user).Error
+	}); err != nil {
 		utils.InternalError(c, "删除用户失败")
 		return
 	}
@@ -1795,7 +1829,11 @@ func AdminGetSettings(c *gin.Context) {
 	database.GetDB().Where("category = ? OR category IS NULL", "").Find(&settings)
 	result := make(map[string]string)
 	for _, s := range settings {
-		result[s.Key] = s.Value
+		if sensitiveSettingKeys[s.Key] && s.Value != "" {
+			result[s.Key] = "****"
+		} else {
+			result[s.Key] = s.Value
+		}
 	}
 	utils.Success(c, result)
 }
@@ -2587,6 +2625,13 @@ func AdminSetSubscriptionExpireTime(c *gin.Context) {
 				return
 			}
 		}
+	}
+
+	// Validate date range
+	maxFuture := time.Now().AddDate(10, 0, 0)
+	if expireTime.After(maxFuture) {
+		utils.BadRequest(c, "到期时间不能超过 10 年")
+		return
 	}
 
 	db := database.GetDB()

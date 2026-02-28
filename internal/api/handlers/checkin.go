@@ -1,7 +1,8 @@
 package handlers
 
 import (
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -39,7 +40,9 @@ func UserCheckIn(c *gin.Context) {
 	}
 
 	// Settings are in 分 (cents), convert to 元 (yuan) for balance
-	rewardCents := minReward + rand.Intn(maxReward-minReward+1)
+	rangeSize := maxReward - minReward + 1
+	n, _ := rand.Int(rand.Reader, big.NewInt(int64(rangeSize)))
+	rewardCents := minReward + int(n.Int64())
 	amount := float64(rewardCents) / 100.0
 
 	// Get user's current balance for the log

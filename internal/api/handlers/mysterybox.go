@@ -1,9 +1,10 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -449,7 +450,8 @@ func weightedRandomPrize(prizes []models.MysteryBoxPrize) (*models.MysteryBoxPri
 	if totalWeight <= 0 {
 		return nil, fmt.Errorf("奖池权重配置异常")
 	}
-	r := rand.Intn(totalWeight)
+	n, _ := rand.Int(rand.Reader, big.NewInt(int64(totalWeight)))
+	r := int(n.Int64())
 	for i := range available {
 		r -= available[i].Weight
 		if r < 0 {

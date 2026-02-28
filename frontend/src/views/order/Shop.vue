@@ -397,6 +397,10 @@ const handleVerifyCoupon = async () => {
 }
 
 const handleCustomBuy = async () => {
+  if (customDevices.value <= 0 || customMonths.value <= 0) {
+    message.warning('设备数和月数必须大于0')
+    return
+  }
   customOrdering.value = true
   try {
     const payload: any = { devices: customDevices.value, months: customMonths.value }

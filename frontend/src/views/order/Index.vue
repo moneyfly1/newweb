@@ -367,6 +367,7 @@ const isQrCodeUrl = (url: string) => {
 }
 
 const startPolling = (orderNo: string) => {
+  stopPolling()
   pollingStatus.value = true
   pollTimer = setInterval(async () => {
     try {
@@ -377,7 +378,7 @@ const startPolling = (orderNo: string) => {
         message.success('支付成功')
         loadOrders()
       }
-    } catch {}
+    } catch { /* polling retry */ }
   }, 3000)
 }
 

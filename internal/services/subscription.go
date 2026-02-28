@@ -113,7 +113,10 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			pkgID := int64(order.PackageID)
 			sub.PackageID = &pkgID
 		}
-		db.Create(&sub)
+		if err := db.Create(&sub).Error; err != nil {
+			utils.SysError("subscription", fmt.Sprintf("创建订阅失败: userID=%d, orderNo=%s, err=%v", order.UserID, order.OrderNo, err))
+			return
+		}
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "activate", "system", nil, fmt.Sprintf("购买套餐激活订阅: %s", pkgName), nil, nil)
 	} else {
 		newExpire := sub.ExpireTime

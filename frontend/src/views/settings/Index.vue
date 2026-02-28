@@ -235,10 +235,10 @@ async function savePw() {
 }
 
 async function saveNotif() {
-  try { await updateNotificationSettings(notifForm.value) } catch {}
+  try { await updateNotificationSettings(notifForm.value); message.success('通知设置已保存') } catch (e: any) { message.error(e.message || '保存通知设置失败') }
 }
 async function savePrivacy() {
-  try { await updatePrivacySettings(privacyForm.value) } catch {}
+  try { await updatePrivacySettings(privacyForm.value); message.success('隐私设置已保存') } catch (e: any) { message.error(e.message || '保存隐私设置失败') }
 }
 
 async function handleUnbindTelegram() {
@@ -283,16 +283,16 @@ onMounted(async () => {
   try {
     const res: any = await getNotificationSettings()
     if (res.data) Object.assign(notifForm.value, res.data)
-  } catch {}
+  } catch (e: any) { console.warn('加载通知设置失败', e) }
   try {
     const res: any = await getPrivacySettings()
     if (res.data) Object.assign(privacyForm.value, res.data)
-  } catch {}
+  } catch (e: any) { console.warn('加载隐私设置失败', e) }
   loadingHistory.value = true
   try {
     const res: any = await getLoginHistory()
     loginHistory.value = res.data?.items || []
-  } catch {}
+  } catch (e: any) { message.error(e.message || '加载登录历史失败') }
   finally { loadingHistory.value = false }
   // Load Telegram config
   try {
@@ -304,7 +304,7 @@ onMounted(async () => {
         setTimeout(loadTelegramBindWidget, 100)
       }
     }
-  } catch {}
+  } catch (e: any) { console.warn('加载Telegram配置失败', e) }
 })
 </script>
 

@@ -147,6 +147,23 @@ func CreateInviteCode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	// Bounds validation
+	if req.InviterReward < 0 || req.InviterReward > 10000 {
+		utils.BadRequest(c, "邀请人奖励需在 0 ~ 10000 之间")
+		return
+	}
+	if req.InviteeReward < 0 || req.InviteeReward > 10000 {
+		utils.BadRequest(c, "受邀人奖励需在 0 ~ 10000 之间")
+		return
+	}
+	if req.MaxUses != nil && (*req.MaxUses < 1 || *req.MaxUses > 100000) {
+		utils.BadRequest(c, "最大使用次数需在 1 ~ 100000 之间")
+		return
+	}
+	if req.ExpiresInDays != nil && (*req.ExpiresInDays < 1 || *req.ExpiresInDays > 3650) {
+		utils.BadRequest(c, "有效天数需在 1 ~ 3650 之间")
+		return
+	}
 	db := database.GetDB()
 	codeStr := ""
 	for i := 0; i < 5; i++ {

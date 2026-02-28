@@ -13,48 +13,51 @@
         <!-- Hero Card: compact status + stats + upgrade inline -->
         <n-card class="hero-card" :bordered="false">
           <div class="hero-content">
-            <div class="hero-top">
-              <div class="status-section">
+            <div class="hero-row-top">
+              <div class="hero-left">
                 <div class="status-badge" :class="statusClass">
-                  <n-icon :size="18" :component="statusIcon" />
+                  <n-icon :size="14" :component="statusIcon" />
                   <span>{{ statusText }}</span>
                 </div>
                 <h2 class="package-name">{{ subscription.package_name || '当前套餐' }}</h2>
               </div>
-              <div class="hero-stats">
-                <div class="hero-stat">
-                  <span class="hero-stat-val">¥{{ (userBalance ?? 0).toFixed(2) }}</span>
-                  <span class="hero-stat-label">余额</span>
-                </div>
-                <div class="hero-stat-divider"></div>
-                <div class="hero-stat">
-                  <span class="hero-stat-val">{{ remainingDays }}</span>
-                  <span class="hero-stat-label">剩余天数</span>
-                  <n-button
-                    class="hero-sub-action"
-                    size="tiny"
-                    :disabled="!canConvert"
-                    @click="showConvertModal = true"
-                  >
-                    转换为余额
-                  </n-button>
-                </div>
-                <div class="hero-stat-divider"></div>
-                <div class="hero-stat">
-                  <span class="hero-stat-val">{{ devices.length }}/{{ subscription.device_limit || 0 }}</span>
-                  <span class="hero-stat-label">设备使用</span>
-                </div>
-                <div class="hero-stat-divider"></div>
-                <div class="hero-stat">
-                  <n-button size="small" class="hero-upgrade-btn" strong @click="showUpgradeModal = true">
-                    <template #icon><n-icon :component="ArrowUpCircleOutline" /></template>
-                    升级套餐
-                  </n-button>
-                </div>
+              <div class="hero-right">
+                <n-button size="small" class="hero-upgrade-btn" strong @click="showUpgradeModal = true">
+                  <template #icon><n-icon :component="ArrowUpCircleOutline" /></template>
+                  升级套餐
+                </n-button>
               </div>
             </div>
-            <div class="hero-meta">
-              <span><n-icon :component="TimeOutline" :size="14" /> 到期：{{ formatDate(subscription.expire_time) }}</span>
+            <div class="hero-stats">
+              <div class="hero-stat">
+                <span class="hero-stat-val">¥{{ (userBalance ?? 0).toFixed(2) }}</span>
+                <span class="hero-stat-label">余额</span>
+              </div>
+              <div class="hero-stat-divider"></div>
+              <div class="hero-stat">
+                <span class="hero-stat-val">{{ remainingDays }}</span>
+                <span class="hero-stat-label">剩余天数</span>
+              </div>
+              <div class="hero-stat-divider"></div>
+              <div class="hero-stat">
+                <span class="hero-stat-val">{{ devices.length }}/{{ subscription.device_limit || 0 }}</span>
+                <span class="hero-stat-label">设备使用</span>
+              </div>
+              <div class="hero-stat-divider"></div>
+              <div class="hero-stat">
+                <span class="hero-stat-val hero-stat-date"><n-icon :component="TimeOutline" :size="14" /> {{ formatDate(subscription.expire_time) }}</span>
+                <span class="hero-stat-label">到期时间</span>
+              </div>
+            </div>
+            <div class="hero-actions">
+              <n-button
+                class="hero-sub-action"
+                size="tiny"
+                :disabled="!canConvert"
+                @click="showConvertModal = true"
+              >
+                转换剩余天数为余额
+              </n-button>
             </div>
           </div>
         </n-card>
@@ -650,23 +653,24 @@ onUnmounted(() => { stopPayPolling() })
 .hero-card { background: linear-gradient(135deg, #4a5fd7 0%, #7c3aed 100%); border-radius: 14px; overflow: hidden; }
 .hero-card :deep(.n-card__content) { padding: 20px 24px; }
 .hero-content { color: white; }
-.hero-top { display: flex; justify-content: space-between; align-items: center; }
-.status-section { display: flex; align-items: center; gap: 12px; }
-.status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.hero-row-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.hero-left { display: flex; align-items: center; gap: 12px; }
+.hero-right { flex-shrink: 0; }
+.status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .status-badge.active { background: rgba(24,160,88,0.4); }
 .status-badge.warning { background: rgba(240,160,32,0.4); }
 .status-badge.expired, .status-badge.inactive { background: rgba(224,48,80,0.4); }
 .package-name { font-size: 18px; font-weight: 700; margin: 0; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
-.hero-stats { display: flex; align-items: center; gap: 20px; }
-.hero-stat { display: flex; flex-direction: column; align-items: center; }
-.hero-stat-val { font-size: 24px; font-weight: 700; }
-.hero-stat-label { font-size: 12px; opacity: 0.9; margin-top: 2px; }
-.hero-sub-action { margin-top: 6px; background: rgba(255,255,255,0.2) !important; color: white !important; border: none !important; font-weight: 500 !important; }
-.hero-sub-action:hover { background: rgba(255,255,255,0.35) !important; }
-.hero-sub-action:disabled { background: rgba(255,255,255,0.1) !important; color: rgba(255,255,255,0.5) !important; }
-.hero-sub-action:deep(.n-button__content) { font-size: 12px; }
-.hero-stat-divider { width: 1px; height: 32px; background: rgba(255,255,255,0.3); }
-.hero-meta { margin-top: 10px; font-size: 13px; opacity: 0.9; display: flex; align-items: center; gap: 4px; }
+.hero-stats { display: flex; align-items: center; justify-content: center; gap: 24px; background: rgba(255,255,255,0.1); border-radius: 10px; padding: 14px 20px; }
+.hero-stat { display: flex; flex-direction: column; align-items: center; min-width: 60px; }
+.hero-stat-val { font-size: 22px; font-weight: 700; line-height: 1.2; }
+.hero-stat-val.hero-stat-date { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.hero-stat-label { font-size: 12px; opacity: 0.8; margin-top: 4px; }
+.hero-stat-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.25); }
+.hero-actions { margin-top: 12px; display: flex; justify-content: flex-end; }
+.hero-sub-action { background: rgba(255,255,255,0.15) !important; color: white !important; border: none !important; font-weight: 500 !important; font-size: 12px !important; }
+.hero-sub-action:hover { background: rgba(255,255,255,0.3) !important; }
+.hero-sub-action:disabled { background: rgba(255,255,255,0.08) !important; color: rgba(255,255,255,0.4) !important; }
 /* Hero upgrade button */
 .hero-upgrade-btn { background: rgba(255,255,255,0.95) !important; color: #4a5fd7 !important; border: none !important; font-weight: 600 !important; }
 .hero-upgrade-btn:hover { background: #fff !important; }
@@ -702,9 +706,10 @@ onUnmounted(() => { stopPayPolling() })
 /* Mobile */
 @media (max-width: 767px) {
   .subscription-page { padding: 0 12px; }
-  .hero-top { flex-direction: column; gap: 12px; }
-  .hero-stats { gap: 12px; }
-  .hero-stat-val { font-size: 20px; }
+  .hero-row-top { flex-direction: column; gap: 10px; align-items: flex-start; }
+  .hero-right { align-self: flex-end; }
+  .hero-stats { flex-wrap: wrap; gap: 16px; padding: 12px 16px; }
+  .hero-stat-val { font-size: 18px; }
   .package-name { font-size: 16px; }
   .two-col { grid-template-columns: 1fr; }
   .url-row { flex-direction: column; align-items: flex-start; }

@@ -681,7 +681,7 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  .invite-page { padding: 0; }
+  .invite-page { padding: 0 12px; }
   .stat-card :deep(.n-statistic__label) { font-size: 12px; }
   .stat-card :deep(.n-statistic-value__content) { font-size: 20px; }
 }

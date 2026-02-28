@@ -219,7 +219,7 @@ onMounted(() => { loadData() })
 }
 
 @media (max-width: 767px) {
-  .recharge-container { padding: 0; }
+  .recharge-container { padding: 0 12px; }
   .title { font-size: 24px; }
   .subtitle { font-size: 14px; }
   .amount-chip { min-width: 60px; padding: 8px 14px; font-size: 14px; }

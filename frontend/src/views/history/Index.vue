@@ -203,7 +203,7 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  .history-page { padding: 0; }
+  .history-page { padding: 0 12px; }
   .stat-card { padding: 14px 16px; }
 }
 </style>

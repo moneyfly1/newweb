@@ -387,7 +387,7 @@ onMounted(async () => {
 .tut-tip { background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 6px; padding: 8px 12px; font-size: 13px; color: #389e0d; margin-top: 12px; }
 
 @media (max-width: 767px) {
-  .help-page { padding: 0; }
+  .help-page { padding: 0 12px; }
   .client-card { padding: 12px 14px; }
 }
 

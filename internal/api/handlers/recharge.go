@@ -54,7 +54,7 @@ func CreateRecharge(c *gin.Context) {
 	if req.PaymentMethodID > 0 {
 		var payConfig models.PaymentConfig
 		if err := db.Where("id = ? AND status = ?", req.PaymentMethodID, 1).First(&payConfig).Error; err != nil {
-			utils.Success(c, record) // return record without payment, method not found
+			utils.BadRequest(c, "支付方式不可用")
 			return
 		}
 

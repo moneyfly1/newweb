@@ -465,7 +465,7 @@ onMounted(() => { loadOrders(); loadPaymentMethods() })
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
-  .order-container { padding: 0; }
+  .order-container { padding: 0 12px; }
   .header { margin-bottom: 4px; }
   .title { font-size: 22px; }
 }

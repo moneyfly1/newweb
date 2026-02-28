@@ -587,7 +587,11 @@ func PaymentNotify(c *gin.Context) {
 
 	// Parse callback data to find transaction/order
 	var callbackData map[string]interface{}
-	json.Unmarshal(rawBody, &callbackData)
+	if err := json.Unmarshal(rawBody, &callbackData); err != nil {
+		utils.SysError("payment", fmt.Sprintf("解析支付回调数据失败: %v", err))
+		c.String(400, "invalid callback data")
+		return
+	}
 
 	// Try to find transaction by common callback fields
 	var transaction models.PaymentTransaction

@@ -123,7 +123,10 @@ func CreateOrder(c *gin.Context) {
 		FinalAmount:    &finalAmount,
 		ExpireTime:     &expireTime,
 	}
-	db.Create(&order)
+	if err := db.Create(&order).Error; err != nil {
+		utils.InternalError(c, "创建订单失败")
+		return
+	}
 
 	// 通知用户新订单 + 通知管理员
 	user := c.MustGet("user").(*models.User)

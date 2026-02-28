@@ -122,7 +122,8 @@ func createDefaultAdmin() {
 		username = "admin_" + localPart
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	randomPass := utils.GenerateRandomString(12)
+	hash, err := bcrypt.GenerateFromPassword([]byte(randomPass), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("生成管理员密码失败: %v", err)
 		return
@@ -149,6 +150,12 @@ func createDefaultAdmin() {
 		log.Printf("创建默认管理员失败: %v", err)
 		return
 	}
+	log.Printf("========================================")
+	log.Printf("  默认管理员账户已创建")
+	log.Printf("  邮箱: %s", adminEmail)
+	log.Printf("  密码: %s", randomPass)
+	log.Printf("  请登录后立即修改密码！")
+	log.Printf("========================================")
 
 	// Auto-create subscription for admin
 	subURL := utils.GenerateRandomString(32)

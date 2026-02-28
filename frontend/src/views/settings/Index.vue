@@ -313,7 +313,7 @@ onMounted(async () => {
 .telegram-status { padding: 8px 0; }
 .telegram-widget-container { min-height: 40px; }
 @media (max-width: 767px) {
-  .settings-page { padding: 0; }
+  .settings-page { padding: 0 12px; }
   .n-card { border-radius: 10px; }
 }
 </style>

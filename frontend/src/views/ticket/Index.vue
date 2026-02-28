@@ -333,6 +333,6 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  .ticket-container { padding: 0; }
+  .ticket-container { padding: 0 12px; }
 }
 </style>

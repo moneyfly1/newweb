@@ -251,5 +251,5 @@ onMounted(() => {
 .card-body { padding: 10px 14px; }
 .card-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
 .card-label { color: #999; }
-@media (max-width: 767px) { .mystery-box-page { padding: 0; } }
+@media (max-width: 767px) { .mystery-box-page { padding: 0 12px; } }
 </style>

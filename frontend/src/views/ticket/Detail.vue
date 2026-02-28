@@ -379,7 +379,7 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  .ticket-detail-container { padding: 0; }
+  .ticket-detail-container { padding: 0 12px; }
   .ticket-meta { flex-direction: column; gap: 8px; }
   .message-bubble { max-width: 85%; }
   .chat-container { min-height: 300px; max-height: 50vh; }

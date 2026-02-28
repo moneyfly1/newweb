@@ -217,7 +217,6 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
   <span style="display:inline-block;font-size:32px;font-weight:bold;letter-spacing:8px;color:#4F46E5;background:#F0EFFF;padding:12px 24px;border-radius:8px">%s</span>
 </div>
 <p style="font-size:14px;color:#666;margin:0">验证码有效期 15 分钟。如果这不是您的操作，请忽略此邮件。</p>`, code)
-	// TEMPLATE_PLACEHOLDER_1
 	case "welcome":
 		subject = fmt.Sprintf("欢迎加入 %s", siteName)
 		title = "欢迎加入"

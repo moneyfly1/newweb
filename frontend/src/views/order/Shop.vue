@@ -605,7 +605,7 @@ onMounted(() => {
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
-  .shop-container { padding: 0; }
+  .shop-container { padding: 0 12px; }
   .title { font-size: 24px; }
   .subtitle { font-size: 14px; }
   .packages-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }

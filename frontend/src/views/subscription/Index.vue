@@ -700,7 +700,7 @@ onUnmounted(() => { stopPayPolling() })
 
 /* Mobile */
 @media (max-width: 767px) {
-  .subscription-page { padding: 0; }
+  .subscription-page { padding: 0 12px; }
   .hero-top { flex-direction: column; gap: 12px; }
   .hero-stats { gap: 12px; }
   .hero-stat-val { font-size: 20px; }

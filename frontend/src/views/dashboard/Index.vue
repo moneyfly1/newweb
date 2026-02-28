@@ -468,7 +468,7 @@ onMounted(async () => {
 
 /* Mobile */
 @media (max-width: 767px) {
-  .dashboard { padding: 0; }
+  .dashboard { padding: 0 12px; }
   .top-bar { flex-direction: column; align-items: flex-start; padding: 14px 16px; }
   .welcome-section { flex-direction: column; align-items: flex-start; gap: 10px; }
   .welcome-title { font-size: 16px; }

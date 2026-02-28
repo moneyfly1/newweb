@@ -819,8 +819,10 @@ func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransact
 		})
 
 		// Add balance to user atomically
-		tx.Model(&models.User{}).Where("id = ?", record.UserID).
-			Update("balance", gorm.Expr("balance + ?", record.Amount))
+		if err := tx.Model(&models.User{}).Where("id = ?", record.UserID).
+			Update("balance", gorm.Expr("balance + ?", record.Amount)).Error; err != nil {
+			return fmt.Errorf("充值余额失败: %w", err)
+		}
 
 		// Fetch user for notification (after balance update)
 		var user models.User

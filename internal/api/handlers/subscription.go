@@ -742,8 +742,16 @@ func DeleteSubscriptionDevice(c *gin.Context) {
 		utils.NotFound(c, "设备不存在")
 		return
 	}
-	// Soft-deactivate
-	db.Model(&device).Update("is_active", false)
-	db.Model(&sub).UpdateColumn("current_devices", gorm.Expr("CASE WHEN current_devices > 0 THEN current_devices - 1 ELSE 0 END"))
+	// Soft-deactivate in transaction
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&device).Update("is_active", false).Error; err != nil {
+			return err
+		}
+		return tx.Model(&sub).UpdateColumn("current_devices", gorm.Expr("CASE WHEN current_devices > 0 THEN current_devices - 1 ELSE 0 END")).Error
+	})
+	if err != nil {
+		utils.InternalError(c, "删除设备失败")
+		return
+	}
 	utils.SuccessMessage(c, "设备已删除")
 }

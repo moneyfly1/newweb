@@ -448,6 +448,10 @@ func CreateCustomOrder(c *gin.Context) {
 		utils.BadRequest(c, fmt.Sprintf("最少购买 %d 个月", minMonths))
 		return
 	}
+	if req.Months > 120 {
+		utils.BadRequest(c, "最多购买 120 个月")
+		return
+	}
 
 	// Parse duration discounts
 	var discountTiers []struct {
@@ -643,6 +647,14 @@ func CreateUpgradeOrder(c *gin.Context) {
 	}
 	if req.AddDevices%5 != 0 {
 		utils.BadRequest(c, "增加设备数只能为 5 的倍数")
+		return
+	}
+	if req.AddDevices > 100 {
+		utils.BadRequest(c, "单次最多增加 100 个设备")
+		return
+	}
+	if req.ExtendMonths < 0 || req.ExtendMonths > 120 {
+		utils.BadRequest(c, "续期月数需在 0 ~ 120 之间")
 		return
 	}
 

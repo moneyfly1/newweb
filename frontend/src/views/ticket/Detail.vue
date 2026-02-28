@@ -3,7 +3,7 @@
     <n-card :bordered="false" class="info-card">
       <div class="ticket-header">
         <div class="header-left">
-          <n-button text @click="router.back()">
+          <n-button text @click="window.history.length > 1 ? router.back() : router.push('/tickets')">
             <template #icon>
               <n-icon><ArrowBackOutline /></n-icon>
             </template>

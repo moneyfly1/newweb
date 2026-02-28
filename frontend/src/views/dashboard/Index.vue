@@ -16,19 +16,24 @@
           <div class="top-stat">
             <span class="top-stat-label">余额</span>
             <span class="top-stat-val">¥{{ info.balance?.toFixed(2) || '0.00' }}</span>
-            <n-button text type="primary" size="tiny" @click="$router.push('/recharge')">充值</n-button>
+            <n-button class="gradient-btn" size="tiny" strong @click="$router.push('/recharge')">
+              充值
+            </n-button>
           </div>
           <div class="top-stat-divider"></div>
           <div class="top-stat">
             <span class="top-stat-label">签到</span>
             <span class="top-stat-val">{{ checkinStatus.consecutive_days || 0 }}天</span>
             <n-button
-              :type="checkinStatus.checked_in_today ? 'default' : 'success'"
-              size="tiny" text
+              class="gradient-btn"
+              size="tiny"
+              strong
               :disabled="checkinStatus.checked_in_today || checkinLoading"
               :loading="checkinLoading"
               @click="handleCheckIn"
-            >{{ checkinStatus.checked_in_today ? '已签到' : '签到' }}</n-button>
+            >
+              {{ checkinStatus.checked_in_today ? '已签到' : '签到' }}
+            </n-button>
           </div>
         </div>
       </div>
@@ -386,19 +391,26 @@ onMounted(async () => {
 
 /* Top Bar */
 .top-bar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4a5fd7 0%, #7c3aed 100%);
   border-radius: 10px; padding: 14px 20px; color: white; position: relative; overflow: hidden;
   display: flex; justify-content: space-between; align-items: center;
 }
 .welcome-section { display: flex; align-items: center; gap: 24px; flex: 1; z-index: 1; }
-.welcome-title { font-size: 18px; font-weight: 700; margin: 0; white-space: nowrap; }
-.welcome-decoration { position: absolute; right: -20px; top: -20px; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,0.1); }
+.welcome-title { font-size: 18px; font-weight: 700; margin: 0; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+.welcome-decoration { position: absolute; right: -20px; top: -20px; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,0.08); }
 .top-stats { display: flex; align-items: center; gap: 16px; }
 .top-stat { display: flex; align-items: center; gap: 6px; }
-.top-stat-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.3); }
-.top-stat-label { font-size: 12px; opacity: 0.8; }
+.top-stat-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.35); }
+.top-stat-label { font-size: 12px; opacity: 0.9; }
 .top-stat-val { font-size: 15px; font-weight: 700; }
+/* Solid white buttons on gradient backgrounds */
+.gradient-btn { background: rgba(255,255,255,0.95) !important; color: #4a5fd7 !important; border: none !important; font-weight: 600 !important; }
+.gradient-btn:hover { background: #fff !important; }
+.gradient-btn:disabled { background: rgba(255,255,255,0.5) !important; color: rgba(74,95,215,0.6) !important; }
 .level-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 12px; color: white; font-weight: 600; font-size: 12px; }
+/* Tags on gradient background need solid styling */
+.top-bar :deep(.n-tag) { background: rgba(255,255,255,0.2) !important; color: white !important; font-weight: 600; }
+.top-bar :deep(.n-tag .n-tag__content) { color: white !important; }
 
 /* Main Grid */
 .main-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; margin-top: 12px; }

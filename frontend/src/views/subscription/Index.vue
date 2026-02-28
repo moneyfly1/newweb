@@ -33,7 +33,6 @@
                   <n-button
                     class="hero-sub-action"
                     size="tiny"
-                    quaternary
                     :disabled="!canConvert"
                     @click="showConvertModal = true"
                   >
@@ -47,7 +46,7 @@
                 </div>
                 <div class="hero-stat-divider"></div>
                 <div class="hero-stat">
-                  <n-button size="small" type="warning" ghost @click="showUpgradeModal = true">
+                  <n-button size="small" class="hero-upgrade-btn" strong @click="showUpgradeModal = true">
                     <template #icon><n-icon :component="ArrowUpCircleOutline" /></template>
                     升级套餐
                   </n-button>
@@ -647,24 +646,29 @@ onUnmounted(() => { stopPayPolling() })
 .empty-state { padding: 80px 0; text-align: center; }
 
 /* Hero Card */
-.hero-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 14px; overflow: hidden; }
+.hero-card { background: linear-gradient(135deg, #4a5fd7 0%, #7c3aed 100%); border-radius: 14px; overflow: hidden; }
 .hero-card :deep(.n-card__content) { padding: 20px 24px; }
 .hero-content { color: white; }
 .hero-top { display: flex; justify-content: space-between; align-items: center; }
 .status-section { display: flex; align-items: center; gap: 12px; }
-.status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; }
-.status-badge.active { background: rgba(24,160,88,0.3); }
-.status-badge.warning { background: rgba(240,160,32,0.3); }
-.status-badge.expired, .status-badge.inactive { background: rgba(224,48,80,0.3); }
-.package-name { font-size: 18px; font-weight: 700; margin: 0; color: white; }
+.status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.status-badge.active { background: rgba(24,160,88,0.4); }
+.status-badge.warning { background: rgba(240,160,32,0.4); }
+.status-badge.expired, .status-badge.inactive { background: rgba(224,48,80,0.4); }
+.package-name { font-size: 18px; font-weight: 700; margin: 0; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
 .hero-stats { display: flex; align-items: center; gap: 20px; }
 .hero-stat { display: flex; flex-direction: column; align-items: center; }
 .hero-stat-val { font-size: 24px; font-weight: 700; }
-.hero-stat-label { font-size: 12px; opacity: 0.85; margin-top: 2px; }
-.hero-sub-action { margin-top: 6px; color: rgba(255,255,255,0.9); }
+.hero-stat-label { font-size: 12px; opacity: 0.9; margin-top: 2px; }
+.hero-sub-action { margin-top: 6px; background: rgba(255,255,255,0.2) !important; color: white !important; border: none !important; font-weight: 500 !important; }
+.hero-sub-action:hover { background: rgba(255,255,255,0.35) !important; }
+.hero-sub-action:disabled { background: rgba(255,255,255,0.1) !important; color: rgba(255,255,255,0.5) !important; }
 .hero-sub-action:deep(.n-button__content) { font-size: 12px; }
-.hero-stat-divider { width: 1px; height: 32px; background: rgba(255,255,255,0.25); }
-.hero-meta { margin-top: 10px; font-size: 13px; opacity: 0.8; display: flex; align-items: center; gap: 4px; }
+.hero-stat-divider { width: 1px; height: 32px; background: rgba(255,255,255,0.3); }
+.hero-meta { margin-top: 10px; font-size: 13px; opacity: 0.9; display: flex; align-items: center; gap: 4px; }
+/* Hero upgrade button */
+.hero-upgrade-btn { background: rgba(255,255,255,0.95) !important; color: #4a5fd7 !important; border: none !important; font-weight: 600 !important; }
+.hero-upgrade-btn:hover { background: #fff !important; }
 
 /* Upgrade Result */
 .upgrade-result { margin-top: 12px; }

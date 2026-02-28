@@ -95,8 +95,8 @@ const loadHistory = async () => {
   try {
     const res: any = await getRedeemHistory()
     history.value = res.data?.items || res.data || []
-  } catch {
-    // silently ignore
+  } catch (e: any) {
+    message.error(e.message || '加载兑换记录失败')
   } finally {
     loadingHistory.value = false
   }

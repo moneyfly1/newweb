@@ -35,7 +35,7 @@ func VerifyCoupon(c *gin.Context) {
 
 	// Check date range
 	now := time.Now()
-	if now.Before(coupon.ValidFrom) || now.After(coupon.ValidUntil) {
+	if now.Before(coupon.ValidFrom) || now.After(coupon.ValidUntil.AddDate(0, 0, 1)) {
 		utils.BadRequest(c, "优惠券不在有效期内")
 		return
 	}

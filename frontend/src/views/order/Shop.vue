@@ -271,6 +271,7 @@ const showQrModal = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
 const pollingStatus = ref(false)
+const buyingId = ref<number | null>(null)
 const userBalance = ref<number>(0)
 const useBalanceDeduct = ref(false)
 const isMobile = ref(window.innerWidth <= 767)
@@ -411,6 +412,7 @@ const handleCustomBuy = async () => {
 
 const handleBuy = async (pkg: any) => {
   selectedPackage.value = pkg
+  buyingId.value = pkg.id
   try {
     const payload: any = { package_id: pkg.id }
     if (couponCode.value.trim()) payload.coupon_code = couponCode.value
@@ -419,7 +421,7 @@ const handleBuy = async (pkg: any) => {
     showPaymentModal.value = true
   } catch (e: any) {
     message.error(e.message || '创建订单失败')
-  }
+  } finally { buyingId.value = null }
 }
 
 const isQrCodeUrl = (url: string) => {
@@ -427,6 +429,7 @@ const isQrCodeUrl = (url: string) => {
 }
 
 const startPolling = (orderNo: string) => {
+  stopPolling()
   pollingStatus.value = true
   pollTimer = setInterval(async () => {
     try {

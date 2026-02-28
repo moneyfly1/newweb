@@ -94,7 +94,7 @@ func CreateOrder(c *gin.Context) {
 	if req.CouponCode != "" {
 		var coupon models.Coupon
 		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
-			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil) {
+			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
 				switch coupon.Type {
 				case "discount":
 					discountAmount = amount * coupon.DiscountValue / 100
@@ -452,7 +452,7 @@ func CreateCustomOrder(c *gin.Context) {
 	if req.CouponCode != "" {
 		var coupon models.Coupon
 		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
-			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil) {
+			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
 				switch coupon.Type {
 				case "discount":
 					couponDiscount = finalPrice * coupon.DiscountValue / 100
@@ -619,7 +619,7 @@ func CreateUpgradeOrder(c *gin.Context) {
 	if req.CouponCode != "" {
 		var coupon models.Coupon
 		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
-			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil) {
+			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
 				switch coupon.Type {
 				case "discount":
 					couponDiscount = basePrice * coupon.DiscountValue / 100

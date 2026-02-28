@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Register 用户注册
@@ -124,28 +125,40 @@ func Register(c *gin.Context) {
 
 	// 处理邀请码
 	if req.InviteCode != "" {
-		var inviteCode models.InviteCode
-		if err := db.Where("UPPER(code) = UPPER(?) AND is_active = ?", req.InviteCode, true).First(&inviteCode).Error; err != nil {
+		// Validate invite code existence only (detailed check with locking inside transaction)
+		var inviteCheck models.InviteCode
+		if err := db.Where("UPPER(code) = UPPER(?) AND is_active = ?", req.InviteCode, true).First(&inviteCheck).Error; err != nil {
 			utils.BadRequest(c, "邀请码无效或已失效")
 			return
 		}
-		// 检查使用次数
-		if inviteCode.MaxUses != nil && inviteCode.UsedCount >= int(*inviteCode.MaxUses) {
-			utils.BadRequest(c, "邀请码已达到最大使用次数")
-			return
-		}
-		// 检查过期
-		if inviteCode.ExpiresAt != nil && inviteCode.ExpiresAt.Before(time.Now()) {
-			utils.BadRequest(c, "邀请码已过期")
-			return
-		}
-		invitedBy := inviteCode.UserID
+		invitedBy := inviteCheck.UserID
 		user.InvitedBy = &invitedBy
 		user.InviteCodeUsed = &req.InviteCode
 	}
 
 	// 开启事务：创建用户、更新邀请码、发放奖励、创建订阅
 	tx := db.Begin()
+
+	// Re-validate invite code with row lock inside transaction
+	if req.InviteCode != "" {
+		var inviteCode models.InviteCode
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("UPPER(code) = UPPER(?) AND is_active = ?", req.InviteCode, true).First(&inviteCode).Error; err != nil {
+			tx.Rollback()
+			utils.BadRequest(c, "邀请码无效或已失效")
+			return
+		}
+		if inviteCode.MaxUses != nil && inviteCode.UsedCount >= int(*inviteCode.MaxUses) {
+			tx.Rollback()
+			utils.BadRequest(c, "邀请码已达到最大使用次数")
+			return
+		}
+		if inviteCode.ExpiresAt != nil && inviteCode.ExpiresAt.Before(time.Now()) {
+			tx.Rollback()
+			utils.BadRequest(c, "邀请码已过期")
+			return
+		}
+	}
 
 	if err := tx.Create(&user).Error; err != nil {
 		tx.Rollback()

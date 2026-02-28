@@ -497,6 +497,7 @@ const loadPaymentMethods = async () => {
   } catch {}
 }
 const startPayPolling = (orderNo: string) => {
+  stopPayPolling()
   payPollingStatus.value = true
   payPollTimer = setInterval(async () => {
     try {
@@ -553,11 +554,11 @@ watch(() => devices.value.length, (count) => {
 })
 
 const handleResetSubscription = async () => {
-  try { await resetSubscription(); message.success('订阅地址已重置'); await loadData() }
+  try { await resetSubscription(); showResetModal.value = false; message.success('订阅地址已重置'); await loadData() }
   catch (e: any) { message.error(e.message || '重置订阅失败') }
 }
 const handleConvertToBalance = async () => {
-  try { await convertToBalance(); message.success('转换成功'); await loadData() }
+  try { await convertToBalance(); showConvertModal.value = false; message.success('转换成功'); await loadData() }
   catch (e: any) { message.error(e.message || '转换失败') }
 }
 const handleSendEmail = async () => {

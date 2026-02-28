@@ -132,12 +132,13 @@ func sendExpiryRemindersTask() {
 	}
 
 	// 3-day reminder (check a 1-hour window to avoid duplicates)
+	now := time.Now()
 	var remind3 []subUser
 	db.Model(&models.Subscription{}).
 		Select("users.email, subscriptions.expire_time").
 		Joins("JOIN users ON users.id = subscriptions.user_id").
 		Where("subscriptions.is_active = ? AND subscriptions.expire_time BETWEEN ? AND ? AND users.email_notifications = ?",
-			true, time.Now().Add(72*time.Hour), time.Now().Add(73*time.Hour), true).
+			true, now.Add(72*time.Hour), now.Add(73*time.Hour), true).
 		Scan(&remind3)
 	for _, r := range remind3 {
 		subject, body := RenderEmail("expiry_reminder", map[string]string{
@@ -152,7 +153,7 @@ func sendExpiryRemindersTask() {
 		Select("users.email, subscriptions.expire_time").
 		Joins("JOIN users ON users.id = subscriptions.user_id").
 		Where("subscriptions.is_active = ? AND subscriptions.expire_time BETWEEN ? AND ? AND users.email_notifications = ?",
-			true, time.Now().Add(24*time.Hour), time.Now().Add(25*time.Hour), true).
+			true, now.Add(24*time.Hour), now.Add(25*time.Hour), true).
 		Scan(&remind1)
 	for _, r := range remind1 {
 		subject, body := RenderEmail("expiry_reminder", map[string]string{
@@ -167,7 +168,7 @@ func sendExpiryRemindersTask() {
 		Select("users.email, subscriptions.expire_time").
 		Joins("JOIN users ON users.id = subscriptions.user_id").
 		Where("subscriptions.status = ? AND subscriptions.expire_time BETWEEN ? AND ? AND users.email_notifications = ?",
-			"expired", time.Now().Add(-1*time.Hour), time.Now(), true).
+			"expired", now.Add(-1*time.Hour), now, true).
 		Scan(&expired)
 	for _, r := range expired {
 		subject, body := RenderEmail("expiry_notice", map[string]string{
@@ -197,6 +198,7 @@ func cleanExpiredCodesTask() {
 // sendUnpaidOrderRemindersTask sends reminders for orders pending 15+ minutes.
 func sendUnpaidOrderRemindersTask() {
 	db := database.GetDB()
+	now := time.Now()
 
 	type orderUser struct {
 		OrderNo     string
@@ -212,7 +214,7 @@ func sendUnpaidOrderRemindersTask() {
 		Select("orders.order_no, orders.user_id, users.email, orders.amount, orders.final_amount, orders.package_id").
 		Joins("JOIN users ON users.id = orders.user_id").
 		Where("orders.status = ? AND orders.created_at BETWEEN ? AND ? AND users.email_notifications = ?",
-			"pending", time.Now().Add(-20*time.Minute), time.Now().Add(-15*time.Minute), true).
+			"pending", now.Add(-20*time.Minute), now.Add(-15*time.Minute), true).
 		Scan(&orders)
 
 	for _, o := range orders {

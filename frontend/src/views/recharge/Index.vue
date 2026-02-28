@@ -127,6 +127,7 @@ const isQrCodeUrl = (url: string) => {
 }
 
 const startPolling = (recordId: number) => {
+  stopPolling()
   pollingStatus.value = true
   pollTimer = setInterval(async () => {
     try {

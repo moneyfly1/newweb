@@ -3,7 +3,7 @@
     <n-card :title="appStore.isMobile ? undefined : '订阅管理'">
       <template v-if="!appStore.isMobile" #header-extra>
         <n-space>
-          <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注" clearable style="width: 200px" @keyup.enter="handleSearch">
+          <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注/订阅地址" clearable style="width: 200px" @keyup.enter="handleSearch">
             <template #prefix><n-icon><SearchOutline /></n-icon></template>
           </n-input>
           <n-select v-model:value="statusFilter" :options="statusOptions" style="width: 120px" @update:value="handleSearch" />
@@ -15,7 +15,7 @@
       <div v-if="appStore.isMobile" class="mobile-toolbar">
         <div class="mobile-toolbar-title">订阅管理</div>
         <div class="mobile-toolbar-controls">
-          <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注" clearable size="small" @keyup.enter="handleSearch">
+          <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注/订阅地址" clearable size="small" @keyup.enter="handleSearch">
             <template #prefix><n-icon><SearchOutline /></n-icon></template>
           </n-input>
           <div class="mobile-toolbar-row">
@@ -192,7 +192,7 @@
             <n-empty v-else description="暂无记录" size="small" />
           </n-tab-pane>
           <n-tab-pane name="resets" tab="重置记录">
-            <n-data-table v-if="(detailData.resets||[]).length" :columns="resetCols" :data="detailData.resets" :bordered="false" size="small" :max-height="240" />
+            <n-data-table v-if="(detailData.resets||[]).length" :columns="resetCols" :data="detailData.resets" :bordered="false" size="small" :max-height="240" :scroll-x="900" />
             <n-empty v-else description="暂无记录" size="small" />
           </n-tab-pane>
           <n-tab-pane name="balance" tab="余额变动">
@@ -367,8 +367,11 @@ const loginCols = [
   { title: '时间', key: 'login_time', width: 160, render: (r) => fmtDate(r.login_time) }
 ]
 const resetCols = [
-  { title: '操作者', key: 'reset_by', width: 100, render: (r) => r.reset_by || '-' },
+  { title: '操作者', key: 'reset_by', width: 80, render: (r) => r.reset_by || '-' },
   { title: '类型', key: 'reset_type', width: 80 },
+  { title: '原订阅地址', key: 'old_subscription_url', width: 180, ellipsis: { tooltip: true }, render: (r) => r.old_subscription_url || '-' },
+  { title: '新订阅地址', key: 'new_subscription_url', width: 180, ellipsis: { tooltip: true }, render: (r) => r.new_subscription_url || '-' },
+  { title: '设备(前/后)', key: 'devices', width: 90, render: (r) => `${r.device_count_before ?? 0} → ${r.device_count_after ?? 0}` },
   { title: '原因', key: 'reason', ellipsis: { tooltip: true } },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]

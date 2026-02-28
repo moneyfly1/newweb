@@ -162,7 +162,13 @@ func AdminListUsers(c *gin.Context) {
 	query := db.Model(&models.User{})
 	if search := c.Query("search"); search != "" {
 		like := "%" + search + "%"
-		query = query.Where("username LIKE ? OR email LIKE ?", like, like)
+		// Also search by old subscription URL in reset history
+		var resetUserIDs []uint
+		db.Model(&models.SubscriptionReset{}).Where("old_subscription_url LIKE ? OR new_subscription_url LIKE ?", like, like).Distinct().Pluck("user_id", &resetUserIDs)
+		// Search by current subscription URL
+		var subUserIDs []uint
+		db.Model(&models.Subscription{}).Where("subscription_url LIKE ?", like).Pluck("user_id", &subUserIDs)
+		query = query.Where("username LIKE ? OR email LIKE ? OR id IN ? OR id IN ?", like, like, resetUserIDs, subUserIDs)
 	}
 	if status := c.Query("is_active"); status != "" {
 		query = query.Where("is_active = ?", status == "true")
@@ -1216,12 +1222,19 @@ func AdminListSubscriptions(c *gin.Context) {
 		query = query.Where("status = ?", status)
 	}
 	if search := c.Query("search"); search != "" {
-		// Search by user email, username, or notes
+		// Search by user email, username, notes, or subscription URL (current + old)
+		like := "%" + search + "%"
 		var userIDs []uint
 		db.Model(&models.User{}).Where("email LIKE ? OR username LIKE ? OR notes LIKE ? OR CAST(id AS CHAR) = ?",
-			"%"+search+"%", "%"+search+"%", "%"+search+"%", search).Pluck("id", &userIDs)
-		if len(userIDs) > 0 {
-			query = query.Where("user_id IN ?", userIDs)
+			like, like, like, search).Pluck("id", &userIDs)
+		// Also match current subscription URL
+		var subIDs []uint
+		db.Model(&models.Subscription{}).Where("subscription_url LIKE ?", like).Pluck("id", &subIDs)
+		// Also match old subscription URLs from reset history
+		var resetSubIDs []uint
+		db.Model(&models.SubscriptionReset{}).Where("old_subscription_url LIKE ? OR new_subscription_url LIKE ?", like, like).Distinct().Pluck("subscription_id", &resetSubIDs)
+		if len(userIDs) > 0 || len(subIDs) > 0 || len(resetSubIDs) > 0 {
+			query = query.Where("user_id IN ? OR id IN ? OR id IN ?", userIDs, subIDs, resetSubIDs)
 		} else {
 			query = query.Where("1 = 0") // no match
 		}

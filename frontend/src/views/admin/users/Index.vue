@@ -8,7 +8,7 @@
             <n-space>
               <n-input
                 v-model:value="searchQuery"
-                placeholder="搜索邮箱或用户名"
+                placeholder="搜索邮箱/用户名/订阅地址"
                 clearable
                 style="width: 260px"
                 @keyup.enter="handleSearch"
@@ -290,7 +290,7 @@
             <n-empty v-else description="暂无记录" size="small" />
           </n-tab-pane>
           <n-tab-pane name="resets" tab="重置记录">
-            <n-data-table v-if="(userDetail.resets||[]).length" :columns="resetCols" :data="userDetail.resets" :bordered="false" size="small" :max-height="240" />
+            <n-data-table v-if="(userDetail.resets||[]).length" :columns="resetCols" :data="userDetail.resets" :bordered="false" size="small" :max-height="240" :scroll-x="900" />
             <n-empty v-else description="暂无记录" size="small" />
           </n-tab-pane>
           <n-tab-pane name="balance" tab="余额变动">
@@ -926,8 +926,11 @@ const loginCols = [
   { title: '时间', key: 'login_time', width: 160, render: (r) => fmtDate(r.login_time) }
 ]
 const resetCols = [
-  { title: '操作者', key: 'reset_by', width: 100, render: (r) => r.reset_by || '-' },
+  { title: '操作者', key: 'reset_by', width: 80, render: (r) => r.reset_by || '-' },
   { title: '类型', key: 'reset_type', width: 80 },
+  { title: '原订阅地址', key: 'old_subscription_url', width: 180, ellipsis: { tooltip: true }, render: (r) => r.old_subscription_url || '-' },
+  { title: '新订阅地址', key: 'new_subscription_url', width: 180, ellipsis: { tooltip: true }, render: (r) => r.new_subscription_url || '-' },
+  { title: '设备(前/后)', key: 'devices', width: 90, render: (r) => `${r.device_count_before ?? 0} → ${r.device_count_after ?? 0}` },
   { title: '原因', key: 'reason', ellipsis: { tooltip: true } },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]

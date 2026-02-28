@@ -425,11 +425,11 @@ const columns = [
       h('div', { style: 'font-size:13px;margin-bottom:4px' }, `在线 ${row.current_devices || 0} / 上限 ${row.device_limit || 0}`),
       h(NInputNumber, { value: row.device_limit, min: 0, max: 999, size: 'small', style: 'width:100%', onUpdateValue: (v) => inlineSetDevice(row, v) }),
       h('div', { class: 'inline-quick-btns' }, [
-        h(NButton, { size: 'tiny', onClick: () => inlineSetDevice(row, 2) }, { default: () => '2' }),
-        h(NButton, { size: 'tiny', onClick: () => inlineSetDevice(row, 5) }, { default: () => '5' }),
-        h(NButton, { size: 'tiny', onClick: () => inlineSetDevice(row, 10) }, { default: () => '10' }),
-        h(NButton, { size: 'tiny', onClick: () => inlineSetDevice(row, 20) }, { default: () => '20' }),
-        h(NButton, { size: 'tiny', onClick: () => inlineSetDevice(row, 30) }, { default: () => '30' }),
+        h(NButton, { size: 'tiny', onClick: () => inlineAddDevice(row, 2) }, { default: () => '+2' }),
+        h(NButton, { size: 'tiny', onClick: () => inlineAddDevice(row, 5) }, { default: () => '+5' }),
+        h(NButton, { size: 'tiny', onClick: () => inlineAddDevice(row, 10) }, { default: () => '+10' }),
+        h(NButton, { size: 'tiny', onClick: () => inlineAddDevice(row, 20) }, { default: () => '+20' }),
+        h(NButton, { size: 'tiny', onClick: () => inlineAddDevice(row, 30) }, { default: () => '+30' }),
       ])
     ])
   },

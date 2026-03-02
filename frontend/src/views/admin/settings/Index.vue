@@ -740,6 +740,7 @@ const loadSettings = async () => {
     const res = await getSettings()
     if (res.code === 0 && res.data) {
       const data = res.data as Record<string, any>
+      maskedFields.value.clear() // 清空之前的记录
       for (const key of Object.keys(form.value)) {
         if (key in data) {
           if (booleanKeys.includes(key)) {
@@ -748,6 +749,10 @@ const loadSettings = async () => {
             form.value[key] = Number(data[key]) || form.value[key]
           } else {
             form.value[key] = data[key]
+            // 记录哪些敏感字段是掩码
+            if (sensitiveKeys.includes(key) && data[key] === '****') {
+              maskedFields.value.add(key)
+            }
           }
         }
       }
@@ -771,6 +776,9 @@ const sensitiveKeys = [
   'pay_stripe_webhook_secret', 'backup_github_token', 'notify_telegram_bot_token'
 ]
 
+// 记录初始加载时的掩码字段
+const maskedFields = ref<Set<string>>(new Set())
+
 const handleSave = async () => {
   saving.value = true
   try {
@@ -778,7 +786,8 @@ const handleSave = async () => {
     const dataToSave: Record<string, any> = {}
     for (const key of Object.keys(form.value)) {
       const val = form.value[key]
-      if (sensitiveKeys.includes(key) && (typeof val === 'string' && (val === '' || val.includes('****')))) {
+      // 只有当字段是初始加载时的掩码且值未改变时才跳过
+      if (sensitiveKeys.includes(key) && maskedFields.value.has(key) && (typeof val === 'string' && val === '****')) {
         continue
       }
       dataToSave[key] = val

@@ -395,7 +395,7 @@ import { SearchOutline, AddOutline, RefreshOutline, EllipsisVertical, DownloadOu
 import {
   listUsers, getUser, updateUser, deleteUser, toggleUserActive,
   createUser, resetUserPassword, deleteUserDevice,
-  batchUserAction, exportUsersCSV, importUsersCSV
+  batchUserAction, exportUsersCSV, importUsersCSV, loginAsUser
 } from '@/api/admin'
 import { listUserLevels } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -509,22 +509,10 @@ const columns = [
     render: (row) => `¥${(row.balance ?? 0).toFixed(2)}`
   },
   {
-    title: '等级',
-    key: 'level',
-    width: 90, resizable: true,
-    render: (row) => row.level_name || row.level || '无'
-  },
-  {
     title: '状态',
     key: 'is_active',
     width: 80, resizable: true,
     render: (row) => h(NTag, { type: row.is_active ? 'success' : 'error', size: 'small' }, { default: () => row.is_active ? '激活' : '禁用' })
-  },
-  {
-    title: '管理员',
-    key: 'is_admin',
-    width: 80, resizable: true,
-    render: (row) => row.is_admin ? h(NTag, { type: 'warning', size: 'small' }, { default: () => '管理员' }) : '-'
   },
   {
     title: '注册时间',
@@ -543,17 +531,16 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 80,
+    width: 210,
     fixed: 'right',
-    render: (row) => h(
-      NDropdown,
-      {
-        trigger: 'click',
-        options: actionOptions(row),
-        onSelect: (key) => handleAction(key, row)
-      },
-      { default: () => h(NButton, { size: 'small', quaternary: true }, { icon: () => h(NIcon, { component: EllipsisVertical }) }) }
-    )
+    render: (row) => h('div', { class: 'action-btn-grid' }, [
+      h(NButton, { size: 'small', secondary: true, type: 'info', onClick: () => handleAction('detail', row) }, { default: () => '详情' }),
+      h(NButton, { size: 'small', type: 'primary', onClick: () => handleAction('edit', row) }, { default: () => '编辑' }),
+      h(NButton, { size: 'small', type: row.is_active ? 'warning' : 'success', onClick: () => handleAction('toggle', row) }, { default: () => row.is_active ? '禁用' : '启用' }),
+      h(NButton, { size: 'small', secondary: true, type: 'warning', onClick: () => handleAction('resetPwd', row) }, { default: () => '重置' }),
+      h(NButton, { size: 'small', type: 'success', onClick: () => handleAction('loginAs', row) }, { default: () => '代登' }),
+      h(NButton, { size: 'small', type: 'error', onClick: () => handleAction('delete', row) }, { default: () => '删除' }),
+    ])
   }
 ]
 // Fetch users
@@ -598,6 +585,7 @@ const handleAction = (key, row) => {
     case 'toggle': handleToggleActive(row); break
     case 'resetPwd': openResetPwdModal(row); break
     case 'delete': handleDelete(row); break
+    case 'loginAs': handleLoginAs(row); break
   }
 }
 
@@ -697,6 +685,20 @@ const handleToggleActive = (row) => {
       }
     }
   })
+}
+
+const handleLoginAs = async (row) => {
+  try {
+    const res = await loginAsUser(row.id)
+    const { access_token, user } = res.data
+    localStorage.setItem('admin_token', localStorage.getItem('token') || '')
+    localStorage.setItem('admin_user', localStorage.getItem('user') || '')
+    localStorage.setItem('token', access_token)
+    localStorage.setItem('user', JSON.stringify(user))
+    window.open('/', '_blank')
+  } catch (error) {
+    message.error('登录失败')
+  }
 }
 
 // Delete
@@ -1089,4 +1091,5 @@ onMounted(() => { fetchUsers() })
   border-top: 1px solid var(--border-color, #f0f0f0);
   flex-wrap: wrap;
 }
+:deep(.action-btn-grid) { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 </style>

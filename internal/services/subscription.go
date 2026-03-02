@@ -19,7 +19,7 @@ import (
 // ── Subscription activation ──
 
 // ActivateSubscription creates or extends a subscription after successful payment.
-func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string) {
+func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string) error {
 	var deviceLimit int
 	var durationDays int
 	var pkgName string
@@ -27,12 +27,12 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 	if order.PackageID == 0 && order.ExtraData != nil {
 		var extra map[string]interface{}
 		if err := json.Unmarshal([]byte(*order.ExtraData), &extra); err != nil {
-			return
+			return fmt.Errorf("解析订单额外数据失败: %w", err)
 		}
 		if extra["type"] == "subscription_upgrade" {
 			var sub models.Subscription
 			if err := db.Where("user_id = ?", order.UserID).First(&sub).Error; err != nil {
-				return
+				return fmt.Errorf("查找用户订阅失败: %w", err)
 			}
 			addDevices := 0
 			extendMonths := 0
@@ -79,10 +79,10 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 				})
 			}
 			distributeInviteCommission(db, order)
-			return
+			return nil
 		}
 		if extra["type"] != "custom_package" {
-			return
+			return fmt.Errorf("未知的订单类型: %v", extra["type"])
 		}
 		devices, _ := extra["devices"].(float64)
 		months, _ := extra["months"].(float64)
@@ -92,7 +92,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 	} else {
 		var pkg models.Package
 		if err := db.First(&pkg, order.PackageID).Error; err != nil {
-			return
+			return fmt.Errorf("查找套餐失败: %w", err)
 		}
 		deviceLimit = pkg.DeviceLimit
 		durationDays = pkg.DurationDays
@@ -115,7 +115,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 		}
 		if err := db.Create(&sub).Error; err != nil {
 			utils.SysError("subscription", fmt.Sprintf("创建订阅失败: userID=%d, orderNo=%s, err=%v", order.UserID, order.OrderNo, err))
-			return
+			return fmt.Errorf("创建订阅失败: %w", err)
 		}
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "activate", "system", nil, fmt.Sprintf("购买套餐激活订阅: %s", pkgName), nil, nil)
 	} else {
@@ -161,6 +161,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 	}
 
 	distributeInviteCommission(db, order)
+	return nil
 }
 
 func distributeInviteCommission(db *gorm.DB, order *models.Order) {

@@ -899,8 +899,12 @@ func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction
 }
 
 func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
+	// Log incoming request
+	fmt.Printf("[alipay] 收到回调: method=%s, url=%s, remote=%s\n", c.Request.Method, c.Request.URL.String(), c.ClientIP())
+
 	alipayCfg, err := services.GetAlipayConfig()
 	if err != nil {
+		fmt.Printf("[alipay] 获取配置失败: %v\n", err)
 		c.String(400, "fail")
 		return
 	}
@@ -913,8 +917,12 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 		return
 	}
 
+	fmt.Printf("[alipay] 回调验证成功: out_trade_no=%s, trade_no=%s, status=%s, amount=%s\n",
+		notification.OutTradeNo, notification.TradeNo, notification.TradeStatus, notification.TotalAmount)
+
 	// Only process successful trades
 	if notification.TradeStatus != "TRADE_SUCCESS" && notification.TradeStatus != "TRADE_FINISHED" {
+		fmt.Printf("[alipay] 交易状态非成功: %s\n", notification.TradeStatus)
 		c.String(200, "success")
 		return
 	}
@@ -992,8 +1000,10 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 
 			// Determine if this is a recharge or order payment
 			if strings.HasPrefix(outTradeNo, "RCH") {
+				fmt.Printf("[alipay] 处理充值回调: %s\n", outTradeNo)
 				handleEpayRechargeCallback(tx, &txn, outTradeNo)
 			} else {
+				fmt.Printf("[alipay] 处理订单回调: %s, order_id=%d\n", outTradeNo, txn.OrderID)
 				handleAlipayOrderCallback(tx, &txn)
 			}
 

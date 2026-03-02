@@ -888,7 +888,9 @@ func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction
 		}).Error; err != nil {
 			return err
 		}
-		services.ActivateSubscription(tx, &order, "epay")
+		if err := services.ActivateSubscription(tx, &order, "epay"); err != nil {
+			return fmt.Errorf("激活订阅失败: %w", err)
+		}
 		return nil
 	})
 	if err != nil {
@@ -1032,7 +1034,9 @@ func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 		}).Error; err != nil {
 			return err
 		}
-		services.ActivateSubscription(tx, &order, "alipay")
+		if err := services.ActivateSubscription(tx, &order, "alipay"); err != nil {
+			return fmt.Errorf("激活订阅失败: %w", err)
+		}
 		return nil
 	})
 	if err != nil {
@@ -1229,7 +1233,9 @@ func handleStripeOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 		}).Error; err != nil {
 			return err
 		}
-		services.ActivateSubscription(tx, &order, "stripe")
+		if err := services.ActivateSubscription(tx, &order, "stripe"); err != nil {
+			return fmt.Errorf("激活订阅失败: %w", err)
+		}
 		return nil
 	})
 	if err != nil {

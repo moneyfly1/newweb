@@ -15,15 +15,21 @@ echo ""
 
 echo "2. 检查支付宝配置..."
 echo "-----------------------------------"
+echo "从 system_configs 表检查："
 sqlite3 $DB_FILE "SELECT
-  id,
-  pay_type,
-  status,
-  CASE WHEN app_id IS NULL OR app_id = '' THEN '❌ 未配置' ELSE '✓ 已配置' END as app_id_status,
-  CASE WHEN merchant_private_key IS NULL OR merchant_private_key = '' THEN '❌ 未配置' ELSE '✓ 已配置' END as private_key_status,
-  CASE WHEN alipay_public_key IS NULL OR alipay_public_key = '' THEN '❌ 未配置' ELSE '✓ 已配置' END as public_key_status,
-  CASE WHEN notify_url IS NULL OR notify_url = '' THEN '❌ 未配置' ELSE notify_url END as notify_url
-FROM payment_configs WHERE pay_type = 'alipay';"
+  CASE WHEN value IS NULL OR value = '' THEN '❌ 未配置' ELSE '✓ 已配置' END as status,
+  key
+FROM system_configs WHERE key IN ('pay_alipay_app_id', 'pay_alipay_private_key', 'pay_alipay_public_key', 'pay_alipay_notify_url')
+ORDER BY key;"
+echo ""
+echo "详细配置："
+sqlite3 $DB_FILE "SELECT key,
+  CASE
+    WHEN key LIKE '%private_key%' THEN SUBSTR(value, 1, 50) || '...(长度:' || LENGTH(value) || ')'
+    WHEN key LIKE '%public_key%' THEN SUBSTR(value, 1, 50) || '...(长度:' || LENGTH(value) || ')'
+    ELSE value
+  END as value
+FROM system_configs WHERE key LIKE 'pay_alipay%' ORDER BY key;"
 echo ""
 
 echo "3. 检查最近的订单..."
@@ -57,10 +63,12 @@ if [[ "$SITE_URL" == *"localhost"* ]] || [[ "$SITE_URL" == *"127.0.0.1"* ]]; the
   echo "   请在系统设置中修改为实际域名（如 https://go.moneyfly.top）"
 fi
 
-APP_ID=$(sqlite3 $DB_FILE "SELECT app_id FROM payment_configs WHERE pay_type = 'alipay';")
+APP_ID=$(sqlite3 $DB_FILE "SELECT value FROM system_configs WHERE key = 'pay_alipay_app_id';")
 if [ -z "$APP_ID" ]; then
   echo "❌ 支付宝 AppID 未配置"
-  echo "   请在支付方式管理中配置支付宝的 AppID、应用私钥、支付宝公钥"
+  echo "   请在系统设置中配置 pay_alipay_app_id"
+else
+  echo "✓ 支付宝配置完整"
 fi
 
 echo ""

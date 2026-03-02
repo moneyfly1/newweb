@@ -854,6 +854,7 @@ func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransact
 	})
 
 	if err != nil {
+		utils.SysError("payment", fmt.Sprintf("易支付充值回调处理失败: txID=%s, err=%v", txID, err))
 		return // Already processed or not found
 	}
 
@@ -872,7 +873,7 @@ func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransact
 }
 
 func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
-	db.Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
 		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
 			return err // Already processed or not found
@@ -880,14 +881,19 @@ func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction
 
 		now := time.Now()
 		pmName := "epay"
-		tx.Model(&order).Updates(map[string]interface{}{
+		if err := tx.Model(&order).Updates(map[string]interface{}{
 			"status":              "paid",
 			"payment_method_name": &pmName,
 			"payment_time":        &now,
-		})
+		}).Error; err != nil {
+			return err
+		}
 		services.ActivateSubscription(tx, &order, "epay")
 		return nil
 	})
+	if err != nil {
+		utils.SysError("payment", fmt.Sprintf("易支付订单回调处理失败: %v", err))
+	}
 }
 
 func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
@@ -1011,7 +1017,7 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 }
 
 func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
-	db.Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
 		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
 			return err // Already processed or not found
@@ -1019,14 +1025,19 @@ func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 
 		now := time.Now()
 		pmName := "alipay"
-		tx.Model(&order).Updates(map[string]interface{}{
+		if err := tx.Model(&order).Updates(map[string]interface{}{
 			"status":              "paid",
 			"payment_method_name": &pmName,
 			"payment_time":        &now,
-		})
+		}).Error; err != nil {
+			return err
+		}
 		services.ActivateSubscription(tx, &order, "alipay")
 		return nil
 	})
+	if err != nil {
+		utils.SysError("payment", fmt.Sprintf("支付宝订单回调处理失败: %v", err))
+	}
 }
 
 func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
@@ -1203,7 +1214,7 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 }
 
 func handleStripeOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
-	db.Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
 		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
 			return err // Already processed or not found
@@ -1211,14 +1222,19 @@ func handleStripeOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 
 		now := time.Now()
 		pmName := "stripe"
-		tx.Model(&order).Updates(map[string]interface{}{
+		if err := tx.Model(&order).Updates(map[string]interface{}{
 			"status":              "paid",
 			"payment_method_name": &pmName,
 			"payment_time":        &now,
-		})
+		}).Error; err != nil {
+			return err
+		}
 		services.ActivateSubscription(tx, &order, "stripe")
 		return nil
 	})
+	if err != nil {
+		utils.SysError("payment", fmt.Sprintf("Stripe订单回调处理失败: %v", err))
+	}
 }
 
 func handleStripeRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) {

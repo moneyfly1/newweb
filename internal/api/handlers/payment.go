@@ -172,18 +172,22 @@ func CreatePayment(c *gin.Context) {
 				if err == nil {
 					notifyURL, returnURL := services.BuildPaymentURLs("alipay", order.OrderNo)
 					var paymentURL string
+					// 使用订单号作为 out_trade_no，这样回调时可以直接找到订单
+					outTradeNo := order.OrderNo
 					if req.IsMobile {
 						// Use WAP payment for mobile
-						paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
+						paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
 					} else {
 						// Use QR code payment for desktop
-						paymentURL, err = services.AlipayCreateOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
+						paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
 					}
 					if err == nil {
+						// 更新支付事务的 transaction_id 为订单号
+						db.Model(&transaction).Update("transaction_id", outTradeNo)
 						utils.Success(c, gin.H{
 							"message":        "支付创建成功",
 							"order_no":       order.OrderNo,
-							"transaction_id": txID,
+							"transaction_id": outTradeNo,
 							"amount":         payAmount,
 							"pay_type":       "alipay",
 							"payment_url":    paymentURL,
@@ -941,19 +945,40 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	rawStr := fmt.Sprintf(`{"out_trade_no":"%s","trade_no":"%s","trade_status":"%s","total_amount":"%s"}`,
 		outTradeNo, tradeNo, notification.TradeStatus, notification.TotalAmount)
 
-	// Find transaction
+	// Find transaction by out_trade_no (which is order_no)
+	// First try to find by transaction_id
 	var transaction models.PaymentTransaction
-	if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err != nil {
-		fmt.Printf("[alipay] ❌ 找不到支付事务: out_trade_no=%s, error=%v\n", outTradeNo, err)
-		callback := models.PaymentCallback{
-			CallbackType: "alipay",
-			CallbackData: rawStr,
-			RawRequest:   &rawStr,
-			Processed:    false,
+	err = db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error
+
+	// If not found, try to find by order_no
+	if err != nil {
+		var order models.Order
+		if err := db.Where("order_no = ?", outTradeNo).First(&order).Error; err != nil {
+			fmt.Printf("[alipay] ❌ 找不到订单: out_trade_no=%s, error=%v\n", outTradeNo, err)
+			callback := models.PaymentCallback{
+				CallbackType: "alipay",
+				CallbackData: rawStr,
+				RawRequest:   &rawStr,
+				Processed:    false,
+			}
+			db.Create(&callback)
+			c.String(200, "success")
+			return
 		}
-		db.Create(&callback)
-		c.String(200, "success")
-		return
+
+		// Find transaction by order_id
+		if err := db.Where("order_id = ?", order.ID).First(&transaction).Error; err != nil {
+			fmt.Printf("[alipay] ❌ 找不到支付事务: order_id=%d, error=%v\n", order.ID, err)
+			callback := models.PaymentCallback{
+				CallbackType: "alipay",
+				CallbackData: rawStr,
+				RawRequest:   &rawStr,
+				Processed:    false,
+			}
+			db.Create(&callback)
+			c.String(200, "success")
+			return
+		}
 	}
 
 	fmt.Printf("[alipay] ✓ 找到支付事务: transaction_id=%d, order_id=%d, status=%s\n",

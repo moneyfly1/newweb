@@ -20,6 +20,9 @@ import (
 
 // ActivateSubscription creates or extends a subscription after successful payment.
 func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string) error {
+	fmt.Printf("[subscription] 开始激活订阅: order_id=%d, order_no=%s, user_id=%d, package_id=%d\n",
+		order.ID, order.OrderNo, order.UserID, order.PackageID)
+
 	var deviceLimit int
 	var durationDays int
 	var pkgName string
@@ -101,6 +104,9 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 
 	var sub models.Subscription
 	if err := db.Where("user_id = ?", order.UserID).First(&sub).Error; err != nil {
+		// Create new subscription
+		fmt.Printf("[subscription] 创建新订阅: user_id=%d, device_limit=%d, duration_days=%d\n",
+			order.UserID, deviceLimit, durationDays)
 		sub = models.Subscription{
 			UserID:          order.UserID,
 			SubscriptionURL: utils.GenerateRandomString(32),
@@ -118,7 +124,11 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			return fmt.Errorf("创建订阅失败: %w", err)
 		}
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "activate", "system", nil, fmt.Sprintf("购买套餐激活订阅: %s", pkgName), nil, nil)
+		fmt.Printf("[subscription] 订阅创建成功: subscription_id=%d, url=%s\n", sub.ID, sub.SubscriptionURL)
 	} else {
+		// Extend existing subscription
+		fmt.Printf("[subscription] 续期现有订阅: subscription_id=%d, old_expire=%s, add_days=%d\n",
+			sub.ID, sub.ExpireTime.Format("2006-01-02"), durationDays)
 		newExpire := sub.ExpireTime
 		if newExpire.Before(time.Now()) {
 			newExpire = time.Now()
@@ -136,6 +146,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 		}
 		db.Model(&sub).Updates(updates)
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "extend", "system", nil, fmt.Sprintf("购买套餐续期订阅: %s, +%d天", pkgName, durationDays), nil, nil)
+		fmt.Printf("[subscription] 订阅续期成功: subscription_id=%d, new_expire=%s\n", sub.ID, newExpire.Format("2006-01-02"))
 	}
 
 	var user models.User
@@ -161,6 +172,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 	}
 
 	distributeInviteCommission(db, order)
+	fmt.Printf("[subscription] 订阅激活完成: order_no=%s, package=%s\n", order.OrderNo, pkgName)
 	return nil
 }
 

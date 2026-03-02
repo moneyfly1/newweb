@@ -71,8 +71,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	api.GET("/packages/:id", handlers.GetPackage)
 	api.GET("/announcements", handlers.ListPublicAnnouncements)
 
-	// 支付回调（无需认证）
+	// 支付回调（无需认证，支持 GET 和 POST）
 	api.POST("/payment/notify/:type", handlers.PaymentNotify)
+	api.GET("/payment/notify/:type", handlers.PaymentNotify)
 	api.GET("/payment/methods", handlers.GetPaymentMethods)
 
 	// 邀请码验证（公开）

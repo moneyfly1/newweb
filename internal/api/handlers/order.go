@@ -95,7 +95,7 @@ func CreateOrder(c *gin.Context) {
 		var coupon models.Coupon
 		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
 			now := time.Now()
-			if now.After(coupon.ValidFrom) && now.Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
+			if now.After(coupon.ValidFrom) && now.Before(coupon.ValidUntil) {
 				// Check total quantity
 				if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
 					utils.BadRequest(c, "优惠券已被领完")
@@ -486,7 +486,7 @@ func CreateCustomOrder(c *gin.Context) {
 		var coupon models.Coupon
 		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
 			now := time.Now()
-			if now.After(coupon.ValidFrom) && now.Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
+			if now.After(coupon.ValidFrom) && now.Before(coupon.ValidUntil) {
 				if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
 					utils.BadRequest(c, "优惠券已被领完")
 					return
@@ -682,7 +682,7 @@ func CreateUpgradeOrder(c *gin.Context) {
 	if req.CouponCode != "" {
 		var coupon models.Coupon
 		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
-			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil.AddDate(0, 0, 1)) {
+			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil) {
 				if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
 					utils.BadRequest(c, "优惠券已被领完")
 					return

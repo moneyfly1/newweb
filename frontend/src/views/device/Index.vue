@@ -30,7 +30,7 @@
             <div v-for="device in devices" :key="device.id" class="mobile-card">
               <div class="card-row">
                 <span class="label">设备名称</span>
-                <span class="value">{{ device.device_name || device.software_name || '未知设备' }}</span>
+                <span class="value">{{ parseDeviceInfo(device.user_agent) || device.device_name || device.software_name || '未知设备' }}</span>
               </div>
               <div class="card-row">
                 <span class="label">IP 地址</span>
@@ -70,6 +70,7 @@ import { ref, h, onMounted } from 'vue'
 import { NButton, NTime, useMessage } from 'naive-ui'
 import { getSubscriptionDevices, deleteDevice } from '@/api/subscription'
 import { useAppStore } from '@/stores/app'
+import { parseDeviceInfo } from '@/utils/i18n'
 
 interface Device {
   id: number
@@ -91,26 +92,17 @@ const showDeleteModal = ref(false)
 const deleteDeviceId = ref<number | null>(null)
 
 const parseDeviceName = (userAgent: string): string => {
-  if (!userAgent) return '未知设备'
-  
-  // 简单的 UA 解析
-  if (userAgent.includes('iPhone')) return 'iPhone'
-  if (userAgent.includes('iPad')) return 'iPad'
-  if (userAgent.includes('Android')) return 'Android 设备'
-  if (userAgent.includes('Windows')) return 'Windows 电脑'
-  if (userAgent.includes('Macintosh')) return 'Mac 电脑'
-  if (userAgent.includes('Linux')) return 'Linux 设备'
-  
-  return '未知设备'
+  // 使用统一的设备解析函数
+  return parseDeviceInfo(userAgent)
 }
 
 const columns = [
   {
     title: '设备名称',
     key: 'device_name',
-    minWidth: 120,
+    minWidth: 180,
     render: (row: Device) => {
-      const name = row.device_name || row.software_name || parseDeviceName(row.user_agent)
+      const name = parseDeviceInfo(row.user_agent) || row.device_name || row.software_name
       return h('span', name)
     }
   },

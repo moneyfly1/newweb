@@ -49,6 +49,8 @@ func (s *Scheduler) Start() {
 	s.startLoop("ExpiryReminder", 1*time.Hour, sendExpiryRemindersTask)
 	s.startLoop("UnpaidOrderReminder", 15*time.Minute, sendUnpaidOrderRemindersTask)
 	s.startLoop("CleanCodes", 30*time.Minute, cleanExpiredCodesTask)
+	s.startLoop("CancelExpiredOrders", 1*time.Hour, cancelExpiredOrdersTask)
+	s.startLoop("CleanPaymentNonces", 6*time.Hour, cleanPaymentNoncesTask)
 }
 
 // Stop gracefully shuts down all background loops.
@@ -192,6 +194,27 @@ func cleanExpiredCodesTask() {
 	if result.RowsAffected > 0 {
 		log.Printf("[Scheduler] 已清理 %d 条过期验证码", result.RowsAffected)
 		utils.SysInfo("scheduler", fmt.Sprintf("已清理 %d 条过期验证码", result.RowsAffected))
+	}
+}
+
+// cancelExpiredOrdersTask cancels pending orders past their expire_time.
+func cancelExpiredOrdersTask() {
+	db := database.GetDB()
+	result := db.Model(&models.Order{}).
+		Where("status = ? AND expire_time < ?", "pending", time.Now()).
+		Update("status", "expired")
+	if result.RowsAffected > 0 {
+		log.Printf("[Scheduler] 已取消 %d 个过期订单", result.RowsAffected)
+		utils.SysInfo("scheduler", fmt.Sprintf("已取消 %d 个过期订单", result.RowsAffected))
+	}
+}
+
+// cleanPaymentNoncesTask removes expired payment nonces.
+func cleanPaymentNoncesTask() {
+	db := database.GetDB()
+	result := db.Where("expires_at < ?", time.Now()).Delete(&models.PaymentNonce{})
+	if result.RowsAffected > 0 {
+		log.Printf("[Scheduler] 已清理 %d 条过期支付 nonce", result.RowsAffected)
 	}
 }
 

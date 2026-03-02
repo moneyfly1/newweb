@@ -106,7 +106,10 @@
               </div>
               <div class="card-actions">
                 <n-button size="small" @click="handleViewDetail(row)">详情</n-button>
-                <n-button v-if="row.status === 'paid'" size="small" type="error" @click="handleRefund(row)">退款</n-button>
+                <n-button v-if="row.status === 'paid'" size="small" type="success" @click="handleComplete(row)">完成</n-button>
+                <n-button v-if="row.status === 'paid' || row.status === 'completed'" size="small" type="warning" @click="handleRefund(row)">退款</n-button>
+                <n-button v-if="row.status === 'pending'" size="small" type="error" @click="handleCancel(row)">取消</n-button>
+                <n-button v-if="row.status === 'cancelled' || row.status === 'refunded'" size="small" type="error" @click="handleDelete(row)">删除</n-button>
               </div>
             </div>
           </div>
@@ -122,12 +125,11 @@
       </n-space>
     </n-card>
 
-    <n-modal
-      v-model:show="showDetailModal"
-      preset="card"
+    <common-drawer
+      v-model:show="showDetailDrawer"
       title="订单详情"
-      :style="{ width: appStore.isMobile ? '95%' : '600px' }"
-      :bordered="false"
+      :width="600"
+      :show-footer="false"
     >
       <n-descriptions
         v-if="currentOrder"
@@ -164,7 +166,7 @@
           {{ new Date(currentOrder.created_at).toLocaleString('zh-CN') }}
         </n-descriptions-item>
       </n-descriptions>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -172,8 +174,9 @@
 import { ref, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline } from '@vicons/ionicons5'
-import { listAdminOrders, refundOrder } from '@/api/admin'
+import { listAdminOrders, refundOrder, cancelOrder, deleteOrder, completeOrder } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -187,13 +190,14 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const totalPages = ref(0)
 
-const showDetailModal = ref(false)
+const showDetailDrawer = ref(false)
 const currentOrder = ref(null)
 
 const statusOptions = [
   { label: '全部', value: null },
   { label: '待支付', value: 'pending' },
   { label: '已支付', value: 'paid' },
+  { label: '已完成', value: 'completed' },
   { label: '已取消', value: 'cancelled' },
   { label: '已退款', value: 'refunded' }
 ]
@@ -202,6 +206,7 @@ const getStatusType = (status) => {
   const typeMap = {
     pending: 'warning',
     paid: 'success',
+    completed: 'info',
     cancelled: 'default',
     refunded: 'error'
   }
@@ -212,6 +217,7 @@ const getStatusText = (status) => {
   const textMap = {
     pending: '待支付',
     paid: '已支付',
+    completed: '已完成',
     cancelled: '已取消',
     refunded: '已退款'
   }
@@ -297,34 +303,75 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 180,
+    width: 280,
     fixed: 'right',
-    render: (row) => h(
-      NSpace,
-      {},
-      {
-        default: () => [
-          h(
-            NButton,
-            {
-              size: 'small',
-              type: 'info',
-              onClick: () => handleViewDetail(row)
-            },
-            { default: () => '查看详情' }
-          ),
-          row.status === 'paid' && h(
-            NButton,
-            {
-              size: 'small',
-              type: 'error',
-              onClick: () => handleRefund(row)
-            },
-            { default: () => '退款' }
-          )
-        ].filter(Boolean)
+    render: (row) => {
+      const buttons = []
+
+      // 查看详情 - 所有状态都可以查看
+      buttons.push(h(
+        NButton,
+        {
+          size: 'small',
+          onClick: () => handleViewDetail(row)
+        },
+        { default: () => '详情' }
+      ))
+
+      // 完成订单 - 仅已支付状态
+      if (row.status === 'paid') {
+        buttons.push(h(
+          NButton,
+          {
+            size: 'small',
+            type: 'success',
+            onClick: () => handleComplete(row)
+          },
+          { default: () => '完成' }
+        ))
       }
-    )
+
+      // 退款 - 已支付或已完成状态
+      if (row.status === 'paid' || row.status === 'completed') {
+        buttons.push(h(
+          NButton,
+          {
+            size: 'small',
+            type: 'warning',
+            onClick: () => handleRefund(row)
+          },
+          { default: () => '退款' }
+        ))
+      }
+
+      // 取消订单 - 仅待支付状态
+      if (row.status === 'pending') {
+        buttons.push(h(
+          NButton,
+          {
+            size: 'small',
+            type: 'error',
+            onClick: () => handleCancel(row)
+          },
+          { default: () => '取消' }
+        ))
+      }
+
+      // 删除订单 - 已取消或已退款状态
+      if (row.status === 'cancelled' || row.status === 'refunded') {
+        buttons.push(h(
+          NButton,
+          {
+            size: 'small',
+            type: 'error',
+            onClick: () => handleDelete(row)
+          },
+          { default: () => '删除' }
+        ))
+      }
+
+      return h(NSpace, { size: 4 }, { default: () => buttons })
+    }
   }
 ]
 
@@ -365,7 +412,7 @@ const handlePageSizeChange = (size) => {
 
 const handleViewDetail = (row) => {
   currentOrder.value = row
-  showDetailModal.value = true
+  showDetailDrawer.value = true
 }
 
 const handleRefund = (row) => {
@@ -381,6 +428,60 @@ const handleRefund = (row) => {
         fetchOrders()
       } catch (error) {
         message.error('退款失败：' + (error.message || '未知错误'))
+      }
+    }
+  })
+}
+
+const handleCancel = (row) => {
+  dialog.warning({
+    title: '确认取消',
+    content: `确定要取消订单 ${row.order_no} 吗？`,
+    positiveText: '确定取消',
+    negativeText: '返回',
+    onPositiveClick: async () => {
+      try {
+        await cancelOrder(row.id)
+        message.success('订单已取消')
+        fetchOrders()
+      } catch (error) {
+        message.error('取消订单失败：' + (error.message || '未知错误'))
+      }
+    }
+  })
+}
+
+const handleComplete = (row) => {
+  dialog.info({
+    title: '确认完成',
+    content: `确定要将订单 ${row.order_no} 标记为已完成吗？`,
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await completeOrder(row.id)
+        message.success('订单已完成')
+        fetchOrders()
+      } catch (error) {
+        message.error('操作失败：' + (error.message || '未知错误'))
+      }
+    }
+  })
+}
+
+const handleDelete = (row) => {
+  dialog.error({
+    title: '确认删除',
+    content: `确定要删除订单 ${row.order_no} 吗？此操作不可恢复！`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await deleteOrder(row.id)
+        message.success('订单已删除')
+        fetchOrders()
+      } catch (error) {
+        message.error('删除订单失败：' + (error.message || '未知错误'))
       }
     }
   })

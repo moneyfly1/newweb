@@ -24,6 +24,9 @@ export const updateUserNotes = (userId: number, notes: string) => request.put(`/
 export const listAdminOrders = (params?: any) => request.get('/admin/orders', { params })
 export const getAdminOrder = (id: number) => request.get(`/admin/orders/${id}`)
 export const refundOrder = (id: number) => request.post(`/admin/orders/${id}/refund`)
+export const cancelOrder = (id: number) => request.post(`/admin/orders/${id}/cancel`)
+export const deleteOrder = (id: number) => request.delete(`/admin/orders/${id}`)
+export const completeOrder = (id: number) => request.post(`/admin/orders/${id}/complete`)
 
 // Packages
 export const listAdminPackages = (params?: any) => request.get('/admin/packages', { params })

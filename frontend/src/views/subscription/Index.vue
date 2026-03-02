@@ -10,126 +10,158 @@
       </div>
 
       <template v-else>
-        <!-- Hero Card: compact status + stats + upgrade inline -->
-        <n-card class="hero-card" :bordered="false">
-          <div class="hero-content">
-            <div class="hero-row-top">
-              <div class="hero-left">
-                <div class="status-badge" :class="statusClass">
-                  <n-icon :size="14" :component="statusIcon" />
-                  <span>{{ statusText }}</span>
-                </div>
-                <h2 class="package-name">{{ subscription.package_name || '当前套餐' }}</h2>
+        <!-- Modern Hero Card -->
+        <div class="modern-hero">
+          <div class="hero-header">
+            <div class="hero-title-section">
+              <div class="status-badge" :class="statusClass">
+                <n-icon :size="16" :component="statusIcon" />
+                <span>{{ statusText }}</span>
               </div>
-              <div class="hero-right">
-                <n-button size="small" class="hero-upgrade-btn" strong @click="showUpgradeModal = true">
-                  <template #icon><n-icon :component="ArrowUpCircleOutline" /></template>
-                  升级套餐
-                </n-button>
+              <h1 class="package-title">{{ subscription.package_name || '当前套餐' }}</h1>
+            </div>
+            <n-button type="primary" size="medium" @click="showUpgradeModal = true">
+              <template #icon><n-icon :component="ArrowUpCircleOutline" /></template>
+              升级套餐
+            </n-button>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-icon balance-icon">
+                <n-icon :size="24" :component="WalletOutline" />
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">账户余额</span>
+                <span class="stat-value">¥{{ (userBalance ?? 0).toFixed(2) }}</span>
               </div>
             </div>
-            <div class="hero-stats">
-              <div class="hero-stat">
-                <span class="hero-stat-val">¥{{ (userBalance ?? 0).toFixed(2) }}</span>
-                <span class="hero-stat-label">余额</span>
+            <div class="stat-item">
+              <div class="stat-icon days-icon">
+                <n-icon :size="24" :component="TimeOutline" />
               </div>
-              <div class="hero-stat-divider"></div>
-              <div class="hero-stat">
-                <span class="hero-stat-val">{{ remainingDays }}</span>
-                <span class="hero-stat-label">剩余天数</span>
-              </div>
-              <div class="hero-stat-divider"></div>
-              <div class="hero-stat">
-                <span class="hero-stat-val">{{ devices.length }}/{{ subscription.device_limit || 0 }}</span>
-                <span class="hero-stat-label">设备使用</span>
-              </div>
-              <div class="hero-stat-divider"></div>
-              <div class="hero-stat">
-                <span class="hero-stat-val hero-stat-date"><n-icon :component="TimeOutline" :size="14" /> {{ formatDate(subscription.expire_time) }}</span>
-                <span class="hero-stat-label">到期时间</span>
+              <div class="stat-content">
+                <span class="stat-label">剩余天数</span>
+                <span class="stat-value">{{ remainingDays }} 天</span>
               </div>
             </div>
-            <div class="hero-actions">
-              <n-button
-                class="hero-sub-action"
-                size="tiny"
-                :disabled="!canConvert"
-                @click="showConvertModal = true"
-              >
-                转换剩余天数为余额
-              </n-button>
+            <div class="stat-item">
+              <div class="stat-icon device-icon">
+                <n-icon :size="24" :component="PhonePortraitOutline" />
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">设备使用</span>
+                <span class="stat-value">{{ devices.length }}/{{ subscription.device_limit || 0 }}</span>
+              </div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-icon expire-icon">
+                <n-icon :size="24" :component="CalendarOutline" />
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">到期时间</span>
+                <span class="stat-value stat-date">{{ formatDate(subscription.expire_time) }}</span>
+              </div>
             </div>
           </div>
-        </n-card>
 
-        <!-- Two Column Layout: URLs left, Formats right -->
-        <div class="two-col">
-          <!-- Left: Subscription URLs -->
-          <n-card :bordered="false" class="section-card compact-card">
-            <template #header><span class="section-title">订阅地址</span></template>
-            <template #header-extra>
-              <n-space :size="8" align="center">
-                <n-button size="tiny" @click="handleSendEmail" :loading="sendingEmail">
-                  <template #icon><n-icon :component="MailOutline" /></template>
-                  发送到邮箱
-                </n-button>
-                <n-button size="tiny" type="warning" ghost @click="showResetModal = true" :disabled="!subscription">
-                  <template #icon><n-icon :component="RefreshOutline" /></template>
-                  重置订阅
-                </n-button>
-              </n-space>
-            </template>
-            <div class="url-list">
-              <div class="url-row">
-                <span class="url-label">通用订阅</span>
-                <div class="url-input-wrapper">
-                  <n-input :value="subscriptionUrl" readonly size="small" class="url-input" />
-                  <n-button size="small" type="primary" @click="copyToClipboard(subscriptionUrl, '通用订阅地址')">
-                    <template #icon><n-icon :component="CopyOutline" /></template>
-                  </n-button>
-                  <n-button size="small" @click="showQrCode(subscriptionUrl, '通用订阅')">
-                    <template #icon><n-icon :component="QrCodeOutline" /></template>
-                  </n-button>
-                </div>
+          <div class="hero-footer">
+            <n-button
+              text
+              size="small"
+              :disabled="!canConvert"
+              @click="showConvertModal = true"
+            >
+              转换剩余天数为余额
+            </n-button>
+          </div>
+        </div>
+
+        <!-- Subscription URLs Card -->
+        <div class="url-card">
+          <div class="card-header">
+            <h3 class="card-title">订阅地址</h3>
+            <n-space :size="8">
+              <n-button size="small" @click="handleSendEmail" :loading="sendingEmail">
+                <template #icon><n-icon :component="MailOutline" /></template>
+                发送邮箱
+              </n-button>
+              <n-button size="small" type="warning" @click="showResetModal = true">
+                <template #icon><n-icon :component="RefreshOutline" /></template>
+                重置
+              </n-button>
+            </n-space>
+          </div>
+
+          <div class="url-list">
+            <div class="url-item">
+              <div class="url-header">
+                <span class="url-type">通用订阅</span>
+                <n-tag size="small" type="info">Universal</n-tag>
               </div>
-              <div class="url-row">
-                <span class="url-label">Clash 订阅</span>
-                <div class="url-input-wrapper">
-                  <n-input :value="clashUrl" readonly size="small" class="url-input" />
-                  <n-button size="small" type="primary" @click="copyToClipboard(clashUrl, 'Clash 订阅地址')">
-                    <template #icon><n-icon :component="CopyOutline" /></template>
-                  </n-button>
-                  <n-button size="small" @click="showQrCode(clashUrl, 'Clash 订阅')">
-                    <template #icon><n-icon :component="QrCodeOutline" /></template>
-                  </n-button>
-                </div>
+              <div class="url-actions">
+                <n-input :value="subscriptionUrl" readonly size="small" />
+                <n-button type="primary" size="small" @click="copyToClipboard(subscriptionUrl, '通用订阅地址')">
+                  <template #icon><n-icon :component="CopyOutline" /></template>
+                  复制
+                </n-button>
+                <n-button size="small" @click="showQrCode(subscriptionUrl, '通用订阅')">
+                  <template #icon><n-icon :component="QrCodeOutline" /></template>
+                  二维码
+                </n-button>
               </div>
             </div>
-          </n-card>
 
-          <!-- Right: Format Selector -->
-          <n-card :bordered="false" class="section-card compact-card">
-            <template #header><span class="section-title">选择订阅格式</span></template>
-            <div class="format-grid">
-              <div
-                v-for="fmt in formats"
-                :key="fmt.type"
-                class="format-card"
-                :class="{ active: selectedFormat === fmt.type }"
-                @click="selectedFormat = fmt.type"
-              >
-                <div class="format-icon">
-                  <img v-if="fmt.iconUrl" class="format-icon-img" :src="fmt.iconUrl" :alt="fmt.name" loading="lazy" />
-                  <span v-else>{{ fmt.icon }}</span>
-                </div>
-                <div class="format-name">{{ fmt.name }}</div>
-                <n-space :size="6" style="margin-top: 6px;">
-                  <n-button size="tiny" type="primary" @click.stop="copyToClipboard(getFormatUrl(fmt.type), fmt.name)">复制</n-button>
-                  <n-button size="tiny" @click.stop="importFormat(fmt)">导入</n-button>
-                </n-space>
+            <div class="url-item">
+              <div class="url-header">
+                <span class="url-type">Clash 订阅</span>
+                <n-tag size="small" type="success">Clash</n-tag>
+              </div>
+              <div class="url-actions">
+                <n-input :value="clashUrl" readonly size="small" />
+                <n-button type="primary" size="small" @click="copyToClipboard(clashUrl, 'Clash 订阅地址')">
+                  <template #icon><n-icon :component="CopyOutline" /></template>
+                  复制
+                </n-button>
+                <n-button size="small" @click="showQrCode(clashUrl, 'Clash 订阅')">
+                  <template #icon><n-icon :component="QrCodeOutline" /></template>
+                  二维码
+                </n-button>
               </div>
             </div>
-          </n-card>
+          </div>
+        </div>
+
+        <!-- Format Selector Card -->
+        <div class="format-card-container">
+          <div class="card-header">
+            <h3 class="card-title">快速导入</h3>
+            <span class="card-subtitle">选择客户端格式一键导入</span>
+          </div>
+
+          <div class="format-grid">
+            <div
+              v-for="fmt in formats"
+              :key="fmt.type"
+              class="format-item"
+              :class="{ active: selectedFormat === fmt.type }"
+              @click="selectedFormat = fmt.type"
+            >
+              <div class="format-item-icon">
+                <img v-if="fmt.iconUrl" :src="fmt.iconUrl" :alt="fmt.name" loading="lazy" />
+                <span v-else style="font-size: 32px;">{{ fmt.icon }}</span>
+              </div>
+              <span class="format-item-name">{{ fmt.name }}</span>
+              <div class="format-item-actions">
+                <n-button size="small" type="primary" @click.stop="copyToClipboard(getFormatUrl(fmt.type), fmt.name)">
+                  复制
+                </n-button>
+                <n-button size="small" @click.stop="importFormat(fmt)">
+                  导入
+                </n-button>
+              </div>
+            </div>
+          </div>
         </div>
       </template>
     </n-spin>
@@ -287,7 +319,7 @@ import {
   CopyOutline, TimeOutline, PhonePortraitOutline, TrashOutline,
   RefreshOutline, SwapHorizontalOutline, MailOutline,
   CheckmarkCircle, CloseCircle, AlertCircle, QrCodeOutline,
-  ArrowUpCircleOutline
+  ArrowUpCircleOutline, WalletOutline, CalendarOutline
 } from '@vicons/ionicons5'
 import {
   getSubscription, getSubscriptionDevices, deleteDevice,
@@ -447,19 +479,30 @@ const copyToClipboard = async (text: string, label: string) => {
 const importFormat = (fmt: any) => {
   const url = getFormatUrl(fmt.type)
   if (!url) { message.warning('暂无可用订阅'); return }
+
+  // V2RayN等桌面客户端没有URL Scheme，直接复制
+  if (fmt.type === 'v2ray') {
+    copyToClipboard(url, fmt.name)
+    message.info('V2RayN 请手动在客户端中添加订阅地址')
+    return
+  }
+
   const schemeMap: Record<string, string> = {
     clash: 'clash://install-config?url=',
     stash: 'stash://install-config?url=',
-    shadowrocket: 'sub://',
+    shadowrocket: 'shadowrocket://add/',
     surge: 'surge:///install-config?url=',
-    quantumult: 'quantumult-x:///update-configuration?remote-resource=',
+    quantumult: 'quantumult-x:///add-resource?remote-resource=',
   }
   const scheme = schemeMap[fmt.type]
   if (scheme) {
-    if (fmt.type === 'shadowrocket') {
-      window.location.href = scheme + btoa(url)
-    } else {
-      window.location.href = scheme + encodeURIComponent(url)
+    try {
+      const fullUrl = scheme + encodeURIComponent(url)
+      window.location.href = fullUrl
+      message.success('正在打开客户端...')
+    } catch (e) {
+      message.error('打开失败，请确保已安装客户端')
+      copyToClipboard(url, fmt.name)
     }
   } else {
     copyToClipboard(url, fmt.name)
@@ -675,6 +718,28 @@ onUnmounted(() => { stopPayPolling() })
 .hero-upgrade-btn { background: rgba(255,255,255,0.95) !important; color: #4a5fd7 !important; border: none !important; font-weight: 600 !important; }
 .hero-upgrade-btn:hover { background: #fff !important; }
 
+/* Modern Hero */
+.modern-hero { background: linear-gradient(135deg, #a8b5ff 0%, #c4a3e8 100%); border-radius: 16px; padding: 24px; color: #333; margin-bottom: 16px; }
+.hero-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.hero-title-section { flex: 1; }
+.package-title { font-size: 24px; font-weight: 700; margin: 8px 0 0 0; color: #333; text-shadow: 0 1px 2px rgba(255,255,255,0.5); }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.stat-item { background: rgba(255,255,255,0.6); border-radius: 12px; padding: 16px; display: flex; align-items: center; gap: 12px; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.8); }
+.stat-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: white; }
+.stat-icon.balance-icon { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+.stat-icon.days-icon { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+.stat-icon.device-icon { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+.stat-icon.expire-icon { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+.stat-content { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat-label { font-size: 12px; opacity: 0.8; color: #555; }
+.stat-value { font-size: 18px; font-weight: 700; line-height: 1.2; color: #333; }
+
+/* Modern Hero Status Badge */
+.modern-hero .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.modern-hero .status-badge.active { background: rgba(24,160,88,0.85); color: white; }
+.modern-hero .status-badge.warning { background: rgba(240,160,32,0.85); color: white; }
+.modern-hero .status-badge.expired, .modern-hero .status-badge.inactive { background: rgba(224,48,80,0.85); color: white; }
+
 /* Upgrade Result */
 .upgrade-result { margin-top: 12px; }
 
@@ -683,7 +748,23 @@ onUnmounted(() => { stopPayPolling() })
 .compact-card :deep(.n-card__content) { padding: 12px 16px; }
 .compact-card :deep(.n-card-header) { padding: 12px 16px 8px; }
 .section-title { font-weight: 600; font-size: 14px; }
-/* URL Section */
+
+/* URL Card */
+.url-card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.url-card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333; }
+.url-item { margin-bottom: 16px; }
+.url-item:last-child { margin-bottom: 0; }
+.url-item-label { font-size: 13px; font-weight: 500; color: #666; margin-bottom: 8px; display: block; }
+.url-item-actions { display: flex; gap: 8px; }
+.url-item-actions .n-input { flex: 1; }
+
+/* Format Card Container */
+.format-card-container { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.format-card-container .card-header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+.format-card-container .card-title { font-size: 16px; font-weight: 600; color: #333; margin: 0; }
+.format-card-container .card-subtitle { font-size: 13px; color: #999; }
+
+/* URL Section (legacy) */
 .url-list { display: flex; flex-direction: column; gap: 10px; }
 .url-row { display: flex; align-items: center; gap: 8px; }
 .url-label { font-size: 13px; font-weight: 500; color: #666; white-space: nowrap; min-width: 70px; }
@@ -691,13 +772,23 @@ onUnmounted(() => { stopPayPolling() })
 .url-input { flex: 1; }
 
 /* Format Grid */
-.format-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.format-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .format-card { padding: 10px 8px; border-radius: 8px; border: 1.5px solid #e8e8e8; cursor: pointer; text-align: center; transition: all 0.2s; }
 .format-card:hover { border-color: #667eea; }
 .format-card.active { border-color: #667eea; background: #667eea08; }
 .format-icon { font-size: 20px; display: flex; justify-content: center; align-items: center; height: 24px; }
 .format-icon-img { width: 22px; height: 22px; object-fit: contain; border-radius: 5px; }
 .format-name { font-size: 12px; font-weight: 600; margin-top: 2px; }
+
+/* Format Item */
+.format-item { padding: 14px 12px; border-radius: 10px; border: 2px solid #e8e8e8; cursor: pointer; transition: all 0.2s; background: white; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.format-item:hover { border-color: #667eea; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.15); }
+.format-item.active { border-color: #667eea; background: linear-gradient(135deg, #667eea08 0%, #764ba208 100%); }
+.format-item-icon { display: flex; justify-content: center; align-items: center; width: 48px; height: 48px; }
+.format-item-icon img { width: 48px; height: 48px; object-fit: contain; border-radius: 8px; }
+.format-item-name { font-size: 14px; font-weight: 600; color: #333; text-align: center; }
+.format-item-actions { display: flex; gap: 6px; width: 100%; margin-top: 4px; }
+.format-item-actions .n-button { flex: 1; }
 
 /* Payment */
 .payment-method { padding: 4px 0; }
@@ -717,5 +808,16 @@ onUnmounted(() => { stopPayPolling() })
   .format-grid { grid-template-columns: repeat(2, 1fr); }
   .action-row { flex-direction: column; }
   .action-row .n-button { width: 100%; }
+
+  /* Modern Hero Mobile */
+  .modern-hero { padding: 16px; }
+  .hero-header { flex-direction: column; gap: 12px; }
+  .package-title { font-size: 20px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-item { padding: 12px; }
+  .stat-icon { width: 36px; height: 36px; }
+  .stat-value { font-size: 16px; }
+  .url-card, .format-card-container { padding: 16px; }
+  .format-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

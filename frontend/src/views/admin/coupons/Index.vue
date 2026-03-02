@@ -74,12 +74,14 @@
       </template>
     </n-card>
 
-    <n-modal
-      v-model:show="showModal"
+    <common-drawer
+      v-model:show="showDrawer"
       :title="modalTitle"
-      preset="card"
-      :style="appStore.isMobile ? 'width: 95%; max-width: 700px' : 'width: 700px'"
-      :mask-closable="false"
+      :width="700"
+      show-footer
+      :loading="submitting"
+      @confirm="handleSubmit"
+      @cancel="showDrawer = false"
     >
       <n-form
         ref="formRef"
@@ -165,13 +167,7 @@
           <n-select v-model:value="formData.status" :options="statusOptions" />
         </n-form-item>
       </n-form>
-      <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 12px">
-          <n-button @click="showModal = false">取消</n-button>
-          <n-button type="primary" @click="handleSubmit" :loading="submitting">确定</n-button>
-        </div>
-      </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -182,6 +178,7 @@ import { AddOutline, CreateOutline, TrashOutline, CopyOutline } from '@vicons/io
 import { listAdminCoupons, createCoupon, updateCoupon, deleteCoupon } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
 
@@ -190,7 +187,7 @@ const dialog = useDialog()
 
 const loading = ref(false)
 const submitting = ref(false)
-const showModal = ref(false)
+const showDrawer = ref(false)
 const modalTitle = ref('创建优惠券')
 const tableData = ref([])
 const formRef = ref(null)
@@ -439,7 +436,7 @@ const handleAdd = () => {
   isEdit.value = false
   modalTitle.value = '创建优惠券'
   resetForm()
-  showModal.value = true
+  showDrawer.value = true
 }
 
 const handleEdit = (row) => {
@@ -460,20 +457,20 @@ const handleEdit = (row) => {
     max_uses_per_user: row.max_uses_per_user,
     status: row.status
   })
-  showModal.value = true
+  showDrawer.value = true
 }
 
 const handleSubmit = async () => {
+  submitting.value = true
   try {
     await formRef.value?.validate()
-    submitting.value = true
-    
+
     const submitData = {
       ...formData,
       valid_from: formData.valid_from ? new Date(formData.valid_from).toISOString() : null,
       valid_until: formData.valid_until ? new Date(formData.valid_until).toISOString() : null
     }
-    
+
     if (isEdit.value) {
       await updateCoupon(editId.value, submitData)
       message.success('更新优惠券成功')
@@ -481,8 +478,8 @@ const handleSubmit = async () => {
       await createCoupon(submitData)
       message.success('创建优惠券成功')
     }
-    
-    showModal.value = false
+
+    showDrawer.value = false
     fetchData()
   } catch (error) {
     if (error.message) {

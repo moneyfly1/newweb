@@ -74,14 +74,14 @@
       </n-space>
     </n-card>
 
-    <n-modal
-      v-model:show="showEditModal"
-      preset="dialog"
+    <common-drawer
+      v-model:show="showEditDrawer"
       :title="isCreating ? '新建套餐' : '编辑套餐'"
-      :positive-text="'保存'"
-      :negative-text="'取消'"
-      :style="appStore.isMobile ? 'width: 95%; max-width: 600px' : 'width: 600px'"
-      @positive-click="handleSavePackage"
+      :width="600"
+      show-footer
+      :loading="saving"
+      @confirm="handleSavePackage"
+      @cancel="showEditDrawer = false"
     >
       <n-form
         ref="formRef"
@@ -158,7 +158,7 @@
           </n-switch>
         </n-form-item>
       </n-form>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -168,6 +168,7 @@ import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naiv
 import { AddOutline } from '@vicons/ionicons5'
 import { listAdminPackages, createPackage, updatePackage, deletePackage } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
 
@@ -180,8 +181,9 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const totalPages = ref(0)
 
-const showEditModal = ref(false)
+const showEditDrawer = ref(false)
 const isCreating = ref(false)
+const saving = ref(false)
 const formRef = ref(null)
 const editForm = reactive({
   id: null,
@@ -334,7 +336,7 @@ const resetForm = () => {
 const handleCreate = () => {
   resetForm()
   isCreating.value = true
-  showEditModal.value = true
+  showEditDrawer.value = true
 }
 
 const handleEdit = (row) => {
@@ -354,13 +356,14 @@ const handleEdit = (row) => {
   editForm.is_featured = row.is_featured || false
   editForm.sort_order = row.sort_order
   isCreating.value = false
-  showEditModal.value = true
+  showEditDrawer.value = true
 }
 
 const handleSavePackage = async () => {
+  saving.value = true
   try {
     await formRef.value?.validate()
-    
+
     const data = {
       name: editForm.name,
       description: editForm.description,
@@ -382,12 +385,14 @@ const handleSavePackage = async () => {
       await updatePackage(editForm.id, data)
       message.success('套餐更新成功')
     }
-    
-    showEditModal.value = false
+
+    showEditDrawer.value = false
     fetchPackages()
   } catch (error) {
     if (error?.errors) return
     message.error((isCreating.value ? '创建' : '更新') + '套餐失败：' + (error.message || '未知错误'))
+  } finally {
+    saving.value = false
   }
 }
 

@@ -58,13 +58,13 @@
               <div v-for="item in loginData" :key="item.id" class="mobile-card">
                 <div class="card-header">
                   <span class="card-title">ID: {{ item.id }}</span>
-                  <n-tag :type="item.login_status === 'success' ? 'success' : 'error'" size="small">{{ item.login_status }}</n-tag>
+                  <n-tag :type="item.login_status === 'success' ? 'success' : 'error'" size="small">{{ translateLoginStatus(item.login_status) }}</n-tag>
                 </div>
                 <div class="card-body">
                   <div class="card-row"><span class="card-label">用户ID:</span><span>{{ item.user_id }}</span></div>
                   <div class="card-row"><span class="card-label">IP地址:</span><span>{{ item.ip_address }}</span></div>
-                  <div class="card-row"><span class="card-label">位置:</span><span>{{ item.location }}</span></div>
-                  <div class="card-row"><span class="card-label">设备:</span><span>{{ item.user_agent }}</span></div>
+                  <div class="card-row"><span class="card-label">位置:</span><span>{{ formatLocation(item.location) }}</span></div>
+                  <div class="card-row"><span class="card-label">设备:</span><span>{{ parseDeviceInfo(item.user_agent) }}</span></div>
                   <div class="card-row"><span class="card-label">登录时间:</span><span>{{ item.login_time }}</span></div>
                 </div>
               </div>
@@ -174,7 +174,7 @@
                 </div>
                 <div class="card-body">
                   <div class="card-row"><span class="card-label">用户ID:</span><span>{{ item.user_id }}</span></div>
-                  <div class="card-row"><span class="card-label">类型:</span><span>{{ item.change_type }}</span></div>
+                  <div class="card-row"><span class="card-label">类型:</span><span>{{ translateBalanceChangeType(item.change_type) }}</span></div>
                   <div class="card-row"><span class="card-label">金额:</span><span>{{ item.amount }}</span></div>
                   <div class="card-row"><span class="card-label">余额:</span><span>{{ item.balance_after }}</span></div>
                   <div class="card-row"><span class="card-label">备注:</span><span>{{ item.description }}</span></div>
@@ -215,7 +215,7 @@
                   <div class="card-row"><span class="card-label">用户ID:</span><span>{{ item.inviter_id }}</span></div>
                   <div class="card-row"><span class="card-label">来源用户ID:</span><span>{{ item.invitee_id }}</span></div>
                   <div class="card-row"><span class="card-label">金额:</span><span>{{ item.amount }}</span></div>
-                  <div class="card-row"><span class="card-label">类型:</span><span>{{ item.commission_type }}</span></div>
+                  <div class="card-row"><span class="card-label">类型:</span><span>{{ translateCommissionType(item.commission_type) }}</span></div>
                   <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at }}</span></div>
                 </div>
               </div>
@@ -281,6 +281,7 @@ import { ref, reactive, h, onMounted } from 'vue'
 import { NCard, NTabs, NTabPane, NDataTable, NTag, NPagination, NSpace, NSelect, useMessage, type DataTableColumns } from 'naive-ui'
 import { getAuditLogs, getLoginLogs, getRegistrationLogs, getSubscriptionLogs, getBalanceLogs, getCommissionLogs, getSystemLogs } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { translateLoginStatus, translateBalanceChangeType, translateCommissionType, parseDeviceInfo, formatLocation } from '@/utils/i18n'
 
 const appStore = useAppStore()
 
@@ -350,17 +351,31 @@ const loginColumns: DataTableColumns = [
   { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '用户ID', key: 'user_id', width: 100, resizable: true },
   { title: 'IP地址', key: 'ip_address', width: 140, resizable: true },
-  { title: '位置', key: 'location', ellipsis: { tooltip: true } },
-  { title: '设备', key: 'user_agent', width: 150, resizable: true, ellipsis: { tooltip: true } },
+  {
+    title: '位置',
+    key: 'location',
+    width: 180,
+    resizable: true,
+    ellipsis: { tooltip: true },
+    render: (row: any) => formatLocation(row.location)
+  },
+  {
+    title: '设备',
+    key: 'user_agent',
+    width: 200,
+    resizable: true,
+    ellipsis: { tooltip: true },
+    render: (row: any) => parseDeviceInfo(row.user_agent)
+  },
   {
     title: '状态',
     key: 'login_status',
     width: 100,
     resizable: true,
     render: (row: any) =>
-      h(NTag, { type: row.login_status === 'success' ? 'success' : 'error' }, { default: () => row.login_status }),
+      h(NTag, { type: row.login_status === 'success' ? 'success' : 'error', size: 'small' }, { default: () => translateLoginStatus(row.login_status) }),
   },
-  { title: '创建时间', key: 'login_time', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.login_time).getTime() - new Date(b.login_time).getTime() },
+  { title: '登录时间', key: 'login_time', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.login_time).getTime() - new Date(b.login_time).getTime() },
 ]
 
 // Registration logs
@@ -442,7 +457,13 @@ const balancePagination = reactive({
 const balanceColumns: DataTableColumns = [
   { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '用户ID', key: 'user_id', width: 100, resizable: true },
-  { title: '类型', key: 'change_type', width: 120, resizable: true },
+  {
+    title: '类型',
+    key: 'change_type',
+    width: 120,
+    resizable: true,
+    render: (row: any) => translateBalanceChangeType(row.change_type)
+  },
   { title: '金额', key: 'amount', width: 120, resizable: true },
   { title: '余额', key: 'balance_after', width: 120, resizable: true },
   { title: '备注', key: 'description', ellipsis: { tooltip: true } },
@@ -474,7 +495,13 @@ const commissionColumns: DataTableColumns = [
   { title: '用户ID', key: 'inviter_id', width: 100, resizable: true },
   { title: '来源用户ID', key: 'invitee_id', width: 120, resizable: true },
   { title: '金额', key: 'amount', width: 120, resizable: true },
-  { title: '类型', key: 'commission_type', width: 120, resizable: true },
+  {
+    title: '类型',
+    key: 'commission_type',
+    width: 120,
+    resizable: true,
+    render: (row: any) => translateCommissionType(row.commission_type)
+  },
   { title: '创建时间', key: 'created_at', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
 ]
 

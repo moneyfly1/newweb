@@ -26,9 +26,33 @@ func Register(c *gin.Context) {
 		Password         string `json:"password" binding:"required,min=6"`
 		InviteCode       string `json:"invite_code"`
 		VerificationCode string `json:"verification_code"`
+		Honeypot         string `json:"website"` // 蜜罐字段，正常用户不应填写
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	// 蜜罐检测：如果填写了 website 字段，说明是机器人
+	if req.Honeypot != "" {
+		utils.SysError("security", fmt.Sprintf("注册蜜罐触发: email=%s, honeypot=%s", req.Email, req.Honeypot))
+		// 返回成功但不实际创建账户，迷惑机器人
+		time.Sleep(2 * time.Second) // 模拟正常注册延迟
+		utils.Success(c, gin.H{
+			"user":          gin.H{"id": 0, "username": req.Username, "email": req.Email},
+			"access_token":  "fake_token",
+			"refresh_token": "fake_token",
+		})
+		return
+	}
+
+	// 用户名/邮箱格式验证
+	req.Username = strings.TrimSpace(req.Username)
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+
+	// 防止 SQL 注入特殊字符（虽然 GORM 已参数化，但额外检查）
+	if strings.ContainsAny(req.Username, "'\"\\<>") {
+		utils.BadRequest(c, "用户名包含非法字符")
 		return
 	}
 
@@ -436,6 +460,13 @@ func RefreshToken(c *gin.Context) {
 		return
 	}
 
+	// 检查 refresh token 是否在黑名单中
+	tokenHash := utils.SHA256Hash(req.RefreshToken)
+	if models.IsTokenBlacklisted(database.GetDB(), tokenHash) {
+		utils.Unauthorized(c, "Refresh Token 已失效")
+		return
+	}
+
 	var user models.User
 	if err := database.GetDB().First(&user, claims.UserID).Error; err != nil {
 		utils.Unauthorized(c, "用户不存在")
@@ -446,6 +477,11 @@ func RefreshToken(c *gin.Context) {
 		utils.Forbidden(c, "账户已被禁用")
 		return
 	}
+
+	// 将旧的 refresh token 加入黑名单（防止重用）
+	db := database.GetDB()
+	expiresAt := time.Now().Add(time.Duration(config.AppConfig.RefreshTokenExpireDays) * 24 * time.Hour)
+	models.AddToBlacklist(db, tokenHash, user.ID, expiresAt)
 
 	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
 	newRefreshToken, _ := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)

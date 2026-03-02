@@ -28,7 +28,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	// CORS
 	corsConfig := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept", "X-CSRF-Token"},
 		ExposeHeaders:    []string{"Content-Length", "Content-Disposition", "Subscription-Userinfo", "Profile-Title", "Subscription-Title", "Profile-Update-Interval"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
@@ -56,13 +56,14 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		auth.POST("/telegram", middleware.RateLimit(10, time.Minute), handlers.TelegramLogin)
 	}
 
-	// 公开订阅链接
-	api.GET("/sub/clash/:url", handlers.GetSubscription)
-	api.GET("/sub/:url", handlers.GetUniversalSubscription)
+	// 公开订阅链接（添加频率限制防枚举）
+	subRL := middleware.RateLimit(120, time.Minute)
+	api.GET("/sub/clash/:url", subRL, handlers.GetSubscription)
+	api.GET("/sub/:url", subRL, handlers.GetUniversalSubscription)
 	// 兼容旧路径
-	api.GET("/subscribe/clash/:url", handlers.GetSubscription)
-	api.GET("/subscribe/universal/:url", handlers.GetUniversalSubscription)
-	api.GET("/subscribe/:url", handlers.GetSubscription)
+	api.GET("/subscribe/clash/:url", subRL, handlers.GetSubscription)
+	api.GET("/subscribe/universal/:url", subRL, handlers.GetUniversalSubscription)
+	api.GET("/subscribe/:url", subRL, handlers.GetSubscription)
 
 	// 公开配置
 	api.GET("/config", handlers.GetPublicConfig)
@@ -81,6 +82,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	authorized := api.Group("")
 	authorized.Use(middleware.AuthRequired())
 	{
+		// CSRF token
+		authorized.GET("/csrf-token", middleware.GetCSRFToken)
 		// 用户
 		users := authorized.Group("/users")
 		{
@@ -130,8 +133,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		authorized.POST("/payment", handlers.CreatePayment)
 		authorized.GET("/payment/status/:id", handlers.GetPaymentStatus)
 
-		// 卡密兑换
-		authorized.POST("/redeem", handlers.RedeemCode)
+		// 卡密兑换（添加频率限制防暴力破解）
+		authorized.POST("/redeem", middleware.RateLimit(5, time.Minute), handlers.RedeemCode)
 		authorized.GET("/redeem/history", handlers.GetRedeemHistory)
 
 		// 节点
@@ -144,8 +147,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			nodes.POST("/batch-test", handlers.BatchTestNodes)
 		}
 
-		// 优惠券
-		authorized.POST("/coupons/verify", handlers.VerifyCoupon)
+		// 优惠券（添加频率限制防暴力枚举）
+		authorized.POST("/coupons/verify", middleware.RateLimit(10, time.Minute), handlers.VerifyCoupon)
 		authorized.GET("/coupons/my", handlers.GetMyCoupons)
 
 		// 通知
@@ -238,6 +241,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminOrders.GET("", handlers.AdminListOrders)
 			adminOrders.GET("/:id", handlers.AdminGetOrder)
 			adminOrders.POST("/:id/refund", handlers.AdminRefundOrder)
+			adminOrders.POST("/:id/cancel", handlers.AdminCancelOrder)
+			adminOrders.POST("/:id/complete", handlers.AdminCompleteOrder)
+			adminOrders.DELETE("/:id", handlers.AdminDeleteOrder)
 		}
 
 		// 套餐管理

@@ -60,14 +60,14 @@ func AdminDashboard(c *gin.Context) {
 	go func() {
 		defer wg.Done()
 		db.Model(&models.Order{}).
-			Where("status = ? AND DATE(payment_time) = ?", "paid", today).
-			Select("COALESCE(SUM(amount), 0)").Scan(&revenueToday)
+			Where("status IN ? AND DATE(payment_time) = ?", []string{"paid", "completed"}, today).
+			Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&revenueToday)
 	}()
 	go func() {
 		defer wg.Done()
 		db.Model(&models.Order{}).
-			Where("status = ? AND DATE(payment_time) >= ?", "paid", monthStart).
-			Select("COALESCE(SUM(amount), 0)").Scan(&revenueMonth)
+			Where("status IN ? AND DATE(payment_time) >= ?", []string{"paid", "completed"}, monthStart).
+			Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&revenueMonth)
 	}()
 	go func() {
 		defer wg.Done()
@@ -88,8 +88,8 @@ func AdminDashboard(c *gin.Context) {
 	go func() {
 		defer wg.Done()
 		db.Model(&models.Order{}).
-			Where("status = ? AND DATE(payment_time) >= ?", "paid", thirtyDaysAgo).
-			Select("DATE(payment_time) as date, COALESCE(SUM(amount), 0) as value").
+			Where("status IN ? AND DATE(payment_time) >= ?", []string{"paid", "completed"}, thirtyDaysAgo).
+			Select("DATE(payment_time) as date, COALESCE(SUM(COALESCE(final_amount, amount)), 0) as value").
 			Group("DATE(payment_time)").
 			Order("date ASC").
 			Scan(&revenueTrend)
@@ -746,6 +746,84 @@ func AdminRefundOrder(c *gin.Context) {
 	}
 	utils.CreateAuditLog(c, "refund_order", "order", uint(id), fmt.Sprintf("退款订单: %s, 金额: %.2f, 方式: %s", order.OrderNo, refundAmount, refundMethod))
 	utils.SuccessMessage(c, fmt.Sprintf("退款成功（%s）", refundMethod))
+}
+
+func AdminCancelOrder(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的订单ID")
+		return
+	}
+	db := database.GetDB()
+	var order models.Order
+	if err := db.First(&order, id).Error; err != nil {
+		utils.NotFound(c, "订单不存在")
+		return
+	}
+	if order.Status != "pending" {
+		utils.BadRequest(c, "只能取消待支付的订单")
+		return
+	}
+
+	if err := db.Model(&order).Update("status", "cancelled").Error; err != nil {
+		utils.InternalError(c, "取消订单失败")
+		return
+	}
+
+	utils.CreateAuditLog(c, "cancel_order", "order", uint(id), fmt.Sprintf("取消订单: %s", order.OrderNo))
+	utils.SuccessMessage(c, "订单已取消")
+}
+
+func AdminCompleteOrder(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的订单ID")
+		return
+	}
+	db := database.GetDB()
+	var order models.Order
+	if err := db.First(&order, id).Error; err != nil {
+		utils.NotFound(c, "订单不存在")
+		return
+	}
+	if order.Status != "paid" {
+		utils.BadRequest(c, "只能完成已支付的订单")
+		return
+	}
+
+	if err := db.Model(&order).Update("status", "completed").Error; err != nil {
+		utils.InternalError(c, "完成订单失败")
+		return
+	}
+
+	utils.CreateAuditLog(c, "complete_order", "order", uint(id), fmt.Sprintf("完成订单: %s", order.OrderNo))
+	utils.SuccessMessage(c, "订单已完成")
+}
+
+func AdminDeleteOrder(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的订单ID")
+		return
+	}
+	db := database.GetDB()
+	var order models.Order
+	if err := db.First(&order, id).Error; err != nil {
+		utils.NotFound(c, "订单不存在")
+		return
+	}
+	if order.Status != "cancelled" && order.Status != "refunded" {
+		utils.BadRequest(c, "只能删除已取消或已退款的订单")
+		return
+	}
+
+	if err := db.Delete(&order).Error; err != nil {
+		utils.InternalError(c, "删除订单失败")
+		return
+	}
+
+	utils.CreateAuditLog(c, "delete_order", "order", uint(id), fmt.Sprintf("删除订单: %s", order.OrderNo))
+	utils.SuccessMessage(c, "订单已删除")
 }
 
 // ==================== Package Management ====================
@@ -1958,17 +2036,17 @@ func AdminDeleteAnnouncement(c *gin.Context) {
 func AdminRevenueStats(c *gin.Context) {
 	db := database.GetDB()
 	var totalRevenue float64
-	db.Model(&models.Order{}).Where("status = ?", "paid").Select("COALESCE(SUM(amount), 0)").Scan(&totalRevenue)
+	db.Model(&models.Order{}).Where("status IN ?", []string{"paid", "completed"}).Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&totalRevenue)
 	var todayRevenue float64
 	today := time.Now().Format("2006-01-02")
-	db.Model(&models.Order{}).Where("status = ? AND DATE(payment_time) = ?", "paid", today).
-		Select("COALESCE(SUM(amount), 0)").Scan(&todayRevenue)
+	db.Model(&models.Order{}).Where("status IN ? AND DATE(payment_time) = ?", []string{"paid", "completed"}, today).
+		Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&todayRevenue)
 	var monthRevenue float64
 	monthStart := time.Now().Format("2006-01") + "-01"
-	db.Model(&models.Order{}).Where("status = ? AND payment_time >= ?", "paid", monthStart).
-		Select("COALESCE(SUM(amount), 0)").Scan(&monthRevenue)
+	db.Model(&models.Order{}).Where("status IN ? AND payment_time >= ?", []string{"paid", "completed"}, monthStart).
+		Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&monthRevenue)
 	var orderCount int64
-	db.Model(&models.Order{}).Where("status = ?", "paid").Count(&orderCount)
+	db.Model(&models.Order{}).Where("status IN ?", []string{"paid", "completed"}).Count(&orderCount)
 	utils.Success(c, gin.H{
 		"total_revenue":     totalRevenue,
 		"today_revenue":     todayRevenue,

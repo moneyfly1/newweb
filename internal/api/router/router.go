@@ -1,6 +1,7 @@
 package router
 
 import (
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -74,6 +75,13 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	// 支付回调（无需认证，支持 GET 和 POST）
 	api.POST("/payment/notify/:type", handlers.PaymentNotify)
 	api.GET("/payment/notify/:type", handlers.PaymentNotify)
+
+	// 测试回调端点（用于验证回调是否能到达）
+	api.Any("/payment/test-callback", func(c *gin.Context) {
+		log.Printf("[test-callback] 收到请求: method=%s, url=%s, remote=%s", c.Request.Method, c.Request.URL.String(), c.ClientIP())
+		c.String(200, "callback received")
+	})
+
 	api.GET("/payment/methods", handlers.GetPaymentMethods)
 
 	// 邀请码验证（公开）

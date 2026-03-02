@@ -296,6 +296,7 @@ func AdminUpdateUser(c *gin.Context) {
 	allowed := map[string]bool{
 		"username": true, "email": true, "is_active": true, "is_verified": true,
 		"is_admin": true, "balance": true, "user_level_id": true, "notes": true,
+		"expire_time": true, "device_limit": true,
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {

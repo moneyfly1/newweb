@@ -195,7 +195,7 @@ const handleSearch = () => {
 }
 
 const handleViewUser = (userId) => {
-  router.push(`/admin/users/${userId}`)
+  router.push({ name: 'AdminUsers', query: { userId } })
 }
 
 onMounted(() => {

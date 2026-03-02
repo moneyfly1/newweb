@@ -400,6 +400,7 @@ import {
 import { listUserLevels } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
+import { useRoute } from 'vue-router'
 import { translateLoginStatus, translateBalanceChangeType, parseDeviceInfo, formatLocation } from '@/utils/i18n'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
@@ -407,6 +408,7 @@ const message = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
 const userStore = useUserStore()
+const route = useRoute()
 
 // State
 const loading = ref(false)
@@ -981,7 +983,17 @@ const rechargeCols = [
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]
 
-onMounted(() => { fetchUsers() })
+onMounted(async () => {
+  await fetchUsers()
+  // 如果 URL 中有 userId 参数，自动打开该用户详情
+  const userId = route.query.userId
+  if (userId) {
+    const user = users.value.find(u => u.id === Number(userId))
+    if (user) {
+      handleViewDetail(user)
+    }
+  }
+})
 </script>
 
 <style scoped>

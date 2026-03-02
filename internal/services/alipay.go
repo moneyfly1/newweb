@@ -282,13 +282,37 @@ func AlipayCreateWapOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notify
 
 // BuildPaymentURLs builds notify and return URLs for payment callbacks
 func BuildPaymentURLs(payType, orderNo string) (notifyURL, returnURL string) {
-	siteURL := GetSiteURL()
-	apiBase := siteURL
-	if apiBase == "" {
-		apiBase = "http://localhost:8000"
+	// Try to get configured URLs first (for Alipay)
+	if payType == "alipay" {
+		cfg, err := GetAlipayConfig()
+		if err == nil {
+			if cfg.NotifyURL != "" {
+				notifyURL = cfg.NotifyURL
+			}
+			if cfg.ReturnURL != "" {
+				returnURL = cfg.ReturnURL
+				if orderNo != "" {
+					returnURL += "?order_no=" + url.QueryEscape(orderNo)
+				}
+			}
+		}
 	}
-	notifyURL = apiBase + "/api/v1/payment/notify/" + payType
-	returnURL = siteURL + "/payment/return?order_no=" + url.QueryEscape(orderNo)
+
+	// Fall back to auto-generated URLs
+	if notifyURL == "" {
+		siteURL := GetSiteURL()
+		apiBase := siteURL
+		if apiBase == "" {
+			apiBase = "http://localhost:8000"
+		}
+		notifyURL = apiBase + "/api/v1/payment/notify/" + payType
+	}
+
+	if returnURL == "" {
+		siteURL := GetSiteURL()
+		returnURL = siteURL + "/payment/return?order_no=" + url.QueryEscape(orderNo)
+	}
+
 	return
 }
 

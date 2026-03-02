@@ -132,13 +132,17 @@
                 </div>
                 <div class="card-row">
                   <span class="label">地区</span>
-                  <span class="value">{{ record.location || '-' }}</span>
+                  <span class="value">{{ formatLocation(record.location) }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="label">设备</span>
+                  <span class="value">{{ parseDeviceInfo(record.user_agent) }}</span>
                 </div>
                 <div class="card-row">
                   <span class="label">状态</span>
                   <span class="value">
                     <n-tag :type="record.login_status === 'success' ? 'success' : 'error'" size="small" :bordered="false">
-                      {{ record.login_status === 'success' ? '成功' : '失败' }}
+                      {{ translateLoginStatus(record.login_status) }}
                     </n-tag>
                   </span>
                 </div>
@@ -158,6 +162,7 @@ import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import { updateProfile, changePassword, getNotificationSettings, updateNotificationSettings, getPrivacySettings, updatePrivacySettings, getLoginHistory, bindTelegram, unbindTelegram } from '@/api/user'
 import { getPublicConfig } from '@/api/common'
+import { translateLoginStatus, parseDeviceInfo, formatLocation } from '@/utils/i18n'
 
 const message = useMessage()
 const userStore = useUserStore()
@@ -206,10 +211,11 @@ const tzOptions = [
 ]
 
 const historyColumns = [
-  { title: '登录时间', key: 'login_time', render: (row: any) => new Date(row.login_time).toLocaleString() },
-  { title: 'IP 地址', key: 'ip_address' },
-  { title: '地区', key: 'location', render: (row: any) => row.location || '-' },
-  { title: '状态', key: 'login_status', render: (row: any) => h(NTag, { type: row.login_status === 'success' ? 'success' : 'error', size: 'small', bordered: false }, () => row.login_status === 'success' ? '成功' : '失败') },
+  { title: '登录时间', key: 'login_time', render: (row: any) => new Date(row.login_time).toLocaleString('zh-CN') },
+  { title: 'IP 地址', key: 'ip_address', render: (row: any) => row.ip_address || '-' },
+  { title: '位置', key: 'location', render: (row: any) => formatLocation(row.location) },
+  { title: '设备', key: 'user_agent', ellipsis: { tooltip: true }, render: (row: any) => parseDeviceInfo(row.user_agent) },
+  { title: '状态', key: 'login_status', render: (row: any) => h(NTag, { type: row.login_status === 'success' ? 'success' : 'error', size: 'small', bordered: false }, () => translateLoginStatus(row.login_status)) },
 ]
 
 async function saveProfile() {

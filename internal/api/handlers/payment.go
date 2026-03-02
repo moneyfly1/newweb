@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -702,6 +703,7 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 
 	// Verify signature
 	if !services.EpayVerifySign(params, epayCfg.SecretKey) {
+		utils.SysError("payment", "易支付回调签名验证失败")
 		c.String(400, "sign error")
 		return
 	}
@@ -716,6 +718,13 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 	outTradeNo := params["out_trade_no"]
 	tradeNo := params["trade_no"]
 	callbackMoney := params["money"]
+
+	// 防重放攻击：检查 nonce
+	if models.IsNonceProcessed(db, outTradeNo, "epay") {
+		utils.SysError("payment", fmt.Sprintf("易支付回调重放攻击检测: %s", outTradeNo))
+		c.String(200, "success") // 返回成功避免重复回调
+		return
+	}
 
 	// Log raw callback
 	rawJSON, _ := json.Marshal(params)
@@ -753,13 +762,23 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 				return err // Already processed or not found
 			}
 
-			// 金额校验
+			// 金额校验（必须严格匹配）
 			if callbackMoney != "" {
 				expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
 				if callbackMoney != expectedAmount {
+					utils.SysError("payment", fmt.Sprintf("易支付金额不匹配: 订单 %s, 期望 %s, 实际 %s", outTradeNo, expectedAmount, callbackMoney))
 					return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, callbackMoney)
 				}
+			} else {
+				utils.SysError("payment", fmt.Sprintf("易支付回调缺少金额字段: %s", outTradeNo))
+				return fmt.Errorf("回调数据缺少金额字段")
 			}
+
+			// 记录 nonce 防止重放
+			if err := models.RecordNonce(tx, outTradeNo, "epay", tradeNo); err != nil {
+				return fmt.Errorf("记录 nonce 失败: %w", err)
+			}
+
 			// Mark transaction as paid
 			callbackJSON := rawStr
 			updates := map[string]interface{}{
@@ -881,6 +900,7 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	notification, err := services.AlipayVerifyCallback(alipayCfg, c.Request)
 	if err != nil {
 		fmt.Printf("[alipay] 回调验证失败: %v\n", err)
+		utils.SysError("payment", fmt.Sprintf("支付宝回调验证失败: %v", err))
 		c.String(400, "verify fail")
 		return
 	}
@@ -893,6 +913,13 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 
 	outTradeNo := notification.OutTradeNo
 	tradeNo := notification.TradeNo
+
+	// 防重放攻击：检查 nonce
+	if models.IsNonceProcessed(db, outTradeNo, "alipay") {
+		utils.SysError("payment", fmt.Sprintf("支付宝回调重放攻击检测: %s", outTradeNo))
+		c.String(200, "success")
+		return
+	}
 
 	// Log raw callback
 	rawStr := fmt.Sprintf(`{"out_trade_no":"%s","trade_no":"%s","trade_status":"%s","total_amount":"%s"}`,
@@ -928,13 +955,23 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 				return err // Already processed or not found
 			}
 
-			// 金额校验
+			// 金额校验（必须严格匹配）
 			if notification.TotalAmount != "" {
 				expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
 				if notification.TotalAmount != expectedAmount {
+					utils.SysError("payment", fmt.Sprintf("支付宝金额不匹配: 订单 %s, 期望 %s, 实际 %s", outTradeNo, expectedAmount, notification.TotalAmount))
 					return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, notification.TotalAmount)
 				}
+			} else {
+				utils.SysError("payment", fmt.Sprintf("支付宝回调缺少金额字段: %s", outTradeNo))
+				return fmt.Errorf("回调数据缺少金额字段")
 			}
+
+			// 记录 nonce 防止重放
+			if err := models.RecordNonce(tx, outTradeNo, "alipay", tradeNo); err != nil {
+				return fmt.Errorf("记录 nonce 失败: %w", err)
+			}
+
 			callbackJSON := rawStr
 			updates := map[string]interface{}{
 				"status":        "paid",
@@ -1064,6 +1101,13 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 		return
 	}
 
+	// 防重放攻击：检查 nonce
+	if models.IsNonceProcessed(db, txIDVal, "stripe") {
+		utils.SysError("payment", fmt.Sprintf("Stripe 回调重放攻击检测: %s", txIDVal))
+		c.String(200, "ok")
+		return
+	}
+
 	// Find transaction
 	var transaction models.PaymentTransaction
 	if err := db.Where("transaction_id = ?", txIDVal).First(&transaction).Error; err != nil {
@@ -1095,21 +1139,38 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 				return err // Already processed or not found
 			}
 
-			// 金额校验: Stripe amount_total 单位为分
+			// 金额校验: Stripe amount_total 单位为分，需严格匹配
 			if amountTotal, ok := obj["amount_total"].(float64); ok {
-				expectedCents := int64(txn.Amount * 100)
+				// 将数据库金额（元）转换为分，考虑汇率
+				rate := 7.2
+				if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
+					if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
+						rate = parsed
+					}
+				}
+				amountUSD := txn.Amount / rate
+				expectedCents := int64(math.Round(amountUSD * 100))
 				actualCents := int64(amountTotal)
-				if actualCents != expectedCents {
+
+				// 允许 1 分的误差（汇率精度问题）
+				if math.Abs(float64(actualCents-expectedCents)) > 1 {
+					utils.SysError("payment", fmt.Sprintf("Stripe 金额不匹配: 订单 %s, 期望 %d 分, 实际 %d 分", txIDVal, expectedCents, actualCents))
 					return fmt.Errorf("金额不匹配: 期望 %d, 实际 %d (分)", expectedCents, actualCents)
 				}
+			} else {
+				utils.SysError("payment", fmt.Sprintf("Stripe 回调缺少金额字段: %s", txIDVal))
+				return fmt.Errorf("回调数据缺少金额字段")
 			}
 
-			// Extract Stripe payment intent ID as external transaction ID
+			// 记录 nonce 防止重放
 			paymentIntent, _ := obj["payment_intent"].(string)
 			sessionID, _ := obj["id"].(string)
 			extTxID := paymentIntent
 			if extTxID == "" {
 				extTxID = sessionID
+			}
+			if err := models.RecordNonce(tx, txIDVal, "stripe", extTxID); err != nil {
+				return fmt.Errorf("记录 nonce 失败: %w", err)
 			}
 
 			callbackJSON := rawStr

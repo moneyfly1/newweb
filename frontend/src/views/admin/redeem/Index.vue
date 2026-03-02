@@ -75,12 +75,14 @@
       </template>
     </n-card>
 
-    <n-modal
-      v-model:show="showGenerateModal"
-      preset="card"
+    <common-drawer
+      v-model:show="showGenerateDrawer"
       title="批量生成兑换码"
-      :style="appStore.isMobile ? 'width: 95vw; max-width: 500px' : 'width: 500px'"
-      :segmented="{ content: 'soft' }"
+      :width="500"
+      show-footer
+      :loading="submitting"
+      @confirm="handleSubmit"
+      @cancel="showGenerateDrawer = false"
     >
       <n-form
         ref="formRef"
@@ -120,16 +122,7 @@
           {{ formData.type === 'balance' ? `将生成 ${formData.quantity} 个面值为 ${formData.value} 元的余额兑换码` : `将生成 ${formData.quantity} 个套餐ID为 ${formData.value} 的套餐兑换码` }}
         </n-alert>
       </n-form>
-
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showGenerateModal = false">取消</n-button>
-          <n-button type="primary" @click="handleSubmit" :loading="submitting">
-            生成
-          </n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
 
     <n-modal
       v-model:show="showCodesModal"
@@ -175,6 +168,7 @@ import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { listRedeemCodes, createRedeemCodes, deleteRedeemCode } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -183,7 +177,7 @@ const appStore = useAppStore()
 const loading = ref(false)
 const submitting = ref(false)
 const codes = ref<any[]>([])
-const showGenerateModal = ref(false)
+const showGenerateDrawer = ref(false)
 const showCodesModal = ref(false)
 const generatedCodes = ref<string[]>([])
 const formRef = ref()
@@ -329,7 +323,7 @@ const handleGenerate = () => {
   formData.type = 'balance'
   formData.value = 10
   formData.quantity = 1
-  showGenerateModal.value = true
+  showGenerateDrawer.value = true
 }
 
 const handleSubmit = async () => {
@@ -345,7 +339,7 @@ const handleSubmit = async () => {
     message.success('生成成功')
     
     generatedCodes.value = res.data.codes || []
-    showGenerateModal.value = false
+    showGenerateDrawer.value = false
     showCodesModal.value = true
     
     await loadCodes()

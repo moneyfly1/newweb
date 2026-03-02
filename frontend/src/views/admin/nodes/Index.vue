@@ -9,13 +9,13 @@
             </template>
             刷新列表
           </n-button>
-          <n-button type="info" @click="showImportLinksModal = true">
+          <n-button type="info" @click="showImportLinksDrawer = true">
             <template #icon>
               <n-icon><LinkOutline /></n-icon>
             </template>
             导入链接
           </n-button>
-          <n-button type="primary" @click="showImportSubModal = true">
+          <n-button type="primary" @click="showImportSubDrawer = true">
             <template #icon>
               <n-icon><CloudDownloadOutline /></n-icon>
             </template>
@@ -43,11 +43,11 @@
               <template #icon><n-icon><RefreshOutline /></n-icon></template>
               刷新
             </n-button>
-            <n-button size="small" type="info" @click="showImportLinksModal = true">
+            <n-button size="small" type="info" @click="showImportLinksDrawer = true">
               <template #icon><n-icon><LinkOutline /></n-icon></template>
               导入链接
             </n-button>
-            <n-button size="small" type="primary" @click="showImportSubModal = true">
+            <n-button size="small" type="primary" @click="showImportSubDrawer = true">
               <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
               导入订阅
             </n-button>
@@ -99,13 +99,15 @@
       </template>
     </n-card>
 
-    <!-- Import Subscription Modal -->
-    <n-modal
-      v-model:show="showImportSubModal"
+    <!-- Import Subscription Drawer -->
+    <common-drawer
+      v-model:show="showImportSubDrawer"
       title="导入订阅"
-      preset="card"
-      :style="{ width: appStore.isMobile ? '95%' : '600px' }"
-      :mask-closable="false"
+      :width="600"
+      show-footer
+      :loading="importing"
+      @confirm="handleImportSubscription"
+      @cancel="showImportSubDrawer = false"
     >
       <n-form label-placement="top">
         <n-form-item label="订阅链接">
@@ -116,28 +118,17 @@
           />
         </n-form-item>
       </n-form>
-      <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 12px">
-          <n-button @click="showImportSubModal = false">取消</n-button>
-          <n-button
-            type="primary"
-            @click="handleImportSubscription"
-            :loading="importing"
-            :disabled="!subscriptionUrl.trim()"
-          >
-            导入
-          </n-button>
-        </div>
-      </template>
-    </n-modal>
+    </common-drawer>
 
-    <!-- Import Links Modal -->
-    <n-modal
-      v-model:show="showImportLinksModal"
+    <!-- Import Links Drawer -->
+    <common-drawer
+      v-model:show="showImportLinksDrawer"
       title="导入链接"
-      preset="card"
-      :style="{ width: appStore.isMobile ? '95%' : '600px' }"
-      :mask-closable="false"
+      :width="600"
+      show-footer
+      :loading="importing"
+      @confirm="handleImportLinks"
+      @cancel="showImportLinksDrawer = false"
     >
       <n-form label-placement="top">
         <n-form-item label="节点链接">
@@ -149,28 +140,17 @@
           />
         </n-form-item>
       </n-form>
-      <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 12px">
-          <n-button @click="showImportLinksModal = false">取消</n-button>
-          <n-button
-            type="primary"
-            @click="handleImportLinks"
-            :loading="importing"
-            :disabled="!nodeLinks.trim()"
-          >
-            导入
-          </n-button>
-        </div>
-      </template>
-    </n-modal>
+    </common-drawer>
 
-    <!-- Edit Modal -->
-    <n-modal
-      v-model:show="showEditModal"
+    <!-- Edit Drawer -->
+    <common-drawer
+      v-model:show="showEditDrawer"
       title="编辑节点"
-      preset="card"
-      :style="{ width: appStore.isMobile ? '95%' : '600px' }"
-      :mask-closable="false"
+      :width="600"
+      show-footer
+      :loading="submitting"
+      @confirm="handleSubmit"
+      @cancel="showEditDrawer = false"
     >
       <n-form
         ref="formRef"
@@ -200,13 +180,7 @@
           />
         </n-form-item>
       </n-form>
-      <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 12px">
-          <n-button @click="showEditModal = false">取消</n-button>
-          <n-button type="primary" @click="handleSubmit" :loading="submitting">确定</n-button>
-        </div>
-      </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -222,6 +196,7 @@ import {
 } from '@vicons/ionicons5'
 import { listAdminNodes, updateNode, deleteNode, importNodes } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -231,9 +206,9 @@ const loading = ref(false)
 const submitting = ref(false)
 const importing = ref(false)
 const refreshing = ref(false)
-const showImportSubModal = ref(false)
-const showImportLinksModal = ref(false)
-const showEditModal = ref(false)
+const showImportSubDrawer = ref(false)
+const showImportLinksDrawer = ref(false)
+const showEditDrawer = ref(false)
 const tableData = ref([])
 const formRef = ref(null)
 const editId = ref(null)
@@ -421,7 +396,7 @@ const handleImportSubscription = async () => {
       url: subscriptionUrl.value.trim()
     })
     message.success(`导入完成: 成功 ${res.data.success}/${res.data.total} 个`)
-    showImportSubModal.value = false
+    showImportSubDrawer.value = false
     subscriptionUrl.value = ''
     fetchData()
   } catch (error) {
@@ -444,7 +419,7 @@ const handleImportLinks = async () => {
       links: nodeLinks.value.trim()
     })
     message.success(`导入完成: 成功 ${res.data.success}/${res.data.total} 个`)
-    showImportLinksModal.value = false
+    showImportLinksDrawer.value = false
     nodeLinks.value = ''
     fetchData()
   } catch (error) {
@@ -481,18 +456,18 @@ const handleEdit = (row) => {
     order_index: row.order_index,
     description: row.description || ''
   })
-  showEditModal.value = true
+  showEditDrawer.value = true
 }
 
 const handleSubmit = async () => {
+  submitting.value = true
   try {
     await formRef.value?.validate()
-    submitting.value = true
 
     await updateNode(editId.value, formData)
     message.success('更新节点成功')
 
-    showEditModal.value = false
+    showEditDrawer.value = false
     fetchData()
   } catch (error) {
     if (error.message) {

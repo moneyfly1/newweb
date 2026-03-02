@@ -64,12 +64,14 @@
       </template>
     </n-card>
 
-    <n-modal
-      v-model:show="showModal"
+    <common-drawer
+      v-model:show="showDrawer"
       :title="modalTitle"
-      preset="card"
-      :style="appStore.isMobile ? 'width: 95%; max-width: 600px' : 'width: 600px'"
-      :mask-closable="false"
+      :width="600"
+      show-footer
+      :loading="submitting"
+      @confirm="handleSubmit"
+      @cancel="showDrawer = false"
     >
       <n-form
         ref="formRef"
@@ -105,16 +107,7 @@
           </n-switch>
         </n-form-item>
       </n-form>
-
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showModal = false">取消</n-button>
-          <n-button type="primary" @click="handleSubmit" :loading="submitting">
-            确定
-          </n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -139,6 +132,7 @@ import {
 } from 'naive-ui'
 import { listAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
 
@@ -146,7 +140,7 @@ const message = useMessage()
 const formRef = ref()
 const loading = ref(false)
 const submitting = ref(false)
-const showModal = ref(false)
+const showDrawer = ref(false)
 const modalTitle = ref('发布公告')
 const tableData = ref<any[]>([])
 const isEdit = ref(false)
@@ -286,14 +280,14 @@ const handleCreate = () => {
     type: 'info',
     is_active: true,
   }
-  showModal.value = true
+  showDrawer.value = true
 }
 
 const handleEdit = (row: any) => {
   isEdit.value = true
   modalTitle.value = '编辑公告'
   formData.value = { ...row }
-  showModal.value = true
+  showDrawer.value = true
 }
 
 const handleSubmit = async () => {
@@ -312,7 +306,7 @@ const handleSubmit = async () => {
       res = await createAnnouncement(formData.value)
     }
     message.success(isEdit.value ? '更新成功' : '创建成功')
-    showModal.value = false
+    showDrawer.value = false
     loadData()
   } catch (error: any) {
     message.error(error.message || '操作失败')

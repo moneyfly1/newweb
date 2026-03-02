@@ -49,8 +49,8 @@
       <div v-if="pools.length === 0 && !loading" style="text-align:center;padding:40px 0;color:#999">暂无奖池</div>
     </n-card>
 
-    <!-- 奖池表单弹窗 -->
-    <n-modal v-model:show="showPoolModal" preset="card" :title="editingPool ? '编辑奖池' : '创建奖池'" :style="appStore.isMobile ? 'width:95vw' : 'width:600px'" :segmented="{ content: 'soft' }">
+    <!-- 奖池表单抽屉 -->
+    <common-drawer v-model:show="showPoolDrawer" :title="editingPool ? '编辑奖池' : '创建奖池'" :width="600" show-footer :loading="submitting" @confirm="handleSubmitPool" @cancel="showPoolDrawer = false">
       <n-form :model="poolForm" label-placement="left" label-width="100">
         <n-form-item label="名称"><n-input v-model:value="poolForm.name" placeholder="奖池名称" /></n-form-item>
         <n-form-item label="描述"><n-input v-model:value="poolForm.description" type="textarea" placeholder="奖池描述（可选）" /></n-form-item>
@@ -64,16 +64,10 @@
         <n-form-item label="开始时间"><n-date-picker v-model:value="poolForm.start_time_ts" type="datetime" clearable style="width:100%" /></n-form-item>
         <n-form-item label="结束时间"><n-date-picker v-model:value="poolForm.end_time_ts" type="datetime" clearable style="width:100%" /></n-form-item>
       </n-form>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showPoolModal = false">取消</n-button>
-          <n-button type="primary" :loading="submitting" @click="handleSubmitPool">确定</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
 
-    <!-- 奖品表单弹窗 -->
-    <n-modal v-model:show="showPrizeModal" preset="card" :title="editingPrize ? '编辑奖品' : '添加奖品'" :style="appStore.isMobile ? 'width:95vw' : 'width:500px'" :segmented="{ content: 'soft' }">
+    <!-- 奖品表单抽屉 -->
+    <common-drawer v-model:show="showPrizeDrawer" :title="editingPrize ? '编辑奖品' : '添加奖品'" :width="500" show-footer :loading="submitting" @confirm="handleSubmitPrize" @cancel="showPrizeDrawer = false">
       <n-form :model="prizeForm" label-placement="left" label-width="80">
         <n-form-item label="名称"><n-input v-model:value="prizeForm.name" placeholder="奖品名称" /></n-form-item>
         <n-form-item label="类型">
@@ -85,13 +79,7 @@
         <n-form-item label="权重"><n-input-number v-model:value="prizeForm.weight" :min="1" style="width:100%" placeholder="越大概率越高" /></n-form-item>
         <n-form-item label="库存"><n-input-number v-model:value="prizeForm.stock" :min="0" style="width:100%" placeholder="留空为无限" clearable /></n-form-item>
       </n-form>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showPrizeModal = false">取消</n-button>
-          <n-button type="primary" :loading="submitting" @click="handleSubmitPrize">确定</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -103,6 +91,7 @@ import {
   listAdminMysteryBoxPools, createMysteryBoxPool, updateMysteryBoxPool, deleteMysteryBoxPool,
   addMysteryBoxPrize, updateMysteryBoxPrize, deleteMysteryBoxPrize, getMysteryBoxStats,
 } from '@/api/admin'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
 const message = useMessage()
@@ -114,7 +103,7 @@ const pools = ref<any[]>([])
 const stats = ref<any>({})
 
 // Pool form
-const showPoolModal = ref(false)
+const showPoolDrawer = ref(false)
 const editingPool = ref<any>(null)
 const poolForm = reactive({
   name: '', description: '' as string | null, price: 0, is_active: true, sort_order: 0,
@@ -124,7 +113,7 @@ const poolForm = reactive({
 })
 
 // Prize form
-const showPrizeModal = ref(false)
+const showPrizeDrawer = ref(false)
 const editingPrize = ref<any>(null)
 const currentPoolId = ref<number>(0)
 const prizeForm = reactive({ name: '', type: 'balance', value: 0, weight: 1, stock: null as number | null })
@@ -204,7 +193,7 @@ const resetPoolForm = () => {
 const handleAddPool = () => {
   editingPool.value = null
   resetPoolForm()
-  showPoolModal.value = true
+  showPoolDrawer.value = true
 }
 
 const handleEditPool = (pool: any) => {
@@ -215,7 +204,7 @@ const handleEditPool = (pool: any) => {
   poolForm.max_opens_per_day = pool.max_opens_per_day; poolForm.max_opens_total = pool.max_opens_total
   poolForm.start_time_ts = pool.start_time ? new Date(pool.start_time).getTime() : null
   poolForm.end_time_ts = pool.end_time ? new Date(pool.end_time).getTime() : null
-  showPoolModal.value = true
+  showPoolDrawer.value = true
 }
 
 const handleSubmitPool = async () => {
@@ -237,7 +226,7 @@ const handleSubmitPool = async () => {
       await createMysteryBoxPool(data)
       message.success('创建成功')
     }
-    showPoolModal.value = false
+    showPoolDrawer.value = false
     loadPools()
   } catch (e: any) {
     message.error(e.message || '操作失败')
@@ -261,7 +250,7 @@ const handleAddPrize = (poolId: number) => {
   editingPrize.value = null
   currentPoolId.value = poolId
   prizeForm.name = ''; prizeForm.type = 'balance'; prizeForm.value = 0; prizeForm.weight = 1; prizeForm.stock = null
-  showPrizeModal.value = true
+  showPrizeDrawer.value = true
 }
 
 const handleEditPrize = (prize: any) => {
@@ -269,7 +258,7 @@ const handleEditPrize = (prize: any) => {
   currentPoolId.value = prize.pool_id
   prizeForm.name = prize.name; prizeForm.type = prize.type; prizeForm.value = prize.value
   prizeForm.weight = prize.weight; prizeForm.stock = prize.stock
-  showPrizeModal.value = true
+  showPrizeDrawer.value = true
 }
 
 const handleSubmitPrize = async () => {
@@ -284,7 +273,7 @@ const handleSubmitPrize = async () => {
       await addMysteryBoxPrize(currentPoolId.value, data)
       message.success('添加成功')
     }
-    showPrizeModal.value = false
+    showPrizeDrawer.value = false
     loadPools()
   } catch (e: any) {
     message.error(e.message || '操作失败')

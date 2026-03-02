@@ -56,8 +56,8 @@
                   <span class="value">{{ formatDateTime(order.created_at) }}</span>
                 </div>
                 <div class="card-actions">
-                  <n-button size="small" type="info" @click="detailOrder = order; showDetailModal = true">详情</n-button>
-                  <n-button v-if="order.status === 'pending'" size="small" type="primary" @click="currentOrder = order; showPaymentModal = true">支付</n-button>
+                  <n-button size="small" type="info" @click="detailOrder = order; showDetailDrawer = true">详情</n-button>
+                  <n-button v-if="order.status === 'pending'" size="small" type="primary" @click="currentOrder = order; showPaymentDrawer = true">支付</n-button>
                   <n-button v-if="order.status === 'pending'" size="small" @click="handleCancelOrder(order)">取消</n-button>
                 </div>
               </div>
@@ -105,14 +105,15 @@
       </n-card>
     </n-space>
 
-    <!-- Payment Modal -->
-    <n-modal
-      v-model:show="showPaymentModal"
-      preset="card"
+    <!-- Payment Drawer -->
+    <common-drawer
+      v-model:show="showPaymentDrawer"
       title="确认支付"
-      style="width: 500px; max-width: 92vw;"
-      :bordered="false"
-      :segmented="{ content: true }"
+      :width="500"
+      show-footer
+      :loading="paying"
+      @confirm="handlePay"
+      @cancel="showPaymentDrawer = false"
     >
       <n-space vertical :size="16">
         <n-descriptions :column="1" bordered>
@@ -139,21 +140,13 @@
           </n-radio-group>
         </div>
       </n-space>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showPaymentModal = false">取消</n-button>
-          <n-button type="primary" :loading="paying" @click="handlePay">确认支付</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
 
-    <!-- Order Detail Modal -->
-    <n-modal
-      v-model:show="showDetailModal"
-      preset="card"
+    <!-- Order Detail Drawer -->
+    <common-drawer
+      v-model:show="showDetailDrawer"
       title="订单详情"
-      style="width: 560px; max-width: 92vw;"
-      :bordered="false"
+      :width="560"
     >
       <n-descriptions :column="1" bordered v-if="detailOrder">
         <n-descriptions-item label="订单号">{{ detailOrder.order_no }}</n-descriptions-item>
@@ -170,16 +163,18 @@
         <n-descriptions-item label="创建时间">{{ formatDateTime(detailOrder.created_at) }}</n-descriptions-item>
         <n-descriptions-item v-if="detailOrder.paid_at" label="支付时间">{{ formatDateTime(detailOrder.paid_at) }}</n-descriptions-item>
       </n-descriptions>
-    </n-modal>
+    </common-drawer>
 
-    <!-- QR Code Payment Modal -->
-    <n-modal
-      v-model:show="showQrModal"
-      preset="card"
+    <!-- QR Code Payment Drawer -->
+    <common-drawer
+      v-model:show="showQrDrawer"
       title="扫码支付"
-      style="width: 400px; max-width: 92vw;"
-      :bordered="false"
+      :width="400"
       :mask-closable="false"
+      show-footer
+      :show-confirm="false"
+      cancel-text="取消支付"
+      @cancel="showQrDrawer = false"
       @after-leave="stopPolling"
     >
       <div style="text-align: center;">
@@ -188,12 +183,7 @@
         <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后将自动跳转...</p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
-      <template #footer>
-        <n-space justify="center">
-          <n-button @click="showQrModal = false">取消支付</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -207,6 +197,7 @@ import { listOrders, payOrder, cancelOrder, createPayment, getOrderStatus } from
 import { listRechargeRecords, cancelRecharge, getPaymentMethods } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 import { safeRedirect } from '@/utils/security'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -218,8 +209,8 @@ const ordersLoading = ref(false)
 const rechargeLoading = ref(false)
 const orders = ref<any[]>([])
 const rechargeRecords = ref<any[]>([])
-const showPaymentModal = ref(false)
-const showDetailModal = ref(false)
+const showPaymentDrawer = ref(false)
+const showDetailDrawer = ref(false)
 const currentOrder = ref<any>(null)
 const detailOrder = ref<any>(null)
 const paying = ref(false)
@@ -227,7 +218,7 @@ const orderStatusFilter = ref('')
 const orderPayMethod = ref('balance')
 const pmMethods = ref<any[]>([])
 const pmBalanceEnabled = ref(true)
-const showQrModal = ref(false)
+const showQrDrawer = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const pollingStatus = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -306,10 +297,10 @@ const orderColumns: DataTableColumns<any> = [
     title: '操作', key: 'actions', width: 200, fixed: 'right',
     render: (row) => {
       const btns: any[] = [
-        h(NButton, { size: 'small', quaternary: true, type: 'info', onClick: () => { detailOrder.value = row; showDetailModal.value = true } }, { default: () => '详情' })
+        h(NButton, { size: 'small', quaternary: true, type: 'info', onClick: () => { detailOrder.value = row; showDetailDrawer.value = true } }, { default: () => '详情' })
       ]
       if (row.status === 'pending') {
-        btns.push(h(NButton, { size: 'small', type: 'primary', onClick: () => { currentOrder.value = row; showPaymentModal.value = true } }, { default: () => '支付' }))
+        btns.push(h(NButton, { size: 'small', type: 'primary', onClick: () => { currentOrder.value = row; showPaymentDrawer.value = true } }, { default: () => '支付' }))
         btns.push(h(NButton, { size: 'small', onClick: () => handleCancelOrder(row) }, { default: () => '取消' }))
       }
       return h(NSpace, { size: 4 }, { default: () => btns })
@@ -374,7 +365,7 @@ const startPolling = (orderNo: string) => {
       const res = await getOrderStatus(orderNo)
       if (res.data?.status === 'paid') {
         stopPolling()
-        showQrModal.value = false
+        showQrDrawer.value = false
         message.success('支付成功')
         loadOrders()
       }
@@ -397,16 +388,16 @@ const handlePay = async () => {
     if (orderPayMethod.value === 'balance') {
       await payOrder(currentOrder.value.order_no, { payment_method: 'balance' })
       message.success('支付成功')
-      showPaymentModal.value = false
+      showPaymentDrawer.value = false
       loadOrders()
     } else if (orderPayMethod.value.startsWith('pm_')) {
       const pmId = parseInt(orderPayMethod.value.replace('pm_', ''))
       const res = await createPayment({ order_id: currentOrder.value.id, payment_method_id: pmId })
       const data = res.data
       if (data?.payment_url) {
-        showPaymentModal.value = false
+        showPaymentDrawer.value = false
         if (isQrCodeUrl(data.payment_url)) {
-          showQrModal.value = true
+          showQrDrawer.value = true
           await nextTick()
           if (qrCanvas.value) {
             QRCode.toCanvas(qrCanvas.value, data.payment_url, { width: 240, margin: 2 })
@@ -417,7 +408,7 @@ const handlePay = async () => {
         }
       } else {
         message.info('支付已创建，请等待处理')
-        showPaymentModal.value = false
+        showPaymentDrawer.value = false
         loadOrders()
       }
     }

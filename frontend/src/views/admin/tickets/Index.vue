@@ -84,12 +84,11 @@
       </n-space>
     </n-card>
 
-    <n-modal
-      v-model:show="showDetailModal"
-      preset="card"
+    <common-drawer
+      v-model:show="showDetailDrawer"
       title="工单详情"
-      :style="appStore.isMobile ? 'width: 95%; max-width: 800px' : 'width: 800px'"
-      :segmented="{ content: 'soft' }"
+      :width="800"
+      :show-footer="false"
     >
       <n-spin :show="detailLoading">
         <div v-if="currentTicket" class="ticket-detail">
@@ -164,7 +163,7 @@
           </n-space>
         </div>
       </n-spin>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -173,6 +172,7 @@ import { ref, reactive, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NSpin, useMessage, useDialog } from 'naive-ui'
 import { listAdminTickets, getAdminTicket, updateTicket, replyAdminTicket } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
 
@@ -184,7 +184,7 @@ const detailLoading = ref(false)
 const replyLoading = ref(false)
 const tickets = ref<any[]>([])
 const currentTicket = ref<any>(null)
-const showDetailModal = ref(false)
+const showDetailDrawer = ref(false)
 const replyContent = ref('')
 const updateStatus = ref('')
 const sortState = ref({ sort: 'id', order: 'desc' })
@@ -384,14 +384,14 @@ const handleSearch = () => {
 
 const handleViewDetail = async (id: number) => {
   detailLoading.value = true
-  showDetailModal.value = true
+  showDetailDrawer.value = true
   try {
     const res = await getAdminTicket(id)
     currentTicket.value = { ...res.data.ticket, replies: res.data.replies || [] }
     updateStatus.value = res.data.ticket.status
   } catch (error: any) {
     message.error(error.message || '加载工单详情失败')
-    showDetailModal.value = false
+    showDetailDrawer.value = false
   } finally {
     detailLoading.value = false
   }

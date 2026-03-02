@@ -1,0 +1,399 @@
+/* 统一的列表和卡片样式 */
+
+/* ========== 移动端卡片列表通用样式 ========== */
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+}
+
+.mobile-card {
+  background: var(--n-color);
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.mobile-card:active {
+  transform: scale(0.98);
+}
+
+.mobile-card.clickable {
+  cursor: pointer;
+}
+
+.mobile-card.clickable:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+/* 卡片头部 */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--n-border-color);
+  background: var(--n-color-target);
+  gap: 8px;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--n-text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.card-subtitle {
+  font-size: 13px;
+  color: var(--n-text-color-3);
+  margin-top: 2px;
+}
+
+/* 卡片主体 */
+.card-body {
+  padding: 12px 16px;
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 6px 0;
+  font-size: 14px;
+  gap: 12px;
+}
+
+.card-row:first-child {
+  padding-top: 0;
+}
+
+.card-row:last-child {
+  padding-bottom: 0;
+}
+
+.card-label {
+  color: var(--n-text-color-3);
+  flex-shrink: 0;
+  min-width: 70px;
+  font-size: 13px;
+}
+
+.card-value {
+  text-align: right;
+  word-break: break-word;
+  color: var(--n-text-color);
+  flex: 1;
+  font-size: 14px;
+}
+
+.card-value.monospace {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+/* 卡片底部操作 */
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--n-border-color);
+  flex-wrap: wrap;
+  background: var(--n-color-target);
+}
+
+.card-footer {
+  padding: 10px 16px;
+  border-top: 1px solid var(--n-border-color);
+  background: var(--n-color-target);
+  font-size: 12px;
+  color: var(--n-text-color-3);
+}
+
+/* ========== 桌面端表格通用样式 ========== */
+.page-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.page-card :deep(.n-card__content) {
+  padding: 20px;
+}
+
+:deep(.n-data-table) {
+  font-size: 14px;
+}
+
+:deep(.n-data-table .n-data-table-th) {
+  font-weight: 600;
+  background: var(--n-th-color);
+  padding: 14px 16px;
+}
+
+:deep(.n-data-table .n-data-table-td) {
+  padding: 12px 16px;
+}
+
+:deep(.n-data-table .n-data-table-tr:hover) {
+  background: var(--n-color-hover);
+}
+
+/* ========== 空状态 ========== */
+.mobile-empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--n-text-color-3);
+  font-size: 14px;
+}
+
+.card-empty {
+  padding: 40px 20px;
+  text-align: center;
+}
+
+/* ========== 加载状态 ========== */
+.card-loading {
+  padding: 40px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ========== 统计卡片样式 ========== */
+.stat-card {
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.08;
+  transition: opacity 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card:hover::before {
+  opacity: 0.12;
+}
+
+.stat-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--n-text-color-3);
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--n-text-color);
+}
+
+/* ========== 响应式适配 ========== */
+@media (max-width: 767px) {
+  .mobile-card-list {
+    gap: 10px;
+  }
+
+  .mobile-card {
+    border-radius: 10px;
+  }
+
+  .card-header {
+    padding: 12px 14px;
+  }
+
+  .card-title {
+    font-size: 14px;
+  }
+
+  .card-body {
+    padding: 10px 14px;
+  }
+
+  .card-row {
+    font-size: 13px;
+    padding: 4px 0;
+  }
+
+  .card-label {
+    min-width: 60px;
+    font-size: 12px;
+  }
+
+  .card-value {
+    font-size: 13px;
+  }
+
+  .card-actions {
+    padding: 10px 14px;
+    gap: 6px;
+  }
+
+  .page-card {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .page-card :deep(.n-card__content) {
+    padding: 12px;
+  }
+
+  .stat-card {
+    border-radius: 10px;
+  }
+
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+  }
+}
+
+/* ========== 主题色卡片变体 ========== */
+.stat-card-blue::before {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.stat-card-orange::before {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.stat-card-green::before {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.stat-card-red::before {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.stat-card-purple::before {
+  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+}
+
+.stat-card-blue .stat-icon {
+  color: #667eea;
+}
+
+.stat-card-orange .stat-icon {
+  color: #f5576c;
+}
+
+.stat-card-green .stat-icon {
+  color: #11998e;
+}
+
+.stat-card-red .stat-icon {
+  color: #fa709a;
+}
+
+.stat-card-purple .stat-icon {
+  color: #a8edea;
+}
+
+/* ========== 抽屉样式优化 ========== */
+:deep(.n-drawer-body-content-wrapper) {
+  padding: 0;
+}
+
+:deep(.n-drawer .n-drawer-header) {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--n-border-color);
+}
+
+:deep(.n-drawer .n-drawer-body) {
+  padding: 24px;
+}
+
+:deep(.n-drawer .n-drawer-footer) {
+  padding: 16px 24px;
+  border-top: 1px solid var(--n-border-color);
+}
+
+@media (max-width: 767px) {
+  :deep(.n-drawer .n-drawer-header) {
+    padding: 16px 20px;
+  }
+
+  :deep(.n-drawer .n-drawer-body) {
+    padding: 20px;
+  }
+
+  :deep(.n-drawer .n-drawer-footer) {
+    padding: 14px 20px;
+  }
+}
+
+/* ========== 通用工具类 ========== */
+.text-monospace {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-break {
+  word-break: break-word;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

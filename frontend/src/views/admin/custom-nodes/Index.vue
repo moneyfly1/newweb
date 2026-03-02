@@ -3,7 +3,7 @@
     <n-card :title="appStore.isMobile ? undefined : '专线节点管理'">
       <template v-if="!appStore.isMobile" #header-extra>
         <n-space>
-          <n-button type="primary" @click="showImportModal = true">
+          <n-button type="primary" @click="showImportDrawer = true">
             <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
             导入链接
           </n-button>
@@ -103,13 +103,15 @@
       </template>
     </n-card>
 
-    <!-- Create/Edit Modal -->
-    <n-modal
-      v-model:show="showEditModal"
+    <!-- Create/Edit Drawer -->
+    <common-drawer
+      v-model:show="showEditDrawer"
       :title="editId ? '编辑专线节点' : '创建专线节点'"
-      preset="card"
-      :style="appStore.isMobile ? 'width: 95vw; max-width: 700px' : 'width: 700px'"
-      :mask-closable="false"
+      :width="700"
+      show-footer
+      :loading="submitting"
+      @confirm="handleSubmit"
+      @cancel="showEditDrawer = false"
     >
       <n-form
         ref="formRef"
@@ -172,21 +174,17 @@
           </n-text>
         </n-form-item>
       </n-form>
-      <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 12px">
-          <n-button @click="showEditModal = false">取消</n-button>
-          <n-button type="primary" @click="handleSubmit" :loading="submitting">确定</n-button>
-        </div>
-      </template>
-    </n-modal>
+    </common-drawer>
 
-    <!-- Assign Modal -->
-    <n-modal
-      v-model:show="showAssignModal"
+    <!-- Assign Drawer -->
+    <common-drawer
+      v-model:show="showAssignDrawer"
       title="分配节点给用户"
-      preset="card"
-      :style="appStore.isMobile ? 'width: 95vw; max-width: 600px' : 'width: 600px'"
-      :mask-closable="false"
+      :width="600"
+      show-footer
+      :loading="assigning"
+      @confirm="handleAssignSubmit"
+      @cancel="showAssignDrawer = false"
     >
       <n-form label-placement="top">
         <n-form-item label="选择用户">
@@ -203,21 +201,17 @@
           选中的用户将可以使用此专线节点
         </n-alert>
       </n-form>
-      <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 12px">
-          <n-button @click="showAssignModal = false">取消</n-button>
-          <n-button type="primary" @click="handleAssignSubmit" :loading="assigning">确定</n-button>
-        </div>
-      </template>
-    </n-modal>
+    </common-drawer>
 
-    <!-- Import Links Modal -->
-    <n-modal
-      v-model:show="showImportModal"
+    <!-- Import Links Drawer -->
+    <common-drawer
+      v-model:show="showImportDrawer"
       title="导入节点链接"
-      preset="card"
-      :style="appStore.isMobile ? 'width: 95vw; max-width: 600px' : 'width: 600px'"
-      :mask-closable="false"
+      :width="600"
+      show-footer
+      :loading="importing"
+      @confirm="handleImportSubmit"
+      @cancel="showImportDrawer = false"
     >
       <n-form label-placement="top">
         <n-form-item label="节点链接">
@@ -229,13 +223,7 @@
           />
         </n-form-item>
       </n-form>
-      <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 12px">
-          <n-button @click="showImportModal = false">取消</n-button>
-          <n-button type="primary" @click="handleImportSubmit" :loading="importing">导入</n-button>
-        </div>
-      </template>
-    </n-modal>
+    </common-drawer>
 
     <!-- View Link Modal -->
     <n-modal
@@ -287,6 +275,7 @@ import {
 } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -296,15 +285,15 @@ const loading = ref(false)
 const submitting = ref(false)
 const assigning = ref(false)
 const loadingUsers = ref(false)
-const showEditModal = ref(false)
-const showAssignModal = ref(false)
+const showEditDrawer = ref(false)
+const showAssignDrawer = ref(false)
 const tableData = ref([])
 const formRef = ref(null)
 const editId = ref(null)
 const assignNodeId = ref(null)
 const assignUserIds = ref([])
 const userOptions = ref([])
-const showImportModal = ref(false)
+const showImportDrawer = ref(false)
 const showLinkModal = ref(false)
 const importing = ref(false)
 const importLinks = ref('')
@@ -502,7 +491,7 @@ const resetForm = () => {
 const handleCreate = () => {
   editId.value = null
   resetForm()
-  showEditModal.value = true
+  showEditDrawer.value = true
 }
 
 const handleEdit = (row) => {
@@ -518,13 +507,13 @@ const handleEdit = (row) => {
     expire_time: row.expire_time ? new Date(row.expire_time).getTime() : null,
     follow_user_expire: row.follow_user_expire || false
   })
-  showEditModal.value = true
+  showEditDrawer.value = true
 }
 
 const handleSubmit = async () => {
+  submitting.value = true
   try {
     await formRef.value?.validate()
-    submitting.value = true
 
     const data = {
       ...formData,
@@ -539,7 +528,7 @@ const handleSubmit = async () => {
       message.success('创建专线节点成功')
     }
 
-    showEditModal.value = false
+    showEditDrawer.value = false
     fetchData()
   } catch (error) {
     if (error.message) {
@@ -581,7 +570,7 @@ const handleDelete = (row) => {
 const handleAssign = (row) => {
   assignNodeId.value = row.id
   assignUserIds.value = []
-  showAssignModal.value = true
+  showAssignDrawer.value = true
   if (userOptions.value.length === 0) {
     fetchUsers()
   }
@@ -599,7 +588,7 @@ const handleAssignSubmit = async () => {
       user_ids: assignUserIds.value
     })
     message.success('分配节点成功')
-    showAssignModal.value = false
+    showAssignDrawer.value = false
   } catch (error) {
     message.error(error.message || '分配节点失败')
   } finally {
@@ -616,7 +605,7 @@ const handleImportSubmit = async () => {
   try {
     const res = await importCustomNodeLinks({ links: importLinks.value })
     message.success(`导入完成: 成功 ${res.data.success}/${res.data.total} 个`)
-    showImportModal.value = false
+    showImportDrawer.value = false
     importLinks.value = ''
     fetchData()
   } catch (error) {

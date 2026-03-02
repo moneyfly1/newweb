@@ -101,6 +101,9 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	url := c.Param("url")
 	db := database.GetDB()
 
+	// 防止订阅地址枚举攻击：记录失败访问
+	clientIP := utils.GetRealClientIP(c)
+
 	siteURL, supportContact := getSubscriptionSiteConfig()
 	ua := c.GetHeader("User-Agent")
 	clientInfo := services.ParseUserAgent(ua)
@@ -109,6 +112,8 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 	var sub models.Subscription
 	if err := db.Where("subscription_url = ?", url).First(&sub).Error; err != nil {
+		// 记录失败的订阅访问（用于检测枚举攻击）
+		utils.SysError("subscription", fmt.Sprintf("订阅地址不存在访问尝试: %s from IP: %s", url, clientIP))
 		ctx.Status = subStatusNotFound
 		return ctx
 	}
@@ -646,50 +651,77 @@ func ResetSubscription(c *gin.Context) {
 
 func ConvertToBalance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uint)
-	user := c.MustGet("user").(*models.User)
 	db := database.GetDB()
-	var sub models.Subscription
-	if err := db.Where("user_id = ? AND status = ?", userID, "active").First(&sub).Error; err != nil {
-		utils.NotFound(c, "暂无有效订阅")
-		return
-	}
-	remaining := time.Until(sub.ExpireTime).Hours() / 24
-	if remaining <= 0 {
-		utils.BadRequest(c, "订阅已过期")
-		return
-	}
 
-	// Convert remaining subscription time to balance.
-	//
-	// Prefer the unified pricing model used by custom packages / upgrades:
-	// price_per_device_year (default 40) × device_limit × (remaining_days / 365)
-	// This works even when PackageID is nil (custom package) or when device_limit
-	// has been upgraded beyond the original package.
 	pricePerDeviceYear := utils.GetFloatSetting("custom_package_price_per_device_year", 40)
 	if pricePerDeviceYear <= 0 {
 		utils.BadRequest(c, "无法计算订阅价值")
 		return
 	}
-	value := math.Round(float64(sub.DeviceLimit)*pricePerDeviceYear*(remaining/365.0)*100) / 100
-	if value <= 0 {
-		utils.BadRequest(c, "无法计算订阅价值")
+
+	var convertedAmount float64
+	var newBalance float64
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var sub models.Subscription
+		if err := tx.Where("user_id = ? AND status = ?", userID, "active").First(&sub).Error; err != nil {
+			return fmt.Errorf("no_sub")
+		}
+		remaining := time.Until(sub.ExpireTime).Hours() / 24
+		if remaining <= 0 {
+			return fmt.Errorf("expired")
+		}
+		value := math.Round(float64(sub.DeviceLimit)*pricePerDeviceYear*(remaining/365.0)*100) / 100
+		if value <= 0 {
+			return fmt.Errorf("zero_value")
+		}
+
+		// 使用原子操作更新余额，防止竞态
+		if err := tx.Model(&models.User{}).Where("id = ?", userID).
+			Update("balance", gorm.Expr("balance + ?", value)).Error; err != nil {
+			return err
+		}
+
+		now := time.Now()
+		if err := tx.Model(&sub).Updates(map[string]interface{}{
+			"status": "disabled", "is_active": false, "expire_time": now, "package_id": nil,
+		}).Error; err != nil {
+			return err
+		}
+
+		convertedAmount = value
+		// 读取更新后的余额
+		var u models.User
+		tx.Select("balance").First(&u, userID)
+		newBalance = u.Balance
+		return nil
+	})
+
+	if err != nil {
+		switch err.Error() {
+		case "no_sub":
+			utils.NotFound(c, "暂无有效订阅")
+		case "expired":
+			utils.BadRequest(c, "订阅已过期")
+		case "zero_value":
+			utils.BadRequest(c, "无法计算订阅价值")
+		default:
+			utils.InternalError(c, "转换失败")
+		}
 		return
 	}
 
-	now := time.Now()
-	db.Model(user).Update("balance", user.Balance+value)
-	utils.CreateBalanceLogEntry(userID, "refund", value, user.Balance, user.Balance+value, nil, fmt.Sprintf("订阅转余额 (剩余%d天)", int(math.Ceil(remaining))), c)
-	db.Model(&sub).Updates(map[string]interface{}{
-		"status":       "disabled",
-		"is_active":    false,
-		"expire_time":  now,
-		"package_id":   nil,
-	})
-	utils.CreateSubscriptionLog(sub.ID, userID, "deactivate", "user", &userID, fmt.Sprintf("订阅转余额: %.2f元", value), nil, nil)
+	utils.CreateBalanceLogEntry(userID, "refund", convertedAmount, newBalance-convertedAmount, newBalance, nil,
+		fmt.Sprintf("订阅转余额 (%.2f元)", convertedAmount), c)
+
+	var sub models.Subscription
+	db.Where("user_id = ?", userID).First(&sub)
+	utils.CreateSubscriptionLog(sub.ID, userID, "deactivate", "user", &userID,
+		fmt.Sprintf("订阅转余额: %.2f元", convertedAmount), nil, nil)
+
 	utils.Success(c, gin.H{
-		"converted_amount": value,
-		"new_balance":      user.Balance + value,
-		"remaining_days":   int(math.Ceil(remaining)),
+		"converted_amount": convertedAmount,
+		"new_balance":      newBalance,
 	})
 }
 

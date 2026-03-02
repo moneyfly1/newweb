@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    CommonDrawer: typeof import('./src/components/CommonDrawer.vue')['default']
     NAlert: typeof import('naive-ui')['NAlert']
     NBadge: typeof import('naive-ui')['NBadge']
     NButton: typeof import('naive-ui')['NButton']
@@ -73,5 +74,7 @@ declare module 'vue' {
     NThing: typeof import('naive-ui')['NThing']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    UnifiedCardList: typeof import('./src/components/UnifiedCardList.vue')['default']
+    UnifiedTable: typeof import('./src/components/UnifiedTable.vue')['default']
   }
 }

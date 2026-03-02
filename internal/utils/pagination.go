@@ -10,6 +10,11 @@ import (
 // validSortField ensures sort field is a safe column name (prevents SQL injection).
 var validSortField = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
+const (
+	MaxPageSize   = 100
+	MaxPageNumber = 10000 // 防止超大 offset 导致性能问题
+)
+
 type Pagination struct {
 	Page     int
 	PageSize int
@@ -20,23 +25,32 @@ type Pagination struct {
 func GetPagination(c *gin.Context) Pagination {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
 	if page < 1 {
 		page = 1
 	}
+	// 添加页码上限，防止超大 offset 攻击
+	if page > MaxPageNumber {
+		page = MaxPageNumber
+	}
+
 	if pageSize < 1 {
 		pageSize = 20
 	}
-	if pageSize > 100 {
-		pageSize = 100
+	if pageSize > MaxPageSize {
+		pageSize = MaxPageSize
 	}
+
 	sort := c.DefaultQuery("sort", "id")
 	if !validSortField.MatchString(sort) {
 		sort = "id"
 	}
+
 	order := c.DefaultQuery("order", "desc")
 	if order != "asc" && order != "desc" {
 		order = "desc"
 	}
+
 	return Pagination{Page: page, PageSize: pageSize, Sort: sort, Order: order}
 }
 

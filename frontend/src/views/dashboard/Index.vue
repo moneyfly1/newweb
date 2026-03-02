@@ -1,33 +1,44 @@
 <template>
   <div class="dashboard">
-    <!-- Compact Welcome + Stats Bar -->
-    <div class="top-bar">
-      <div class="welcome-section">
-        <h1 class="welcome-title">{{ greetingText }}，{{ info.username || '用户' }}</h1>
-        <div class="top-stats">
-          <div class="top-stat">
+    <!-- Modern Welcome Card -->
+    <div class="welcome-card">
+      <div class="welcome-content">
+        <div class="welcome-left">
+          <h1 class="welcome-title">{{ greetingText }}，{{ info.username || '用户' }} 👋</h1>
+          <div class="user-meta">
             <div class="level-badge" :style="{ background: levelColor }">
-              <n-icon size="14" :component="RibbonOutline" />
+              <n-icon size="16" :component="RibbonOutline" />
               <span>{{ info.level_name || 'Lv.0' }}</span>
             </div>
-            <n-tag v-if="info.discount_rate" type="success" size="small" :bordered="false">{{ (info.discount_rate * 100).toFixed(0) }}%折扣</n-tag>
+            <n-tag v-if="info.discount_rate" type="success" size="small">
+              {{ (info.discount_rate * 100).toFixed(0) }}% 折扣
+            </n-tag>
           </div>
-          <div class="top-stat-divider"></div>
-          <div class="top-stat">
-            <span class="top-stat-label">余额</span>
-            <span class="top-stat-val">¥{{ info.balance?.toFixed(2) || '0.00' }}</span>
-            <n-button class="gradient-btn" size="tiny" strong @click="$router.push('/recharge')">
+        </div>
+        <div class="welcome-stats">
+          <div class="stat-card balance-card">
+            <div class="stat-icon">
+              <n-icon size="24" :component="WalletOutline" />
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">账户余额</span>
+              <span class="stat-value">¥{{ info.balance?.toFixed(2) || '0.00' }}</span>
+            </div>
+            <n-button type="primary" size="small" @click="$router.push('/recharge')">
               充值
             </n-button>
           </div>
-          <div class="top-stat-divider"></div>
-          <div class="top-stat">
-            <span class="top-stat-label">签到</span>
-            <span class="top-stat-val">{{ checkinStatus.consecutive_days || 0 }}天</span>
+          <div class="stat-card checkin-card">
+            <div class="stat-icon">
+              <n-icon size="24" :component="CalendarOutline" />
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">连续签到</span>
+              <span class="stat-value">{{ checkinStatus.consecutive_days || 0 }} 天</span>
+            </div>
             <n-button
-              class="gradient-btn"
-              size="tiny"
-              strong
+              type="success"
+              size="small"
               :disabled="checkinStatus.checked_in_today || checkinLoading"
               :loading="checkinLoading"
               @click="handleCheckIn"
@@ -37,7 +48,6 @@
           </div>
         </div>
       </div>
-      <div class="welcome-decoration"></div>
     </div>
 
     <!-- Main Two-Column -->
@@ -389,6 +399,23 @@ onMounted(async () => {
 <style scoped>
 .dashboard { padding: 0; }
 
+/* Welcome Card */
+.welcome-card { background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%); border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; color: #333; }
+.welcome-content { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+.welcome-left { flex: 1; }
+.welcome-title { font-size: 22px; font-weight: 700; margin: 0 0 8px 0; text-shadow: 0 1px 2px rgba(255,255,255,0.5); color: #333; }
+.user-meta { display: flex; align-items: center; gap: 8px; }
+.level-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 16px; color: white; font-weight: 600; font-size: 13px; background: rgba(102,126,234,0.85); }
+.welcome-stats { display: flex; gap: 12px; }
+.stat-card { background: rgba(255,255,255,0.7); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; backdrop-filter: blur(10px); min-width: 200px; border: 1px solid rgba(255,255,255,0.9); }
+.stat-icon { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: white; }
+.stat-info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.stat-label { font-size: 12px; opacity: 0.8; color: #555; }
+.stat-value { font-size: 18px; font-weight: 700; line-height: 1.2; color: #333; }
+.stat-card .n-button { flex-shrink: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; color: white !important; border: none !important; font-weight: 600 !important; }
+.stat-card .n-button:hover { opacity: 0.9; }
+.stat-card .n-button:disabled { background: rgba(102,126,234,0.5) !important; color: rgba(255,255,255,0.7) !important; }
+
 /* Top Bar */
 .top-bar {
   background: linear-gradient(135deg, #4a5fd7 0%, #7c3aed 100%);
@@ -469,10 +496,11 @@ onMounted(async () => {
 /* Mobile */
 @media (max-width: 767px) {
   .dashboard { padding: 0 12px; }
-  .top-bar { flex-direction: column; align-items: flex-start; padding: 14px 16px; }
-  .welcome-section { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .welcome-title { font-size: 16px; }
-  .top-stats { flex-wrap: wrap; gap: 10px; }
+  .welcome-card { padding: 16px; margin-bottom: 16px; }
+  .welcome-content { flex-direction: column; align-items: flex-start; }
+  .welcome-title { font-size: 20px; }
+  .welcome-stats { flex-direction: column; width: 100%; }
+  .stat-card { min-width: auto; width: 100%; }
   .main-grid { grid-template-columns: 1fr; }
   .client-grid { grid-template-columns: repeat(2, 1fr); }
   .quick-actions-grid { grid-template-columns: repeat(2, 1fr); }

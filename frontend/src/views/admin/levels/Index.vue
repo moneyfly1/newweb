@@ -53,12 +53,14 @@
       </template>
     </n-card>
 
-    <n-modal
-      v-model:show="showModal"
-      preset="card"
+    <common-drawer
+      v-model:show="showDrawer"
       :title="isEdit ? '编辑等级' : '添加等级'"
-      :style="appStore.isMobile ? 'width: 95vw; max-width: 600px' : 'width: 600px'"
-      :segmented="{ content: 'soft' }"
+      :width="600"
+      show-footer
+      :loading="submitting"
+      @confirm="handleSubmit"
+      @cancel="showDrawer = false"
     >
       <n-form
         ref="formRef"
@@ -116,16 +118,7 @@
           <n-switch v-model:value="formData.is_active" />
         </n-form-item>
       </n-form>
-
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showModal = false">取消</n-button>
-          <n-button type="primary" @click="handleSubmit" :loading="submitting">
-            确定
-          </n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -134,6 +127,7 @@ import { ref, reactive, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { listUserLevels, createUserLevel, updateUserLevel, deleteUserLevel } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -142,7 +136,7 @@ const appStore = useAppStore()
 const loading = ref(false)
 const submitting = ref(false)
 const levels = ref<any[]>([])
-const showModal = ref(false)
+const showDrawer = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
 
@@ -239,7 +233,7 @@ const resetForm = () => {
 const handleAdd = () => {
   resetForm()
   isEdit.value = false
-  showModal.value = true
+  showDrawer.value = true
 }
 
 const handleEdit = (row: any) => {
@@ -251,7 +245,7 @@ const handleEdit = (row: any) => {
   formData.benefits = row.benefits || ''
   formData.is_active = row.is_active
   isEdit.value = true
-  showModal.value = true
+  showDrawer.value = true
 }
 
 const handleSubmit = async () => {
@@ -274,7 +268,7 @@ const handleSubmit = async () => {
       message.success('创建成功')
     }
 
-    showModal.value = false
+    showDrawer.value = false
     await loadLevels()
   } catch (error: any) {
     message.error(error.message || '操作失败')

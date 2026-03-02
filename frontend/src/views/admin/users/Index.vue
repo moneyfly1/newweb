@@ -206,8 +206,16 @@
       </n-space>
     </n-card>
 
-    <!-- Create/Edit User Modal -->
-    <n-modal v-model:show="showEditModal" preset="card" :title="isCreate ? '新增用户' : '编辑用户'" :style="{ width: appStore.isMobile ? '95%' : '520px' }">
+    <!-- Create/Edit User Drawer -->
+    <common-drawer
+      v-model:show="showEditDrawer"
+      :title="isCreate ? '新增用户' : '编辑用户'"
+      :width="520"
+      show-footer
+      :loading="saving"
+      @confirm="handleSaveUser"
+      @cancel="showEditDrawer = false"
+    >
       <n-form ref="formRef" :model="editForm" :rules="formRulesComputed" label-placement="left" label-width="80" style="margin-top: 8px">
         <n-form-item label="用户名" path="username">
           <n-input v-model:value="editForm.username" placeholder="请输入用户名" />
@@ -227,17 +235,29 @@
         <n-form-item label="启用" path="is_active">
           <n-switch v-model:value="editForm.is_active" />
         </n-form-item>
+        <n-form-item label="到期时间" path="expire_time">
+          <n-date-picker
+            v-model:value="editForm.expire_time"
+            type="datetime"
+            clearable
+            style="width: 100%"
+            placeholder="选择到期时间"
+          />
+        </n-form-item>
+        <n-form-item label="设备数量" path="device_limit">
+          <n-input-number
+            v-model:value="editForm.device_limit"
+            :min="1"
+            :max="100"
+            style="width: 100%"
+            placeholder="设备数量限制"
+          />
+        </n-form-item>
         <n-form-item label="备注" path="notes">
           <n-input v-model:value="editForm.notes" type="textarea" placeholder="备注信息" :rows="3" />
         </n-form-item>
       </n-form>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showEditModal = false">取消</n-button>
-          <n-button type="primary" :loading="saving" @click="handleSaveUser">保存</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
 
     <!-- User Detail Drawer -->
     <n-drawer v-model:show="showDetailDrawer" :width="appStore.isMobile ? '100%' : 780" placement="right" closable>
@@ -305,20 +325,22 @@
       </n-drawer-content>
     </n-drawer>
 
-    <!-- Reset Password Modal -->
-    <n-modal v-model:show="showResetPwdModal" preset="card" title="重置密码" :style="{ width: appStore.isMobile ? '95%' : '420px' }">
+    <!-- Reset Password Drawer -->
+    <common-drawer
+      v-model:show="showResetPwdDrawer"
+      title="重置密码"
+      :width="420"
+      show-footer
+      :loading="resettingPwd"
+      @confirm="handleResetPassword"
+      @cancel="showResetPwdDrawer = false"
+    >
       <n-form ref="resetPwdFormRef" :model="resetPwdForm" :rules="resetPwdRules" label-placement="left" label-width="80">
         <n-form-item label="新密码" path="password">
           <n-input v-model:value="resetPwdForm.password" type="password" show-password-on="click" placeholder="请输入新密码" />
         </n-form-item>
       </n-form>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showResetPwdModal = false">取消</n-button>
-          <n-button type="primary" :loading="resettingPwd" @click="handleResetPassword">确认重置</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
 
     <!-- Set Level Modal -->
     <n-modal v-model:show="showSetLevelModal" preset="card" title="设置用户等级" :style="{ width: appStore.isMobile ? '95%' : '420px' }">
@@ -378,6 +400,8 @@ import {
 import { listUserLevels } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
+import { translateLoginStatus, translateBalanceChangeType, parseDeviceInfo, formatLocation } from '@/utils/i18n'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -408,8 +432,8 @@ const showSetLevelModal = ref(false)
 const selectedLevelId = ref(null)
 
 // Modals
-const showEditModal = ref(false)
-const showResetPwdModal = ref(false)
+const showEditDrawer = ref(false)
+const showResetPwdDrawer = ref(false)
 const showDetailDrawer = ref(false)
 const isCreate = ref(false)
 const formRef = ref(null)
@@ -425,7 +449,9 @@ const editForm = reactive({
   balance: 0,
   is_admin: false,
   is_active: true,
-  notes: ''
+  notes: '',
+  expire_time: null,
+  device_limit: 5
 })
 
 const resetPwdForm = reactive({ password: '' })
@@ -585,12 +611,18 @@ const resetEditForm = () => {
   editForm.is_admin = false
   editForm.is_active = true
   editForm.notes = ''
+  // 默认到期时间延长一年
+  const oneYearLater = new Date()
+  oneYearLater.setFullYear(oneYearLater.getFullYear() + 1)
+  editForm.expire_time = oneYearLater.getTime()
+  // 默认设备数量5个
+  editForm.device_limit = 5
 }
 
 const openCreateModal = () => {
   resetEditForm()
   isCreate.value = true
-  showEditModal.value = true
+  showEditDrawer.value = true
 }
 
 const handleEdit = (row) => {
@@ -603,7 +635,9 @@ const handleEdit = (row) => {
   editForm.is_admin = row.is_admin
   editForm.is_active = row.is_active
   editForm.notes = row.notes || ''
-  showEditModal.value = true
+  editForm.expire_time = row.expire_time ? new Date(row.expire_time).getTime() : null
+  editForm.device_limit = row.device_limit || 5
+  showEditDrawer.value = true
 }
 
 // Save user
@@ -613,29 +647,26 @@ const handleSaveUser = async () => {
   } catch { return }
   saving.value = true
   try {
+    const userData = {
+      username: editForm.username,
+      email: editForm.email,
+      balance: editForm.balance,
+      is_admin: editForm.is_admin,
+      is_active: editForm.is_active,
+      notes: editForm.notes,
+      expire_time: editForm.expire_time ? new Date(editForm.expire_time).toISOString() : null,
+      device_limit: editForm.device_limit
+    }
+
     if (isCreate.value) {
-      await createUser({
-        username: editForm.username,
-        email: editForm.email,
-        password: editForm.password,
-        balance: editForm.balance,
-        is_admin: editForm.is_admin,
-        is_active: editForm.is_active,
-        notes: editForm.notes
-      })
+      userData.password = editForm.password
+      await createUser(userData)
       message.success('用户创建成功')
     } else {
-      await updateUser(editForm.id, {
-        username: editForm.username,
-        email: editForm.email,
-        balance: editForm.balance,
-        is_admin: editForm.is_admin,
-        is_active: editForm.is_active,
-        notes: editForm.notes
-      })
+      await updateUser(editForm.id, userData)
       message.success('用户更新成功')
     }
-    showEditModal.value = false
+    showEditDrawer.value = false
     fetchUsers()
   } catch (error) {
     message.error((isCreate.value ? '创建' : '更新') + '用户失败：' + (error.message || '未知错误'))
@@ -690,7 +721,7 @@ const handleDelete = (row) => {
 const openResetPwdModal = (row) => {
   resetPwdTargetId.value = row.id
   resetPwdForm.password = ''
-  showResetPwdModal.value = true
+  showResetPwdDrawer.value = true
 }
 
 const handleResetPassword = async () => {
@@ -701,7 +732,7 @@ const handleResetPassword = async () => {
   try {
     await resetUserPassword(resetPwdTargetId.value, { password: resetPwdForm.password })
     message.success('密码重置成功')
-    showResetPwdModal.value = false
+    showResetPwdDrawer.value = false
   } catch (error) {
     message.error('密码重置失败：' + (error.message || '未知错误'))
   } finally {
@@ -920,9 +951,9 @@ const deviceCols = [
 ]
 const loginCols = [
   { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
-  { title: '位置', key: 'location', width: 100, render: (r) => r.location || '-' },
-  { title: 'UA', key: 'user_agent', ellipsis: { tooltip: true }, render: (r) => r.user_agent || '-' },
-  { title: '状态', key: 'login_status', width: 70, render: (r) => h(NTag, { type: r.login_status === 'success' ? 'success' : 'error', size: 'small' }, { default: () => r.login_status === 'success' ? '成功' : '失败' }) },
+  { title: '位置', key: 'location', width: 150, render: (r) => formatLocation(r.location) },
+  { title: '设备', key: 'user_agent', width: 180, ellipsis: { tooltip: true }, render: (r) => parseDeviceInfo(r.user_agent) },
+  { title: '状态', key: 'login_status', width: 70, render: (r) => h(NTag, { type: r.login_status === 'success' ? 'success' : 'error', size: 'small' }, { default: () => translateLoginStatus(r.login_status) }) },
   { title: '时间', key: 'login_time', width: 160, render: (r) => fmtDate(r.login_time) }
 ]
 const resetCols = [
@@ -935,7 +966,7 @@ const resetCols = [
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]
 const balanceCols = [
-  { title: '类型', key: 'change_type', width: 90 },
+  { title: '类型', key: 'change_type', width: 110, render: (r) => translateBalanceChangeType(r.change_type) },
   { title: '金额', key: 'amount', width: 90, render: (r) => `¥${(r.amount ?? 0).toFixed(2)}` },
   { title: '变动后', key: 'balance_after', width: 90, render: (r) => `¥${(r.balance_after ?? 0).toFixed(2)}` },
   { title: '说明', key: 'description', ellipsis: { tooltip: true }, render: (r) => r.description || '-' },

@@ -146,8 +146,8 @@
           </n-descriptions-item>
           <n-descriptions-item label="收件人" :span="2">{{ detailItem.to_email }}</n-descriptions-item>
           <n-descriptions-item label="主题" :span="2">{{ detailItem.subject }}</n-descriptions-item>
-          <n-descriptions-item label="邮件类型">{{ detailItem.email_type || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="内容类型">{{ detailItem.content_type || 'plain' }}</n-descriptions-item>
+          <n-descriptions-item label="邮件类型">{{ translateEmailType(detailItem.email_type) || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="内容类型">{{ detailItem.content_type === 'html' ? 'HTML' : '纯文本' }}</n-descriptions-item>
           <n-descriptions-item label="重试次数">{{ detailItem.retry_count || 0 }} / {{ detailItem.max_retries || 3 }}</n-descriptions-item>
           <n-descriptions-item label="创建时间">{{ formatTime(detailItem.created_at) }}</n-descriptions-item>
           <n-descriptions-item label="发送时间">{{ formatTime(detailItem.sent_at) }}</n-descriptions-item>
@@ -191,6 +191,7 @@ import {
 } from '@vicons/ionicons5'
 import { listEmailQueue, retryEmail, deleteEmail } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { translateEmailType } from '@/utils/i18n'
 
 const appStore = useAppStore()
 

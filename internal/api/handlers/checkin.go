@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -24,15 +25,6 @@ func UserCheckIn(c *gin.Context) {
 		return
 	}
 
-	// Check if already checked in today
-	today := time.Now().Format("2006-01-02")
-	var count int64
-	db.Model(&models.CheckIn{}).Where("user_id = ? AND DATE(created_at) = ?", userID, today).Count(&count)
-	if count > 0 {
-		utils.BadRequest(c, "今天已经签到过了")
-		return
-	}
-
 	minReward := utils.GetIntSetting("checkin_min_reward", 10)
 	maxReward := utils.GetIntSetting("checkin_max_reward", 50)
 	if minReward > maxReward {
@@ -45,56 +37,77 @@ func UserCheckIn(c *gin.Context) {
 	rewardCents := minReward + int(n.Int64())
 	amount := float64(rewardCents) / 100.0
 
-	// Get user's current balance for the log
-	var user models.User
-	if err := db.First(&user, userID).Error; err != nil {
-		utils.InternalError(c, "用户不存在")
+	var consecutiveDays int
+	var newBalance float64
+
+	// 使用事务防止重放攻击和竞态条件
+	err := db.Transaction(func(tx *gorm.DB) error {
+		// 在事务内再次检查是否已签到（防重放）
+		today := time.Now().Format("2006-01-02")
+		var count int64
+		tx.Model(&models.CheckIn{}).Where("user_id = ? AND DATE(created_at) = ?", userID, today).Count(&count)
+		if count > 0 {
+			return fmt.Errorf("already_checked_in")
+		}
+
+		// 在事务内读取用户余额
+		var user models.User
+		if err := tx.First(&user, userID).Error; err != nil {
+			return fmt.Errorf("user_not_found")
+		}
+		balanceBefore := user.Balance
+
+		// 创建签到记录
+		checkIn := models.CheckIn{
+			UserID: userID,
+			Amount: amount,
+		}
+		if err := tx.Create(&checkIn).Error; err != nil {
+			return err
+		}
+
+		// 原子更新余额
+		if err := tx.Model(&models.User{}).Where("id = ?", userID).
+			Update("balance", gorm.Expr("balance + ?", amount)).Error; err != nil {
+			return err
+		}
+
+		// 记录余额日志
+		desc := "每日签到奖励"
+		balanceLog := models.BalanceLog{
+			UserID:        userID,
+			ChangeType:    "checkin",
+			Amount:        amount,
+			BalanceBefore: balanceBefore,
+			BalanceAfter:  balanceBefore + amount,
+			Description:   &desc,
+		}
+		if err := tx.Create(&balanceLog).Error; err != nil {
+			return err
+		}
+
+		newBalance = balanceBefore + amount
+		return nil
+	})
+
+	if err != nil {
+		if err.Error() == "already_checked_in" {
+			utils.BadRequest(c, "今天已经签到过了")
+		} else if err.Error() == "user_not_found" {
+			utils.InternalError(c, "用户不存在")
+		} else {
+			utils.InternalError(c, "签到失败")
+		}
 		return
 	}
-	balanceBefore := user.Balance
 
-	// Create check-in record and update balance in transaction
-	tx := db.Begin()
-	checkIn := models.CheckIn{
-		UserID: userID,
-		Amount: amount,
-	}
-	if err := tx.Create(&checkIn).Error; err != nil {
-		tx.Rollback()
-		utils.InternalError(c, "签到失败")
-		return
-	}
-
-	if err := tx.Model(&models.User{}).Where("id = ?", userID).
-		Update("balance", gorm.Expr("balance + ?", amount)).Error; err != nil {
-		tx.Rollback()
-		utils.InternalError(c, "更新余额失败")
-		return
-	}
-
-	desc := "每日签到奖励"
-	balanceLog := models.BalanceLog{
-		UserID:        userID,
-		ChangeType:    "checkin",
-		Amount:        amount,
-		BalanceBefore: balanceBefore,
-		BalanceAfter:  balanceBefore + amount,
-		Description:   &desc,
-	}
-	if err := tx.Create(&balanceLog).Error; err != nil {
-		tx.Rollback()
-		utils.InternalError(c, "记录余额日志失败")
-		return
-	}
-
-	tx.Commit()
-
-	// Calculate consecutive days
-	consecutiveDays := calcConsecutiveDays(db, userID)
+	// 计算连续签到天数（事务外，不影响核心逻辑）
+	consecutiveDays = calcConsecutiveDays(db, userID)
 
 	utils.Success(c, gin.H{
-		"amount":          amount,
+		"amount":           amount,
 		"consecutive_days": consecutiveDays,
+		"new_balance":      newBalance,
 	})
 }
 

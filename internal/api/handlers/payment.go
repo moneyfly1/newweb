@@ -944,6 +944,7 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	// Find transaction
 	var transaction models.PaymentTransaction
 	if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err != nil {
+		fmt.Printf("[alipay] ❌ 找不到支付事务: out_trade_no=%s, error=%v\n", outTradeNo, err)
 		callback := models.PaymentCallback{
 			CallbackType: "alipay",
 			CallbackData: rawStr,
@@ -954,6 +955,9 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 		c.String(200, "success")
 		return
 	}
+
+	fmt.Printf("[alipay] ✓ 找到支付事务: transaction_id=%d, order_id=%d, status=%s\n",
+		transaction.ID, transaction.OrderID, transaction.Status)
 
 	callback := models.PaymentCallback{
 		PaymentTransactionID: transaction.ID,
@@ -1029,11 +1033,18 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 }
 
 func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
+	fmt.Printf("[alipay] handleAlipayOrderCallback 开始: transaction_id=%d, order_id=%d\n",
+		transaction.ID, transaction.OrderID)
+
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
 		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
+			fmt.Printf("[alipay] ❌ 查找订单失败: order_id=%d, error=%v\n", transaction.OrderID, err)
 			return err // Already processed or not found
 		}
+
+		fmt.Printf("[alipay] ✓ 找到订单: order_no=%s, user_id=%d, amount=%.2f\n",
+			order.OrderNo, order.UserID, order.Amount)
 
 		now := time.Now()
 		pmName := "alipay"
@@ -1042,15 +1053,24 @@ func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 			"payment_method_name": &pmName,
 			"payment_time":        &now,
 		}).Error; err != nil {
+			fmt.Printf("[alipay] ❌ 更新订单状态失败: error=%v\n", err)
 			return err
 		}
+
+		fmt.Printf("[alipay] ✓ 订单状态已更新为 paid\n")
+
 		if err := services.ActivateSubscription(tx, &order, "alipay"); err != nil {
+			fmt.Printf("[alipay] ❌ 激活订阅失败: error=%v\n", err)
 			return fmt.Errorf("激活订阅失败: %w", err)
 		}
+
+		fmt.Printf("[alipay] ✓ 订阅激活成功\n")
 		return nil
 	})
 	if err != nil {
 		utils.SysError("payment", fmt.Sprintf("支付宝订单回调处理失败: %v", err))
+	} else {
+		fmt.Printf("[alipay] ✅ 订单回调处理完成\n")
 	}
 }
 

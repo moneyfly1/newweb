@@ -296,26 +296,45 @@ func AdminUpdateUser(c *gin.Context) {
 	allowed := map[string]bool{
 		"username": true, "email": true, "is_active": true, "is_verified": true,
 		"is_admin": true, "balance": true, "user_level_id": true, "notes": true,
-		"expire_time": true, "device_limit": true,
 	}
 	updates := make(map[string]interface{})
+	subscriptionUpdates := make(map[string]interface{})
+
 	for k, v := range req {
 		if allowed[k] {
 			updates[k] = v
+		} else if k == "expire_time" || k == "device_limit" {
+			// These fields belong to subscription table
+			subscriptionUpdates[k] = v
 		}
 	}
 
-	if len(updates) == 0 {
+	if len(updates) == 0 && len(subscriptionUpdates) == 0 {
 		utils.BadRequest(c, "没有可更新的字段")
 		return
 	}
 
+	// Update user fields
+	if len(updates) > 0 {
+		if err := db.Model(&user).Updates(updates).Error; err != nil {
+			utils.InternalError(c, "更新用户失败")
+			return
+		}
+	}
+
+	// Update subscription fields if provided
+	if len(subscriptionUpdates) > 0 {
+		var subscription models.Subscription
+		if err := db.Where("user_id = ?", user.ID).First(&subscription).Error; err == nil {
+			if err := db.Model(&subscription).Updates(subscriptionUpdates).Error; err != nil {
+				utils.InternalError(c, "更新订阅信息失败")
+				return
+			}
+		}
+	}
+
 	// If balance is being changed, log it properly
 	oldBalance := user.Balance
-	if err := db.Model(&user).Updates(updates).Error; err != nil {
-		utils.InternalError(c, "更新用户失败")
-		return
-	}
 	if newBal, ok := updates["balance"]; ok {
 		var newBalance float64
 		switch v := newBal.(type) {

@@ -34,8 +34,25 @@ func ListOrders(c *gin.Context) {
 		PackageName string `json:"package_name"`
 	}
 	items := make([]OrderItem, 0, len(orders))
+
+	// 批量查询所有套餐信息，避免 N+1 查询
+	packageIDs := make([]uint, 0)
+	for _, o := range orders {
+		if o.PackageID > 0 {
+			packageIDs = append(packageIDs, o.PackageID)
+		}
+	}
+
 	pkgNameCache := make(map[uint]string)
-	dbConn := database.GetDB()
+	if len(packageIDs) > 0 {
+		var packages []models.Package
+		dbConn := database.GetDB()
+		dbConn.Select("id, name").Where("id IN ?", packageIDs).Find(&packages)
+		for _, pkg := range packages {
+			pkgNameCache[pkg.ID] = pkg.Name
+		}
+	}
+
 	for _, o := range orders {
 		item := OrderItem{Order: o}
 		if o.PackageID == 0 && o.ExtraData != nil {
@@ -56,12 +73,6 @@ func ListOrders(c *gin.Context) {
 			}
 		} else if name, ok := pkgNameCache[o.PackageID]; ok {
 			item.PackageName = name
-		} else {
-			var pkg models.Package
-			if err := dbConn.Select("name").First(&pkg, o.PackageID).Error; err == nil {
-				item.PackageName = pkg.Name
-				pkgNameCache[o.PackageID] = pkg.Name
-			}
 		}
 		items = append(items, item)
 	}

@@ -9,13 +9,14 @@ import (
 	"cboard/v2/internal/models"
 )
 
-// ---------- in-memory settings cache (30 s TTL) ----------
+// ---------- in-memory settings cache (5 min TTL) ----------
+// 系统配置缓存，减少数据库查询，提升性能
 
 var (
 	cacheMu       sync.RWMutex
 	settingsCache map[string]string
 	lastCacheTime time.Time
-	cacheTTL      = 30 * time.Second
+	cacheTTL      = 5 * time.Minute // 从 30 秒增加到 5 分钟，减少数据库查询
 )
 
 // refreshCacheIfStale reloads all settings from DB when the cache is older than cacheTTL.

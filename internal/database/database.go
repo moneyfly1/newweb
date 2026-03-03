@@ -207,6 +207,7 @@ func AutoMigrate() error {
 		&models.PaymentTransaction{},
 		&models.PaymentCallback{},
 		&models.PaymentConfig{},
+		&models.PaymentNonce{},
 
 		// 优惠券
 		&models.Coupon{},

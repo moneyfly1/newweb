@@ -60,12 +60,17 @@
       </div>
     </n-card>
 
-    <n-modal
+    <common-drawer
       v-model:show="showCreateModal"
-      preset="card"
       title="新建工单"
-      style="width: 600px; border-radius: 12px"
+      :width="600"
       :mask-closable="false"
+      show-footer
+      @confirm="handleCreate"
+      @cancel="showCreateModal = false"
+      :confirm-loading="submitting"
+      confirm-text="提交工单"
+      cancel-text="取消"
     >
       <n-form
         ref="formRef"
@@ -99,15 +104,7 @@
           />
         </n-form-item>
       </n-form>
-      <template #footer>
-        <div class="modal-footer">
-          <n-button @click="showCreateModal = false">取消</n-button>
-          <n-button type="primary" @click="handleCreate" :loading="submitting">
-            提交工单
-          </n-button>
-        </div>
-      </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -118,6 +115,7 @@ import { NButton, NTag, NIcon, useMessage } from 'naive-ui'
 import { AddOutline } from '@vicons/ionicons5'
 import { listTickets, createTicket } from '@/api/ticket'
 import { useAppStore } from '@/stores/app'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const router = useRouter()
 const message = useMessage()
@@ -324,12 +322,6 @@ onMounted(() => {
 
 .table-card {
   border-radius: 12px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
 }
 
 @media (max-width: 767px) {

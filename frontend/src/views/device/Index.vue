@@ -53,15 +53,16 @@
       </n-spin>
     </n-card>
 
-    <n-modal
+    <common-drawer
       v-model:show="showDeleteModal"
-      preset="dialog"
       title="确认删除"
-      content="确定要删除此设备吗？删除后该设备将无法继续使用订阅。"
-      positive-text="确认删除"
-      negative-text="取消"
-      @positive-click="handleConfirmDelete"
-    />
+      :width="400"
+      show-footer
+      @confirm="handleConfirmDelete"
+      @cancel="showDeleteModal = false"
+    >
+      <div>确定要删除此设备吗？删除后该设备将无法继续使用订阅。</div>
+    </common-drawer>
   </div>
 </template>
 
@@ -71,6 +72,7 @@ import { NButton, NTime, useMessage } from 'naive-ui'
 import { getSubscriptionDevices, deleteDevice } from '@/api/subscription'
 import { useAppStore } from '@/stores/app'
 import { parseDeviceInfo } from '@/utils/i18n'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 interface Device {
   id: number

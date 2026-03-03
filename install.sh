@@ -392,22 +392,35 @@ build_backend() {
     cd "$INSTALL_DIR"
     export PATH=$PATH:/usr/local/go/bin
 
+    # 首先下载依赖
+    info "下载 Go 依赖包（可能需要几分钟）..."
+    if ! go mod download 2>&1 | tee /tmp/go-download.log; then
+        warn "依赖下载出现警告，继续尝试构建..."
+    fi
+
     # 最多重试2次
     local success=false
     for i in 1 2; do
-        if go build -o cboard ./cmd/server/main.go 2>&1; then
+        info "开始编译 (尝试 $i/2)..."
+        if go build -v -o cboard ./cmd/server/main.go 2>&1 | tee /tmp/go-build.log; then
             success=true
             break
         else
             warn "后端构建失败 (尝试 $i/2)"
+            echo "构建日志已保存到 /tmp/go-build.log"
             if [ $i -lt 2 ]; then
                 info "清理缓存后重试..."
                 go clean -cache 2>/dev/null || true
+                sleep 2
             fi
         fi
     done
 
     if [ "$success" = false ]; then
+        echo ""
+        echo "=== 构建失败详情 ==="
+        tail -50 /tmp/go-build.log 2>/dev/null || echo "无法读取构建日志"
+        echo ""
         fatal "后端构建失败，请检查 Go 环境和源码"
     fi
 
@@ -1426,7 +1439,7 @@ reinstall_website() {
     # 重新构建后端
     info "3. 重新构建后端..."
     export PATH=$PATH:/usr/local/go/bin
-    go build -o cboard ./cmd/server/main.go 2>&1 || {
+    go build -v -o cboard ./cmd/server/main.go 2>&1 || {
         err "后端构建失败"
         read -rp "按回车键继续..."
         return 1
@@ -1595,7 +1608,7 @@ update_code() {
 
         info "构建后端..."
         export PATH=$PATH:/usr/local/go/bin
-        go build -o cboard ./cmd/server/main.go 2>&1 || { err "后端构建失败"; }
+        go build -v -o cboard ./cmd/server/main.go 2>&1 || { err "后端构建失败"; }
         chmod +x cboard 2>/dev/null || true
 
         info "构建前端..."

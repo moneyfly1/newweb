@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"sync"
 	"time"
@@ -104,7 +105,10 @@ func generateCSRFToken(userID uint) string {
 
 	// 生成新 token
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// 随机数生成失败，返回空字符串
+		return ""
+	}
 	token := base64.URLEncoding.EncodeToString(b)
 
 	store.tokens[userID] = &csrfToken{
@@ -134,5 +138,5 @@ func validateCSRFToken(userID uint, token string) bool {
 	}
 
 	// 常量时间比较防止时序攻击
-	return token == stored.token
+	return subtle.ConstantTimeCompare([]byte(token), []byte(stored.token)) == 1
 }

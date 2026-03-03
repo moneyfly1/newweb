@@ -2246,13 +2246,8 @@ func AdminCreateBackup(c *gin.Context) {
 		return
 	}
 
-	// Add .env if exists
-	if _, err := os.Stat(".env"); err == nil {
-		if err := addFileToZip(zipWriter, ".env", ".env"); err != nil {
-			utils.InternalError(c, "添加.env到ZIP失败: "+err.Error())
-			return
-		}
-	}
+	// 注意：不备份 .env 文件以防止敏感信息泄露（数据库密码、API密钥、支付密钥等）
+	// 如需备份配置，请使用加密存储或单独的安全备份方案
 
 	zipWriter.Close()
 	zipFile.Close()

@@ -91,14 +91,15 @@
       </n-spin>
     </n-space>
 
-    <!-- Purchase Modal -->
-    <n-modal
+    <!-- Purchase Drawer -->
+    <common-drawer
       v-model:show="showPaymentModal"
-      preset="card"
       title="确认购买"
-      style="width: 520px; max-width: 92vw;"
-      :bordered="false"
-      :segmented="{ content: true }"
+      :width="520"
+      show-footer
+      :loading="paying"
+      @confirm="handlePay"
+      @cancel="showPaymentModal = false"
     >
       <n-space vertical :size="16">
         <n-descriptions :column="1" bordered>
@@ -124,7 +125,7 @@
           </n-descriptions-item>
         </n-descriptions>
 
-        <!-- Coupon Input in Modal -->
+        <!-- Coupon Input -->
         <div class="modal-coupon">
           <n-input-group>
             <n-input v-model:value="couponCode" placeholder="输入优惠码（可选）" :disabled="verifying" size="small" />
@@ -159,23 +160,18 @@
           </div>
         </div>
       </n-space>
+    </common-drawer>
 
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showPaymentModal = false">取消</n-button>
-          <n-button type="primary" :loading="paying" @click="handlePay">确认支付</n-button>
-        </n-space>
-      </template>
-    </n-modal>
-
-    <!-- QR Code Payment Modal -->
-    <n-modal
+    <!-- QR Code Payment Drawer -->
+    <common-drawer
       v-model:show="showQrModal"
-      preset="card"
       title="扫码支付"
-      style="width: 400px; max-width: 92vw;"
-      :bordered="false"
+      :width="400"
       :mask-closable="false"
+      show-footer
+      :show-confirm="false"
+      cancel-text="取消支付"
+      @cancel="showQrModal = false"
       @after-leave="stopPolling"
     >
       <div v-if="isMobile" style="text-align: center;">
@@ -192,21 +188,18 @@
         <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后将自动跳转...</p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
-      <template #footer>
-        <n-space justify="center">
-          <n-button @click="showQrModal = false">取消支付</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
 
-    <!-- Crypto Payment Modal -->
-    <n-modal
+    <!-- Crypto Payment Drawer -->
+    <common-drawer
       v-model:show="showCryptoModal"
-      preset="card"
       title="加密货币支付"
-      style="width: 480px; max-width: 92vw;"
-      :bordered="false"
+      :width="480"
       :mask-closable="false"
+      show-footer
+      confirm-text="我已转账"
+      @confirm="handleCryptoTransferred"
+      @cancel="showCryptoModal = false"
       @after-leave="stopPolling"
     >
       <div v-if="cryptoInfo" style="text-align: center;">
@@ -229,13 +222,7 @@
         </n-alert>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
-      <template #footer>
-        <n-space justify="center">
-          <n-button @click="showCryptoModal = false">取消</n-button>
-          <n-button type="primary" @click="handleCryptoTransferred">我已转账</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -251,6 +238,7 @@ import { listPackages, verifyCoupon, getPaymentMethods, getPublicConfig } from '
 import { createOrder, payOrder, createPayment, getOrderStatus, createCustomOrder } from '@/api/order'
 import { getDashboardInfo } from '@/api/user'
 import { safeRedirect } from '@/utils/security'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const router = useRouter()
 const message = useMessage()

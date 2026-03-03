@@ -30,12 +30,19 @@ func main() {
 
 	log.Println("CBoard v2.0 启动中...")
 
+	// 初始化日志系统
+	if err := utils.InitLogger(); err != nil {
+		log.Printf("初始化日志系统失败: %v", err)
+	}
+	defer utils.CloseLogger()
+
 	// 加载配置
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
 	log.Printf("项目: %s v%s", cfg.ProjectName, cfg.Version)
+	utils.LogInfo("项目: %s v%s", cfg.ProjectName, cfg.Version)
 
 	// 初始化数据库
 	if err := database.InitDatabase(cfg); err != nil {

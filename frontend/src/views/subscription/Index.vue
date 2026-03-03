@@ -166,32 +166,29 @@
       </template>
     </n-spin>
 
-    <!-- QR Code Modal -->
-    <n-modal v-model:show="showQrModal" preset="card" :title="qrTitle" style="width: 340px; max-width: 92vw;" :bordered="false">
+    <!-- QR Code Drawer -->
+    <common-drawer v-model:show="showQrModal" :title="qrTitle" :width="340">
       <div style="text-align: center;">
         <canvas ref="qrCanvas" style="margin: 0 auto;"></canvas>
         <p style="margin-top: 12px; color: #999; font-size: 13px;">使用客户端扫描二维码导入订阅</p>
       </div>
-    </n-modal>
+    </common-drawer>
 
-    <!-- Reset Modal -->
-    <n-modal v-model:show="showResetModal" preset="dialog" title="重置订阅地址"
-      content="重置后原订阅地址将失效，所有设备需要重新配置。确定要继续吗？"
-      positive-text="确定" negative-text="取消" @positive-click="handleResetSubscription" />
+    <!-- Reset Drawer -->
+    <common-drawer v-model:show="showResetModal" title="重置订阅地址" :width="400" show-footer @confirm="handleResetSubscription" @cancel="showResetModal = false">
+      <p>重置后原订阅地址将失效，所有设备需要重新配置。确定要继续吗？</p>
+    </common-drawer>
 
-    <!-- Convert Modal -->
-    <n-modal v-model:show="showConvertModal" preset="dialog" title="转换剩余天数"
-      :content="`将剩余 ${remainingDays} 天转换为余额，转换后订阅将立即失效。确定要继续吗？`"
-      positive-text="确定" negative-text="取消" @positive-click="handleConvertToBalance" />
+    <!-- Convert Drawer -->
+    <common-drawer v-model:show="showConvertModal" title="转换剩余天数" :width="400" show-footer @confirm="handleConvertToBalance" @cancel="showConvertModal = false">
+      <p>将剩余 {{ remainingDays }} 天转换为余额，转换后订阅将立即失效。确定要继续吗？</p>
+    </common-drawer>
 
-    <!-- Upgrade Pay Modal -->
-    <n-modal
+    <!-- Upgrade Pay Drawer -->
+    <common-drawer
       v-model:show="showUpgradePayModal"
-      preset="card"
       title="确认支付 - 升级订阅"
-      style="width: 520px; max-width: 92vw;"
-      :bordered="false"
-      :segmented="{ content: true }"
+      :width="520"
     >
       <n-space vertical :size="16">
         <n-descriptions :column="1" bordered>
@@ -236,10 +233,10 @@
           <n-button type="primary" :loading="paying" @click="handleUpgradePay">确认支付</n-button>
         </n-space>
       </template>
-    </n-modal>
+    </common-drawer>
 
-    <!-- Pay QR Modal -->
-    <n-modal v-model:show="showPayQrModal" preset="card" title="扫码支付" style="width: 400px; max-width: 92vw;" :bordered="false" :mask-closable="false" @after-leave="stopPayPolling">
+    <!-- Pay QR Drawer -->
+    <common-drawer v-model:show="showPayQrModal" title="扫码支付" :width="400" :mask-closable="false" @after-leave="stopPayPolling">
       <div v-if="isMobile" style="text-align: center;">
         <p style="margin-bottom: 16px; color: #666;">请点击下方按钮完成支付</p>
         <n-button type="primary" size="large" block tag="a" :href="mobilePayUrl" target="_blank">打开支付App付款</n-button>
@@ -253,10 +250,10 @@
       <template #footer>
         <n-space justify="center"><n-button @click="showPayQrModal = false">取消支付</n-button></n-space>
       </template>
-    </n-modal>
+    </common-drawer>
 
-    <!-- Crypto Pay Modal -->
-    <n-modal v-model:show="showCryptoModal" preset="card" title="加密货币支付" style="width: 480px; max-width: 92vw;" :bordered="false" :mask-closable="false" @after-leave="stopPayPolling">
+    <!-- Crypto Pay Drawer -->
+    <common-drawer v-model:show="showCryptoModal" title="加密货币支付" :width="480" :mask-closable="false" @after-leave="stopPayPolling">
       <div v-if="cryptoInfo" style="text-align: center;">
         <n-descriptions :column="1" bordered size="small" style="text-align: left;">
           <n-descriptions-item label="网络">{{ cryptoInfo.network }}</n-descriptions-item>
@@ -280,10 +277,10 @@
           <n-button type="primary" @click="handleCryptoTransferred">我已转账</n-button>
         </n-space>
       </template>
-    </n-modal>
+    </common-drawer>
 
-    <!-- Upgrade Modal -->
-    <n-modal v-model:show="showUpgradeModal" preset="card" title="升级订阅" style="width: 480px; max-width: 92vw;" :bordered="false">
+    <!-- Upgrade Drawer -->
+    <common-drawer v-model:show="showUpgradeModal" title="升级订阅" :width="480">
       <n-form label-placement="left" label-width="auto" :disabled="upgradeSubmitting" size="medium">
         <n-form-item label="增加设备数">
           <n-input-number v-model:value="upgradeAddDevices" :min="5" :max="50" :step="5" style="width: 100%;" />
@@ -308,7 +305,7 @@
           <n-button v-if="upgradeResult && upgradeResult.total > 0" type="success" :loading="upgradeSubmitting" @click="handleOpenUpgradePay">去支付</n-button>
         </n-space>
       </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 <script setup lang="ts">
@@ -331,6 +328,7 @@ import { getDashboardInfo } from '@/api/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { safeRedirect } from '@/utils/security'
 import { useRouter } from 'vue-router'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
 const router = useRouter()

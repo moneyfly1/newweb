@@ -251,6 +251,23 @@ func AutoMigrate() error {
 		&models.CommissionLog{},
 		&models.SystemLog{},
 
+		// 扩展日志（新增）
+		&models.OrderLog{},
+		&models.PaymentLog{},
+		&models.CouponLog{},
+		&models.NodeLog{},
+		&models.UserActionLog{},
+		&models.AdminActionLog{},
+		&models.DeviceLog{},
+		&models.TicketLog{},
+		&models.InviteLog{},
+		&models.ConfigChangeLog{},
+		&models.SecurityLog{},
+		&models.APILog{},
+		&models.DatabaseLog{},
+		&models.EmailLog{},
+		&models.NotificationLog{},
+
 		// 卡密（v2 新增）
 		&models.RedeemCode{},
 		&models.RedeemRecord{},

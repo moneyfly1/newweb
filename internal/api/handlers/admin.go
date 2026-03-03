@@ -538,17 +538,34 @@ func AdminGetAbnormalUsers(c *gin.Context) {
 		var subs []models.Subscription
 		db.Where("current_devices > device_limit").Find(&subs)
 
-		for _, sub := range subs {
-			var user models.User
-			if err := db.First(&user, sub.UserID).Error; err == nil {
-				abnormalUsers = append(abnormalUsers, AbnormalUser{
-					UserID:       user.ID,
-					Username:     user.Username,
-					Email:        user.Email,
-					AbnormalType: "device_limit_exceeded",
-					Details:      strconv.Itoa(sub.CurrentDevices) + "/" + strconv.Itoa(sub.DeviceLimit) + " 设备",
-					LastActive:   user.LastLogin,
-				})
+		// 批量查询用户信息，避免 N+1 查询
+		if len(subs) > 0 {
+			userIDs := make([]uint, len(subs))
+			for i, sub := range subs {
+				userIDs[i] = sub.UserID
+			}
+
+			var users []models.User
+			db.Where("id IN ?", userIDs).Find(&users)
+
+			// 创建用户 ID 到用户的映射
+			userMap := make(map[uint]models.User)
+			for _, user := range users {
+				userMap[user.ID] = user
+			}
+
+			// 使用映射避免重复查询
+			for _, sub := range subs {
+				if user, ok := userMap[sub.UserID]; ok {
+					abnormalUsers = append(abnormalUsers, AbnormalUser{
+						UserID:       user.ID,
+						Username:     user.Username,
+						Email:        user.Email,
+						AbnormalType: "device_limit_exceeded",
+						Details:      strconv.Itoa(sub.CurrentDevices) + "/" + strconv.Itoa(sub.DeviceLimit) + " 设备",
+						LastActive:   user.LastLogin,
+					})
+				}
 			}
 		}
 	}
@@ -568,17 +585,34 @@ func AdminGetAbnormalUsers(c *gin.Context) {
 			Having("COUNT(DISTINCT ip_address) >= ?", 5).
 			Find(&ipCounts)
 
-		for _, ic := range ipCounts {
-			var user models.User
-			if err := db.First(&user, ic.UserID).Error; err == nil {
-				abnormalUsers = append(abnormalUsers, AbnormalUser{
-					UserID:       user.ID,
-					Username:     user.Username,
-					Email:        user.Email,
-					AbnormalType: "suspicious_logins",
-					Details:      strconv.FormatInt(ic.Count, 10) + " 个不同IP (24小时内)",
-					LastActive:   user.LastLogin,
-				})
+		// 批量查询用户信息，避免 N+1 查询
+		if len(ipCounts) > 0 {
+			userIDs := make([]uint, len(ipCounts))
+			for i, ic := range ipCounts {
+				userIDs[i] = ic.UserID
+			}
+
+			var users []models.User
+			db.Where("id IN ?", userIDs).Find(&users)
+
+			// 创建用户 ID 到用户的映射
+			userMap := make(map[uint]models.User)
+			for _, user := range users {
+				userMap[user.ID] = user
+			}
+
+			// 使用映射避免重复查询
+			for _, ic := range ipCounts {
+				if user, ok := userMap[ic.UserID]; ok {
+					abnormalUsers = append(abnormalUsers, AbnormalUser{
+						UserID:       user.ID,
+						Username:     user.Username,
+						Email:        user.Email,
+						AbnormalType: "suspicious_logins",
+						Details:      strconv.FormatInt(ic.Count, 10) + " 个不同IP (24小时内)",
+						LastActive:   user.LastLogin,
+					})
+				}
 			}
 		}
 	}

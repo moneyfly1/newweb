@@ -12,6 +12,7 @@ import (
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
+	"cboard/v2/internal/worker"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -189,13 +190,16 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		db.Model(&sub).Update("current_devices", sub.CurrentDevices+1)
 		ctx.CurrentDevices = sub.CurrentDevices + 1
 
-		// Lookup and update region asynchronously
-		go func(deviceID uint, ipAddr string) {
+		// 使用 worker 池异步查询 IP 位置，避免无限创建 goroutine
+		deviceID := device.ID
+		ipAddr := ip
+		pool := worker.GetDefaultPool()
+		pool.Submit(func() {
 			region := utils.GetIPLocation(ipAddr)
 			if region != "" {
 				database.GetDB().Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region)
 			}
-		}(device.ID, ip)
+		})
 	} else {
 		db.Model(&device).Updates(map[string]interface{}{
 			"last_access":  time.Now(),
@@ -203,15 +207,19 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 			"ip_address":   ip,
 		})
 
-		// Update region asynchronously if IP changed
-		go func(deviceID uint, ipAddr string, oldIP *string) {
+		// 使用 worker 池异步更新 IP 位置
+		deviceID := device.ID
+		ipAddr := ip
+		oldIP := device.IPAddress
+		pool := worker.GetDefaultPool()
+		pool.Submit(func() {
 			if oldIP == nil || *oldIP != ipAddr {
 				region := utils.GetIPLocation(ipAddr)
 				if region != "" {
 					database.GetDB().Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region)
 				}
 			}
-		}(device.ID, ip, device.IPAddress)
+		})
 	}
 
 	var nodes []models.Node

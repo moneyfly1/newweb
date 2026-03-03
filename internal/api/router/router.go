@@ -13,6 +13,7 @@ import (
 	"cboard/v2/internal/config"
 
 	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 )
 
@@ -26,6 +27,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	r.Use(gin.Recovery())
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.RequestLogger()) // 添加请求日志中间件
+	r.Use(gzip.Gzip(gzip.DefaultCompression)) // 添加 Gzip 压缩，提升传输性能
 
 	// CORS
 	corsConfig := cors.Config{

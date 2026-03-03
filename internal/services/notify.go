@@ -166,128 +166,28 @@ func NotifyAdmin(eventType string, data map[string]string) {
 	}
 }
 
+// buildNotifyMessage 使用模板系统构建通知消息
 func buildNotifyMessage(siteName, eventType string, data map[string]string) (title, telegramBody, barkBody string) {
-	now := time.Now().Format("2006-01-02 15:04:05")
-
-	type field struct {
-		emoji, label, value string
-	}
-
-	var emoji, heading, footer string
-	var fields []field
-
-	switch eventType {
-	case "new_order":
-		emoji, heading = "📦", "新订单"
-		fields = []field{
-			{"🆔", "订单号", data["order_no"]},
-			{"👤", "用户", data["username"]},
-			{"📦", "套餐", data["package_name"]},
-			{"💰", "金额", "¥" + data["amount"]},
-			{"🕐", "时间", now},
-		}
-	case "payment_success":
-		emoji, heading = "🎉", "支付成功"
-		fields = []field{
-			{"🆔", "订单号", data["order_no"]},
-			{"👤", "用户", data["username"]},
-			{"📦", "套餐", data["package_name"]},
-			{"💰", "金额", "¥" + data["amount"]},
-			{"🕐", "时间", now},
-		}
-		footer = "✅ 订单已自动处理\n📦 订阅已激活"
-	case "recharge_success":
-		emoji, heading = "💰", "充值成功"
-		fields = []field{
-			{"🆔", "充值单号", data["order_no"]},
-			{"👤", "用户", data["username"]},
-			{"💰", "金额", "¥" + data["amount"]},
-			{"🕐", "时间", now},
-		}
-	case "new_ticket":
-		emoji, heading = "🎫", "新工单"
-		fields = []field{
-			{"🆔", "工单号", data["ticket_no"]},
-			{"👤", "用户", data["username"]},
-			{"📝", "标题", data["title"]},
-			{"🕐", "时间", now},
-		}
-	case "new_user":
-		emoji, heading = "👋", "新用户注册"
-		fields = []field{
-			{"👤", "用户名", data["username"]},
-			{"📧", "邮箱", data["email"]},
-			{"🕐", "时间", now},
-		}
-		footer = "✅ 已自动创建默认订阅"
-	case "admin_create_user":
-		emoji, heading = "📋", "管理员创建用户"
-		fields = []field{
-			{"👤", "用户名", data["username"]},
-			{"📧", "邮箱", data["email"]},
-			{"🕐", "时间", now},
-		}
-	case "subscription_reset":
-		emoji, heading = "🔄", "订阅重置"
-		fields = []field{
-			{"👤", "用户", data["username"]},
-			{"🔧", "操作者", data["reset_by"]},
-			{"🕐", "时间", now},
-		}
-		footer = "⚠️ 旧地址已失效"
-	case "abnormal_login":
-		emoji, heading = "⚠️", "异常登录"
-		fields = []field{
-			{"👤", "用户", data["username"]},
-			{"🌐", "IP", data["ip"]},
-			{"📍", "位置", data["location"]},
-			{"🕐", "时间", now},
-		}
-	case "unpaid_order":
-		emoji, heading = "⏳", "未支付订单"
-		fields = []field{
-			{"🆔", "订单号", data["order_no"]},
-			{"👤", "用户", data["username"]},
-			{"💰", "金额", "¥" + data["amount"]},
-			{"🕐", "时间", now},
-		}
-	case "expiry_reminder":
-		emoji, heading = "⏰", "订阅到期提醒"
-		fields = []field{
-			{"👤", "用户", data["username"]},
-			{"⏰", "到期时间", data["expire_time"]},
-		}
-	default:
+	// 获取模板
+	template := GetNotifyTemplate(eventType)
+	if template == nil {
+		// 回退到默认消息
 		title = fmt.Sprintf("[%s] 通知", siteName)
-		return title, data["message"], data["message"]
+		msg := data["message"]
+		if msg == "" {
+			msg = "系统通知"
+		}
+		return title, msg, msg
 	}
 
-	title = fmt.Sprintf("[%s] %s %s", siteName, emoji, heading)
+	// 渲染标题
+	title = RenderNotifyTitle(siteName, template)
 
-	// Telegram (HTML)
-	var tg strings.Builder
-	tg.WriteString(fmt.Sprintf("%s <b>%s</b>\n\n", emoji, heading))
-	tg.WriteString("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n")
-	tg.WriteString(fmt.Sprintf("┃  📋 <b>%s详情</b>\n", heading))
-	tg.WriteString("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n")
-	for _, f := range fields {
-		tg.WriteString(fmt.Sprintf("%s <b>%s</b>: <code>%s</code>\n", f.emoji, f.label, f.value))
-	}
-	if footer != "" {
-		tg.WriteString("\n" + footer)
-	}
-	telegramBody = tg.String()
+	// 渲染 Telegram 消息
+	telegramBody = RenderTelegramMessage(template, data)
 
-	// Bark (plain text)
-	var bk strings.Builder
-	bk.WriteString(fmt.Sprintf("%s %s\n\n", emoji, heading))
-	for _, f := range fields {
-		bk.WriteString(fmt.Sprintf("%s %s: %s\n", f.emoji, f.label, f.value))
-	}
-	if footer != "" {
-		bk.WriteString("\n" + footer)
-	}
-	barkBody = bk.String()
+	// 渲染 Bark 消息
+	barkBody = RenderBarkMessage(template, data)
 
 	return title, telegramBody, barkBody
 }
@@ -305,16 +205,18 @@ func SendTestTelegram() error {
 		siteName = "CBoard"
 	}
 	now := time.Now().Format("2006-01-02 15:04:05")
-	msg := fmt.Sprintf(
-		"✅ <b>Telegram 通知测试成功</b>\n\n"+
-			"┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n"+
-			"┃  📋 <b>测试信息</b>\n"+
-			"┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n"+
-			"🏷️ <b>站点</b>: <b>%s</b>\n"+
-			"🕐 <b>时间</b>: %s\n\n"+
-			"📡 通知服务运行正常",
-		siteName, now)
-	return sendTelegramSync(botToken, chatID, msg)
+
+	// 使用模板系统构建测试消息
+	var sb strings.Builder
+	sb.WriteString("✅ <b>Telegram 通知测试成功</b>\n\n")
+	sb.WriteString("┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n")
+	sb.WriteString("┃  📋 <b>测试信息</b>\n")
+	sb.WriteString("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n")
+	sb.WriteString(fmt.Sprintf("🏷️ <b>站点</b>: <b>%s</b>\n", siteName))
+	sb.WriteString(fmt.Sprintf("🕐 <b>时间</b>: %s\n\n", now))
+	sb.WriteString("📡 通知服务运行正常")
+
+	return sendTelegramSync(botToken, chatID, sb.String())
 }
 
 func sendTelegram(botToken, chatID, message string) {

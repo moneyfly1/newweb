@@ -1198,7 +1198,10 @@ reset_admin_password() {
         err "无法进入项目目录"; read -rp "按回车键继续..."; return 1
     }
 
-    local new_password
+    local new_email new_password
+
+    read -rp "管理员邮箱 (留空使用当前): " new_email
+
     while true; do
         read -rsp "新密码 (至少8位): " new_password; echo
         if [ ${#new_password} -lt 8 ]; then
@@ -1208,11 +1211,45 @@ reset_admin_password() {
         fi
     done
 
-    if [ -f cboard ]; then
-        ./cboard reset-password --password "$new_password" 2>/dev/null && ok "密码重置成功" || warn "重置失败，请手动操作"
-    else
-        warn "cboard 可执行文件不存在"
+    # 检查数据库和工具
+    if [ ! -f cboard.db ]; then
+        warn "数据库文件不存在: cboard.db"
+        echo "请确保已完成安装并启动过服务"
+        echo ""; read -rp "按回车键继续..."; return 1
     fi
+
+    if ! command -v sqlite3 &>/dev/null; then
+        warn "sqlite3 工具未安装，正在安装..."
+        if command -v apt-get &>/dev/null; then
+            apt-get update && apt-get install -y sqlite3
+        elif command -v yum &>/dev/null; then
+            yum install -y sqlite
+        else
+            err "无法自动安装 sqlite3，请手动安装"
+            echo ""; read -rp "按回车键继续..."; return 1
+        fi
+    fi
+
+    # 使用 Go 程序重置密码
+    if [ -f cboard-server ]; then
+        info "使用 cboard-server 重置密码..."
+        if ./cboard-server reset-password --email "${new_email:-admin}" --password "$new_password" 2>&1; then
+            ok "密码重置成功"
+        else
+            err "密码重置失败，请检查邮箱是否正确"
+        fi
+    elif [ -f cboard ]; then
+        info "使用 cboard 重置密码..."
+        if ./cboard reset-password --email "${new_email:-admin}" --password "$new_password" 2>&1; then
+            ok "密码重置成功"
+        else
+            err "密码重置失败，请检查邮箱是否正确"
+        fi
+    else
+        err "未找到 cboard-server 或 cboard 可执行文件"
+        echo "请先编译项目或重新运行安装脚本"
+    fi
+
     echo ""; read -rp "按回车键继续..."
 }
 

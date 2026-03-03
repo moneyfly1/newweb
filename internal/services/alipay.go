@@ -310,7 +310,12 @@ func BuildPaymentURLs(payType, orderNo string) (notifyURL, returnURL string) {
 
 	if returnURL == "" {
 		siteURL := GetSiteURL()
-		returnURL = siteURL + "/payment/return?order_no=" + url.QueryEscape(orderNo)
+		apiBase := siteURL
+		if apiBase == "" {
+			apiBase = "http://localhost:8000"
+		}
+		// 使用 API 路由作为同步回调，后端会重定向到前端页面
+		returnURL = apiBase + "/api/v1/payment/success?order_no=" + url.QueryEscape(orderNo)
 	}
 
 	return

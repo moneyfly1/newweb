@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# 本地测试支付回调解决方案
+
+echo "=========================================="
+echo "本地测试支付回调配置指南"
+echo "=========================================="
+echo ""
+
+echo "问题："
+echo "  本地测试时，支付宝无法回调到 localhost"
+echo "  当前配置的回调地址：https://go.moneyfly.top/api/v1/payment/notify/alipay"
+echo ""
+
+echo "解决方案1：使用内网穿透（推荐）"
+echo "=========================================="
+echo ""
+echo "1. 安装 ngrok："
+echo "   brew install ngrok"
+echo ""
+echo "2. 启动内网穿透："
+echo "   ngrok http 8000"
+echo ""
+echo "3. 复制 ngrok 提供的 HTTPS 地址（如 https://abc123.ngrok.io）"
+echo ""
+echo "4. 更新数据库配置："
+echo "   sqlite3 /Users/apple/v2/cboard.db \"UPDATE system_configs SET value='https://abc123.ngrok.io/api/v1/payment/notify/alipay' WHERE key='pay_alipay_notify_url';\""
+echo ""
+echo "5. 重启服务器"
+echo ""
+
+echo "解决方案2：手动模拟回调（用于已支付订单）"
+echo "=========================================="
+echo ""
+echo "如果订单已经支付成功，可以手动完成："
+echo ""
+echo "1. 查看订单号："
+echo "   sqlite3 /Users/apple/v2/cboard.db \"SELECT id, order_no, status FROM orders WHERE status='pending' ORDER BY id DESC LIMIT 5;\""
+echo ""
+echo "2. 手动完成订单（替换 ORDER_ID 和 ORDER_NO）："
+echo "   ./manual_complete_order.sh ORDER_ID ORDER_NO"
+echo ""
+
+echo "解决方案3：使用生产环境测试"
+echo "=========================================="
+echo ""
+echo "在生产服务器上测试，回调地址已正确配置"
+echo ""
+
+echo "当前待处理订单："
+echo "=========================================="
+sqlite3 /Users/apple/v2/cboard.db "SELECT id, order_no, status, datetime(created_at, 'localtime') as created FROM orders WHERE status='pending' AND datetime(created_at, 'localtime') > datetime('now', 'localtime', '-30 minutes') ORDER BY id DESC;"
+
+echo ""
+echo "如需手动完成这些订单，请运行："
+echo "  ./complete_pending_orders.sh"

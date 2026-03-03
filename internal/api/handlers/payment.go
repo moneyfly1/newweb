@@ -182,8 +182,13 @@ func CreatePayment(c *gin.Context) {
 						paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
 					}
 					if err == nil {
-						// 更新支付事务的 transaction_id 为订单号
-						db.Model(&transaction).Update("transaction_id", outTradeNo)
+						// 更新支付事务的 transaction_id 为订单号，这样回调时可以通过 out_trade_no 找到
+						db.Model(&transaction).Updates(map[string]interface{}{
+							"transaction_id": outTradeNo,
+						})
+						// 同时更新订单的 payment_transaction_id
+						ptxID := fmt.Sprintf("%d", transaction.ID)
+						db.Model(&order).Update("payment_transaction_id", &ptxID)
 						utils.Success(c, gin.H{
 							"message":        "支付创建成功",
 							"order_no":       order.OrderNo,
@@ -885,10 +890,12 @@ func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction
 
 		now := time.Now()
 		pmName := "epay"
+		txIDStr := fmt.Sprintf("%d", transaction.ID)
 		if err := tx.Model(&order).Updates(map[string]interface{}{
-			"status":              "paid",
-			"payment_method_name": &pmName,
-			"payment_time":        &now,
+			"status":                 "paid",
+			"payment_method_name":    &pmName,
+			"payment_time":           &now,
+			"payment_transaction_id": &txIDStr,
 		}).Error; err != nil {
 			return err
 		}
@@ -1068,15 +1075,17 @@ func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 			return err // Already processed or not found
 		}
 
-		fmt.Printf("[alipay] ✓ 找到订单: order_no=%s, user_id=%d, amount=%.2f\n",
-			order.OrderNo, order.UserID, order.Amount)
+		fmt.Printf("[alipay] ✓ 找到订单: order_no=%s, user_id=%d, package_id=%d, amount=%.2f\n",
+			order.OrderNo, order.UserID, order.PackageID, order.Amount)
 
 		now := time.Now()
 		pmName := "alipay"
+		txIDStr := fmt.Sprintf("%d", transaction.ID)
 		if err := tx.Model(&order).Updates(map[string]interface{}{
-			"status":              "paid",
-			"payment_method_name": &pmName,
-			"payment_time":        &now,
+			"status":                 "paid",
+			"payment_method_name":    &pmName,
+			"payment_time":           &now,
+			"payment_transaction_id": &txIDStr,
 		}).Error; err != nil {
 			fmt.Printf("[alipay] ❌ 更新订单状态失败: error=%v\n", err)
 			return err
@@ -1281,10 +1290,12 @@ func handleStripeOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 
 		now := time.Now()
 		pmName := "stripe"
+		txIDStr := fmt.Sprintf("%d", transaction.ID)
 		if err := tx.Model(&order).Updates(map[string]interface{}{
-			"status":              "paid",
-			"payment_method_name": &pmName,
-			"payment_time":        &now,
+			"status":                 "paid",
+			"payment_method_name":    &pmName,
+			"payment_time":           &now,
+			"payment_transaction_id": &txIDStr,
 		}).Error; err != nil {
 			return err
 		}

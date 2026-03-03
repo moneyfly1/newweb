@@ -395,7 +395,7 @@ build_backend() {
     # 最多重试2次
     local success=false
     for i in 1 2; do
-        if go build -o cboard cmd/server/main.go 2>&1; then
+        if go build -o cboard ./cmd/server/main.go 2>&1; then
             success=true
             break
         else
@@ -1312,7 +1312,7 @@ reset_admin_password() {
         fi
     else
         err "未找到 cboard-server 或 cboard 可执行文件"
-        echo "请先编译项目: go build -o cboard-server cmd/server/main.go"
+        echo "请先编译项目: go build -o cboard-server ./cmd/server/main.go"
         echo "或重新运行安装脚本"
     fi
 
@@ -1426,7 +1426,7 @@ reinstall_website() {
     # 重新构建后端
     info "3. 重新构建后端..."
     export PATH=$PATH:/usr/local/go/bin
-    go build -o cboard cmd/server/main.go 2>&1 || {
+    go build -o cboard ./cmd/server/main.go 2>&1 || {
         err "后端构建失败"
         read -rp "按回车键继续..."
         return 1
@@ -1595,7 +1595,7 @@ update_code() {
 
         info "构建后端..."
         export PATH=$PATH:/usr/local/go/bin
-        go build -o cboard cmd/server/main.go 2>&1 || { err "后端构建失败"; }
+        go build -o cboard ./cmd/server/main.go 2>&1 || { err "后端构建失败"; }
         chmod +x cboard 2>/dev/null || true
 
         info "构建前端..."

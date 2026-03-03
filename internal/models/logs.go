@@ -4,6 +4,29 @@ import (
 	"time"
 )
 
+// AuditLog 审计日志（系统操作审计）
+type AuditLog struct {
+	ID                uint      `gorm:"primaryKey" json:"id"`
+	UserID            *int64    `gorm:"index" json:"user_id,omitempty"`
+	ActionType        string    `gorm:"type:varchar(50);index;not null" json:"action_type"`
+	ResourceType      *string   `gorm:"type:varchar(50);index" json:"resource_type,omitempty"`
+	ResourceID        *int64    `gorm:"index" json:"resource_id,omitempty"`
+	ActionDescription *string   `gorm:"type:text" json:"action_description,omitempty"`
+	IPAddress         *string   `gorm:"type:varchar(45)" json:"ip_address,omitempty"`
+	UserAgent         *string   `gorm:"type:text" json:"user_agent,omitempty"`
+	Location          *string   `gorm:"type:varchar(255)" json:"location,omitempty"`
+	RequestMethod     *string   `gorm:"type:varchar(10)" json:"request_method,omitempty"`
+	RequestPath       *string   `gorm:"type:varchar(255)" json:"request_path,omitempty"`
+	RequestParams     *string   `gorm:"type:text" json:"request_params,omitempty"`
+	ResponseStatus    *int64    `json:"response_status,omitempty"`
+	BeforeData        *string   `gorm:"type:text" json:"before_data,omitempty"`
+	AfterData         *string   `gorm:"type:text" json:"after_data,omitempty"`
+	CreatedAt         time.Time `gorm:"autoCreateTime;index" json:"created_at"`
+}
+
+func (AuditLog) TableName() string { return "audit_logs" }
+
+// RegistrationLog 用户注册日志
 type RegistrationLog struct {
 	ID             uint           `gorm:"primaryKey" json:"id"`
 	UserID         uint           `gorm:"index;not null" json:"user_id"`
@@ -22,6 +45,7 @@ type RegistrationLog struct {
 
 func (RegistrationLog) TableName() string { return "registration_logs" }
 
+// SubscriptionLog 订阅变更日志
 type SubscriptionLog struct {
 	ID             uint           `gorm:"primaryKey" json:"id"`
 	SubscriptionID uint           `gorm:"index;not null" json:"subscription_id"`
@@ -39,6 +63,7 @@ type SubscriptionLog struct {
 
 func (SubscriptionLog) TableName() string { return "subscription_logs" }
 
+// BalanceLog 余额变动日志
 type BalanceLog struct {
 	ID              uint           `gorm:"primaryKey" json:"id"`
 	UserID          uint           `gorm:"index;not null" json:"user_id"`
@@ -58,6 +83,7 @@ type BalanceLog struct {
 
 func (BalanceLog) TableName() string { return "balance_logs" }
 
+// CommissionLog 佣金日志
 type CommissionLog struct {
 	ID               uint           `gorm:"primaryKey" json:"id"`
 	InviterID        uint           `gorm:"index;not null" json:"inviter_id"`
@@ -74,7 +100,7 @@ type CommissionLog struct {
 
 func (CommissionLog) TableName() string { return "commission_logs" }
 
-// SystemLog stores runtime system events (email sending, scheduler tasks, errors, etc.)
+// SystemLog 系统运行日志（邮件发送、定时任务、错误等）
 type SystemLog struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	Level     string    `gorm:"type:varchar(10);index;not null" json:"level"` // info, warn, error

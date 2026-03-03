@@ -152,8 +152,16 @@
       </n-card>
     </n-space>
 
-    <!-- 创建邀请码弹窗 -->
-    <n-modal v-model:show="showCreateModal" preset="card" title="生成邀请码" style="width: 500px">
+    <!-- 创建邀请码抽屉 -->
+    <common-drawer
+      v-model:show="showCreateModal"
+      title="生成邀请码"
+      :width="500"
+      show-footer
+      @confirm="handleCreate"
+      @cancel="showCreateModal = false"
+      :confirm-loading="creating"
+    >
       <n-form ref="formRef" :model="formData" :rules="rules" label-placement="left" label-width="120">
         <n-form-item label="最大使用次数" path="max_uses">
           <n-input-number
@@ -199,14 +207,7 @@
           </n-input-number>
         </n-form-item>
       </n-form>
-
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showCreateModal = false">取消</n-button>
-          <n-button type="primary" @click="handleCreate" :loading="creating">生成</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -216,6 +217,7 @@ import { NButton, NSpace, NTag, NTime, useMessage, useDialog } from 'naive-ui'
 import { listInviteCodes, createInviteCode, getInviteStats, deleteInviteCode, getPublicConfig } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 interface InviteCode {
   id: number

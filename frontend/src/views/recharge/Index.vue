@@ -49,14 +49,14 @@
       </n-card>
     </n-space>
 
-    <!-- QR Code Payment Modal -->
-    <n-modal
+    <!-- QR Code Payment Drawer -->
+    <common-drawer
       v-model:show="showQrModal"
-      preset="card"
       title="扫码支付"
-      style="width: 400px; max-width: 92vw;"
-      :bordered="false"
+      :width="400"
       :mask-closable="false"
+      show-footer
+      @cancel="showQrModal = false"
       @after-leave="stopPolling"
     >
       <div style="text-align: center;">
@@ -65,12 +65,7 @@
         <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后将自动跳转...</p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
-      <template #footer>
-        <n-space justify="center">
-          <n-button @click="showQrModal = false">取消支付</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    </common-drawer>
   </div>
 </template>
 
@@ -81,6 +76,7 @@ import QRCode from 'qrcode'
 import { getPaymentMethods, createRecharge } from '@/api/common'
 import { getDashboardInfo } from '@/api/user'
 import { safeRedirect } from '@/utils/security'
+import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
 

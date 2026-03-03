@@ -562,7 +562,7 @@ const siteBase = computed(() => {
   return url.startsWith('http') ? url.replace(/\/+$/, '') : 'https://' + url.replace(/\/+$/, '')
 })
 const alipayNotifyUrlHint = computed(() => siteBase.value + '/api/v1/payment/notify/alipay')
-const alipayReturnUrlHint = computed(() => siteBase.value + '/payment/return')
+const alipayReturnUrlHint = computed(() => siteBase.value + '/api/v1/payment/success')
 const stripeWebhookUrlHint = computed(() => siteBase.value + '/api/v1/payment/notify/stripe')
 
 const encryptionOptions = [

@@ -435,16 +435,24 @@ const isQrCodeUrl = (url: string) => {
 const startPolling = (orderNo: string) => {
   stopPolling()
   pollingStatus.value = true
+  console.log('[轮询] 开始轮询订单状态:', orderNo)
   pollTimer = setInterval(async () => {
     try {
+      console.log('[轮询] 检查订单状态:', orderNo)
       const res = await getOrderStatus(orderNo)
+      console.log('[轮询] 订单状态响应:', res.data)
       if (res.data?.status === 'paid') {
+        console.log('[轮询] 订单已支付，停止轮询')
         stopPolling()
         showQrModal.value = false
         message.success('支付成功')
         router.push('/orders')
+      } else {
+        console.log('[轮询] 订单状态:', res.data?.status)
       }
-    } catch {}
+    } catch (e) {
+      console.error('[轮询] 查询订单状态失败:', e)
+    }
   }, 3000)
 }
 

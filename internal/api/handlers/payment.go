@@ -911,25 +911,32 @@ func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction
 
 func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	// Log incoming request
-	fmt.Printf("[alipay] 收到回调: method=%s, url=%s, remote=%s\n", c.Request.Method, c.Request.URL.String(), c.ClientIP())
+	fmt.Printf("[alipay] ========== 收到支付宝回调 ==========\n")
+	fmt.Printf("[alipay] Method: %s\n", c.Request.Method)
+	fmt.Printf("[alipay] URL: %s\n", c.Request.URL.String())
+	fmt.Printf("[alipay] Remote: %s\n", c.ClientIP())
+	fmt.Printf("[alipay] Headers: %+v\n", c.Request.Header)
 
 	alipayCfg, err := services.GetAlipayConfig()
 	if err != nil {
-		fmt.Printf("[alipay] 获取配置失败: %v\n", err)
+		fmt.Printf("[alipay] ❌ 获取配置失败: %v\n", err)
 		c.String(400, "fail")
 		return
 	}
 
 	notification, err := services.AlipayVerifyCallback(alipayCfg, c.Request)
 	if err != nil {
-		fmt.Printf("[alipay] 回调验证失败: %v\n", err)
+		fmt.Printf("[alipay] ❌ 回调验证失败: %v\n", err)
 		utils.SysError("payment", fmt.Sprintf("支付宝回调验证失败: %v", err))
 		c.String(400, "verify fail")
 		return
 	}
 
-	fmt.Printf("[alipay] 回调验证成功: out_trade_no=%s, trade_no=%s, status=%s, amount=%s\n",
-		notification.OutTradeNo, notification.TradeNo, notification.TradeStatus, notification.TotalAmount)
+	fmt.Printf("[alipay] ✓ 回调验证成功\n")
+	fmt.Printf("[alipay]   - out_trade_no: %s\n", notification.OutTradeNo)
+	fmt.Printf("[alipay]   - trade_no: %s\n", notification.TradeNo)
+	fmt.Printf("[alipay]   - trade_status: %s\n", notification.TradeStatus)
+	fmt.Printf("[alipay]   - total_amount: %s\n", notification.TotalAmount)
 
 	// Only process successful trades
 	if notification.TradeStatus != "TRADE_SUCCESS" && notification.TradeStatus != "TRADE_FINISHED" {

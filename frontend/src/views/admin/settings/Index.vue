@@ -140,15 +140,15 @@
                     <n-input v-model:value="form.pay_alipay_public_key" type="textarea" placeholder="请输入支付宝公钥（用于验证回调签名）" :rows="3" />
                   </n-form-item>
                   <n-form-item label="异步回调地址">
-                    <n-input v-model:value="form.pay_alipay_notify_url" :placeholder="alipayNotifyUrlHint" />
+                    <n-input v-model:value="form.pay_alipay_notify_url" placeholder="留空则自动生成" />
                     <template #feedback>
-                      <span style="font-size: 12px; color: #999">支付宝服务器通知地址，留空则自动使用: {{ alipayNotifyUrlHint }}</span>
+                      <span style="font-size: 12px; color: #999">支付宝服务器通知地址，留空则自动使用: 站点地址/api/v1/payment/notify/alipay</span>
                     </template>
                   </n-form-item>
                   <n-form-item label="同步回调地址">
-                    <n-input v-model:value="form.pay_alipay_return_url" :placeholder="alipayReturnUrlHint" />
+                    <n-input v-model:value="form.pay_alipay_return_url" placeholder="留空则自动生成" />
                     <template #feedback>
-                      <span style="font-size: 12px; color: #999">支付完成后跳转地址，留空则自动使用: {{ alipayReturnUrlHint }}</span>
+                      <span style="font-size: 12px; color: #999">支付完成后跳转地址，留空则自动使用: 站点地址/api/v1/payment/success</span>
                     </template>
                   </n-form-item>
                   <n-form-item label="沙箱模式">
@@ -213,9 +213,9 @@
                     </template>
                   </n-form-item>
                   <n-form-item label="Webhook 地址">
-                    <n-input :value="stripeWebhookUrlHint" readonly />
+                    <n-input value="站点地址/api/v1/payment/notify/stripe" readonly />
                     <template #feedback>
-                      <span style="font-size: 12px; color: #999">请在 Stripe Dashboard 中配置此 Webhook 地址</span>
+                      <span style="font-size: 12px; color: #999">请在 Stripe Dashboard 中配置此 Webhook 地址（使用您的实际站点地址）</span>
                     </template>
                   </n-form-item>
                 </n-form>

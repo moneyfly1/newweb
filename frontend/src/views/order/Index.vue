@@ -156,7 +156,7 @@
         <n-descriptions-item label="实付金额">
           <span style="color: #18a058; font-weight: 600;">¥{{ detailOrder.final_amount }}</span>
         </n-descriptions-item>
-        <n-descriptions-item label="支付方式">{{ detailOrder.payment_method || '-' }}</n-descriptions-item>
+        <n-descriptions-item label="支付方式">{{ detailOrder.payment_method_name || '-' }}</n-descriptions-item>
         <n-descriptions-item label="状态">
           <n-tag :type="getStatusType(detailOrder.status)" size="small">{{ getStatusText(detailOrder.status) }}</n-tag>
         </n-descriptions-item>
@@ -291,7 +291,7 @@ const orderColumns: DataTableColumns<any> = [
     render: (r) => h('span', { style: 'color:#18a058;font-weight:600' }, `¥${r.final_amount}`)
   },
   { title: '状态', key: 'status', width: 90, resizable: true, render: (r) => h(NTag, { type: getStatusType(r.status), size: 'small' }, { default: () => getStatusText(r.status) }) },
-  { title: '支付方式', key: 'payment_method', width: 90, resizable: true, render: (r) => r.payment_method || '-' },
+  { title: '支付方式', key: 'payment_method_name', width: 90, resizable: true, render: (r) => r.payment_method_name || '-' },
   { title: '创建时间', key: 'created_at', width: 170, resizable: true, sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(), render: (r) => formatDateTime(r.created_at) },
   {
     title: '操作', key: 'actions', width: 200, fixed: 'right',

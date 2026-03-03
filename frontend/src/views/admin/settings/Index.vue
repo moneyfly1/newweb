@@ -133,8 +133,8 @@
                   <n-form-item label="App ID">
                     <n-input v-model:value="form.pay_alipay_app_id" placeholder="请输入支付宝 App ID" />
                   </n-form-item>
-                  <n-form-item label="应用私钥">
-                    <n-input v-model:value="form.pay_alipay_private_key" type="textarea" placeholder="请输入应用私钥（PKCS1 或 PKCS8 格式）" :rows="3" />
+                  <n-form-item label="商户私钥">
+                    <n-input v-model:value="form.pay_alipay_private_key" type="textarea" placeholder="请输入商户应用私钥（PKCS1 或 PKCS8 格式）" :rows="3" />
                   </n-form-item>
                   <n-form-item label="支付宝公钥">
                     <n-input v-model:value="form.pay_alipay_public_key" type="textarea" placeholder="请输入支付宝公钥（用于验证回调签名）" :rows="3" />

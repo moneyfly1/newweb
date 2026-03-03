@@ -1328,3 +1328,30 @@ func handleStripeRechargeCallback(db *gorm.DB, transaction *models.PaymentTransa
 	// Reuse the same recharge callback logic as epay
 	handleEpayRechargeCallback(db, transaction, txID)
 }
+
+// PaymentReturn handles synchronous return from payment gateway (e.g., Alipay return_url)
+// Redirects to frontend payment result page
+func PaymentReturn(c *gin.Context) {
+	// Get order_no from query params (支付宝会传递 out_trade_no)
+	orderNo := c.Query("out_trade_no")
+	if orderNo == "" {
+		orderNo = c.Query("order_no")
+	}
+
+	utils.LogCallback("[PaymentReturn] 同步回调 - order_no=%s, query=%v", orderNo, c.Request.URL.Query())
+
+	// Get site URL for redirect
+	siteURL := utils.GetSetting("site_url")
+	if siteURL == "" {
+		siteURL = "http://localhost:8000"
+	}
+
+	// Redirect to frontend payment return page
+	redirectURL := siteURL + "/payment/return"
+	if orderNo != "" {
+		redirectURL += "?order_no=" + orderNo
+	}
+
+	utils.LogCallback("[PaymentReturn] 重定向到: %s", redirectURL)
+	c.Redirect(302, redirectURL)
+}

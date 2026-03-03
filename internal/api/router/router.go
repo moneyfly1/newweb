@@ -77,6 +77,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	api.POST("/payment/notify/:type", handlers.PaymentNotify)
 	api.GET("/payment/notify/:type", handlers.PaymentNotify)
 
+	// 支付宝同步回调（重定向到前端页面）
+	api.GET("/payment/success", handlers.PaymentReturn)
+	api.POST("/payment/success", handlers.PaymentReturn)
+
 	// 测试回调端点（用于验证回调是否能到达）
 	api.Any("/payment/test-callback", func(c *gin.Context) {
 		log.Printf("[test-callback] 收到请求: method=%s, url=%s, remote=%s", c.Request.Method, c.Request.URL.String(), c.ClientIP())

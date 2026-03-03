@@ -116,16 +116,25 @@ func CreatePayment(c *gin.Context) {
 		IsMobile        bool `json:"is_mobile"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.LogError("[CreatePayment] 参数错误: %v", err)
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+
 	userID := c.GetUint("user_id")
+	utils.LogPayment("[CreatePayment] 开始创建支付 - user_id=%d, order_id=%d, payment_method_id=%d, is_mobile=%v",
+		userID, req.OrderID, req.PaymentMethodID, req.IsMobile)
+
 	db := database.GetDB()
 	var order models.Order
 	if err := db.Where("id = ? AND user_id = ? AND status = ?", req.OrderID, userID, "pending").First(&order).Error; err != nil {
+		utils.LogError("[CreatePayment] 订单不存在或状态不正确 - order_id=%d, user_id=%d, error=%v", req.OrderID, userID, err)
 		utils.NotFound(c, "订单不存在或状态不正确")
 		return
 	}
+
+	utils.LogPayment("[CreatePayment] 找到订单 - order_no=%s, package_id=%d, amount=%.2f",
+		order.OrderNo, order.PackageID, order.Amount)
 
 	// Verify payment method exists
 	var payConfig models.PaymentConfig
@@ -911,32 +920,31 @@ func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction
 
 func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	// Log incoming request
-	fmt.Printf("[alipay] ========== 收到支付宝回调 ==========\n")
-	fmt.Printf("[alipay] Method: %s\n", c.Request.Method)
-	fmt.Printf("[alipay] URL: %s\n", c.Request.URL.String())
-	fmt.Printf("[alipay] Remote: %s\n", c.ClientIP())
-	fmt.Printf("[alipay] Headers: %+v\n", c.Request.Header)
+	utils.LogCallback("========== 开始处理支付宝回调 ==========")
+	utils.LogCallback("Method: %s", c.Request.Method)
+	utils.LogCallback("URL: %s", c.Request.URL.String())
+	utils.LogCallback("Remote: %s", c.ClientIP())
 
 	alipayCfg, err := services.GetAlipayConfig()
 	if err != nil {
-		fmt.Printf("[alipay] ❌ 获取配置失败: %v\n", err)
+		utils.LogError("[Alipay] ❌ 获取配置失败: %v", err)
 		c.String(400, "fail")
 		return
 	}
 
 	notification, err := services.AlipayVerifyCallback(alipayCfg, c.Request)
 	if err != nil {
-		fmt.Printf("[alipay] ❌ 回调验证失败: %v\n", err)
+		utils.LogError("[Alipay] ❌ 回调验证失败: %v", err)
 		utils.SysError("payment", fmt.Sprintf("支付宝回调验证失败: %v", err))
 		c.String(400, "verify fail")
 		return
 	}
 
-	fmt.Printf("[alipay] ✓ 回调验证成功\n")
-	fmt.Printf("[alipay]   - out_trade_no: %s\n", notification.OutTradeNo)
-	fmt.Printf("[alipay]   - trade_no: %s\n", notification.TradeNo)
-	fmt.Printf("[alipay]   - trade_status: %s\n", notification.TradeStatus)
-	fmt.Printf("[alipay]   - total_amount: %s\n", notification.TotalAmount)
+	utils.LogCallback("[Alipay] ✅ 回调验证成功")
+	utils.LogCallback("  - out_trade_no: %s", notification.OutTradeNo)
+	utils.LogCallback("  - trade_no: %s", notification.TradeNo)
+	utils.LogCallback("  - trade_status: %s", notification.TradeStatus)
+	utils.LogCallback("  - total_amount: %s", notification.TotalAmount)
 
 	// Only process successful trades
 	if notification.TradeStatus != "TRADE_SUCCESS" && notification.TradeStatus != "TRADE_FINISHED" {

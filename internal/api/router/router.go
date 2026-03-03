@@ -58,8 +58,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		auth.POST("/telegram", middleware.RateLimit(10, time.Minute), handlers.TelegramLogin)
 	}
 
-	// 公开订阅链接（添加频率限制防枚举）
-	subRL := middleware.RateLimit(120, time.Minute)
+	// 公开订阅链接（添加严格的频率限制防枚举攻击）
+	// 降低到 20 请求/分钟以防止订阅 URL 枚举
+	subRL := middleware.RateLimit(20, time.Minute)
 	api.GET("/sub/clash/:url", subRL, handlers.GetSubscription)
 	api.GET("/sub/:url", subRL, handlers.GetUniversalSubscription)
 	// 兼容旧路径

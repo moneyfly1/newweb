@@ -23,14 +23,22 @@ func GenerateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, length)
 	for i := range b {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			// 如果随机数生成失败，使用备用方案
+			panic(fmt.Sprintf("随机数生成失败: %v", err))
+		}
 		b[i] = charset[n.Int64()]
 	}
 	return string(b)
 }
 
 func GenerateVerificationCode() string {
-	n, _ := rand.Int(rand.Reader, big.NewInt(900000))
+	n, err := rand.Int(rand.Reader, big.NewInt(900000))
+	if err != nil {
+		// 如果随机数生成失败，使用备用方案
+		panic(fmt.Sprintf("随机数生成失败: %v", err))
+	}
 	return fmt.Sprintf("%06d", n.Int64()+100000)
 }
 

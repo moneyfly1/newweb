@@ -190,268 +190,120 @@ func ProcessEmailQueue() {
 
 // RenderEmail renders a named email template with the given data.
 func RenderEmail(templateName string, data map[string]string) (subject, htmlBody string) {
+	builder := NewEmailTemplateBuilder()
 	siteName := utils.GetSetting("site_name")
 	if siteName == "" {
 		siteName = "CBoard"
 	}
-	domain := GetSiteURL()
-
-	var title, content, btnText, btnLink string
 
 	switch templateName {
 	case "verification":
 		subject = fmt.Sprintf("邮箱验证码 - %s", siteName)
-		title = "邮箱验证码"
-		code := html.EscapeString(data["code"])
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您正在进行邮箱验证操作。</p>
-<div style="text-align:center;margin:24px 0">
-  <span style="display:inline-block;font-size:32px;font-weight:bold;letter-spacing:8px;color:#4F46E5;background:#F0EFFF;padding:12px 24px;border-radius:8px">%s</span>
-</div>
-<p style="font-size:14px;color:#666;margin:0">验证码有效期 5 分钟，请勿泄露给他人。</p>`, code)
+		htmlBody = builder.GetVerificationCodeTemplate(data["username"], data["code"])
 	case "reset_password":
 		subject = fmt.Sprintf("密码重置 - %s", siteName)
-		title = "密码重置"
-		code := html.EscapeString(data["code"])
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您正在进行密码重置操作。</p>
-<div style="text-align:center;margin:24px 0">
-  <span style="display:inline-block;font-size:32px;font-weight:bold;letter-spacing:8px;color:#4F46E5;background:#F0EFFF;padding:12px 24px;border-radius:8px">%s</span>
-</div>
-<p style="font-size:14px;color:#666;margin:0">验证码有效期 15 分钟。如果这不是您的操作，请忽略此邮件。</p>`, code)
+		// Use verification code template for password reset
+		htmlBody = builder.GetPasswordResetVerificationCodeTemplate(data["username"], data["code"])
 	case "welcome":
 		subject = fmt.Sprintf("欢迎加入 %s", siteName)
-		title = "欢迎加入"
-		username := html.EscapeString(data["username"])
-		email := html.EscapeString(data["email"])
-		loginURL := domain + "/login"
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">Hi %s，欢迎加入 %s！您的账户已创建成功。</p>
-<div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#333;margin:0 0 8px">邮箱：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0">登录地址：<a href="%s" style="color:#4F46E5">%s</a></p>
-</div>
-<p style="font-size:13px;color:#E11D48;margin:0">⚠️ 请使用注册时设置的密码登录，建议登录后定期修改密码。</p>`, username, siteName, email, loginURL, loginURL)
-		btnText = "立即登录"
-		btnLink = loginURL
+		loginURL := builder.GetBaseURL() + "/login"
+		htmlBody = builder.GetWelcomeTemplate(data["username"], data["email"], loginURL, true, "")
 	case "subscription":
 		subject = fmt.Sprintf("您的订阅信息 - %s", siteName)
-		title = "订阅信息"
-		clashURL := html.EscapeString(data["clash_url"])
-		universalURL := html.EscapeString(data["universal_url"])
-		expireTime := html.EscapeString(data["expire_time"])
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，以下是您的订阅信息：</p>
-<div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:13px;color:#888;margin:0 0 4px">Clash 订阅链接</p>
-  <p style="font-size:13px;color:#333;word-break:break-all;margin:0 0 12px;background:#fff;padding:8px;border-radius:4px;border:1px solid #E5E7EB"><code>%s</code></p>
-  <p style="font-size:13px;color:#888;margin:0 0 4px">通用订阅链接</p>
-  <p style="font-size:13px;color:#333;word-break:break-all;margin:0;background:#fff;padding:8px;border-radius:4px;border:1px solid #E5E7EB"><code>%s</code></p>
-</div>
-<p style="font-size:14px;color:#666;margin:0 0 8px">到期时间：<strong>%s</strong></p>
-<p style="font-size:13px;color:#999;margin:0">请妥善保管，不要泄露给他人。</p>`, clashURL, universalURL, expireTime)
-		btnText = "查看订阅"
-		btnLink = domain + "/subscription"
+		// Parse remaining days, device limit, current devices from data or use defaults
+		remainingDays := 30
+		deviceLimit := 5
+		currentDevices := 0
+		htmlBody = builder.GetSubscriptionTemplate(data["username"], data["universal_url"], data["clash_url"], data["expire_time"], remainingDays, deviceLimit, currentDevices)
 	case "payment_success":
 		subject = fmt.Sprintf("支付成功 - %s", siteName)
-		title = "支付成功"
-		orderNo := html.EscapeString(data["order_no"])
-		amount := html.EscapeString(data["amount"])
-		packageName := html.EscapeString(data["package_name"])
-		subURL := data["subscription_url"]
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的订单已支付成功！</p>
-<div style="background:#F0FDF4;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#333;margin:0 0 8px">订单号：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0 0 8px">套餐：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0">金额：<strong>¥%s</strong></p>
-</div>`, orderNo, packageName, amount)
-		if subURL != "" {
-			escapedURL := html.EscapeString(subURL)
-			content += fmt.Sprintf(`<div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:13px;color:#888;margin:0 0 4px">您的订阅地址</p>
-  <p style="font-size:13px;color:#333;word-break:break-all;margin:0;background:#fff;padding:8px;border-radius:4px;border:1px solid #E5E7EB"><code>%s</code></p>
-</div>`, escapedURL)
+		// Parse amount from string to float64
+		amount := 0.0
+		if amountStr := data["amount"]; amountStr != "" {
+			if parsed, err := strconv.ParseFloat(amountStr, 64); err == nil {
+				amount = parsed
+			}
 		}
-		content += `<p style="font-size:14px;color:#666;margin:0">订阅已自动激活，感谢您的支持！</p>`
-		btnText = "查看订阅"
-		btnLink = domain + "/subscription"
-	// TEMPLATE_PLACEHOLDER_2
+		paymentTime := time.Now().Format("2006-01-02 15:04:05")
+		htmlBody = builder.GetPaymentSuccessTemplate(data["username"], data["order_no"], data["package_name"], amount, "支付宝", paymentTime)
 	case "recharge_success":
 		subject = fmt.Sprintf("充值成功 - %s", siteName)
-		title = "充值成功"
-		orderNo := html.EscapeString(data["order_no"])
-		amount := html.EscapeString(data["amount"])
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的充值已成功到账！</p>
-<div style="background:#F0FDF4;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#333;margin:0 0 8px">充值单号：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0">充值金额：<strong>¥%s</strong></p>
-</div>
-<p style="font-size:14px;color:#666;margin:0">余额已自动到账，感谢您的支持！</p>`, orderNo, amount)
-		btnText = "查看余额"
-		btnLink = domain + "/"
+		// Use payment success template for recharge
+		amount := 0.0
+		if amountStr := data["amount"]; amountStr != "" {
+			if parsed, err := strconv.ParseFloat(amountStr, 64); err == nil {
+				amount = parsed
+			}
+		}
+		paymentTime := time.Now().Format("2006-01-02 15:04:05")
+		htmlBody = builder.GetPaymentSuccessTemplate(data["username"], data["order_no"], "余额充值", amount, "支付宝", paymentTime)
 	case "expiry_reminder":
-		days := html.EscapeString(data["days"])
-		expireTime := html.EscapeString(data["expire_time"])
 		subject = fmt.Sprintf("%s - 订阅即将到期提醒", siteName)
-		title = "订阅到期提醒"
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的 %s 订阅将在 <strong>%s 天</strong>后到期。</p>
-<div style="background:#FFFBEB;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#92400E;margin:0">⏰ 到期时间：<strong>%s</strong></p>
-</div>
-<p style="font-size:14px;color:#666;margin:0">请及时续费以免服务中断。</p>`, siteName, days, expireTime)
-		btnText = "立即续费"
-		btnLink = domain + "/shop"
+		// Parse days from string to int
+		remainingDays := 3
+		if daysStr := data["days"]; daysStr != "" {
+			if parsed, err := strconv.Atoi(daysStr); err == nil {
+				remainingDays = parsed
+			}
+		}
+		htmlBody = builder.GetExpirationReminderTemplate(data["username"], "订阅套餐", data["expire_time"], remainingDays, 5, 0, false)
 	case "expiry_notice":
-		expireTime := html.EscapeString(data["expire_time"])
 		subject = fmt.Sprintf("%s - 订阅已过期", siteName)
-		title = "订阅已过期"
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的 %s 订阅已于 <strong>%s</strong> 过期。</p>
-<div style="background:#FEF2F2;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#991B1B;margin:0">❌ 您的服务已暂停，续费后将自动恢复。</p>
-</div>
-<p style="font-size:14px;color:#666;margin:0">请续费以恢复服务。</p>`, siteName, expireTime)
-		btnText = "立即续费"
-		btnLink = domain + "/shop"
+		htmlBody = builder.GetExpirationReminderTemplate(data["username"], "订阅套餐", data["expire_time"], 0, 5, 0, true)
 	case "test":
 		subject = fmt.Sprintf("%s - 测试邮件", siteName)
-		title = "测试邮件"
-		content = `<p style="font-size:15px;color:#333;margin:0 0 16px">如果您收到此邮件，说明 SMTP 配置正确。</p>
-<p style="font-size:14px;color:#666;margin:0">这是一封测试邮件，无需任何操作。</p>`
-		btnText = "访问面板"
-		btnLink = domain + "/"
+		htmlBody = builder.GetBroadcastNotificationTemplate("测试邮件", "<p>如果您收到此邮件，说明 SMTP 配置正确。这是一封测试邮件，无需任何操作。</p>")
 	case "admin_create_user":
 		subject = fmt.Sprintf("账户已创建 - %s", siteName)
-		title = "账户已创建"
-		username := html.EscapeString(data["username"])
-		email := html.EscapeString(data["email"])
-		loginURL := domain + "/login"
-		resetURL := domain + "/forgot-password"
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，管理员已为您创建了 %s 账户。</p>
-<div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#333;margin:0 0 8px">邮箱：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0 0 8px">用户名：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0">登录地址：<a href="%s" style="color:#4F46E5">%s</a></p>
-</div>
-<p style="font-size:13px;color:#E11D48;margin:0">⚠️ 请通过<a href="%s" style="color:#4F46E5">忘记密码</a>设置您的登录密码。</p>`, siteName, email, username, loginURL, loginURL, resetURL)
-		btnText = "立即登录"
-		btnLink = loginURL
-	// TEMPLATE_PLACEHOLDER_3
+		// Use welcome template with password reset instruction
+		loginURL := builder.GetBaseURL() + "/login"
+		htmlBody = builder.GetWelcomeTemplate(data["username"], data["email"], loginURL, false, "")
 	case "account_disabled":
 		subject = fmt.Sprintf("账户已被禁用 - %s", siteName)
-		title = "账户已禁用"
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的 %s 账户已被管理员禁用。</p>
-<div style="background:#FEF2F2;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#991B1B;margin:0">您的账户已无法登录和使用服务。如有疑问，请联系客服。</p>
-</div>`, siteName)
+		htmlBody = builder.GetBroadcastNotificationTemplate("账户已禁用", fmt.Sprintf("<p>您好，您的 %s 账户已被管理员禁用。</p><p>您的账户已无法登录和使用服务。如有疑问，请联系客服。</p>", siteName))
 	case "account_enabled":
 		subject = fmt.Sprintf("账户已恢复 - %s", siteName)
-		title = "账户已恢复"
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的 %s 账户已被管理员恢复启用。</p>
-<div style="background:#F0FDF4;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#166534;margin:0">✅ 您现在可以正常登录和使用服务了。</p>
-</div>`, siteName)
-		btnText = "立即登录"
-		btnLink = domain + "/login"
+		htmlBody = builder.GetBroadcastNotificationTemplate("账户已恢复", fmt.Sprintf("<p>您好，您的 %s 账户已被管理员恢复启用。</p><p>✅ 您现在可以正常登录和使用服务了。</p>", siteName))
 	case "account_deleted":
 		subject = fmt.Sprintf("账户已删除 - %s", siteName)
-		title = "账户已删除"
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的 %s 账户已被删除。</p>
-<div style="background:#FEF2F2;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#991B1B;margin:0">您的所有数据（包括订阅、订单等）已被清除。如有疑问，请联系客服。</p>
-</div>`, siteName)
+		deletionDate := time.Now().Format("2006-01-02")
+		htmlBody = builder.GetAccountDeletionTemplate(data["username"], deletionDate, "管理员删除", "30天")
 	case "subscription_reset":
 		subject = fmt.Sprintf("订阅地址已重置 - %s", siteName)
-		title = "订阅地址已重置"
-		resetBy := html.EscapeString(data["reset_by"])
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的订阅地址已被%s重置。</p>
-<div style="background:#FFFBEB;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#92400E;margin:0">⚠️ 旧的订阅地址已失效，所有已连接设备已被清除。请使用新的订阅地址重新配置客户端。</p>
-</div>`, resetBy)
-		btnText = "查看新订阅"
-		btnLink = domain + "/subscription"
+		resetTime := time.Now().Format("2006-01-02 15:04:05")
+		htmlBody = builder.GetSubscriptionResetTemplate(data["username"], data["universal_url"], data["clash_url"], data["expire_time"], resetTime, data["reset_by"])
 	case "abnormal_login":
 		subject = fmt.Sprintf("异常登录提醒 - %s", siteName)
-		title = "异常登录提醒"
-		ip := html.EscapeString(data["ip"])
-		location := html.EscapeString(data["location"])
-		loginTime := html.EscapeString(data["time"])
-		ua := html.EscapeString(data["user_agent"])
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您的账户检测到一次异常登录。</p>
-<div style="background:#FEF2F2;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#333;margin:0 0 8px">IP 地址：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0 0 8px">位置：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0 0 8px">时间：<strong>%s</strong></p>
-  <p style="font-size:13px;color:#666;margin:0;word-break:break-all">设备：%s</p>
-</div>
-<p style="font-size:14px;color:#E11D48;margin:0">如果这不是您本人操作，请立即修改密码。</p>`, ip, location, loginTime, ua)
-		btnText = "修改密码"
-		btnLink = domain + "/settings"
+		htmlBody = builder.GetAbnormalLoginAlertTemplate(data["username"], data["time"], data["ip"], data["location"], true, true)
 	case "unpaid_order":
 		subject = fmt.Sprintf("您有未支付的订单 - %s", siteName)
-		title = "订单待支付提醒"
-		orderNo := html.EscapeString(data["order_no"])
-		packageName := html.EscapeString(data["package_name"])
-		amount := html.EscapeString(data["amount"])
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您有一笔订单尚未支付。</p>
-<div style="background:#FFFBEB;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#333;margin:0 0 8px">订单号：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0 0 8px">套餐：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0">金额：<strong>¥%s</strong></p>
-</div>
-<p style="font-size:14px;color:#666;margin:0">订单将在 30 分钟后自动取消，请尽快完成支付。</p>`, orderNo, packageName, amount)
-		btnText = "立即支付"
-		btnLink = domain + "/orders"
+		// Use order confirmation template
+		amount := 0.0
+		if amountStr := data["amount"]; amountStr != "" {
+			if parsed, err := strconv.ParseFloat(amountStr, 64); err == nil {
+				amount = parsed
+			}
+		}
+		orderTime := time.Now().Format("2006-01-02 15:04:05")
+		htmlBody = builder.GetOrderConfirmationTemplate(data["username"], data["order_no"], data["package_name"], amount, "待支付", orderTime)
 	case "new_order":
 		subject = fmt.Sprintf("新订单通知 - %s", siteName)
-		title = "新订单"
-		orderNo := html.EscapeString(data["order_no"])
-		packageName := html.EscapeString(data["package_name"])
-		amount := html.EscapeString(data["amount"])
-		content = fmt.Sprintf(`<p style="font-size:15px;color:#333;margin:0 0 16px">您好，您已成功创建订单。</p>
-<div style="background:#F9FAFB;border-radius:8px;padding:16px;margin:0 0 16px">
-  <p style="font-size:14px;color:#333;margin:0 0 8px">订单号：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0 0 8px">套餐：<strong>%s</strong></p>
-  <p style="font-size:14px;color:#333;margin:0">金额：<strong>¥%s</strong></p>
-</div>
-<p style="font-size:14px;color:#666;margin:0">请尽快完成支付以激活服务。</p>`, orderNo, packageName, amount)
-		btnText = "去支付"
-		btnLink = domain + "/orders"
+		// Use order confirmation template
+		amount := 0.0
+		if amountStr := data["amount"]; amountStr != "" {
+			if parsed, err := strconv.ParseFloat(amountStr, 64); err == nil {
+				amount = parsed
+			}
+		}
+		orderTime := time.Now().Format("2006-01-02 15:04:05")
+		htmlBody = builder.GetOrderConfirmationTemplate(data["username"], data["order_no"], data["package_name"], amount, "待支付", orderTime)
 	default:
 		subject = fmt.Sprintf("通知 - %s", siteName)
-		title = "通知"
-		content = `<p style="font-size:15px;color:#333">` + html.EscapeString(data["message"]) + `</p>`
+		message := data["message"]
+		if message == "" {
+			message = "您有一条新通知"
+		}
+		htmlBody = builder.GetBroadcastNotificationTemplate("系统通知", "<p>"+html.EscapeString(message)+"</p>")
 	}
-
-	htmlBody = buildEmailHTML(siteName, domain, title, content, btnText, btnLink)
 	return
-}
-
-func buildEmailHTML(siteName, domain, title, content, btnText, btnLink string) string {
-	btnHTML := ""
-	if btnText != "" && btnLink != "" {
-		btnHTML = fmt.Sprintf(`<div style="text-align:center;margin:28px 0 8px">
-  <a href="%s" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#6366F1,#4F46E5);color:#ffffff;text-decoration:none;padding:12px 32px;border-radius:6px;font-size:15px;font-weight:bold">%s</a>
-</div>`, btnLink, btnText)
-	}
-
-	return fmt.Sprintf(`<!DOCTYPE html>
-<html lang="zh">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#F3F4F6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif">
-<table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="background-color:#F3F4F6">
-<tr><td align="center" style="padding:32px 16px">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%%">
-<tr><td style="background:linear-gradient(135deg,#6366F1,#4F46E5);padding:28px 32px;border-radius:12px 12px 0 0;text-align:center">
-  <h1 style="margin:0;font-size:22px;color:#ffffff;font-weight:bold">%s</h1>
-</td></tr>
-<tr><td style="background:#ffffff;padding:32px;border-radius:0 0 12px 12px">
-  <h2 style="margin:0 0 20px;font-size:18px;color:#1F2937;font-weight:600">%s</h2>
-  %s
-  %s
-</td></tr>
-<tr><td style="padding:24px 32px;text-align:center">
-  <p style="margin:0 0 4px;font-size:12px;color:#9CA3AF">© %s. All rights reserved.</p>
-  <p style="margin:0;font-size:12px;color:#9CA3AF">此邮件由系统自动发送，请勿直接回复。</p>
-</td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>`, siteName, title, content, btnHTML, siteName)
 }

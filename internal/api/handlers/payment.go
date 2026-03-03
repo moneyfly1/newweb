@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -595,6 +596,9 @@ func PaymentNotify(c *gin.Context) {
 		handleStripeWebhook(c, db)
 		return
 	}
+
+	// 限制请求体大小为 10MB，防止 DoS 攻击
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 10*1024*1024)
 
 	// Read raw callback body
 	rawBody, err := io.ReadAll(c.Request.Body)

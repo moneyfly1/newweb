@@ -181,8 +181,10 @@ func CreatePayment(c *gin.Context) {
 				if err == nil {
 					notifyURL, returnURL := services.BuildPaymentURLs("alipay", order.OrderNo)
 					var paymentURL string
-					// 使用订单号作为 out_trade_no，这样回调时可以直接找到订单
-					outTradeNo := order.OrderNo
+					// 关键修复：使用 transaction.TransactionID (txID) 作为 out_trade_no
+					// 这样回调时可以通过 out_trade_no 直接找到 payment_transaction
+					outTradeNo := *transaction.TransactionID
+					utils.LogPayment("[CreatePayment] 使用 txID 作为 out_trade_no: %s (order_no: %s)", outTradeNo, order.OrderNo)
 					if req.IsMobile {
 						// Use WAP payment for mobile
 						paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
@@ -191,13 +193,10 @@ func CreatePayment(c *gin.Context) {
 						paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
 					}
 					if err == nil {
-						// 更新支付事务的 transaction_id 为订单号，这样回调时可以通过 out_trade_no 找到
-						db.Model(&transaction).Updates(map[string]interface{}{
-							"transaction_id": outTradeNo,
-						})
-						// 同时更新订单的 payment_transaction_id
+						// 更新订单的 payment_transaction_id，关联支付事务
 						ptxID := fmt.Sprintf("%d", transaction.ID)
 						db.Model(&order).Update("payment_transaction_id", &ptxID)
+						utils.LogPayment("[CreatePayment] ✅ 支付宝订单创建成功 - txID=%s, order_no=%s, order_id=%d", outTradeNo, order.OrderNo, order.ID)
 						utils.Success(c, gin.H{
 							"message":        "支付创建成功",
 							"order_no":       order.OrderNo,
@@ -208,7 +207,7 @@ func CreatePayment(c *gin.Context) {
 						})
 						return
 					}
-					fmt.Printf("[payment] 直接支付宝失败: %v, 尝试易支付\n", err)
+					utils.LogError("[payment] 直接支付宝失败: %v, 尝试易支付", err)
 				}
 			}
 		}
@@ -405,15 +404,23 @@ func CreateRechargePayment(c *gin.Context) {
 				if err == nil {
 					notifyURL, returnURL := services.BuildPaymentURLs("alipay", record.OrderNo)
 					var paymentURL string
+					// 使用 txID 作为 out_trade_no，这样回调时可以通过 out_trade_no 找到 payment_transaction
+					outTradeNo := txID
+					utils.LogPayment("[CreateRechargePayment] 使用 txID 作为 out_trade_no: %s (order_no: %s)", outTradeNo, record.OrderNo)
 					if req.IsMobile {
 						// Use WAP payment for mobile
-						paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+						paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
 					} else {
 						// Use QR code payment for desktop
-						paymentURL, err = services.AlipayCreateOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+						paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
 					}
 					if err == nil {
-						db.Model(&record).Update("payment_url", &paymentURL)
+						// 更新充值记录，关联支付事务ID和支付URL
+						db.Model(&record).Updates(map[string]interface{}{
+							"payment_url": &paymentURL,
+							"payment_transaction_id": &txID,
+						})
+						utils.LogPayment("[CreateRechargePayment] ✅ 充值支付宝订单创建成功 - txID=%s, order_no=%s", outTradeNo, record.OrderNo)
 						utils.Success(c, gin.H{
 							"message":        "支付创建成功",
 							"order_no":       record.OrderNo,
@@ -424,7 +431,7 @@ func CreateRechargePayment(c *gin.Context) {
 						})
 						return
 					}
-					fmt.Printf("[payment] 充值直接支付宝失败: %v, 尝试易支付\n", err)
+					utils.LogError("[payment] 充值直接支付宝失败: %v, 尝试易支付", err)
 				}
 			}
 		}
@@ -967,44 +974,51 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	rawStr := fmt.Sprintf(`{"out_trade_no":"%s","trade_no":"%s","trade_status":"%s","total_amount":"%s"}`,
 		outTradeNo, tradeNo, notification.TradeStatus, notification.TotalAmount)
 
-	// Find transaction by out_trade_no (which is order_no)
+	// Find transaction by out_trade_no (which should be txID)
 	// First try to find by transaction_id
 	var transaction models.PaymentTransaction
+	utils.LogCallback("[Alipay] 🔍 查找支付事务 - out_trade_no=%s", outTradeNo)
 	err = db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error
 
-	// If not found, try to find by order_no
+	// If not found, try to find by order_no (fallback for old orders)
 	if err != nil {
+		utils.LogCallback("[Alipay] ⚠️  通过 transaction_id 未找到，尝试通过 order_no 查找")
 		var order models.Order
 		if err := db.Where("order_no = ?", outTradeNo).First(&order).Error; err != nil {
-			fmt.Printf("[alipay] ❌ 找不到订单: out_trade_no=%s, error=%v\n", outTradeNo, err)
+			utils.LogError("[alipay] ❌ 找不到订单: out_trade_no=%s, error=%v", outTradeNo, err)
 			callback := models.PaymentCallback{
 				CallbackType: "alipay",
 				CallbackData: rawStr,
 				RawRequest:   &rawStr,
 				Processed:    false,
 			}
+			errMsg := fmt.Sprintf("找不到订单: %v", err)
+			callback.ErrorMessage = &errMsg
 			db.Create(&callback)
 			c.String(200, "success")
 			return
 		}
 
+		utils.LogCallback("[Alipay] ✓ 通过 order_no 找到订单: order_id=%d, order_no=%s", order.ID, order.OrderNo)
 		// Find transaction by order_id
 		if err := db.Where("order_id = ?", order.ID).First(&transaction).Error; err != nil {
-			fmt.Printf("[alipay] ❌ 找不到支付事务: order_id=%d, error=%v\n", order.ID, err)
+			utils.LogError("[alipay] ❌ 找不到支付事务: order_id=%d, error=%v", order.ID, err)
 			callback := models.PaymentCallback{
 				CallbackType: "alipay",
 				CallbackData: rawStr,
 				RawRequest:   &rawStr,
 				Processed:    false,
 			}
+			errMsg := fmt.Sprintf("找不到支付事务: %v", err)
+			callback.ErrorMessage = &errMsg
 			db.Create(&callback)
 			c.String(200, "success")
 			return
 		}
 	}
 
-	fmt.Printf("[alipay] ✓ 找到支付事务: transaction_id=%d, order_id=%d, status=%s\n",
-		transaction.ID, transaction.OrderID, transaction.Status)
+	utils.LogCallback("[Alipay] ✅ 找到支付事务: transaction_id=%d, order_id=%d, status=%s, amount=%.2f",
+		transaction.ID, transaction.OrderID, transaction.Status, transaction.Amount)
 
 	callback := models.PaymentCallback{
 		PaymentTransactionID: transaction.ID,
@@ -1080,17 +1094,27 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 }
 
 func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
-	fmt.Printf("[alipay] handleAlipayOrderCallback 开始: transaction_id=%d, order_id=%d\n",
-		transaction.ID, transaction.OrderID)
+	utils.LogCallback("[Alipay] 📦 开始处理订单回调 - transaction_id=%d, order_id=%d", transaction.ID, transaction.OrderID)
+
+	// 检查是否为充值订单（order_id = 0）
+	if transaction.OrderID == 0 {
+		utils.LogCallback("[Alipay] 💰 这是充值订单，调用充值处理逻辑")
+		if transaction.TransactionID != nil {
+			handleEpayRechargeCallback(db, transaction, *transaction.TransactionID)
+		} else {
+			utils.LogError("[Alipay] ❌ 充值订单缺少 transaction_id")
+		}
+		return
+	}
 
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
 		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
-			fmt.Printf("[alipay] ❌ 查找订单失败: order_id=%d, error=%v\n", transaction.OrderID, err)
+			utils.LogError("[Alipay] ❌ 查找订单失败: order_id=%d, error=%v", transaction.OrderID, err)
 			return err // Already processed or not found
 		}
 
-		fmt.Printf("[alipay] ✓ 找到订单: order_no=%s, user_id=%d, package_id=%d, amount=%.2f\n",
+		utils.LogCallback("[Alipay] ✓ 找到待支付订单: order_no=%s, user_id=%d, package_id=%d, amount=%.2f",
 			order.OrderNo, order.UserID, order.PackageID, order.Amount)
 
 		now := time.Now()
@@ -1102,24 +1126,25 @@ func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 			"payment_time":           &now,
 			"payment_transaction_id": &txIDStr,
 		}).Error; err != nil {
-			fmt.Printf("[alipay] ❌ 更新订单状态失败: error=%v\n", err)
+			utils.LogError("[Alipay] ❌ 更新订单状态失败: error=%v", err)
 			return err
 		}
 
-		fmt.Printf("[alipay] ✓ 订单状态已更新为 paid\n")
+		utils.LogCallback("[Alipay] ✅ 订单状态已更新为 paid - order_no=%s", order.OrderNo)
 
 		if err := services.ActivateSubscription(tx, &order, "alipay"); err != nil {
-			fmt.Printf("[alipay] ❌ 激活订阅失败: error=%v\n", err)
+			utils.LogError("[Alipay] ❌ 激活订阅失败: error=%v", err)
 			return fmt.Errorf("激活订阅失败: %w", err)
 		}
 
-		fmt.Printf("[alipay] ✓ 订阅激活成功\n")
+		utils.LogCallback("[Alipay] ✅ 订阅激活成功 - order_no=%s", order.OrderNo)
 		return nil
 	})
 	if err != nil {
 		utils.SysError("payment", fmt.Sprintf("支付宝订单回调处理失败: %v", err))
+		utils.LogError("[Alipay] ❌ 订单回调处理失败: %v", err)
 	} else {
-		fmt.Printf("[alipay] ✅ 订单回调处理完成\n")
+		utils.LogCallback("[Alipay] ✅✅✅ 订单回调处理完成")
 	}
 }
 
@@ -1333,12 +1358,38 @@ func handleStripeRechargeCallback(db *gorm.DB, transaction *models.PaymentTransa
 // Redirects to frontend payment result page
 func PaymentReturn(c *gin.Context) {
 	// Get order_no from query params (支付宝会传递 out_trade_no)
-	orderNo := c.Query("out_trade_no")
-	if orderNo == "" {
-		orderNo = c.Query("order_no")
+	// out_trade_no 现在是 txID (如 PAY1234567890ABC)，需要查找对应的订单号
+	outTradeNo := c.Query("out_trade_no")
+	if outTradeNo == "" {
+		outTradeNo = c.Query("order_no")
 	}
 
-	utils.LogCallback("[PaymentReturn] 同步回调 - order_no=%s, query=%v", orderNo, c.Request.URL.Query())
+	utils.LogCallback("[PaymentReturn] 同步回调 - out_trade_no=%s, query=%v", outTradeNo, c.Request.URL.Query())
+
+	// 查找订单号
+	orderNo := outTradeNo
+	if outTradeNo != "" {
+		db := database.GetDB()
+		// 先尝试通过 transaction_id 查找
+		var transaction models.PaymentTransaction
+		if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err == nil {
+			// 找到支付事务，获取订单号
+			if transaction.OrderID > 0 {
+				var order models.Order
+				if err := db.First(&order, transaction.OrderID).Error; err == nil {
+					orderNo = order.OrderNo
+					utils.LogCallback("[PaymentReturn] 通过 txID 找到订单: %s -> %s", outTradeNo, orderNo)
+				}
+			} else {
+				// 充值订单，查找充值记录
+				var record models.RechargeRecord
+				if err := db.Where("payment_transaction_id = ?", outTradeNo).First(&record).Error; err == nil {
+					orderNo = record.OrderNo
+					utils.LogCallback("[PaymentReturn] 通过 txID 找到充值订单: %s -> %s", outTradeNo, orderNo)
+				}
+			}
+		}
+	}
 
 	// Get site URL for redirect
 	siteURL := utils.GetSetting("site_url")

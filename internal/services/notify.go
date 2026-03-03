@@ -141,7 +141,10 @@ func NotifyAdmin(eventType string, data map[string]string) {
 	if email := settings["notify_admin_email"]; email != "" {
 		enabled := settings["notify_email_enabled"]
 		if enabled == "" || enabled == "true" || enabled == "1" {
-			go QueueEmail(email, title, "<h3>"+title+"</h3><pre>"+barkMsg+"</pre>", "admin_notify")
+			// 使用模板系统构建管理员通知邮件
+			builder := NewEmailTemplateBuilder()
+			emailBody := builder.GetAdminNotificationTemplate(eventType, title, barkMsg, convertToInterfaceMap(data))
+			go QueueEmail(email, title, emailBody, "admin_notify")
 		}
 	}
 
@@ -264,4 +267,13 @@ func sendBark(serverURL, deviceKey, title, body string) {
 		log.Printf("[Notify] Bark 返回状态码: %d", resp.StatusCode)
 		utils.SysWarn("notify", fmt.Sprintf("Bark 返回状态码: %d", resp.StatusCode))
 	}
+}
+
+// convertToInterfaceMap 将 map[string]string 转换为 map[string]interface{}
+func convertToInterfaceMap(data map[string]string) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range data {
+		result[k] = v
+	}
+	return result
 }

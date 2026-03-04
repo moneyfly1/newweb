@@ -189,7 +189,7 @@ func testNodeConnectivity(config string) (latencyMs int, reachable bool) {
 	if err != nil {
 		return 0, false
 	}
-	conn.Close()
+	_ = conn.Close()
 	return int(time.Since(start).Milliseconds()), true
 }
 

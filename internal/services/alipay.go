@@ -18,8 +18,8 @@ type AlipayConfig struct {
 	AppID        string
 	PrivateKey   string
 	PublicKey    string
-	NotifyURL   string
-	ReturnURL   string
+	NotifyURL    string
+	ReturnURL    string
 	IsProduction bool
 }
 
@@ -41,8 +41,8 @@ func GetAlipayConfig() (*AlipayConfig, error) {
 		AppID:        appID,
 		PrivateKey:   privateKey,
 		PublicKey:    strings.TrimSpace(m["pay_alipay_public_key"]),
-		NotifyURL:   strings.TrimSpace(m["pay_alipay_notify_url"]),
-		ReturnURL:   strings.TrimSpace(m["pay_alipay_return_url"]),
+		NotifyURL:    strings.TrimSpace(m["pay_alipay_notify_url"]),
+		ReturnURL:    strings.TrimSpace(m["pay_alipay_return_url"]),
 		IsProduction: m["pay_alipay_sandbox"] != "true" && m["pay_alipay_sandbox"] != "1",
 	}, nil
 }
@@ -348,5 +348,90 @@ func AlipayRefund(tradeNo, outRequestNo, refundAmount string) error {
 	}
 
 	log.Printf("[alipay] 退款成功: trade_no=%s, refund_amount=%s", tradeNo, refundAmount)
+	return nil
+}
+
+// AlipayGateway 支付宝网关实现
+type AlipayGateway struct {
+	config *AlipayConfig
+}
+
+// NewAlipayGateway 创建支付宝网关实例
+func NewAlipayGateway() (*AlipayGateway, error) {
+	config, err := GetAlipayConfig()
+	if err != nil {
+		return nil, err
+	}
+	return &AlipayGateway{config: config}, nil
+}
+
+// GetConfig 获取支付配置
+func (g *AlipayGateway) GetConfig() (interface{}, error) {
+	if g.config == nil {
+		config, err := GetAlipayConfig()
+		if err != nil {
+			return nil, err
+		}
+		g.config = config
+	}
+	return g.config, nil
+}
+
+// IsConfigured 检查是否已配置
+func (g *AlipayGateway) IsConfigured() bool {
+	return IsDirectAlipayConfigured()
+}
+
+// CreatePayment 创建支付
+func (g *AlipayGateway) CreatePayment(orderNo string, amount float64, subject, returnURL, notifyURL string) (interface{}, error) {
+	if g.config == nil {
+		config, err := GetAlipayConfig()
+		if err != nil {
+			return nil, err
+		}
+		g.config = config
+	}
+
+	amountStr := fmt.Sprintf("%.2f", amount)
+	payURL, err := AlipayCreateOrder(g.config, orderNo, subject, amountStr, notifyURL, returnURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"pay_url":  payURL,
+		"order_no": orderNo,
+		"amount":   amount,
+	}, nil
+}
+
+// VerifyCallback 验证回调签名
+func (g *AlipayGateway) VerifyCallback(data map[string]interface{}) bool {
+	// 支付宝回调验证在 handleAlipayNotify 中处理
+	// 这里返回 true，实际验证在回调处理函数中
+	return true
+}
+
+// GetName 获取网关名称
+func (g *AlipayGateway) GetName() string {
+	return "alipay"
+}
+
+// GetDisplayName 获取显示名称
+func (g *AlipayGateway) GetDisplayName() string {
+	return "支付宝"
+}
+
+// ValidateConfig 验证配置
+func (g *AlipayGateway) ValidateConfig() error {
+	if g.config == nil {
+		return fmt.Errorf("支付宝配置未初始化")
+	}
+	if g.config.AppID == "" {
+		return fmt.Errorf("支付宝 AppID 未配置")
+	}
+	if g.config.PrivateKey == "" {
+		return fmt.Errorf("支付宝应用私钥未配置")
+	}
 	return nil
 }

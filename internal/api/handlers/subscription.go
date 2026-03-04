@@ -759,9 +759,9 @@ func SendSubscriptionEmail(c *gin.Context) {
 	clashURL := fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, sub.SubscriptionURL)
 
 	subject, body := services.RenderEmail("subscription", map[string]string{
-		"clash_url":    clashURL,
+		"clash_url":     clashURL,
 		"universal_url": universalURL,
-		"expire_time":  sub.ExpireTime.Format("2006-01-02 15:04"),
+		"expire_time":   sub.ExpireTime.Format("2006-01-02 15:04"),
 	})
 
 	go services.QueueEmail(user.Email, subject, body, "subscription")

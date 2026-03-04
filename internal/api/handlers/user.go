@@ -103,9 +103,15 @@ func UpdatePreferences(c *gin.Context) {
 		return
 	}
 	updates := map[string]interface{}{}
-	if req.Theme != "" { updates["theme"] = req.Theme }
-	if req.Language != "" { updates["language"] = req.Language }
-	if req.Timezone != "" { updates["timezone"] = req.Timezone }
+	if req.Theme != "" {
+		updates["theme"] = req.Theme
+	}
+	if req.Language != "" {
+		updates["language"] = req.Language
+	}
+	if req.Timezone != "" {
+		updates["timezone"] = req.Timezone
+	}
 	database.GetDB().Model(user).Updates(updates)
 	utils.SuccessMessage(c, "偏好设置已更新")
 }
@@ -125,24 +131,36 @@ func GetNotificationSettings(c *gin.Context) {
 func UpdateNotificationSettings(c *gin.Context) {
 	user := c.MustGet("user").(*models.User)
 	var req struct {
-		EmailNotifications       *bool `json:"email_notifications"`
+		EmailNotifications        *bool `json:"email_notifications"`
 		AbnormalLoginAlertEnabled *bool `json:"abnormal_login_alert_enabled"`
-		PushNotifications        *bool `json:"push_notifications"`
-		NotifyOrder              *bool `json:"notify_order"`
-		NotifyExpiry             *bool `json:"notify_expiry"`
-		NotifySubscription       *bool `json:"notify_subscription"`
+		PushNotifications         *bool `json:"push_notifications"`
+		NotifyOrder               *bool `json:"notify_order"`
+		NotifyExpiry              *bool `json:"notify_expiry"`
+		NotifySubscription        *bool `json:"notify_subscription"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
 	updates := map[string]interface{}{}
-	if req.EmailNotifications != nil { updates["email_notifications"] = *req.EmailNotifications }
-	if req.AbnormalLoginAlertEnabled != nil { updates["abnormal_login_alert_enabled"] = *req.AbnormalLoginAlertEnabled }
-	if req.PushNotifications != nil { updates["push_notifications"] = *req.PushNotifications }
-	if req.NotifyOrder != nil { updates["notify_order"] = *req.NotifyOrder }
-	if req.NotifyExpiry != nil { updates["notify_expiry"] = *req.NotifyExpiry }
-	if req.NotifySubscription != nil { updates["notify_subscription"] = *req.NotifySubscription }
+	if req.EmailNotifications != nil {
+		updates["email_notifications"] = *req.EmailNotifications
+	}
+	if req.AbnormalLoginAlertEnabled != nil {
+		updates["abnormal_login_alert_enabled"] = *req.AbnormalLoginAlertEnabled
+	}
+	if req.PushNotifications != nil {
+		updates["push_notifications"] = *req.PushNotifications
+	}
+	if req.NotifyOrder != nil {
+		updates["notify_order"] = *req.NotifyOrder
+	}
+	if req.NotifyExpiry != nil {
+		updates["notify_expiry"] = *req.NotifyExpiry
+	}
+	if req.NotifySubscription != nil {
+		updates["notify_subscription"] = *req.NotifySubscription
+	}
 	database.GetDB().Model(user).Updates(updates)
 	utils.SuccessMessage(c, "通知设置已更新")
 }
@@ -163,8 +181,12 @@ func UpdatePrivacySettings(c *gin.Context) {
 		return
 	}
 	updates := map[string]interface{}{}
-	if req.DataSharing != nil { updates["data_sharing"] = *req.DataSharing }
-	if req.Analytics != nil { updates["analytics"] = *req.Analytics }
+	if req.DataSharing != nil {
+		updates["data_sharing"] = *req.DataSharing
+	}
+	if req.Analytics != nil {
+		updates["analytics"] = *req.Analytics
+	}
 	database.GetDB().Model(user).Updates(updates)
 	utils.SuccessMessage(c, "隐私设置已更新")
 }
@@ -218,11 +240,11 @@ func GetDashboardInfo(c *gin.Context) {
 		db.Model(&models.Device{}).Where("subscription_id = ? AND is_active = ?", sub.ID, true).Count(&deviceCount)
 	}
 	utils.Success(c, gin.H{
-		"balance": user.Balance,
+		"balance":          user.Balance,
 		"has_subscription": hasSub,
-		"subscription": sub,
-		"order_count": orderCount,
-		"device_count": deviceCount,
+		"subscription":     sub,
+		"order_count":      orderCount,
+		"device_count":     deviceCount,
 	})
 }
 

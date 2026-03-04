@@ -58,7 +58,7 @@ func ErrorWithFields(c *gin.Context, httpStatus int, code int, message string, e
 	c.JSON(httpStatus, ErrorResponse{Code: code, Message: message, Errors: errors})
 }
 
-func BadRequest(c *gin.Context, message string)     { Error(c, 400, 40000, message) }
+func BadRequest(c *gin.Context, message string)      { Error(c, 400, 40000, message) }
 func Unauthorized(c *gin.Context, message string)    { Error(c, 401, 40100, message) }
 func Forbidden(c *gin.Context, message string)       { Error(c, 403, 40300, message) }
 func NotFound(c *gin.Context, message string)        { Error(c, 404, 40400, message) }

@@ -163,3 +163,15 @@ export const getAdminInviteStats = () => request.get('/admin/invites/stats')
 export const listAdminInviteRelations = (params?: any) => request.get('/admin/invites/relations', { params })
 export const deleteAdminInviteCode = (id: number) => request.delete(`/admin/invites/${id}`)
 export const toggleAdminInviteCode = (id: number) => request.post(`/admin/invites/${id}/toggle`)
+
+// Payment Gateways
+export const listPaymentGateways = () => request.get('/admin/payment-gateways')
+export const getAvailablePaymentGateways = () => request.get('/admin/payment-gateways/available')
+export const getPaymentGateway = (type: string) => request.get(`/admin/payment-gateways/${type}`)
+export const testPaymentGateway = (type: string) => request.post(`/admin/payment-gateways/${type}/test`)
+
+// Payment Stats
+export const getPaymentStats = (params?: any) => request.get('/admin/stats/payment', { params })
+export const getPaymentMethodComparison = (params?: any) => request.get('/admin/stats/payment/comparison', { params })
+export const getPaymentAnalysis = (params?: any) => request.get('/admin/stats/payment/analysis', { params })
+

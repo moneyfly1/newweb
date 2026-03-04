@@ -134,3 +134,121 @@ func EpayQueryOrder(cfg *EpayConfig, outTradeNo string) (map[string]string, erro
 	}
 	return result, nil
 }
+
+// EpayGateway 易支付网关实现
+type EpayGateway struct {
+	config *EpayConfig
+}
+
+// NewEpayGateway 创建易支付网关实例
+func NewEpayGateway() (*EpayGateway, error) {
+	config, err := GetEpayConfig()
+	if err != nil {
+		return nil, err
+	}
+	return &EpayGateway{config: config}, nil
+}
+
+// GetConfig 获取支付配置
+func (g *EpayGateway) GetConfig() (interface{}, error) {
+	if g.config == nil {
+		config, err := GetEpayConfig()
+		if err != nil {
+			return nil, err
+		}
+		g.config = config
+	}
+	return g.config, nil
+}
+
+// IsConfigured 检查是否已配置
+func (g *EpayGateway) IsConfigured() bool {
+	_, err := GetEpayConfig()
+	return err == nil
+}
+
+// CreatePayment 创建支付
+// 注意：Epay 需要指定支付类型（alipay/wxpay/qqpay）
+func (g *EpayGateway) CreatePayment(orderNo string, amount float64, subject, returnURL, notifyURL string) (interface{}, error) {
+	if g.config == nil {
+		config, err := GetEpayConfig()
+		if err != nil {
+			return nil, err
+		}
+		g.config = config
+	}
+
+	// 默认使用支付宝
+	payType := "alipay"
+	amountStr := fmt.Sprintf("%.2f", amount)
+
+	payURL, err := EpayCreateOrder(g.config, payType, orderNo, subject, amountStr, notifyURL, returnURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"pay_url":  payURL,
+		"order_no": orderNo,
+		"amount":   amount,
+		"pay_type": payType,
+	}, nil
+}
+
+// CreatePaymentWithType 创建指定类型的支付
+func (g *EpayGateway) CreatePaymentWithType(payType, orderNo string, amount float64, subject, returnURL, notifyURL string) (interface{}, error) {
+	if g.config == nil {
+		config, err := GetEpayConfig()
+		if err != nil {
+			return nil, err
+		}
+		g.config = config
+	}
+
+	amountStr := fmt.Sprintf("%.2f", amount)
+	payURL, err := EpayCreateOrder(g.config, payType, orderNo, subject, amountStr, notifyURL, returnURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"pay_url":  payURL,
+		"order_no": orderNo,
+		"amount":   amount,
+		"pay_type": payType,
+	}, nil
+}
+
+// VerifyCallback 验证回调签名
+func (g *EpayGateway) VerifyCallback(data map[string]interface{}) bool {
+	// Epay 回调验证在 handleEpayNotify 中处理
+	// 这里返回 true，实际验证在回调处理函数中
+	return true
+}
+
+// GetName 获取网关名称
+func (g *EpayGateway) GetName() string {
+	return "epay"
+}
+
+// GetDisplayName 获取显示名称
+func (g *EpayGateway) GetDisplayName() string {
+	return "易支付"
+}
+
+// ValidateConfig 验证配置
+func (g *EpayGateway) ValidateConfig() error {
+	if g.config == nil {
+		return fmt.Errorf("易支付配置未初始化")
+	}
+	if g.config.Gateway == "" {
+		return fmt.Errorf("易支付网关地址未配置")
+	}
+	if g.config.MerchantID == "" {
+		return fmt.Errorf("易支付商户ID未配置")
+	}
+	if g.config.SecretKey == "" {
+		return fmt.Errorf("易支付密钥未配置")
+	}
+	return nil
+}

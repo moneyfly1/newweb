@@ -49,10 +49,17 @@ func CreateSecurityEvent(eventType string, severity string, description string, 
 	// 记录到系统日志
 	SysError("security", fmt.Sprintf("[%s] %s: %s", severity, eventType, description))
 
-	// 可以扩展：发送告警邮件、Webhook 等
-	if severity == "critical" || severity == "high" {
-		// TODO: 发送告警通知
+	// 记录到数据库
+	db := database.GetDB()
+	log := models.SecurityLog{
+		EventType:   eventType,
+		Severity:    severity,
+		Description: &description,
 	}
+	db.Create(&log)
+
+	// 注意：安全告警通知功能已实现在 services/security_alert.go
+	// 可以在需要时调用 services.SendSecurityAlert()
 }
 
 // DetectSuspiciousActivity 检测可疑活动

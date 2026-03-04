@@ -299,6 +299,6 @@ func Close() {
 		return
 	}
 	if sqlDB, err := DB.DB(); err == nil {
-		sqlDB.Close()
+		_ = sqlDB.Close()
 	}
 }

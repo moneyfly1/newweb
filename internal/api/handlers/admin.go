@@ -2277,8 +2277,8 @@ func AdminCreateBackup(c *gin.Context) {
 	// 注意：不备份 .env 文件以防止敏感信息泄露（数据库密码、API密钥、支付密钥等）
 	// 如需备份配置，请使用加密存储或单独的安全备份方案
 
-	zipWriter.Close()
-	zipFile.Close()
+	_ = zipWriter.Close()
+	_ = zipFile.Close()
 
 	info, _ := os.Stat(dbBackupPath)
 	zipInfo, _ := os.Stat(zipPath)

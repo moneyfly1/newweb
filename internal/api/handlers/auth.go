@@ -259,7 +259,7 @@ func Register(c *gin.Context) {
 	}
 	subscribeDays := 0
 	if v := settings["default_subscribe_days"]; v != "" {
-		fmt.Sscanf(v, "%d", &subscribeDays)
+		_, _ = fmt.Sscanf(v, "%d", &subscribeDays)
 	}
 	expireTime := time.Now()
 	if subscribeDays > 0 {

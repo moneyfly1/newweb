@@ -45,7 +45,7 @@ func InitLogger() error {
 // CloseLogger 关闭日志系统
 func CloseLogger() {
 	if logFile != nil {
-		logFile.Close()
+		_ = logFile.Close()
 	}
 }
 

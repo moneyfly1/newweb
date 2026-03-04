@@ -428,7 +428,7 @@ func Logout(c *gin.Context) {
 	tokenString, _ := c.Get("token")
 	if token, ok := tokenString.(string); ok {
 		tokenHash := utils.SHA256Hash(token)
-		models.AddToBlacklist(database.GetDB(), tokenHash, c.GetUint("user_id"), time.Now().Add(24*time.Hour))
+		_ = models.AddToBlacklist(database.GetDB(), tokenHash, c.GetUint("user_id"), time.Now().Add(24*time.Hour))
 	}
 	utils.SuccessMessage(c, "已登出")
 }
@@ -481,7 +481,7 @@ func RefreshToken(c *gin.Context) {
 	// 将旧的 refresh token 加入黑名单（防止重用）
 	db := database.GetDB()
 	expiresAt := time.Now().Add(time.Duration(config.AppConfig.RefreshTokenExpireDays) * 24 * time.Hour)
-	models.AddToBlacklist(db, tokenHash, user.ID, expiresAt)
+	_ = models.AddToBlacklist(db, tokenHash, user.ID, expiresAt)
 
 	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
 	newRefreshToken, _ := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)

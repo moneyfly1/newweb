@@ -166,7 +166,7 @@ func createDefaultAdmin() {
 	}
 	log.Printf("========================================")
 	log.Printf("  默认管理员账户已创建")
-	log.Printf("  邮箱: %s", adminEmail)
+	log.Printf("  邮箱: %q", adminEmail)
 	log.Printf("  密码: %s", randomPass)
 	log.Printf("  请登录后立即修改密码！")
 	log.Printf("========================================")
@@ -182,7 +182,7 @@ func createDefaultAdmin() {
 		ExpireTime:      time.Now(),
 	})
 
-	log.Printf("已创建默认管理员: %s（请立即修改密码）", adminEmail)
+	log.Printf("已创建默认管理员: %q（请立即修改密码）", adminEmail)
 }
 
 // runResetPassword 从命令行参数解析 --email 和 --password，重置管理员密码后退出
@@ -253,7 +253,7 @@ func runResetPassword() {
 					"username": username,
 					"password": string(hash),
 				})
-				log.Printf("已将默认管理员替换为 %s 并设置密码", email)
+				log.Printf("已将默认管理员替换为 %q 并设置密码", email)
 				return
 			}
 
@@ -295,7 +295,7 @@ func runResetPassword() {
 				Status:          "active",
 				ExpireTime:      time.Now(),
 			})
-			log.Printf("已创建管理员 %s 并设置密码", user.Email)
+			log.Printf("已创建管理员 %q 并设置密码", user.Email)
 			return
 		}
 		log.Fatalf("未找到管理员账号（可指定 --email 或留空使用第一个管理员）: %v", err)
@@ -304,7 +304,7 @@ func runResetPassword() {
 	if err := db.Model(&user).Update("password", string(hash)).Error; err != nil {
 		log.Fatalf("更新密码失败: %v", err)
 	}
-	log.Printf("管理员 %s 密码已重置成功", user.Email)
+	log.Printf("管理员 %q 密码已重置成功", user.Email)
 }
 
 func ensureUserSubscriptions() {

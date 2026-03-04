@@ -25,7 +25,7 @@ fatal() { echo -e "${RED}[FATAL]${NC} $*"; exit 1; }
 # ---- 配置变量 ----
 PROJECT_PATH="$(cd "$(dirname "$0")" && pwd)"
 INSTALL_DIR="/opt/cboard"
-SERVICE_NAME="cboard"
+SERVICE_NAME="cboard-v2"
 CBOARD_PORT=9000
 BACKEND_PORT=9000
 DOMAIN=""

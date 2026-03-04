@@ -24,14 +24,14 @@ var (
 
 // ClientInfo holds parsed User-Agent information
 type ClientInfo struct {
-	SoftwareName    string
-	SoftwareVersion string
-	OSName          string
-	OSVersion       string
-	DeviceModel     string
-	DeviceBrand     string
-	DeviceType      string // mobile, desktop, tablet, unknown
-	IsBrowser       bool
+	SoftwareName     string
+	SoftwareVersion  string
+	OSName           string
+	OSVersion        string
+	DeviceModel      string
+	DeviceBrand      string
+	DeviceType       string // mobile, desktop, tablet, unknown
+	IsBrowser        bool
 	SubscriptionType string // clash, surge, shadowrocket, quantumult, v2ray
 }
 

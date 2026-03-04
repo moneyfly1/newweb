@@ -137,10 +137,10 @@ func (c *GitClient) createRepo() error {
 	} else {
 		apiURL = c.BaseURL + "/api/v5/user/repos"
 		payload = map[string]interface{}{
-			"name":        c.Repo,
-			"private":     true,
-			"description": "CBoard 自动备份仓库",
-			"auto_init":   true,
+			"name":         c.Repo,
+			"private":      true,
+			"description":  "CBoard 自动备份仓库",
+			"auto_init":    true,
 			"access_token": c.Token,
 		}
 	}

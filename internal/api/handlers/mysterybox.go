@@ -372,7 +372,7 @@ func OpenMysteryBox(c *gin.Context) {
 			coupon := models.Coupon{
 				Code: couponCode, Name: fmt.Sprintf("盲盒奖品-%s", prize.Name),
 				Description: fmt.Sprintf("盲盒「%s」获得的优惠券", pool.Name),
-				Type: "fixed", DiscountValue: prize.Value,
+				Type:        "fixed", DiscountValue: prize.Value,
 				ValidFrom: validFrom, ValidUntil: validUntil,
 				MaxUsesPerUser: 1, Status: "active", TotalQuantity: &qty,
 			}

@@ -513,14 +513,23 @@ const handleBatchDelete = () => {
     positiveText: '确定',
     negativeText: '取消',
     onPositiveClick: async () => {
-      try {
-        await Promise.all(checkedRowKeys.value.map(id => deleteNode(id)))
-        message.success('批量删除成功')
-        checkedRowKeys.value = []
-        fetchData()
-      } catch (error) {
-        message.error(error.message || '批量删除失败')
+      const results = await Promise.allSettled(
+        checkedRowKeys.value.map(id => deleteNode(id))
+      )
+
+      const successCount = results.filter(r => r.status === 'fulfilled').length
+      const failedCount = results.filter(r => r.status === 'rejected').length
+
+      if (failedCount === 0) {
+        message.success(`批量删除成功，共删除 ${successCount} 个节点`)
+      } else if (successCount === 0) {
+        message.error(`批量删除失败，${failedCount} 个节点删除失败`)
+      } else {
+        message.warning(`部分删除成功：${successCount} 个成功，${failedCount} 个失败`)
       }
+
+      checkedRowKeys.value = []
+      fetchData()
     }
   })
 }

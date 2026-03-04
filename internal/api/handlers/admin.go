@@ -272,7 +272,6 @@ func AdminGetUser(c *gin.Context) {
 	})
 }
 
-
 func AdminUpdateUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -483,7 +482,9 @@ func AdminToggleUserActive(c *gin.Context) {
 		go services.NotifyUser(user.ID, "account_disabled", nil)
 	}
 	action := "启用"
-	if !newStatus { action = "禁用" }
+	if !newStatus {
+		action = "禁用"
+	}
 	utils.CreateAuditLog(c, "toggle_user_active", "user", uint(id), fmt.Sprintf("%s用户: %s", action, user.Username))
 	utils.Success(c, gin.H{"is_active": newStatus})
 }
@@ -495,11 +496,11 @@ func AdminGetAbnormalUsers(c *gin.Context) {
 	abnormalType := c.Query("type")
 
 	type AbnormalUser struct {
-		UserID       uint      `json:"user_id"`
-		Username     string    `json:"username"`
-		Email        string    `json:"email"`
-		AbnormalType string    `json:"abnormal_type"`
-		Details      string    `json:"details"`
+		UserID       uint       `json:"user_id"`
+		Username     string     `json:"username"`
+		Email        string     `json:"email"`
+		AbnormalType string     `json:"abnormal_type"`
+		Details      string     `json:"details"`
 		LastActive   *time.Time `json:"last_active"`
 	}
 
@@ -678,7 +679,6 @@ func AdminListOrders(c *gin.Context) {
 
 	utils.SuccessPage(c, orders, total, p.Page, p.PageSize)
 }
-
 
 func AdminGetOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -882,7 +882,6 @@ func AdminDeleteOrder(c *gin.Context) {
 
 // ==================== Package Management ====================
 
-
 func AdminListPackages(c *gin.Context) {
 	db := database.GetDB()
 	p := utils.GetPagination(c)
@@ -951,7 +950,6 @@ func AdminDeletePackage(c *gin.Context) {
 
 // ==================== Node Management ====================
 
-
 func AdminListNodes(c *gin.Context) {
 	db := database.GetDB()
 	p := utils.GetPagination(c)
@@ -1012,7 +1010,6 @@ func AdminUpdateNode(c *gin.Context) {
 	utils.CreateAuditLog(c, "update_node", "node", uint(id), fmt.Sprintf("更新节点: %s", node.Name))
 	utils.Success(c, node)
 }
-
 
 func AdminDeleteNode(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -1154,7 +1151,6 @@ func AdminCreateCustomNode(c *gin.Context) {
 	}
 	utils.Success(c, node)
 }
-
 
 func AdminUpdateCustomNode(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -1308,8 +1304,8 @@ func AdminGetCustomNodeLink(c *gin.Context) {
 		return
 	}
 	utils.Success(c, gin.H{
-		"link":   node.Config,
-		"name":   node.DisplayName,
+		"link":     node.Config,
+		"name":     node.DisplayName,
 		"protocol": node.Protocol,
 	})
 }
@@ -1382,12 +1378,12 @@ func AdminListSubscriptions(c *gin.Context) {
 	baseURL := getSubscriptionBaseURL()
 	type SubItem struct {
 		models.Subscription
-		UserEmail   string  `json:"user_email"`
-		Username    string  `json:"username"`
-		PackageName string  `json:"package_name"`
-		UserNotes   *string `json:"user_notes"`
-		UniversalURL string `json:"universal_url"`
-		ClashURL     string `json:"clash_url"`
+		UserEmail    string  `json:"user_email"`
+		Username     string  `json:"username"`
+		PackageName  string  `json:"package_name"`
+		UserNotes    *string `json:"user_notes"`
+		UniversalURL string  `json:"universal_url"`
+		ClashURL     string  `json:"clash_url"`
 	}
 	items := make([]SubItem, 0, len(subs))
 	for _, sub := range subs {
@@ -1462,20 +1458,20 @@ func AdminGetSubscription(c *gin.Context) {
 	db.Where("subscription_id = ?", sub.ID).Find(&devices)
 
 	result := gin.H{
-		"id":                sub.ID,
-		"user_id":           sub.UserID,
-		"package_id":        sub.PackageID,
-		"subscription_url":  sub.SubscriptionURL,
-		"device_limit":      sub.DeviceLimit,
-		"current_devices":   sub.CurrentDevices,
-		"universal_count":   sub.UniversalCount,
-		"clash_count":       sub.ClashCount,
-		"is_active":         sub.IsActive,
-		"status":            sub.Status,
-		"expire_time":       sub.ExpireTime,
-		"created_at":        sub.CreatedAt,
-		"updated_at":        sub.UpdatedAt,
-		"devices":           devices,
+		"id":               sub.ID,
+		"user_id":          sub.UserID,
+		"package_id":       sub.PackageID,
+		"subscription_url": sub.SubscriptionURL,
+		"device_limit":     sub.DeviceLimit,
+		"current_devices":  sub.CurrentDevices,
+		"universal_count":  sub.UniversalCount,
+		"clash_count":      sub.ClashCount,
+		"is_active":        sub.IsActive,
+		"status":           sub.Status,
+		"expire_time":      sub.ExpireTime,
+		"created_at":       sub.CreatedAt,
+		"updated_at":       sub.UpdatedAt,
+		"devices":          devices,
 	}
 
 	// Build full subscription URLs
@@ -1531,7 +1527,6 @@ func AdminGetSubscription(c *gin.Context) {
 
 	utils.Success(c, result)
 }
-
 
 func AdminResetSubscription(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -1743,7 +1738,6 @@ func AdminGetTicket(c *gin.Context) {
 
 	utils.Success(c, gin.H{"ticket": ticket, "replies": replies})
 }
-
 
 func AdminUpdateTicket(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -2217,11 +2211,11 @@ func AdminMonitoring(c *gin.Context) {
 	var pendingOrders int64
 	db.Model(&models.Order{}).Where("status = ?", "pending").Count(&pendingOrders)
 	utils.Success(c, gin.H{
-		"user_count":          userCount,
-		"node_count":          nodeCount,
+		"user_count":           userCount,
+		"node_count":           nodeCount,
 		"active_subscriptions": activeSubCount,
-		"pending_tickets":     pendingTickets,
-		"pending_orders":      pendingOrders,
+		"pending_tickets":      pendingTickets,
+		"pending_orders":       pendingOrders,
 	})
 }
 
@@ -2490,16 +2484,16 @@ func AdminCreateUser(c *gin.Context) {
 	}
 
 	user := models.User{
-		Username:   req.Username,
-		Email:      req.Email,
-		Password:   hashed,
-		Balance:    req.Balance,
-		IsAdmin:    req.IsAdmin,
-		IsActive:   req.IsActive,
-		IsVerified: true,
-		Theme:      "light",
-		Language:   "zh-CN",
-		Timezone:   "Asia/Shanghai",
+		Username:                    req.Username,
+		Email:                       req.Email,
+		Password:                    hashed,
+		Balance:                     req.Balance,
+		IsAdmin:                     req.IsAdmin,
+		IsActive:                    req.IsActive,
+		IsVerified:                  true,
+		Theme:                       "light",
+		Language:                    "zh-CN",
+		Timezone:                    "Asia/Shanghai",
 		SpecialNodeSubscriptionType: "both",
 	}
 	if req.Notes != "" {
@@ -2913,7 +2907,7 @@ func AdminFinancialReport(c *gin.Context) {
 	var revenueChart []ChartPoint
 	db.Model(&models.Order{}).
 		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", "paid", startStr, endStr).
-		Select(dateExpr+" as date, COALESCE(SUM(amount), 0) as revenue, COUNT(*) as orders").
+		Select(dateExpr + " as date, COALESCE(SUM(amount), 0) as revenue, COUNT(*) as orders").
 		Group(dateExpr).
 		Order("date ASC").
 		Scan(&revenueChart)
@@ -2934,7 +2928,7 @@ func AdminFinancialReport(c *gin.Context) {
 	}
 	db.Model(&models.RechargeRecord{}).
 		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", "paid", startStr, endStr).
-		Select(rechargeDateExpr+" as date, COALESCE(SUM(amount), 0) as recharge").
+		Select(rechargeDateExpr + " as date, COALESCE(SUM(amount), 0) as recharge").
 		Group(rechargeDateExpr).
 		Order("date ASC").
 		Scan(&rechargeByDate)
@@ -3063,7 +3057,7 @@ func AdminExportFinancialReport(c *gin.Context) {
 	var rows []Row
 	db.Model(&models.Order{}).
 		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", "paid", startStr, endStr).
-		Select(dateExpr+" as date, COALESCE(SUM(amount), 0) as revenue, COUNT(*) as orders").
+		Select(dateExpr + " as date, COALESCE(SUM(amount), 0) as revenue, COUNT(*) as orders").
 		Group(dateExpr).
 		Order("date ASC").
 		Scan(&rows)
@@ -3085,7 +3079,7 @@ func AdminExportFinancialReport(c *gin.Context) {
 	var rrows []RRow
 	db.Model(&models.RechargeRecord{}).
 		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", "paid", startStr, endStr).
-		Select(rechargeDateExpr+" as date, COALESCE(SUM(amount), 0) as recharge").
+		Select(rechargeDateExpr + " as date, COALESCE(SUM(amount), 0) as recharge").
 		Group(rechargeDateExpr).
 		Order("date ASC").
 		Scan(&rrows)
@@ -3111,7 +3105,7 @@ func AdminExportFinancialReport(c *gin.Context) {
 	var urows []URow
 	db.Model(&models.User{}).
 		Where("DATE(created_at) >= ? AND DATE(created_at) <= ?", startStr, endStr).
-		Select(userDateExpr+" as date, COUNT(*) as new_users").
+		Select(userDateExpr + " as date, COUNT(*) as new_users").
 		Group(userDateExpr).
 		Order("date ASC").
 		Scan(&urows)
@@ -3410,14 +3404,14 @@ func AdminImportUsersCSV(c *gin.Context) {
 		}
 
 		user := models.User{
-			Username:   username,
-			Email:      email,
-			Password:   hashed,
-			IsActive:   true,
-			IsVerified: true,
-			Theme:      "light",
-			Language:   "zh-CN",
-			Timezone:   "Asia/Shanghai",
+			Username:                    username,
+			Email:                       email,
+			Password:                    hashed,
+			IsActive:                    true,
+			IsVerified:                  true,
+			Theme:                       "light",
+			Language:                    "zh-CN",
+			Timezone:                    "Asia/Shanghai",
 			SpecialNodeSubscriptionType: "both",
 		}
 

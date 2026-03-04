@@ -418,7 +418,7 @@ func CreateRechargePayment(c *gin.Context) {
 					if err == nil {
 						// 更新充值记录，关联支付事务ID和支付URL
 						db.Model(&record).Updates(map[string]interface{}{
-							"payment_url": &paymentURL,
+							"payment_url":            &paymentURL,
 							"payment_transaction_id": &txID,
 						})
 						utils.LogPayment("[CreateRechargePayment] ✅ 充值支付宝订单创建成功 - txID=%s, order_no=%s", outTradeNo, record.OrderNo)

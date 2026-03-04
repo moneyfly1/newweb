@@ -179,7 +179,7 @@ func PayOrder(c *gin.Context) {
 	var req struct {
 		PaymentMethod string `json:"payment_method"`
 	}
-	c.ShouldBindJSON(&req)
+	_ = c.ShouldBindJSON(&req)
 	db := database.GetDB()
 	var order models.Order
 	if err := db.Where("order_no = ? AND user_id = ? AND status = ?", orderNo, userID, "pending").First(&order).Error; err != nil {
@@ -471,7 +471,7 @@ func CreateCustomOrder(c *gin.Context) {
 	}
 	discountsJSON := utils.GetSetting("custom_package_duration_discounts")
 	if discountsJSON != "" {
-		json.Unmarshal([]byte(discountsJSON), &discountTiers)
+		_ = json.Unmarshal([]byte(discountsJSON), &discountTiers)
 	}
 
 	// Calculate price

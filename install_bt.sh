@@ -533,69 +533,51 @@ setup_ssl() {
     fi
 
     # 检查已有证书
-    if [ -f "/www/server/panel/vhost/cert/$DOMAIN/fullchain.pem" ] || \
-       [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    if [ -f "/www/server/panel/vhost/cert/$DOMAIN/fullchain.pem" ] && [ -f "/www/server/panel/vhost/cert/$DOMAIN/privkey.pem" ]; then
         ok "检测到已有 SSL 证书"
+        if update_nginx_ssl; then
+            ok "Nginx 已配置 HTTPS 并重载"
+        else
+            warn "Nginx SSL 配置更新失败"
+        fi
+        return 0
+    fi
+
+    if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/$DOMAIN/privkey.pem" ]; then
+        ok "检测到已有 SSL 证书"
+        copy_cert_to_bt && update_nginx_ssl
         return 0
     fi
 
     info "申请 Let's Encrypt SSL 证书..."
 
-    # 安装 certbot
-    if ! command -v certbot &>/dev/null; then
-        if command -v apt-get &>/dev/null; then
-            apt-get install -y -qq certbot >/dev/null 2>&1
-        else
-            yum install -y certbot >/dev/null 2>&1
-        fi
-    fi
-
-    # 检查 80 端口
+    # 检查 Nginx 运行状态
     local NGINX_WAS_RUNNING=false
-    local PORT_FREE=false
-
-    if ! lsof -ti :80 &>/dev/null; then
-        PORT_FREE=true
-    else
-        info "80 端口被占用，尝试临时停止 Nginx..."
-        if systemctl is-active --quiet nginx 2>/dev/null; then
-            NGINX_WAS_RUNNING=true
-            systemctl stop nginx 2>/dev/null || /www/server/nginx/sbin/nginx -s stop 2>/dev/null || true
-            sleep 2
-            if ! lsof -ti :80 &>/dev/null; then
-                PORT_FREE=true
-                ok "80 端口已释放"
-            fi
-        fi
+    if systemctl is-active --quiet nginx 2>/dev/null || pgrep -x nginx >/dev/null 2>&1; then
+        NGINX_WAS_RUNNING=true
     fi
 
-    if [ "$PORT_FREE" = false ]; then
-        warn "无法释放 80 端口"
-        echo -e "${YELLOW}请手动检查: lsof -i :80${NC}"
-        if [ "$NGINX_WAS_RUNNING" = true ]; then
-            systemctl start nginx 2>/dev/null || /www/server/nginx/sbin/nginx 2>/dev/null || true
-        fi
-        echo ""
-        echo -e "${YELLOW}建议在宝塔面板中申请 SSL 证书:${NC}"
-        echo "  网站 -> $DOMAIN -> SSL -> Let's Encrypt"
+    # 尝试 nginx 方式
+    if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" --redirect 2>&1; then
+        ok "SSL 证书申请成功 (nginx 方式)"
+        copy_cert_to_bt
         return 0
     fi
 
-    # 申请证书
+    warn "nginx 方式失败，尝试 standalone 方式..."
+
+    # 停止 Nginx 释放 80 端口
+    if [ "$NGINX_WAS_RUNNING" = true ]; then
+        systemctl stop nginx 2>/dev/null || /www/server/nginx/sbin/nginx -s stop 2>/dev/null || true
+        sleep 2
+    fi
+
     local CERT_SUCCESS=false
-    if certbot certonly --standalone -d "$DOMAIN" --register-unsafely-without-email --agree-tos --non-interactive 2>&1 | tee /tmp/certbot_install.log; then
+    if certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" 2>&1; then
         if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
             CERT_SUCCESS=true
-            ok "SSL 证书申请成功"
-
-            # 复制到宝塔标准路径
-            mkdir -p "/www/server/panel/vhost/cert/$DOMAIN"
-            cp "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" "/www/server/panel/vhost/cert/$DOMAIN/fullchain.pem" 2>/dev/null || true
-            cp "/etc/letsencrypt/live/$DOMAIN/privkey.pem" "/www/server/panel/vhost/cert/$DOMAIN/privkey.pem" 2>/dev/null || true
-            ok "证书已复制到宝塔标准路径"
-
-            # 更新 Nginx 配置加入 SSL
-            update_nginx_ssl
+            ok "SSL 证书申请成功 (standalone 方式)"
+            copy_cert_to_bt && update_nginx_ssl
         fi
     fi
 
@@ -609,11 +591,11 @@ setup_ssl() {
         echo ""
         echo -e "${YELLOW}可能的原因:${NC}"
         echo "  1. 域名 DNS 未正确解析到此服务器"
-        echo "  2. 80 端口未开放"
+        echo "  2. 80 端口未开放或被占用"
         echo "  3. 防火墙阻止了访问"
         echo "  4. Let's Encrypt 频率限制"
         echo ""
-        echo -e "${YELLOW}建议在宝塔面板中申请:${NC}"
+        echo -e "${YELLOW}建议在宝塔面板中申请 SSL 证书:${NC}"
         echo "  网站 -> $DOMAIN -> SSL -> Let's Encrypt"
         echo ""
         read -rp "是否继续安装? (y/n) [y]: " cont
@@ -621,6 +603,33 @@ setup_ssl() {
             fatal "安装已取消"
         fi
     fi
+}
+
+# ---- 复制证书到宝塔路径 ----
+copy_cert_to_bt() {
+    if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+        return 1
+    fi
+
+    if ! mkdir -p "/www/server/panel/vhost/cert/$DOMAIN"; then
+        warn "创建证书目录失败"
+        return 1
+    fi
+
+    if ! cp "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" "/www/server/panel/vhost/cert/$DOMAIN/fullchain.pem" 2>/dev/null; then
+        warn "复制证书文件失败"
+        return 1
+    fi
+
+    if ! cp "/etc/letsencrypt/live/$DOMAIN/privkey.pem" "/www/server/panel/vhost/cert/$DOMAIN/privkey.pem" 2>/dev/null; then
+        warn "复制私钥文件失败"
+        return 1
+    fi
+
+    chmod 644 "/www/server/panel/vhost/cert/$DOMAIN/fullchain.pem" 2>/dev/null || true
+    chmod 600 "/www/server/panel/vhost/cert/$DOMAIN/privkey.pem" 2>/dev/null || true
+    ok "证书已复制到宝塔标准路径"
+    return 0
 }
 
 # ---- 更新 Nginx SSL 配置 ----
@@ -703,11 +712,23 @@ server {
 }
 EOF
 
-    cp "$CONF_FILE" /www/server/nginx/conf/vhost/cboard.conf 2>/dev/null || true
+    if ! cp "$CONF_FILE" /www/server/nginx/conf/vhost/cboard.conf 2>/dev/null; then
+        warn "复制 Nginx 配置文件失败"
+        return 1
+    fi
 
-    if /www/server/nginx/sbin/nginx -t 2>/dev/null; then
-        /www/server/nginx/sbin/nginx -s reload 2>/dev/null || true
-        ok "Nginx SSL 配置已更新"
+    if ! /www/server/nginx/sbin/nginx -t 2>&1 | grep -q "successful"; then
+        warn "Nginx 配置测试失败，回滚配置"
+        rm -f /www/server/nginx/conf/vhost/cboard.conf 2>/dev/null || true
+        return 1
+    fi
+
+    if ! /www/server/nginx/sbin/nginx -s reload 2>/dev/null; then
+        warn "Nginx 重载失败"
+        return 1
+    fi
+
+    ok "Nginx SSL 配置已更新"
     fi
 }
 

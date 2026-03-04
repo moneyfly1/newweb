@@ -715,7 +715,7 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 			}
 		}
 	} else {
-		c.Request.ParseForm()
+		_ = c.Request.ParseForm()
 		for k, v := range c.Request.PostForm {
 			if len(v) > 0 {
 				params[k] = v[0]

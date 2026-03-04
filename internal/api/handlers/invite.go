@@ -97,7 +97,7 @@ func AdminListInviteRelations(c *gin.Context) {
 		models.InviteRelation
 		InviterUsername string `json:"inviter_username"`
 		InviteeUsername string `json:"invitee_username"`
-		Code           string `json:"invite_code"`
+		Code            string `json:"invite_code"`
 	}
 	var result []RR
 	for _, rel := range rels {

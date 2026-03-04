@@ -169,7 +169,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, h, onMounted } from 'vue'
-import { NButton, NTag, NSpace, NSpin, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NSpin, NSelect, useMessage, useDialog } from 'naive-ui'
 import { listAdminTickets, getAdminTicket, updateTicket, replyAdminTicket } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
@@ -420,20 +420,21 @@ const handleReply = async () => {
 }
 
 const handleQuickStatusUpdate = (row: any) => {
+  const newStatus = ref(row.status)
+
   dialog.create({
     title: '更新工单状态',
     content: () => {
-      const status = ref(row.status)
       return h(NSpace, { vertical: true }, {
         default: () => [
           h('div', {}, `工单编号: ${row.ticket_no}`),
           h('div', {}, `当前状态: ${getStatusText(row.status)}`),
           h('div', { style: { marginTop: '12px' } }, '选择新状态:'),
-          h('select', {
-            value: status.value,
-            onChange: (e: any) => { status.value = e.target.value },
-            style: { width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #e0e0e0' }
-          }, statusOptions.map(opt => h('option', { value: opt.value }, opt.label)))
+          h(NSelect, {
+            value: newStatus.value,
+            options: statusOptions,
+            onUpdateValue: (value: string) => { newStatus.value = value }
+          })
         ]
       })
     },
@@ -441,7 +442,7 @@ const handleQuickStatusUpdate = (row: any) => {
     negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        await updateTicket(row.id, { status: row.status })
+        await updateTicket(row.id, { status: newStatus.value })
         message.success('状态更新成功')
         await loadTickets()
       } catch (error: any) {

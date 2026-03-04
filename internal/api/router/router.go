@@ -26,7 +26,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 	r.Use(middleware.SecurityHeaders())
-	r.Use(middleware.RequestLogger()) // 添加请求日志中间件
+	r.Use(middleware.RequestLogger())         // 添加请求日志中间件
 	r.Use(gzip.Gzip(gzip.DefaultCompression)) // 添加 Gzip 压缩，提升传输性能
 
 	// CORS
@@ -389,6 +389,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/stats/regions", handlers.AdminRegionStats)
 		admin.GET("/stats/financial", handlers.AdminFinancialReport)
 		admin.GET("/stats/financial/export", handlers.AdminExportFinancialReport)
+		admin.GET("/stats/payment", handlers.AdminPaymentStats)
+		admin.GET("/stats/payment/comparison", handlers.AdminPaymentMethodComparison)
+		admin.GET("/stats/payment/analysis", handlers.AdminPaymentAnalysis)
 
 		// 日志
 		admin.GET("/logs/audit", handlers.AdminAuditLogs)
@@ -410,6 +413,12 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 签到管理
 		admin.GET("/checkin/stats", handlers.AdminGetCheckInStats)
+
+		// 支付网关管理
+		admin.GET("/payment-gateways", handlers.AdminListPaymentGateways)
+		admin.GET("/payment-gateways/available", handlers.AdminGetAvailableGateways)
+		admin.GET("/payment-gateways/:type", handlers.AdminGetPaymentGateway)
+		admin.POST("/payment-gateways/:type/test", handlers.AdminTestPaymentGateway)
 
 		// 邀请码管理
 		adminInvites := admin.Group("/invites")

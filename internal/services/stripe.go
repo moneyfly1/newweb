@@ -140,3 +140,100 @@ func StripeVerifyWebhook(payload []byte, sigHeader, webhookSecret string) bool {
 
 	return hmac.Equal([]byte(signature), []byte(expectedSig))
 }
+
+// StripeGateway Stripe 网关实现
+type StripeGateway struct {
+	config *StripeConfig
+}
+
+// NewStripeGateway 创建 Stripe 网关实例
+func NewStripeGateway() (*StripeGateway, error) {
+	config, err := GetStripeConfig()
+	if err != nil {
+		return nil, err
+	}
+	return &StripeGateway{config: config}, nil
+}
+
+// GetConfig 获取支付配置
+func (g *StripeGateway) GetConfig() (interface{}, error) {
+	if g.config == nil {
+		config, err := GetStripeConfig()
+		if err != nil {
+			return nil, err
+		}
+		g.config = config
+	}
+	return g.config, nil
+}
+
+// IsConfigured 检查是否已配置
+func (g *StripeGateway) IsConfigured() bool {
+	return IsStripeConfigured()
+}
+
+// CreatePayment 创建支付
+func (g *StripeGateway) CreatePayment(orderNo string, amount float64, subject, returnURL, notifyURL string) (interface{}, error) {
+	if g.config == nil {
+		config, err := GetStripeConfig()
+		if err != nil {
+			return nil, err
+		}
+		g.config = config
+	}
+
+	// Stripe 使用美分作为单位
+	amountCents := int64(math.Round(amount * 100))
+	currency := "usd" // 默认使用美元
+
+	sessionID, checkoutURL, err := StripeCreateCheckoutSession(
+		g.config,
+		orderNo,
+		subject,
+		amountCents,
+		currency,
+		returnURL,
+		notifyURL,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"session_id":   sessionID,
+		"checkout_url": checkoutURL,
+		"order_no":     orderNo,
+		"amount":       amount,
+	}, nil
+}
+
+// VerifyCallback 验证回调签名
+func (g *StripeGateway) VerifyCallback(data map[string]interface{}) bool {
+	// Stripe webhook 验证在 handleStripeWebhook 中处理
+	// 这里返回 true，实际验证在回调处理函数中
+	return true
+}
+
+// GetName 获取网关名称
+func (g *StripeGateway) GetName() string {
+	return "stripe"
+}
+
+// GetDisplayName 获取显示名称
+func (g *StripeGateway) GetDisplayName() string {
+	return "Stripe"
+}
+
+// ValidateConfig 验证配置
+func (g *StripeGateway) ValidateConfig() error {
+	if g.config == nil {
+		return fmt.Errorf("Stripe 配置未初始化")
+	}
+	if g.config.SecretKey == "" {
+		return fmt.Errorf("Stripe Secret Key 未配置")
+	}
+	if g.config.PublishableKey == "" {
+		return fmt.Errorf("Stripe Publishable Key 未配置")
+	}
+	return nil
+}

@@ -132,18 +132,18 @@ func Register(c *gin.Context) {
 	}
 
 	user := models.User{
-		Username: req.Username,
-		Email:    req.Email,
-		Password: hashedPassword,
-		IsActive: true,
-		Theme:    "light",
-		Language: "zh-CN",
-		Timezone: "Asia/Shanghai",
-		EmailNotifications:        true,
-		AbnormalLoginAlertEnabled: true,
-		PushNotifications:         true,
-		DataSharing:               true,
-		Analytics:                 true,
+		Username:                    req.Username,
+		Email:                       req.Email,
+		Password:                    hashedPassword,
+		IsActive:                    true,
+		Theme:                       "light",
+		Language:                    "zh-CN",
+		Timezone:                    "Asia/Shanghai",
+		EmailNotifications:          true,
+		AbnormalLoginAlertEnabled:   true,
+		PushNotifications:           true,
+		DataSharing:                 true,
+		Analytics:                   true,
 		SpecialNodeSubscriptionType: "both",
 	}
 

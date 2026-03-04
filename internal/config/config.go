@@ -21,16 +21,16 @@ type Config struct {
 	BaseURL     string `mapstructure:"BASE_URL"`
 
 	// 数据库配置（支持 SQLite / MySQL / PostgreSQL）
-	DatabaseURL     string `mapstructure:"DATABASE_URL"`
-	MySQLHost       string `mapstructure:"MYSQL_HOST"`
-	MySQLPort       int    `mapstructure:"MYSQL_PORT"`
-	MySQLUser       string `mapstructure:"MYSQL_USER"`
-	MySQLPassword   string `mapstructure:"MYSQL_PASSWORD"`
-	MySQLDatabase   string `mapstructure:"MYSQL_DATABASE"`
-	PostgresServer  string `mapstructure:"POSTGRES_SERVER"`
-	PostgresUser    string `mapstructure:"POSTGRES_USER"`
-	PostgresPass    string `mapstructure:"POSTGRES_PASS"`
-	PostgresDB      string `mapstructure:"POSTGRES_DB"`
+	DatabaseURL    string `mapstructure:"DATABASE_URL"`
+	MySQLHost      string `mapstructure:"MYSQL_HOST"`
+	MySQLPort      int    `mapstructure:"MYSQL_PORT"`
+	MySQLUser      string `mapstructure:"MYSQL_USER"`
+	MySQLPassword  string `mapstructure:"MYSQL_PASSWORD"`
+	MySQLDatabase  string `mapstructure:"MYSQL_DATABASE"`
+	PostgresServer string `mapstructure:"POSTGRES_SERVER"`
+	PostgresUser   string `mapstructure:"POSTGRES_USER"`
+	PostgresPass   string `mapstructure:"POSTGRES_PASS"`
+	PostgresDB     string `mapstructure:"POSTGRES_DB"`
 
 	// JWT / 安全配置
 	SecretKey                string `mapstructure:"SECRET_KEY"`
@@ -68,7 +68,7 @@ type Config struct {
 	DeviceUpgradePricePerMonth float64 `mapstructure:"DEVICE_UPGRADE_PRICE_PER_MONTH"`
 
 	// Telegram 机器人（v2 新增）
-	TelegramBotToken  string `mapstructure:"TELEGRAM_BOT_TOKEN"`
+	TelegramBotToken   string `mapstructure:"TELEGRAM_BOT_TOKEN"`
 	TelegramWebhookURL string `mapstructure:"TELEGRAM_WEBHOOK_URL"`
 
 	// CORS 允许的来源

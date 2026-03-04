@@ -10,10 +10,10 @@ import (
 
 // ConfigCache 系统配置缓存
 type ConfigCache struct {
-	mu      sync.RWMutex
-	configs map[string]string
+	mu         sync.RWMutex
+	configs    map[string]string
 	lastUpdate time.Time
-	ttl     time.Duration
+	ttl        time.Duration
 }
 
 var (

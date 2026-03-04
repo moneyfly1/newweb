@@ -8,10 +8,10 @@ import (
 
 // NotifyTemplate 通知模板结构
 type NotifyTemplate struct {
-	Emoji   string
-	Title   string
-	Fields  []NotifyField
-	Footer  string
+	Emoji  string
+	Title  string
+	Fields []NotifyField
+	Footer string
 }
 
 // NotifyField 通知字段
@@ -114,6 +114,17 @@ func GetNotifyTemplate(eventType string) *NotifyTemplate {
 				{"👤", "用户", "username"},
 				{"⏰", "到期时间", "expire_time"},
 			},
+		},
+		"security_alert": {
+			Emoji: "🚨",
+			Title: "安全告警",
+			Fields: []NotifyField{
+				{"⚠️", "事件类型", "event_type"},
+				{"📊", "严重级别", "severity"},
+				{"📝", "描述", "description"},
+				{"🕐", "时间", "time"},
+			},
+			Footer: "⚠️ 请立即检查并处理！",
 		},
 	}
 

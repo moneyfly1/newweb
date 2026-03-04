@@ -313,6 +313,24 @@ func AdminUpdateUser(c *gin.Context) {
 		return
 	}
 
+	// If balance is being changed, log it properly (before update)
+	oldBalance := user.Balance
+	var shouldLogBalance bool
+	var newBalance float64
+	if newBal, ok := updates["balance"]; ok {
+		switch v := newBal.(type) {
+		case float64:
+			newBalance = v
+		case int:
+			newBalance = float64(v)
+		default:
+			newBalance = oldBalance
+		}
+		if newBalance != oldBalance {
+			shouldLogBalance = true
+		}
+	}
+
 	// Update user fields
 	if len(updates) > 0 {
 		if err := db.Model(&user).Updates(updates).Error; err != nil {
@@ -355,24 +373,12 @@ func AdminUpdateUser(c *gin.Context) {
 		}
 	}
 
-	// If balance is being changed, log it properly
-	oldBalance := user.Balance
-	if newBal, ok := updates["balance"]; ok {
-		var newBalance float64
-		switch v := newBal.(type) {
-		case float64:
-			newBalance = v
-		case int:
-			newBalance = float64(v)
-		default:
-			newBalance = oldBalance
-		}
+	// Create balance log after successful update
+	if shouldLogBalance {
 		diff := newBalance - oldBalance
-		if diff != 0 {
-			changeType := "admin_adjust"
-			desc := fmt.Sprintf("管理员调整余额: %+.2f", diff)
-			utils.CreateBalanceLogEntry(user.ID, changeType, diff, oldBalance, newBalance, nil, desc, c)
-		}
+		changeType := "admin_adjust"
+		desc := fmt.Sprintf("管理员调整余额: %+.2f", diff)
+		utils.CreateBalanceLogEntry(user.ID, changeType, diff, oldBalance, newBalance, nil, desc, c)
 	}
 	utils.CreateAuditLog(c, "update_user", "user", uint(id), fmt.Sprintf("更新用户: %s", user.Username))
 	utils.Success(c, user)
@@ -3503,13 +3509,41 @@ func AdminImportUsersCSV(c *gin.Context) {
 
 		// Create subscription
 		subURL := utils.GenerateRandomString(32)
+
+		// 默认值
+		deviceLimit := 3
+		expireTime := time.Now().AddDate(1, 0, 0) // 默认1年后过期
+
+		// 可选: 设备限制
+		if idx, ok := colMap["设备限制"]; ok && idx < len(record) {
+			if val := strings.TrimSpace(record[idx]); val != "" {
+				if limit, err := strconv.Atoi(val); err == nil && limit > 0 {
+					deviceLimit = limit
+				}
+			}
+		}
+
+		// 可选: 到期时间
+		if idx, ok := colMap["到期时间"]; ok && idx < len(record) {
+			if val := strings.TrimSpace(record[idx]); val != "" {
+				// 支持多种日期格式
+				formats := []string{"2006-01-02", "2006/01/02", "2006-01-02 15:04:05", time.RFC3339}
+				for _, format := range formats {
+					if t, err := time.Parse(format, val); err == nil {
+						expireTime = t
+						break
+					}
+				}
+			}
+		}
+
 		subscription := models.Subscription{
 			UserID:          user.ID,
 			SubscriptionURL: subURL,
-			DeviceLimit:     3,
+			DeviceLimit:     deviceLimit,
 			IsActive:        true,
 			Status:          "active",
-			ExpireTime:      time.Now(),
+			ExpireTime:      expireTime,
 		}
 		db.Create(&subscription)
 

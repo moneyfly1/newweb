@@ -690,7 +690,7 @@ func PaymentNotify(c *gin.Context) {
 					"payment_method_name": &pmName,
 					"payment_time":        &now,
 				})
-				services.ActivateSubscription(tx, &order, payType)
+				_ = services.ActivateSubscription(tx, &order, payType)
 			}
 
 			return nil

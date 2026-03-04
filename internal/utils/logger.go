@@ -17,13 +17,13 @@ var (
 func InitLogger() error {
 	// 创建 logs 目录
 	logDir := "logs"
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0750); err != nil {
 		return fmt.Errorf("创建日志目录失败: %v", err)
 	}
 
 	// 创建日志文件（按日期）
 	logFileName := filepath.Join(logDir, fmt.Sprintf("app-%s.log", time.Now().Format("2006-01-02")))
-	file, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	file, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("打开日志文件失败: %v", err)
 	}

@@ -2221,7 +2221,7 @@ func AdminMonitoring(c *gin.Context) {
 
 func AdminCreateBackup(c *gin.Context) {
 	backupDir := "backups"
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
+	if err := os.MkdirAll(backupDir, 0750); err != nil {
 		utils.InternalError(c, "创建备份目录失败: "+err.Error())
 		return
 	}

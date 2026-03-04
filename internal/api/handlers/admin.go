@@ -325,6 +325,29 @@ func AdminUpdateUser(c *gin.Context) {
 	if len(subscriptionUpdates) > 0 {
 		var subscription models.Subscription
 		if err := db.Where("user_id = ?", user.ID).First(&subscription).Error; err == nil {
+			// 处理 expire_time 的时间格式转换
+			if expireTimeStr, ok := subscriptionUpdates["expire_time"].(string); ok && expireTimeStr != "" {
+				if expireTime, err := time.Parse(time.RFC3339, expireTimeStr); err == nil {
+					subscriptionUpdates["expire_time"] = expireTime
+
+					// 同步更新 status
+					now := time.Now()
+					if expireTime.After(now) {
+						// 未过期
+						if time.Until(expireTime) <= 7*24*time.Hour {
+							subscriptionUpdates["status"] = "expiring"
+						} else {
+							subscriptionUpdates["status"] = "active"
+						}
+						// 确保 is_active 为 true
+						subscriptionUpdates["is_active"] = true
+					} else {
+						// 已过期
+						subscriptionUpdates["status"] = "expired"
+					}
+				}
+			}
+
 			if err := db.Model(&subscription).Updates(subscriptionUpdates).Error; err != nil {
 				utils.InternalError(c, "更新订阅信息失败")
 				return
@@ -2451,13 +2474,15 @@ func AdminTestGitHubConnection(c *gin.Context) {
 
 func AdminCreateUser(c *gin.Context) {
 	var req struct {
-		Username string  `json:"username" binding:"required,min=3,max=50"`
-		Email    string  `json:"email" binding:"required,email"`
-		Password string  `json:"password" binding:"required,min=6"`
-		Balance  float64 `json:"balance"`
-		IsAdmin  bool    `json:"is_admin"`
-		IsActive bool    `json:"is_active"`
-		Notes    string  `json:"notes"`
+		Username    string     `json:"username" binding:"required,min=3,max=50"`
+		Email       string     `json:"email" binding:"required,email"`
+		Password    string     `json:"password" binding:"required,min=6"`
+		Balance     float64    `json:"balance"`
+		IsAdmin     bool       `json:"is_admin"`
+		IsActive    bool       `json:"is_active"`
+		Notes       string     `json:"notes"`
+		ExpireTime  *time.Time `json:"expire_time"`
+		DeviceLimit int        `json:"device_limit"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -2507,13 +2532,25 @@ func AdminCreateUser(c *gin.Context) {
 
 	// Auto-create subscription for new user
 	subURL := utils.GenerateRandomString(32)
+
+	// 设置到期时间和设备限制
+	expireTime := time.Now()
+	if req.ExpireTime != nil {
+		expireTime = *req.ExpireTime
+	}
+
+	deviceLimit := 3
+	if req.DeviceLimit > 0 {
+		deviceLimit = req.DeviceLimit
+	}
+
 	subscription := models.Subscription{
 		UserID:          user.ID,
 		SubscriptionURL: subURL,
-		DeviceLimit:     3,
+		DeviceLimit:     deviceLimit,
 		IsActive:        true,
 		Status:          "active",
-		ExpireTime:      time.Now(), // Expired by default, activated on purchase
+		ExpireTime:      expireTime,
 	}
 	db.Create(&subscription)
 
@@ -2611,17 +2648,46 @@ func AdminUpdateSubscription(c *gin.Context) {
 	}
 
 	allowed := map[string]bool{
-		"device_limit": true, "is_active": true,
+		"device_limit": true, "is_active": true, "expire_time": true,
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {
 		if allowed[k] {
-			updates[k] = v
+			// 处理 expire_time 的时间格式转换
+			if k == "expire_time" {
+				if expireTimeStr, ok := v.(string); ok && expireTimeStr != "" {
+					if expireTime, err := time.Parse(time.RFC3339, expireTimeStr); err == nil {
+						updates[k] = expireTime
+					}
+				}
+			} else {
+				updates[k] = v
+			}
 		}
 	}
 	if len(updates) == 0 {
 		utils.BadRequest(c, "没有可更新的字段")
 		return
+	}
+
+	// 如果更新了 expire_time，需要同步更新 status
+	if expireTime, ok := updates["expire_time"].(time.Time); ok {
+		now := time.Now()
+		if expireTime.After(now) {
+			// 未过期
+			if time.Until(expireTime) <= 7*24*time.Hour {
+				updates["status"] = "expiring"
+			} else {
+				updates["status"] = "active"
+			}
+			// 确保 is_active 为 true
+			if _, hasIsActive := updates["is_active"]; !hasIsActive {
+				updates["is_active"] = true
+			}
+		} else {
+			// 已过期
+			updates["status"] = "expired"
+		}
 	}
 
 	if err := db.Model(&sub).Updates(updates).Error; err != nil {

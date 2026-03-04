@@ -18,8 +18,8 @@ fi
 # 停止应用服务
 echo ""
 echo "步骤 1: 停止应用服务..."
-if systemctl is-active --quiet cboard; then
-    sudo systemctl stop cboard
+if systemctl is-active --quiet cboard-v2; then
+    sudo systemctl stop cboard-v2
     echo "✓ 服务已停止"
 else
     echo "✓ 服务未运行"
@@ -122,20 +122,20 @@ echo "✓ 权限已设置"
 # 启动应用服务
 echo ""
 echo "步骤 6: 启动应用服务..."
-sudo systemctl start cboard
+sudo systemctl start cboard-v2
 sleep 2
 
-if systemctl is-active --quiet cboard; then
+if systemctl is-active --quiet cboard-v2; then
     echo "✓ 服务启动成功"
     echo ""
     echo "=========================================="
     echo "修复完成！"
     echo "=========================================="
     echo ""
-    echo "查看日志: sudo journalctl -u cboard -f"
+    echo "查看日志: sudo journalctl -u cboard-v2 -f"
     echo "或: tail -f logs/app-$(date +%Y-%m-%d).log"
 else
     echo "✗ 服务启动失败"
-    echo "查看错误日志: sudo journalctl -u cboard -n 50"
+    echo "查看错误日志: sudo journalctl -u cboard-v2 -n 50"
     exit 1
 fi

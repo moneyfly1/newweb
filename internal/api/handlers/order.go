@@ -257,7 +257,8 @@ func PayOrder(c *gin.Context) {
 				devices, _ := extra["devices"].(float64)
 				months, _ := extra["months"].(float64)
 				deviceLimit = int(devices)
-				durationDays = int(months) * 30
+				// 使用更准确的天数计算：1个月约30.44天
+				durationDays = int(math.Round(float64(months) * 30.44))
 				pkgName = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
 			}
 		} else {

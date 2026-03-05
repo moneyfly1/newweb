@@ -395,7 +395,10 @@ const handleCustomBuy = async () => {
     if (customCouponCode.value.trim()) payload.coupon_code = customCouponCode.value
     const res = await createCustomOrder(payload)
     orderInfo.value = res.data
-    selectedPackage.value = { name: `自定义套餐 (${customDevices.value}设备/${customMonths.value}月)`, duration_days: customMonths.value * 30 }
+    // 计算准确的天数：使用月份转换为天数的更准确方式
+    // 1个月约30.44天，12个月约365天
+    const durationDays = Math.round(customMonths.value * 30.44)
+    selectedPackage.value = { name: `自定义套餐 (${customDevices.value}设备/${customMonths.value}月)`, duration_days: durationDays }
     showPaymentModal.value = true
   } catch (e: any) {
     message.error(e.message || '创建订单失败')

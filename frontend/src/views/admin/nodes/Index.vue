@@ -287,6 +287,13 @@ const columns = [
     render: (row) => h(NTag, { type: row.is_manual ? 'info' : 'default', size: 'small' }, { default: () => row.is_manual ? '手动' : '订阅' })
   },
   {
+    title: '订阅#',
+    key: 'source_index',
+    width: 70,
+    resizable: true,
+    render: (row) => row.is_manual ? '-' : (row.source_index || '-')
+  },
+  {
     title: '启用',
     key: 'is_active',
     width: 100,

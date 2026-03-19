@@ -223,7 +223,9 @@ func SendTestTelegram() error {
 }
 
 func sendTelegram(botToken, chatID, message string) {
-	_ = sendTelegramSync(botToken, chatID, message)
+	if err := sendTelegramSync(botToken, chatID, message); err != nil {
+		log.Printf("[Notify] Telegram 异步发送失败: %v", err)
+	}
 }
 
 func sendTelegramSync(botToken, chatID, message string) error {

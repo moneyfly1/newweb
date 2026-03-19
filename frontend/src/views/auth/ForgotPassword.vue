@@ -71,6 +71,7 @@ import { useRouter } from 'vue-router'
 import { useMessage, type FormInst } from 'naive-ui'
 import { MailOutline, LockClosedOutline, KeyOutline } from '@vicons/ionicons5'
 import { forgotPassword, resetPassword } from '@/api/auth'
+import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const message = useMessage()
@@ -111,7 +112,7 @@ async function sendCode() {
     step.value = 2
     startCountdown()
   } catch (e: any) {
-    message.error(e.message || '发送失败')
+    message.error(getErrorMessage(e, '发送失败'))
   } finally {
     sending.value = false
   }
@@ -125,7 +126,7 @@ async function doReset() {
     message.success('密码重置成功')
     step.value = 3
   } catch (e: any) {
-    message.error(e.message || '重置失败')
+    message.error(getErrorMessage(e, '重置失败'))
   } finally {
     resetting.value = false
   }

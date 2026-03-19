@@ -139,7 +139,7 @@ func buildMIME(from, to, subject, body string) string {
 // A background worker or the caller can process it later.
 func QueueEmail(toEmail, subject, content, emailType string) {
 	db := database.GetDB()
-	db.Create(&models.EmailQueue{
+	if err := db.Create(&models.EmailQueue{
 		ToEmail:     toEmail,
 		Subject:     subject,
 		Content:     content,
@@ -147,7 +147,9 @@ func QueueEmail(toEmail, subject, content, emailType string) {
 		EmailType:   emailType,
 		Status:      "pending",
 		MaxRetries:  3,
-	})
+	}).Error; err != nil {
+		utils.SysError("email", fmt.Sprintf("写入邮件队列失败: to=%s type=%s err=%v", toEmail, emailType, err))
+	}
 }
 
 // ProcessEmailQueue tries to send all pending emails in the queue.
@@ -173,13 +175,17 @@ func ProcessEmailQueue() {
 			if eq.RetryCount >= eq.MaxRetries {
 				eq.Status = "failed"
 			}
-			db.Save(eq)
+			if saveErr := db.Save(eq).Error; saveErr != nil {
+				utils.SysError("email", fmt.Sprintf("更新邮件队列失败: id=%d err=%v", eq.ID, saveErr))
+			}
 			log.Printf("[EmailQueue] 发送失败 #%d -> %s: %s", eq.ID, eq.ToEmail, errMsg)
 			utils.SysError("email", fmt.Sprintf("发送失败 -> %s", eq.ToEmail), errMsg)
 		} else {
 			eq.Status = "sent"
 			eq.SentAt = &now
-			db.Save(eq)
+			if saveErr := db.Save(eq).Error; saveErr != nil {
+				utils.SysError("email", fmt.Sprintf("更新邮件队列失败: id=%d err=%v", eq.ID, saveErr))
+			}
 			log.Printf("[EmailQueue] 发送成功 #%d -> %s", eq.ID, eq.ToEmail)
 			utils.SysInfo("email", fmt.Sprintf("发送成功 -> %s (%s)", eq.ToEmail, eq.EmailType))
 		}

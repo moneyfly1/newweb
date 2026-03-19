@@ -213,6 +213,11 @@ func cancelExpiredOrdersTask() {
 func cleanPaymentNoncesTask() {
 	db := database.GetDB()
 	result := db.Where("expires_at < ?", time.Now()).Delete(&models.PaymentNonce{})
+	if result.Error != nil {
+		log.Printf("[Scheduler] 清理支付 nonce 失败: %v", result.Error)
+		utils.SysError("scheduler", "清理支付 nonce 失败", result.Error.Error())
+		return
+	}
 	if result.RowsAffected > 0 {
 		log.Printf("[Scheduler] 已清理 %d 条过期支付 nonce", result.RowsAffected)
 	}

@@ -49,62 +49,85 @@ func AdminDashboard(c *gin.Context) {
 	var userGrowth []DayStat
 
 	var wg sync.WaitGroup
+	errCh := make(chan error, 11)
+	runQuery := func(query func() error) {
+		defer wg.Done()
+		if err := query(); err != nil {
+			errCh <- err
+		}
+	}
 	wg.Add(11)
 
-	go func() { defer wg.Done(); db.Model(&models.User{}).Count(&userCount) }()
-	go func() { defer wg.Done(); db.Model(&models.Order{}).Count(&orderCount) }()
+	go func() { runQuery(func() error { return db.Model(&models.User{}).Count(&userCount).Error }) }()
+	go func() { runQuery(func() error { return db.Model(&models.Order{}).Count(&orderCount).Error }) }()
 	go func() {
-		defer wg.Done()
-		db.Model(&models.Subscription{}).Where("is_active = ? AND expire_time > ?", true, now).Count(&subCount)
+		runQuery(func() error {
+			return db.Model(&models.Subscription{}).Where("is_active = ? AND expire_time > ?", true, now).Count(&subCount).Error
+		})
 	}()
 	go func() {
-		defer wg.Done()
-		db.Model(&models.Order{}).
-			Where("status IN ? AND DATE(payment_time) = ?", []string{"paid", "completed"}, today).
-			Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&revenueToday)
+		runQuery(func() error {
+			return db.Model(&models.Order{}).
+				Where("status IN ? AND DATE(payment_time) = ?", []string{"paid", "completed"}, today).
+				Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&revenueToday).Error
+		})
 	}()
 	go func() {
-		defer wg.Done()
-		db.Model(&models.Order{}).
-			Where("status IN ? AND DATE(payment_time) >= ?", []string{"paid", "completed"}, monthStart).
-			Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&revenueMonth)
+		runQuery(func() error {
+			return db.Model(&models.Order{}).
+				Where("status IN ? AND DATE(payment_time) >= ?", []string{"paid", "completed"}, monthStart).
+				Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&revenueMonth).Error
+		})
 	}()
 	go func() {
-		defer wg.Done()
-		db.Model(&models.Order{}).Where("status = ?", "pending").Count(&pendingOrders)
+		runQuery(func() error {
+			return db.Model(&models.Order{}).Where("status = ?", "pending").Count(&pendingOrders).Error
+		})
 	}()
 	go func() {
-		defer wg.Done()
-		db.Model(&models.Ticket{}).Where("status IN ?", []string{"pending", "open"}).Count(&pendingTickets)
+		runQuery(func() error {
+			return db.Model(&models.Ticket{}).Where("status IN ?", []string{"pending", "open"}).Count(&pendingTickets).Error
+		})
 	}()
 	go func() {
-		defer wg.Done()
-		db.Order("created_at DESC").Limit(5).Find(&recentOrders)
+		runQuery(func() error {
+			return db.Order("created_at DESC").Limit(5).Find(&recentOrders).Error
+		})
 	}()
 	go func() {
-		defer wg.Done()
-		db.Where("status IN ?", []string{"pending", "open"}).Order("created_at DESC").Limit(5).Find(&ticketList)
+		runQuery(func() error {
+			return db.Where("status IN ?", []string{"pending", "open"}).Order("created_at DESC").Limit(5).Find(&ticketList).Error
+		})
 	}()
 	go func() {
-		defer wg.Done()
-		db.Model(&models.Order{}).
-			Where("status IN ? AND DATE(payment_time) >= ?", []string{"paid", "completed"}, thirtyDaysAgo).
-			Select("DATE(payment_time) as date, COALESCE(SUM(COALESCE(final_amount, amount)), 0) as value").
-			Group("DATE(payment_time)").
-			Order("date ASC").
-			Scan(&revenueTrend)
+		runQuery(func() error {
+			return db.Model(&models.Order{}).
+				Where("status IN ? AND DATE(payment_time) >= ?", []string{"paid", "completed"}, thirtyDaysAgo).
+				Select("DATE(payment_time) as date, COALESCE(SUM(COALESCE(final_amount, amount)), 0) as value").
+				Group("DATE(payment_time)").
+				Order("date ASC").
+				Scan(&revenueTrend).Error
+		})
 	}()
 	go func() {
-		defer wg.Done()
-		db.Model(&models.User{}).
-			Where("DATE(created_at) >= ?", thirtyDaysAgo).
-			Select("DATE(created_at) as date, COUNT(*) as value").
-			Group("DATE(created_at)").
-			Order("date ASC").
-			Scan(&userGrowth)
+		runQuery(func() error {
+			return db.Model(&models.User{}).
+				Where("DATE(created_at) >= ?", thirtyDaysAgo).
+				Select("DATE(created_at) as date, COUNT(*) as value").
+				Group("DATE(created_at)").
+				Order("date ASC").
+				Scan(&userGrowth).Error
+		})
 	}()
 
 	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			utils.InternalError(c, "获取仪表盘统计失败")
+			return
+		}
+	}
 
 	utils.Success(c, gin.H{
 		"total_users":          userCount,
@@ -403,17 +426,39 @@ func AdminDeleteUser(c *gin.Context) {
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		uid := user.ID
 		// Clean up related records
-		tx.Where("user_id = ?", uid).Delete(&models.Subscription{})
-		tx.Where("user_id = ?", uid).Delete(&models.Order{})
-		tx.Where("user_id = ?", uid).Delete(&models.Device{})
-		tx.Where("user_id = ?", uid).Delete(&models.InviteCode{})
-		tx.Where("inviter_id = ? OR invitee_id = ?", uid, uid).Delete(&models.InviteRelation{})
-		tx.Where("user_id = ?", uid).Delete(&models.Ticket{})
-		tx.Where("user_id = ?", uid).Delete(&models.TicketReply{})
-		tx.Where("user_id = ?", uid).Delete(&models.CheckIn{})
-		tx.Where("user_id = ?", uid).Delete(&models.BalanceLog{})
-		tx.Where("user_id = ?", uid).Delete(&models.MysteryBoxRecord{})
-		tx.Where("user_id = ?", uid).Delete(&models.CouponUsage{})
+		if err := tx.Where("user_id = ?", uid).Delete(&models.Subscription{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", uid).Delete(&models.Order{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", uid).Delete(&models.Device{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", uid).Delete(&models.InviteCode{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("inviter_id = ? OR invitee_id = ?", uid, uid).Delete(&models.InviteRelation{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", uid).Delete(&models.Ticket{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", uid).Delete(&models.TicketReply{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", uid).Delete(&models.CheckIn{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", uid).Delete(&models.BalanceLog{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", uid).Delete(&models.MysteryBoxRecord{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", uid).Delete(&models.CouponUsage{}).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&user).Error
 	}); err != nil {
 		utils.InternalError(c, "删除用户失败")
@@ -450,10 +495,16 @@ func AdminDeleteUserDevice(c *gin.Context) {
 		utils.Forbidden(c, "设备不属于该用户")
 		return
 	}
-	db.Delete(&device)
+	if err := db.Delete(&device).Error; err != nil {
+		utils.InternalError(c, "删除设备失败")
+		return
+	}
 	// Decrement current_devices
 	if sub.CurrentDevices > 0 {
-		db.Model(&sub).UpdateColumn("current_devices", gorm.Expr("CASE WHEN current_devices > 0 THEN current_devices - 1 ELSE 0 END"))
+		if err := db.Model(&sub).UpdateColumn("current_devices", gorm.Expr("CASE WHEN current_devices > 0 THEN current_devices - 1 ELSE 0 END")).Error; err != nil {
+			utils.InternalError(c, "更新设备计数失败")
+			return
+		}
 	}
 	utils.CreateAuditLog(c, "delete_device", "device", uint(deviceID), fmt.Sprintf("删除用户%d的设备%d", userID, deviceID))
 	utils.SuccessMessage(c, "设备已删除")
@@ -481,7 +532,10 @@ func AdminToggleUserActive(c *gin.Context) {
 		utils.BadRequest(c, "不能禁用其他管理员账号")
 		return
 	}
-	db.Model(&user).Update("is_active", newStatus)
+	if err := db.Model(&user).Update("is_active", newStatus).Error; err != nil {
+		utils.InternalError(c, "更新用户状态失败")
+		return
+	}
 
 	// Sync subscription status
 	if newStatus {
@@ -494,14 +548,20 @@ func AdminToggleUserActive(c *gin.Context) {
 			} else {
 				updates["status"] = "expired"
 			}
-			db.Model(&sub).Updates(updates)
+			if err := db.Model(&sub).Updates(updates).Error; err != nil {
+				utils.InternalError(c, "同步订阅状态失败")
+				return
+			}
 		}
 	} else {
 		// Disable: set subscription to disabled
-		db.Model(&models.Subscription{}).Where("user_id = ?", id).Updates(map[string]interface{}{
+		if err := db.Model(&models.Subscription{}).Where("user_id = ?", id).Updates(map[string]interface{}{
 			"is_active": false,
 			"status":    "disabled",
-		})
+		}).Error; err != nil {
+			utils.InternalError(c, "同步订阅状态失败")
+			return
+		}
 	}
 
 	// 通知用户账户状态变更
@@ -769,6 +829,10 @@ func AdminRefundOrder(c *gin.Context) {
 	}
 
 	tx := db.Begin()
+	if tx.Error != nil {
+		utils.InternalError(c, "创建事务失败")
+		return
+	}
 
 	// If not refunded via gateway, refund to user balance
 	if !gatewayRefunded {
@@ -789,7 +853,11 @@ func AdminRefundOrder(c *gin.Context) {
 
 	// Update payment transaction status
 	if txn.ID > 0 {
-		tx.Model(&txn).Update("status", "refunded")
+		if err := tx.Model(&txn).Update("status", "refunded").Error; err != nil {
+			tx.Rollback()
+			utils.InternalError(c, "退款失败")
+			return
+		}
 	}
 
 	// Cancel/rollback the subscription that was activated by this order
@@ -803,10 +871,14 @@ func AdminRefundOrder(c *gin.Context) {
 			shouldCancel = true
 		}
 		if shouldCancel {
-			tx.Model(&sub).Updates(map[string]interface{}{
+			if err := tx.Model(&sub).Updates(map[string]interface{}{
 				"is_active": false,
 				"status":    "cancelled",
-			})
+			}).Error; err != nil {
+				tx.Rollback()
+				utils.InternalError(c, "退款失败")
+				return
+			}
 		}
 	}
 
@@ -1140,9 +1212,12 @@ func AdminTestNode(c *gin.Context) {
 	if reachable {
 		status = "online"
 	}
-	db.Model(&node).Updates(map[string]interface{}{
+	if err := db.Model(&node).Updates(map[string]interface{}{
 		"status": status, "latency": latency, "last_test": &now,
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "更新节点测试结果失败")
+		return
+	}
 
 	utils.Success(c, gin.H{
 		"node_id":   node.ID,
@@ -1213,7 +1288,10 @@ func AdminDeleteCustomNode(c *gin.Context) {
 	}
 	db := database.GetDB()
 	// Remove user assignments first
-	db.Where("custom_node_id = ?", id).Delete(&models.UserCustomNode{})
+	if err := db.Where("custom_node_id = ?", id).Delete(&models.UserCustomNode{}).Error; err != nil {
+		utils.InternalError(c, "删除专线节点分配关系失败")
+		return
+	}
 	if err := db.Delete(&models.CustomNode{}, id).Error; err != nil {
 		utils.InternalError(c, "删除专线节点失败")
 		return
@@ -1243,10 +1321,16 @@ func AdminAssignCustomNode(c *gin.Context) {
 	}
 
 	// Remove existing assignments and re-assign
-	db.Where("custom_node_id = ?", id).Delete(&models.UserCustomNode{})
+	if err := db.Where("custom_node_id = ?", id).Delete(&models.UserCustomNode{}).Error; err != nil {
+		utils.InternalError(c, "清理分配关系失败")
+		return
+	}
 	for _, uid := range req.UserIDs {
 		assignment := models.UserCustomNode{UserID: uid, CustomNodeID: uint(id)}
-		db.Create(&assignment)
+		if err := db.Create(&assignment).Error; err != nil {
+			utils.InternalError(c, "分配专线节点失败")
+			return
+		}
 	}
 	utils.CreateAuditLog(c, "assign_custom_node", "custom_node", uint(id), fmt.Sprintf("分配专线节点给 %d 个用户", len(req.UserIDs)))
 	utils.SuccessMessage(c, "分配成功")
@@ -1312,7 +1396,10 @@ func AdminBatchDeleteCustomNodes(c *gin.Context) {
 	}
 
 	db := database.GetDB()
-	db.Where("custom_node_id IN ?", req.IDs).Delete(&models.UserCustomNode{})
+	if err := db.Where("custom_node_id IN ?", req.IDs).Delete(&models.UserCustomNode{}).Error; err != nil {
+		utils.InternalError(c, "批量删除分配关系失败")
+		return
+	}
 	result := db.Where("id IN ?", req.IDs).Delete(&models.CustomNode{})
 	utils.Success(c, gin.H{
 		"deleted": result.RowsAffected,
@@ -1466,7 +1553,10 @@ func AdminUpdateUserNotes(c *gin.Context) {
 		utils.NotFound(c, "用户不存在")
 		return
 	}
-	db.Model(&user).Update("notes", req.Notes)
+	if err := db.Model(&user).Update("notes", req.Notes).Error; err != nil {
+		utils.InternalError(c, "更新备注失败")
+		return
+	}
 	utils.SuccessMessage(c, "备注已更新")
 }
 
@@ -1572,27 +1662,30 @@ func AdminResetSubscription(c *gin.Context) {
 
 	oldURL := sub.SubscriptionURL
 	newURL := utils.GenerateRandomString(32)
-
-	tx := db.Begin()
-	// Clear devices
-	tx.Where("subscription_id = ?", sub.ID).Delete(&models.Device{})
-	// Update subscription URL and reset device count
-	tx.Model(&sub).Updates(map[string]interface{}{
-		"subscription_url": newURL,
-		"current_devices":  0,
-	})
-	// Log the reset
-	tx.Create(&models.SubscriptionReset{
-		UserID:             sub.UserID,
-		SubscriptionID:     sub.ID,
-		ResetType:          "admin_reset",
-		Reason:             "管理员重置",
-		OldSubscriptionURL: &oldURL,
-		NewSubscriptionURL: &newURL,
-		DeviceCountBefore:  sub.CurrentDevices,
-		DeviceCountAfter:   0,
-	})
-	tx.Commit()
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("subscription_id = ?", sub.ID).Delete(&models.Device{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&sub).Updates(map[string]interface{}{
+			"subscription_url": newURL,
+			"current_devices":  0,
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&models.SubscriptionReset{
+			UserID:             sub.UserID,
+			SubscriptionID:     sub.ID,
+			ResetType:          "admin_reset",
+			Reason:             "管理员重置",
+			OldSubscriptionURL: &oldURL,
+			NewSubscriptionURL: &newURL,
+			DeviceCountBefore:  sub.CurrentDevices,
+			DeviceCountAfter:   0,
+		}).Error
+	}); err != nil {
+		utils.InternalError(c, "重置订阅失败")
+		return
+	}
 
 	// 通知用户订阅已重置
 	go services.NotifyUser(sub.UserID, "subscription_reset", map[string]string{"reset_by": "管理员"})
@@ -1629,11 +1722,14 @@ func AdminExtendSubscription(c *gin.Context) {
 		newExpire = time.Now()
 	}
 	newExpire = newExpire.AddDate(0, 0, req.Days)
-	db.Model(&sub).Updates(map[string]interface{}{
+	if err := db.Model(&sub).Updates(map[string]interface{}{
 		"expire_time": newExpire,
 		"is_active":   true,
 		"status":      "active",
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "延长订阅失败")
+		return
+	}
 
 	adminID := c.GetUint("user_id")
 	utils.CreateSubscriptionLog(sub.ID, sub.UserID, "extend", "admin", &adminID, fmt.Sprintf("管理员延长订阅 %d 天", req.Days), nil, nil)
@@ -1798,7 +1894,10 @@ func AdminUpdateTicket(c *gin.Context) {
 		utils.BadRequest(c, "无有效更新字段")
 		return
 	}
-	db.Model(&ticket).Updates(updates)
+	if err := db.Model(&ticket).Updates(updates).Error; err != nil {
+		utils.InternalError(c, "更新工单失败")
+		return
+	}
 	utils.Success(c, ticket)
 }
 
@@ -1818,8 +1917,14 @@ func AdminReplyTicket(c *gin.Context) {
 	}
 	db := database.GetDB()
 	reply := models.TicketReply{TicketID: uint(id), UserID: adminID, Content: req.Content, IsAdmin: true}
-	db.Create(&reply)
-	db.Model(&models.Ticket{}).Where("id = ?", id).Update("status", "processing")
+	if err := db.Create(&reply).Error; err != nil {
+		utils.InternalError(c, "回复工单失败")
+		return
+	}
+	if err := db.Model(&models.Ticket{}).Where("id = ?", id).Update("status", "processing").Error; err != nil {
+		utils.InternalError(c, "更新工单状态失败")
+		return
+	}
 	utils.Success(c, reply)
 }
 
@@ -1835,7 +1940,10 @@ func AdminCreateUserLevel(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	database.GetDB().Create(&level)
+	if err := database.GetDB().Create(&level).Error; err != nil {
+		utils.InternalError(c, "创建用户等级失败")
+		return
+	}
 	utils.Success(c, level)
 }
 
@@ -1870,7 +1978,10 @@ func AdminUpdateUserLevel(c *gin.Context) {
 		utils.BadRequest(c, "无有效更新字段")
 		return
 	}
-	db.Model(&level).Updates(updates)
+	if err := db.Model(&level).Updates(updates).Error; err != nil {
+		utils.InternalError(c, "更新用户等级失败")
+		return
+	}
 	utils.Success(c, level)
 }
 
@@ -1880,7 +1991,10 @@ func AdminDeleteUserLevel(c *gin.Context) {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	database.GetDB().Delete(&models.UserLevel{}, id)
+	if err := database.GetDB().Delete(&models.UserLevel{}, id).Error; err != nil {
+		utils.InternalError(c, "删除用户等级失败")
+		return
+	}
 	utils.SuccessMessage(c, "等级已删除")
 }
 
@@ -1932,7 +2046,10 @@ func AdminCreateRedeemCodes(c *gin.Context) {
 			Status:    "unused",
 			CreatedBy: adminID,
 		}
-		db.Create(&rc)
+		if err := db.Create(&rc).Error; err != nil {
+			utils.InternalError(c, "创建卡密失败")
+			return
+		}
 		codes = append(codes, rc)
 	}
 	codeStrings := make([]string, len(codes))
@@ -1948,7 +2065,10 @@ func AdminDeleteRedeemCode(c *gin.Context) {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	database.GetDB().Delete(&models.RedeemCode{}, id)
+	if err := database.GetDB().Delete(&models.RedeemCode{}, id).Error; err != nil {
+		utils.InternalError(c, "删除卡密失败")
+		return
+	}
 	utils.SuccessMessage(c, "卡密已删除")
 }
 
@@ -1973,9 +2093,12 @@ func AdminRetryEmail(c *gin.Context) {
 		return
 	}
 	db := database.GetDB()
-	db.Model(&models.EmailQueue{}).Where("id = ?", id).Updates(map[string]interface{}{
+	if err := db.Model(&models.EmailQueue{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"status": "pending",
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "重试邮件失败")
+		return
+	}
 	utils.SuccessMessage(c, "已重新加入队列")
 }
 
@@ -2063,7 +2186,10 @@ func AdminCreateAnnouncement(c *gin.Context) {
 		Type:     req.Type,
 		IsActive: true,
 	}
-	database.GetDB().Create(&ann)
+	if err := database.GetDB().Create(&ann).Error; err != nil {
+		utils.InternalError(c, "创建公告失败")
+		return
+	}
 	utils.Success(c, ann)
 }
 
@@ -2096,7 +2222,10 @@ func AdminUpdateAnnouncement(c *gin.Context) {
 		utils.BadRequest(c, "无有效更新字段")
 		return
 	}
-	database.GetDB().Model(&ann).Updates(updates)
+	if err := database.GetDB().Model(&ann).Updates(updates).Error; err != nil {
+		utils.InternalError(c, "更新公告失败")
+		return
+	}
 	utils.Success(c, ann)
 }
 
@@ -2106,7 +2235,10 @@ func AdminDeleteAnnouncement(c *gin.Context) {
 		utils.BadRequest(c, "无效的ID")
 		return
 	}
-	database.GetDB().Delete(&models.Announcement{}, id)
+	if err := database.GetDB().Delete(&models.Announcement{}, id).Error; err != nil {
+		utils.InternalError(c, "删除公告失败")
+		return
+	}
 	utils.SuccessMessage(c, "公告已删除")
 }
 
@@ -2558,7 +2690,10 @@ func AdminCreateUser(c *gin.Context) {
 		Status:          "active",
 		ExpireTime:      expireTime,
 	}
-	db.Create(&subscription)
+	if err := db.Create(&subscription).Error; err != nil {
+		utils.InternalError(c, "创建订阅失败")
+		return
+	}
 
 	// 发送账户创建通知邮件
 	go services.NotifyUserDirect(user.Email, "admin_create_user", map[string]string{
@@ -2600,7 +2735,10 @@ func AdminResetUserPassword(c *gin.Context) {
 		utils.InternalError(c, "密码加密失败")
 		return
 	}
-	db.Model(&user).Update("password", hashed)
+	if err := db.Model(&user).Update("password", hashed).Error; err != nil {
+		utils.InternalError(c, "重置密码失败")
+		return
+	}
 	utils.CreateAuditLog(c, "reset_password", "user", uint(id), fmt.Sprintf("重置用户密码: %s", user.Username))
 	utils.SuccessMessage(c, "密码已重置")
 }
@@ -2753,41 +2891,97 @@ func AdminDeleteUserFull(c *gin.Context) {
 	userExists := db.First(&user, id).Error == nil
 
 	tx := db.Begin()
+	if tx.Error != nil {
+		utils.InternalError(c, "创建事务失败")
+		return
+	}
+	rollbackWithErr := func(err error) bool {
+		if err == nil {
+			return false
+		}
+		tx.Rollback()
+		utils.InternalError(c, "删除用户失败")
+		return true
+	}
 
 	// Delete ticket replies (via user's tickets)
 	var ticketIDs []uint
-	tx.Model(&models.Ticket{}).Where("user_id = ?", id).Pluck("id", &ticketIDs)
+	if rollbackWithErr(tx.Model(&models.Ticket{}).Where("user_id = ?", id).Pluck("id", &ticketIDs).Error) {
+		return
+	}
 	if len(ticketIDs) > 0 {
-		tx.Where("ticket_id IN ?", ticketIDs).Delete(&models.TicketReply{})
+		if rollbackWithErr(tx.Where("ticket_id IN ?", ticketIDs).Delete(&models.TicketReply{}).Error) {
+			return
+		}
 	}
 
 	// Delete all related data by user_id
-	tx.Where("user_id = ?", id).Delete(&models.PaymentTransaction{})
-	tx.Where("user_id = ?", id).Delete(&models.Notification{})
-	tx.Where("user_id = ?", id).Delete(&models.UserActivity{})
-	tx.Where("user_id = ?", id).Delete(&models.InviteCode{})
-	tx.Where("inviter_id = ? OR invitee_id = ?", id, id).Delete(&models.InviteRelation{})
-	tx.Where("inviter_id = ? OR invitee_id = ?", id, id).Delete(&models.CommissionLog{})
-	tx.Where("user_id = ?", id).Delete(&models.RegistrationLog{})
-	tx.Where("user_id = ?", id).Delete(&models.SubscriptionLog{})
-
-	if userExists {
-		tx.Where("username = ? OR username = ?", user.Email, user.Username).Delete(&models.LoginAttempt{})
-		tx.Where("email = ?", user.Email).Delete(&models.VerificationCode{})
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.PaymentTransaction{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.Notification{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.UserActivity{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.InviteCode{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("inviter_id = ? OR invitee_id = ?", id, id).Delete(&models.InviteRelation{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("inviter_id = ? OR invitee_id = ?", id, id).Delete(&models.CommissionLog{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.RegistrationLog{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.SubscriptionLog{}).Error) {
+		return
 	}
 
-	tx.Where("user_id = ?", id).Delete(&models.Order{})
-	tx.Where("user_id = ?", id).Delete(&models.Device{})
-	tx.Where("user_id = ?", id).Delete(&models.SubscriptionReset{})
-	tx.Where("user_id = ?", id).Delete(&models.Subscription{})
-	tx.Where("user_id = ?", id).Delete(&models.Ticket{})
-	tx.Where("user_id = ?", id).Delete(&models.BalanceLog{})
-	tx.Where("user_id = ?", id).Delete(&models.LoginHistory{})
-	tx.Where("user_id = ?", id).Delete(&models.RechargeRecord{})
-	tx.Where("user_id = ?", id).Delete(&models.UserCustomNode{})
+	if userExists {
+		if rollbackWithErr(tx.Where("username = ? OR username = ?", user.Email, user.Username).Delete(&models.LoginAttempt{}).Error) {
+			return
+		}
+		if rollbackWithErr(tx.Where("email = ?", user.Email).Delete(&models.VerificationCode{}).Error) {
+			return
+		}
+	}
+
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.Order{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.Device{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.SubscriptionReset{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.Subscription{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.Ticket{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.BalanceLog{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.LoginHistory{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.RechargeRecord{}).Error) {
+		return
+	}
+	if rollbackWithErr(tx.Where("user_id = ?", id).Delete(&models.UserCustomNode{}).Error) {
+		return
+	}
 
 	if userExists {
-		tx.Delete(&user)
+		if rollbackWithErr(tx.Delete(&user).Error) {
+			return
+		}
 	}
 
 	if err := tx.Commit().Error; err != nil {
@@ -2852,7 +3046,10 @@ func AdminSetSubscriptionExpireTime(c *gin.Context) {
 		updates["is_active"] = true
 		updates["status"] = "active"
 	}
-	db.Model(&sub).Updates(updates)
+	if err := db.Model(&sub).Updates(updates).Error; err != nil {
+		utils.InternalError(c, "设置订阅到期时间失败")
+		return
+	}
 	adminID := c.GetUint("user_id")
 	utils.CreateSubscriptionLog(sub.ID, sub.UserID, "update", "admin", &adminID, fmt.Sprintf("管理员设置到期时间: %s", expireTime.Format("2006-01-02")), nil, nil)
 	utils.CreateAuditLog(c, "set_expire_time", "subscription", uint(id), fmt.Sprintf("设置订阅到期时间: %s (用户ID: %d)", expireTime.Format("2006-01-02"), sub.UserID))
@@ -3255,15 +3452,21 @@ func AdminBatchUserAction(c *gin.Context) {
 				} else {
 					updates["status"] = "expired"
 				}
-				db.Model(&sub).Updates(updates)
+				if err := db.Model(&sub).Updates(updates).Error; err != nil {
+					utils.InternalError(c, "同步订阅状态失败")
+					return
+				}
 			}
 		}
 	case "disable":
 		result := db.Model(&models.User{}).Where("id IN ? AND is_admin = ?", req.UserIDs, false).Update("is_active", false)
 		affected = result.RowsAffected
-		db.Model(&models.Subscription{}).Where("user_id IN ?", req.UserIDs).Updates(map[string]interface{}{
+		if err := db.Model(&models.Subscription{}).Where("user_id IN ?", req.UserIDs).Updates(map[string]interface{}{
 			"is_active": false, "status": "disabled",
-		})
+		}).Error; err != nil {
+			utils.InternalError(c, "同步订阅状态失败")
+			return
+		}
 	case "delete":
 		result := db.Where("id IN ? AND is_admin = ?", req.UserIDs, false).Delete(&models.User{})
 		affected = result.RowsAffected
@@ -3545,7 +3748,10 @@ func AdminImportUsersCSV(c *gin.Context) {
 			Status:          "active",
 			ExpireTime:      expireTime,
 		}
-		db.Create(&subscription)
+		if err := db.Create(&subscription).Error; err != nil {
+			errors = append(errors, fmt.Sprintf("第%d行: 创建订阅失败 (%s)", rowNum, err.Error()))
+			continue
+		}
 
 		imported++
 	}

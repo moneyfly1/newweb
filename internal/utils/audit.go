@@ -40,5 +40,9 @@ func CreateAuditLog(c *gin.Context, actionType, resourceType string, resourceID 
 	log.RequestMethod = &method
 	log.RequestPath = &path
 
-	go func() { db.Create(&log) }()
+	go func(entry models.AuditLog) {
+		if err := db.Create(&entry).Error; err != nil {
+			SysError("audit", "创建审计日志失败: "+err.Error())
+		}
+	}(log)
 }

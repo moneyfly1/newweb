@@ -84,6 +84,7 @@ import { useMessage, type FormInst } from 'naive-ui'
 import { PersonOutline, MailOutline, LockClosedOutline, GiftOutline, ShieldCheckmarkOutline } from '@vicons/ionicons5'
 import { register, sendVerificationCode } from '@/api/auth'
 import { getPublicConfig, validateInviteCode } from '@/api/common'
+import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const route = useRoute()
@@ -146,7 +147,7 @@ const handleSendCode = async () => {
       if (codeCooldown.value <= 0 && codeTimer) { clearInterval(codeTimer); codeTimer = null }
     }, 1000)
   } catch (e: any) {
-    message.error(e.message || '发送失败')
+    message.error(getErrorMessage(e, '发送失败'))
   } finally {
     sendingCode.value = false
   }
@@ -160,7 +161,7 @@ async function handleRegister() {
     message.success('注册成功，请登录')
     router.push('/login')
   } catch (e: any) {
-    message.error(e.message || '注册失败')
+    message.error(getErrorMessage(e, '注册失败'))
   } finally {
     loading.value = false
   }
@@ -177,7 +178,7 @@ const handleValidateInvite = async () => {
     inviteError.value = ''
   } catch (e: any) {
     inviteValid.value = false
-    inviteError.value = e.message || '邀请码无效'
+    inviteError.value = getErrorMessage(e, '邀请码无效')
     inviteReward.value = 0
   } finally {
     validatingInvite.value = false

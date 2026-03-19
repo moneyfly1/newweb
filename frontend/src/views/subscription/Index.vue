@@ -327,6 +327,7 @@ import { getPaymentMethods } from '@/api/common'
 import { getDashboardInfo } from '@/api/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { safeRedirect } from '@/utils/security'
+import { getErrorMessage } from '@/utils/error'
 import { useRouter } from 'vue-router'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
@@ -579,7 +580,7 @@ const loadData = async () => {
     devices.value = devRes.data || []
     await Promise.all([balanceP, pmP])
   } catch (e: any) {
-    if (e?.response?.status !== 404) message.error(e.message || '加载数据失败')
+    if (e?.response?.status !== 404) message.error(getErrorMessage(e, '加载数据失败'))
   } finally { loading.value = false }
 }
 
@@ -599,16 +600,16 @@ watch(() => devices.value.length, (count) => {
 
 const handleResetSubscription = async () => {
   try { await resetSubscription(); showResetModal.value = false; message.success('订阅地址已重置'); await loadData() }
-  catch (e: any) { message.error(e.message || '重置订阅失败') }
+  catch (e: any) { message.error(getErrorMessage(e, '重置订阅失败')) }
 }
 const handleConvertToBalance = async () => {
   try { await convertToBalance(); showConvertModal.value = false; message.success('转换成功'); await loadData() }
-  catch (e: any) { message.error(e.message || '转换失败') }
+  catch (e: any) { message.error(getErrorMessage(e, '转换失败')) }
 }
 const handleSendEmail = async () => {
   sendingEmail.value = true
   try { await sendSubscriptionEmail(); message.success('订阅信息已发送到您的邮箱') }
-  catch (e: any) { message.error(e.message || '发送失败') }
+  catch (e: any) { message.error(getErrorMessage(e, '发送失败')) }
   finally { sendingEmail.value = false }
 }
 
@@ -620,7 +621,7 @@ const handleCalcUpgrade = async () => {
     if (d && typeof d.total === 'number') {
       upgradeResult.value = { fee_extend: d.fee_extend ?? 0, fee_new_devices: d.fee_new_devices ?? 0, total: d.total ?? 0 }
     }
-  } catch (e: any) { message.error(e.message || '计算失败') }
+  } catch (e: any) { message.error(getErrorMessage(e, '计算失败')) }
   finally { upgradeCalcLoading.value = false }
 }
 const handleOpenUpgradePay = async () => {
@@ -633,7 +634,7 @@ const handleOpenUpgradePay = async () => {
     if (balanceEnabled.value) paymentMethod.value = 'balance'
     else if (paymentMethods.value.length > 0) paymentMethod.value = 'pm_' + paymentMethods.value[0].id
     showUpgradePayModal.value = true
-  } catch (e: any) { message.error(e.message || '创建订单失败') }
+  } catch (e: any) { message.error(getErrorMessage(e, '创建订单失败')) }
   finally { upgradeSubmitting.value = false }
 }
 
@@ -667,7 +668,7 @@ const handleUpgradePay = async () => {
         } else { safeRedirect(data.payment_url) }
       } else { message.info('支付已创建，请等待处理'); showUpgradePayModal.value = false; await loadData() }
     }
-  } catch (e: any) { message.error(e.message || '支付失败') }
+  } catch (e: any) { message.error(getErrorMessage(e, '支付失败')) }
   finally { paying.value = false }
 }
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // subscriptionStatus represents the state of a subscription access
@@ -28,6 +30,8 @@ const (
 	subStatusInactive
 	subStatusDeviceOverLimit
 )
+
+var errDeviceLimitReached = errors.New("device limit reached")
 
 // subscriptionContext holds all info needed for subscription generation
 type subscriptionContext struct {
@@ -149,11 +153,12 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	var device models.Device
 	err := db.Where("subscription_id = ? AND device_fingerprint = ? AND is_active = ?", sub.ID, fingerprint, true).First(&device).Error
 	if err != nil {
-		// New device — check limit
-		if sub.CurrentDevices >= sub.DeviceLimit {
-			ctx.Status = subStatusDeviceOverLimit
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.SysError("subscription", fmt.Sprintf("查询设备失败: sub=%d err=%v", sub.ID, err))
+			ctx.Status = subStatusInactive
 			return ctx
 		}
+
 		now := time.Now()
 		softwareName := clientInfo.SoftwareName
 		softwareVer := clientInfo.SoftwareVersion
@@ -165,7 +170,7 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		subType := clientInfo.SubscriptionType
 		deviceName := buildDeviceName(clientInfo)
 		userID := int64(sub.UserID)
-		device = models.Device{
+		newDevice := models.Device{
 			UserID:            &userID,
 			SubscriptionID:    sub.ID,
 			DeviceFingerprint: fingerprint,
@@ -186,9 +191,52 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 			LastAccess:        now,
 			AccessCount:       1,
 		}
-		db.Create(&device)
-		db.Model(&sub).Update("current_devices", sub.CurrentDevices+1)
-		ctx.CurrentDevices = sub.CurrentDevices + 1
+
+		txErr := db.Transaction(func(tx *gorm.DB) error {
+			var lockedSub models.Subscription
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lockedSub, sub.ID).Error; err != nil {
+				return err
+			}
+
+			// Double-check in transaction in case another request created the same device.
+			var existing models.Device
+			if err := tx.Where("subscription_id = ? AND device_fingerprint = ? AND is_active = ?", sub.ID, fingerprint, true).First(&existing).Error; err == nil {
+				device = existing
+				return tx.Model(&device).Updates(map[string]interface{}{
+					"last_access":  time.Now(),
+					"access_count": device.AccessCount + 1,
+					"ip_address":   ip,
+				}).Error
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+
+			if lockedSub.CurrentDevices >= lockedSub.DeviceLimit {
+				return errDeviceLimitReached
+			}
+
+			if err := tx.Create(&newDevice).Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&models.Subscription{}).
+				Where("id = ?", lockedSub.ID).
+				UpdateColumn("current_devices", gorm.Expr("current_devices + 1")).Error; err != nil {
+				return err
+			}
+
+			device = newDevice
+			ctx.CurrentDevices = lockedSub.CurrentDevices + 1
+			return nil
+		})
+		if txErr != nil {
+			if errors.Is(txErr, errDeviceLimitReached) {
+				ctx.Status = subStatusDeviceOverLimit
+				return ctx
+			}
+			utils.SysError("subscription", fmt.Sprintf("登记新设备失败: sub=%d err=%v", sub.ID, txErr))
+			ctx.Status = subStatusInactive
+			return ctx
+		}
 
 		// 使用 worker 池异步查询 IP 位置，避免无限创建 goroutine
 		deviceID := device.ID
@@ -197,15 +245,19 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		pool.Submit(func() {
 			region := utils.GetIPLocation(ipAddr)
 			if region != "" {
-				database.GetDB().Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region)
+				if err := database.GetDB().Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region).Error; err != nil {
+					utils.SysError("subscription", fmt.Sprintf("更新设备地区失败: device=%d err=%v", deviceID, err))
+				}
 			}
 		})
 	} else {
-		db.Model(&device).Updates(map[string]interface{}{
+		if err := db.Model(&device).Updates(map[string]interface{}{
 			"last_access":  time.Now(),
 			"access_count": device.AccessCount + 1,
 			"ip_address":   ip,
-		})
+		}).Error; err != nil {
+			utils.SysError("subscription", fmt.Sprintf("更新设备访问记录失败: device=%d err=%v", device.ID, err))
+		}
 
 		// 使用 worker 池异步更新 IP 位置
 		deviceID := device.ID
@@ -216,7 +268,9 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 			if oldIP == nil || *oldIP != ipAddr {
 				region := utils.GetIPLocation(ipAddr)
 				if region != "" {
-					database.GetDB().Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region)
+					if err := database.GetDB().Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region).Error; err != nil {
+						utils.SysError("subscription", fmt.Sprintf("更新设备地区失败: device=%d err=%v", deviceID, err))
+					}
 				}
 			}
 		})
@@ -516,17 +570,24 @@ func setSubscriptionHeaders(c *gin.Context, ctx *subscriptionContext) {
 // incrementSubscriptionCounter increments the appropriate counter based on client type
 func incrementSubscriptionCounter(sub *models.Subscription, subType string) {
 	db := database.GetDB()
+	updateCounter := func(column string) {
+		if err := db.Model(&models.Subscription{}).
+			Where("id = ?", sub.ID).
+			UpdateColumn(column, gorm.Expr(column+" + 1")).Error; err != nil {
+			utils.SysError("subscription", fmt.Sprintf("更新订阅计数失败: sub=%d column=%s err=%v", sub.ID, column, err))
+		}
+	}
 	switch subType {
 	case "clash":
-		db.Model(sub).Update("clash_count", sub.ClashCount+1)
+		updateCounter("clash_count")
 	case "surge":
-		db.Model(sub).Update("surge_count", sub.SurgeCount+1)
+		updateCounter("surge_count")
 	case "shadowrocket":
-		db.Model(sub).Update("shadowrocket_count", sub.ShadowrocketCount+1)
+		updateCounter("shadowrocket_count")
 	case "quantumult":
-		db.Model(sub).Update("quanx_count", sub.QuanXCount+1)
+		updateCounter("quanx_count")
 	default:
-		db.Model(sub).Update("universal_count", sub.UniversalCount+1)
+		updateCounter("universal_count")
 	}
 }
 
@@ -639,18 +700,27 @@ func ResetSubscription(c *gin.Context) {
 	oldURL := sub.SubscriptionURL
 	newURL := utils.GenerateRandomString(32)
 	devicesBefore := sub.CurrentDevices
-	db.Where("subscription_id = ?", sub.ID).Delete(&models.Device{})
-	db.Model(&sub).Updates(map[string]interface{}{
-		"subscription_url": newURL, "current_devices": 0,
-		"clash_count": 0, "universal_count": 0,
-	})
 	resetBy := "user"
-	db.Create(&models.SubscriptionReset{
-		UserID: userID, SubscriptionID: sub.ID, ResetType: "manual",
-		Reason: "用户自助重置", OldSubscriptionURL: &oldURL,
-		NewSubscriptionURL: &newURL, DeviceCountBefore: devicesBefore,
-		DeviceCountAfter: 0, ResetBy: &resetBy,
-	})
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("subscription_id = ?", sub.ID).Delete(&models.Device{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&sub).Updates(map[string]interface{}{
+			"subscription_url": newURL, "current_devices": 0,
+			"clash_count": 0, "universal_count": 0,
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&models.SubscriptionReset{
+			UserID: userID, SubscriptionID: sub.ID, ResetType: "manual",
+			Reason: "用户自助重置", OldSubscriptionURL: &oldURL,
+			NewSubscriptionURL: &newURL, DeviceCountBefore: devicesBefore,
+			DeviceCountAfter: 0, ResetBy: &resetBy,
+		}).Error
+	}); err != nil {
+		utils.InternalError(c, "重置订阅失败")
+		return
+	}
 	// 通知用户订阅已重置
 	go services.NotifyUser(userID, "subscription_reset", map[string]string{"reset_by": "您自己"})
 	utils.Success(c, gin.H{"new_url": newURL})

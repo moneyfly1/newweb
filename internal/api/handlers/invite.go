@@ -77,7 +77,10 @@ func AdminToggleInviteCode(c *gin.Context) {
 		return
 	}
 	code.IsActive = !code.IsActive
-	db.Save(&code)
+	if err := db.Save(&code).Error; err != nil {
+		utils.InternalError(c, "更新邀请码状态失败")
+		return
+	}
 	msg := "已启用"
 	if !code.IsActive {
 		msg = "已禁用"
@@ -186,7 +189,10 @@ func CreateInviteCode(c *gin.Context) {
 		exp := time.Now().AddDate(0, 0, *req.ExpiresInDays)
 		code.ExpiresAt = &exp
 	}
-	db.Create(&code)
+	if err := db.Create(&code).Error; err != nil {
+		utils.InternalError(c, "创建邀请码失败")
+		return
+	}
 	utils.Success(c, code)
 }
 
@@ -244,7 +250,10 @@ func DeleteInviteCode(c *gin.Context) {
 		utils.NotFound(c, "邀请码不存在")
 		return
 	}
-	db.Delete(&code)
+	if err := db.Delete(&code).Error; err != nil {
+		utils.InternalError(c, "删除邀请码失败")
+		return
+	}
 	utils.SuccessMessage(c, "邀请码已删除")
 }
 

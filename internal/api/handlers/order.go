@@ -157,8 +157,14 @@ func CreateOrder(c *gin.Context) {
 	}
 	// Record coupon usage
 	if couponID != nil {
-		db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: discountAmount})
-		db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1"))
+		if err := db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: discountAmount}).Error; err != nil {
+			utils.InternalError(c, "记录优惠券使用失败")
+			return
+		}
+		if err := db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1")).Error; err != nil {
+			utils.InternalError(c, "更新优惠券使用次数失败")
+			return
+		}
 	}
 
 	// 通知用户新订单 + 通知管理员
@@ -179,7 +185,10 @@ func PayOrder(c *gin.Context) {
 	var req struct {
 		PaymentMethod string `json:"payment_method"`
 	}
-	_ = c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
 	db := database.GetDB()
 	var order models.Order
 	if err := db.Where("order_no = ? AND user_id = ? AND status = ?", orderNo, userID, "pending").First(&order).Error; err != nil {
@@ -204,6 +213,10 @@ func PayOrder(c *gin.Context) {
 			return
 		}
 		tx := db.Begin()
+		if tx.Error != nil {
+			utils.InternalError(c, "创建事务失败")
+			return
+		}
 		// Re-check order status inside transaction to prevent double-spend
 		var freshOrder models.Order
 		if err := tx.Where("id = ? AND status = ?", order.ID, "pending").First(&freshOrder).Error; err != nil {
@@ -384,7 +397,10 @@ func CancelOrder(c *gin.Context) {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
-	db.Model(&order).Update("status", "cancelled")
+	if err := db.Model(&order).Update("status", "cancelled").Error; err != nil {
+		utils.InternalError(c, "取消订单失败")
+		return
+	}
 	utils.SuccessMessage(c, "订单已取消")
 }
 
@@ -472,7 +488,9 @@ func CreateCustomOrder(c *gin.Context) {
 	}
 	discountsJSON := utils.GetSetting("custom_package_duration_discounts")
 	if discountsJSON != "" {
-		_ = json.Unmarshal([]byte(discountsJSON), &discountTiers)
+		if err := json.Unmarshal([]byte(discountsJSON), &discountTiers); err != nil {
+			utils.SysError("order", fmt.Sprintf("自定义套餐折扣配置解析失败: %v", err))
+		}
 	}
 
 	// Calculate price
@@ -559,8 +577,14 @@ func CreateCustomOrder(c *gin.Context) {
 		return
 	}
 	if couponID != nil {
-		db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount})
-		db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1"))
+		if err := db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount}).Error; err != nil {
+			utils.InternalError(c, "记录优惠券使用失败")
+			return
+		}
+		if err := db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1")).Error; err != nil {
+			utils.InternalError(c, "更新优惠券使用次数失败")
+			return
+		}
 	}
 
 	pkgName := fmt.Sprintf("自定义套餐 (%d设备/%d月)", req.Devices, req.Months)
@@ -758,8 +782,14 @@ func CreateUpgradeOrder(c *gin.Context) {
 		return
 	}
 	if couponID != nil {
-		db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount})
-		db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1"))
+		if err := db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount}).Error; err != nil {
+			utils.InternalError(c, "记录优惠券使用失败")
+			return
+		}
+		if err := db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1")).Error; err != nil {
+			utils.InternalError(c, "更新优惠券使用次数失败")
+			return
+		}
 	}
 
 	pkgName := fmt.Sprintf("订阅升级: +%d设备", req.AddDevices)

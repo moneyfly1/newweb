@@ -238,6 +238,7 @@ import { listPackages, verifyCoupon, getPaymentMethods, getPublicConfig } from '
 import { createOrder, payOrder, createPayment, getOrderStatus, createCustomOrder } from '@/api/order'
 import { getDashboardInfo } from '@/api/user'
 import { safeRedirect } from '@/utils/security'
+import { getErrorMessage } from '@/utils/error'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const router = useRouter()
@@ -335,7 +336,7 @@ const loadPackages = async () => {
     customDevices.value = Math.max(customMinDevices.value, Math.min(customDevices.value, customMaxDevices.value))
     customMonths.value = Math.max(customMinMonths.value, customMonths.value)
   } catch (e: any) {
-    message.error(e.message || '加载套餐失败')
+    message.error(getErrorMessage(e, '加载套餐失败'))
   } finally { loading.value = false }
 }
 
@@ -379,7 +380,7 @@ const handleVerifyCoupon = async () => {
       orderInfo.value = orderRes.data
     }
   } catch (e: any) {
-    message.error(e.message || '优惠码无效')
+    message.error(getErrorMessage(e, '优惠码无效'))
     couponInfo.value = null
   } finally { verifying.value = false }
 }
@@ -401,7 +402,7 @@ const handleCustomBuy = async () => {
     selectedPackage.value = { name: `自定义套餐 (${customDevices.value}设备/${customMonths.value}月)`, duration_days: durationDays }
     showPaymentModal.value = true
   } catch (e: any) {
-    message.error(e.message || '创建订单失败')
+    message.error(getErrorMessage(e, '创建订单失败'))
   } finally { customOrdering.value = false }
 }
 
@@ -415,7 +416,7 @@ const handleBuy = async (pkg: any) => {
     orderInfo.value = res.data
     showPaymentModal.value = true
   } catch (e: any) {
-    message.error(e.message || '创建订单失败')
+    message.error(getErrorMessage(e, '创建订单失败'))
   } finally { buyingId.value = null }
 }
 
@@ -513,7 +514,7 @@ const handlePay = async () => {
       }
     }
   } catch (e: any) {
-    message.error(e.message || '支付失败')
+    message.error(getErrorMessage(e, '支付失败'))
   } finally { paying.value = false }
 }
 

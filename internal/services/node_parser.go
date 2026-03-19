@@ -106,33 +106,7 @@ func ParseNodeLinks(content string) ([]models.Node, error) {
 			continue
 		}
 
-		var node *models.Node
-		var err error
-
-		if strings.HasPrefix(line, "vmess://") {
-			node, err = ParseVmessLink(line)
-		} else if strings.HasPrefix(line, "vless://") {
-			node, err = ParseVlessLink(line)
-		} else if strings.HasPrefix(line, "trojan://") {
-			node, err = ParseTrojanLink(line)
-		} else if strings.HasPrefix(line, "ssr://") {
-			node, err = ParseSSRLink(line)
-		} else if strings.HasPrefix(line, "ss://") {
-			node, err = ParseShadowsocksLink(line)
-		} else if strings.HasPrefix(line, "hysteria2://") || strings.HasPrefix(line, "hy2://") {
-			node, err = ParseHysteria2Link(line)
-		} else if strings.HasPrefix(line, "hysteria://") {
-			node, err = ParseHysteriaLink(line)
-		} else if strings.HasPrefix(line, "tuic://") {
-			node, err = ParseTUICLink(line)
-		} else if strings.HasPrefix(line, "naive+https://") || strings.HasPrefix(line, "naive://") {
-			node, err = ParseNaiveLink(line)
-		} else if strings.HasPrefix(line, "anytls://") {
-			node, err = ParseAnytlsLink(line)
-		} else if strings.HasPrefix(line, "socks5://") || strings.HasPrefix(line, "socks://") {
-			node, err = ParseSOCKSLink(line)
-		}
-
+		node, err := parseNodeFromLine(line)
 		if err == nil && node != nil {
 			nodes = append(nodes, *node)
 		}
@@ -141,41 +115,170 @@ func ParseNodeLinks(content string) ([]models.Node, error) {
 	return nodes, nil
 }
 
-func ParseVmessLink(link string) (*models.Node, error) {
-	encoded := strings.TrimPrefix(link, "vmess://")
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		decoded, err = base64.RawStdEncoding.DecodeString(encoded)
-		if err != nil {
-			return nil, err
+type nodeLinkRule struct {
+	prefixes  []string
+	parser    func(string) (*models.Node, error)
+	condition func(string) bool
+}
+
+var nodeLinkRules = []nodeLinkRule{
+	{prefixes: []string{"vmess://"}, parser: ParseVmessLink},
+	{prefixes: []string{"vless://"}, parser: ParseVlessLink},
+	{prefixes: []string{"trojan://"}, parser: ParseTrojanLink},
+	{prefixes: []string{"ssr://"}, parser: ParseSSRLink},
+	{prefixes: []string{"ss://"}, parser: ParseShadowsocksLink},
+	{prefixes: []string{"hysteria2://", "hy2://"}, parser: ParseHysteria2Link},
+	{prefixes: []string{"hysteria://"}, parser: ParseHysteriaLink},
+	{prefixes: []string{"tuic://"}, parser: ParseTUICLink},
+	{prefixes: []string{"naive+https://", "naive://"}, parser: ParseNaiveLink},
+	{prefixes: []string{"anytls://"}, parser: ParseAnytlsLink},
+	{prefixes: []string{"socks5://", "socks://"}, parser: ParseSOCKSLink},
+	{prefixes: []string{"wg://"}, parser: ParseWireGuardLink},
+	{
+		prefixes:  []string{"http://", "https://"},
+		parser:    ParseHTTPLink,
+		condition: isLikelyHTTPProxyLink,
+	},
+}
+
+func parseNodeFromLine(line string) (*models.Node, error) {
+	for _, rule := range nodeLinkRules {
+		if !hasAnyPrefix(line, rule.prefixes) {
+			continue
+		}
+		if rule.condition != nil && !rule.condition(line) {
+			return nil, nil
+		}
+		return rule.parser(line)
+	}
+	return nil, nil
+}
+
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
 		}
 	}
+	return false
+}
 
-	var vmessConfig map[string]interface{}
-	if err := json.Unmarshal(decoded, &vmessConfig); err != nil {
-		return nil, err
-	}
+func isLikelyHTTPProxyLink(link string) bool {
+	return strings.Contains(link, "method=") || strings.Contains(link, "remarks=") || strings.Contains(link, "#")
+}
 
-	name := ""
-	if ps, ok := vmessConfig["ps"].(string); ok {
-		name = ps
+func buildNode(name string, defaultName string, nodeType string, link string) *models.Node {
+	resolvedName := strings.TrimSpace(name)
+	if resolvedName == "" {
+		resolvedName = defaultName
 	}
-	if name == "" {
-		name = "VMess Node"
-	}
-
-	region := DetectRegion(name)
+	region := DetectRegion(resolvedName)
 	config := link
-
 	return &models.Node{
-		Name:     name,
+		Name:     resolvedName,
 		Region:   region,
-		Type:     "vmess",
+		Type:     nodeType,
 		Status:   "online",
 		Config:   &config,
 		IsActive: true,
 		IsManual: false,
-	}, nil
+	}
+}
+
+func decodeFragment(fragment string) string {
+	if fragment == "" {
+		return ""
+	}
+	if decoded, err := url.QueryUnescape(fragment); err == nil {
+		return decoded
+	}
+	return fragment
+}
+
+func parseQuerySafe(raw string) url.Values {
+	values, err := url.ParseQuery(raw)
+	if err != nil {
+		return url.Values{}
+	}
+	return values
+}
+
+func parseIntOrDefault(raw string, defaultVal int) int {
+	if raw == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultVal
+	}
+	return n
+}
+
+func parsePortWithDefault(portStr string, defaultPort int) int {
+	port := parseIntOrDefault(portStr, 0)
+	if port <= 0 {
+		return defaultPort
+	}
+	return port
+}
+
+func ParseVmessLink(link string) (*models.Node, error) {
+	encoded := strings.TrimPrefix(link, "vmess://")
+
+	// Split off query string before base64 decode
+	encodedBase64 := encoded
+	if idx := strings.Index(encodedBase64, "?"); idx != -1 {
+		encodedBase64 = encodedBase64[:idx]
+	}
+	if idx := strings.Index(encodedBase64, "#"); idx != -1 {
+		encodedBase64 = encodedBase64[:idx]
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(encodedBase64)
+	if err != nil {
+		decoded, err = base64.RawStdEncoding.DecodeString(encodedBase64)
+		if err != nil {
+			decoded, err = base64.RawURLEncoding.DecodeString(encodedBase64)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Try standard JSON vmess format first
+	var vmessConfig map[string]interface{}
+	if err := json.Unmarshal(decoded, &vmessConfig); err == nil {
+		name := ""
+		if ps, ok := vmessConfig["ps"].(string); ok {
+			name = ps
+		}
+		return buildNode(name, "VMess Node", "vmess", link), nil
+	}
+
+	// Non-standard format: Base64(auto:uuid@server:port)?query_params
+	decodedStr := string(decoded)
+	if strings.Contains(decodedStr, "@") {
+		// Extract name from query remarks or fragment
+		name := "VMess Node"
+		if idx := strings.Index(encoded, "?"); idx != -1 {
+			queryStr := encoded[idx+1:]
+			if fidx := strings.Index(queryStr, "#"); fidx != -1 {
+				queryStr = queryStr[:fidx]
+			}
+			q := parseQuerySafe(queryStr)
+			if r := q.Get("remarks"); r != "" {
+				name = decodeFragment(r)
+			}
+		}
+		if idx := strings.Index(encoded, "#"); idx != -1 {
+			if n := decodeFragment(encoded[idx+1:]); n != "" {
+				name = n
+			}
+		}
+		return buildNode(name, "VMess Node", "vmess", link), nil
+	}
+
+	return nil, fmt.Errorf("invalid vmess link format")
 }
 
 func ParseVlessLink(link string) (*models.Node, error) {
@@ -185,22 +288,26 @@ func ParseVlessLink(link string) (*models.Node, error) {
 	}
 
 	name := u.Fragment
-	if name == "" {
-		name = "VLESS Node"
+	// Check for non-standard format: vless://Base64(...)
+	if u.User == nil || u.User.Username() == "" {
+		// Try non-standard Base64 format
+		encoded := strings.TrimPrefix(link, "vless://")
+		base64Part := encoded
+		if idx := strings.Index(base64Part, "?"); idx != -1 {
+			base64Part = base64Part[:idx]
+		}
+		if idx := strings.Index(base64Part, "#"); idx != -1 {
+			base64Part = base64Part[:idx]
+		}
+		if decoded, err := decodeBase64Flexible(base64Part); err == nil && strings.Contains(decoded, "@") {
+			q := u.Query()
+			if r := q.Get("remarks"); r != "" {
+				name = r
+			}
+		}
 	}
 
-	region := DetectRegion(name)
-	config := link
-
-	return &models.Node{
-		Name:     name,
-		Region:   region,
-		Type:     "vless",
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-		IsManual: false,
-	}, nil
+	return buildNode(name, "VLESS Node", "vless", link), nil
 }
 
 func ParseTrojanLink(link string) (*models.Node, error) {
@@ -209,23 +316,7 @@ func ParseTrojanLink(link string) (*models.Node, error) {
 		return nil, err
 	}
 
-	name := u.Fragment
-	if name == "" {
-		name = "Trojan Node"
-	}
-
-	region := DetectRegion(name)
-	config := link
-
-	return &models.Node{
-		Name:     name,
-		Region:   region,
-		Type:     "trojan",
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-		IsManual: false,
-	}, nil
+	return buildNode(u.Fragment, "Trojan Node", "trojan", link), nil
 }
 
 func ParseShadowsocksLink(link string) (*models.Node, error) {
@@ -234,23 +325,7 @@ func ParseShadowsocksLink(link string) (*models.Node, error) {
 		return nil, err
 	}
 
-	name := u.Fragment
-	if name == "" {
-		name = "Shadowsocks Node"
-	}
-
-	region := DetectRegion(name)
-	config := link
-
-	return &models.Node{
-		Name:     name,
-		Region:   region,
-		Type:     "ss",
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-		IsManual: false,
-	}, nil
+	return buildNode(u.Fragment, "Shadowsocks Node", "ss", link), nil
 }
 
 // ParseSSRLink parses an ssr:// link into a Node model.
@@ -274,7 +349,7 @@ func ParseSSRLink(link string) (*models.Node, error) {
 
 	name := "SSR Node"
 	if len(mainAndParams) > 1 {
-		params, _ := url.ParseQuery(mainAndParams[1])
+		params := parseQuerySafe(mainAndParams[1])
 		if remarks := params.Get("remarks"); remarks != "" {
 			remarksDecoded, err := base64.RawURLEncoding.DecodeString(remarks)
 			if err == nil {
@@ -283,18 +358,7 @@ func ParseSSRLink(link string) (*models.Node, error) {
 		}
 	}
 
-	region := DetectRegion(name)
-	config := link
-
-	return &models.Node{
-		Name:     name,
-		Region:   region,
-		Type:     "ssr",
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-		IsManual: false,
-	}, nil
+	return buildNode(name, "SSR Node", "ssr", link), nil
 }
 
 // ParseHysteriaLink parses a hysteria:// link into a Node model.
@@ -304,23 +368,7 @@ func ParseHysteriaLink(link string) (*models.Node, error) {
 		return nil, err
 	}
 
-	name := u.Fragment
-	if name == "" {
-		name = "Hysteria Node"
-	}
-
-	region := DetectRegion(name)
-	config := link
-
-	return &models.Node{
-		Name:     name,
-		Region:   region,
-		Type:     "hysteria",
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-		IsManual: false,
-	}, nil
+	return buildNode(u.Fragment, "Hysteria Node", "hysteria", link), nil
 }
 
 // ParseHysteria2Link parses a hysteria2:// or hy2:// link into a Node model.
@@ -330,23 +378,7 @@ func ParseHysteria2Link(link string) (*models.Node, error) {
 		return nil, err
 	}
 
-	name := u.Fragment
-	if name == "" {
-		name = "Hysteria2 Node"
-	}
-
-	region := DetectRegion(name)
-	config := link
-
-	return &models.Node{
-		Name:     name,
-		Region:   region,
-		Type:     "hysteria2",
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-		IsManual: false,
-	}, nil
+	return buildNode(u.Fragment, "Hysteria2 Node", "hysteria2", link), nil
 }
 
 // ParseTUICLink parses a tuic:// link into a Node model.
@@ -356,23 +388,7 @@ func ParseTUICLink(link string) (*models.Node, error) {
 		return nil, err
 	}
 
-	name := u.Fragment
-	if name == "" {
-		name = "TUIC Node"
-	}
-
-	region := DetectRegion(name)
-	config := link
-
-	return &models.Node{
-		Name:     name,
-		Region:   region,
-		Type:     "tuic",
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-		IsManual: false,
-	}, nil
+	return buildNode(u.Fragment, "TUIC Node", "tuic", link), nil
 }
 
 // ParseNaiveLink parses naive:// or naive+https:// links
@@ -389,23 +405,11 @@ func ParseNaiveLink(link string) (*models.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	name := ""
-	if u.Fragment != "" {
-		name, _ = url.QueryUnescape(u.Fragment)
-	}
+	name := decodeFragment(u.Fragment)
 	if name == "" {
 		name = u.Hostname()
 	}
-	region := DetectRegion(name)
-	config := link
-	return &models.Node{
-		Name:     name,
-		Type:     "naive",
-		Region:   region,
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-	}, nil
+	return buildNode(name, "Naive Node", "naive", link), nil
 }
 
 // ParseAnytlsLink parses anytls:// links
@@ -414,23 +418,11 @@ func ParseAnytlsLink(link string) (*models.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	name := ""
-	if u.Fragment != "" {
-		name, _ = url.QueryUnescape(u.Fragment)
-	}
+	name := decodeFragment(u.Fragment)
 	if name == "" {
 		name = u.Hostname()
 	}
-	region := DetectRegion(name)
-	config := link
-	return &models.Node{
-		Name:     name,
-		Type:     "anytls",
-		Region:   region,
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-	}, nil
+	return buildNode(name, "AnyTLS Node", "anytls", link), nil
 }
 
 // ParseSOCKSLink parses socks5:// and socks:// links
@@ -439,27 +431,49 @@ func ParseSOCKSLink(link string) (*models.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	name := ""
-	if u.Fragment != "" {
-		name, _ = url.QueryUnescape(u.Fragment)
+	name := decodeFragment(u.Fragment)
+	// Check for remarks in query (GOST format)
+	if name == "" {
+		if r := u.Query().Get("remarks"); r != "" {
+			name = decodeFragment(r)
+		}
 	}
+
+	// Handle Base64 encoded socks links: socks://Base64(user:pass@host:port)?params
+	// or socks://Base64(host:port)?params
+	if u.Hostname() == "" || (u.User == nil && name != "") {
+		encoded := strings.TrimPrefix(link, "socks://")
+		encoded = strings.TrimPrefix(encoded, "socks5://")
+		base64Part := encoded
+		if idx := strings.Index(base64Part, "?"); idx != -1 {
+			base64Part = base64Part[:idx]
+		}
+		if idx := strings.Index(base64Part, "#"); idx != -1 {
+			base64Part = base64Part[:idx]
+		}
+		if decoded, err := decodeBase64Flexible(base64Part); err == nil {
+			if unescaped, e := url.QueryUnescape(decoded); e == nil {
+				decoded = unescaped
+			}
+			// decoded could be "user:pass@host:port" or "host:port"
+			if name == "" {
+				if strings.Contains(decoded, "@") {
+					parts := strings.SplitN(decoded, "@", 2)
+					name = parts[1]
+				} else {
+					name = decoded
+				}
+			}
+		}
+	}
+
 	if name == "" {
 		name = u.Hostname()
 	}
-	nodeType := "socks5"
-	if strings.HasPrefix(link, "socks://") {
-		nodeType = "socks"
+	if name == "" {
+		name = "SOCKS Node"
 	}
-	region := DetectRegion(name)
-	config := link
-	return &models.Node{
-		Name:     name,
-		Type:     nodeType,
-		Region:   region,
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-	}, nil
+	return buildNode(name, "SOCKS Node", "socks5", link), nil
 }
 
 // ParseHTTPLink parses http:// and https:// proxy links
@@ -468,23 +482,357 @@ func ParseHTTPLink(link string) (*models.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	name := ""
-	if u.Fragment != "" {
-		name, _ = url.QueryUnescape(u.Fragment)
+	name := decodeFragment(u.Fragment)
+	// Check remarks in query
+	if name == "" {
+		if r := u.Query().Get("remarks"); r != "" {
+			name = decodeFragment(r)
+		}
 	}
 	if name == "" {
 		name = u.Hostname()
 	}
-	region := DetectRegion(name)
-	config := link
-	return &models.Node{
-		Name:     name,
-		Type:     "http",
-		Region:   region,
-		Status:   "online",
-		Config:   &config,
-		IsActive: true,
-	}, nil
+	if name == "" {
+		name = "HTTP Node"
+	}
+	return buildNode(name, "HTTP Node", "http", link), nil
+}
+
+// ParseWireGuardLink parses a wg:// link into a Node model.
+func ParseWireGuardLink(link string) (*models.Node, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	name := decodeFragment(u.Fragment)
+	if name == "" {
+		name = "WireGuard " + u.Hostname()
+	}
+	return buildNode(name, "WireGuard Node", "wireguard", link), nil
+}
+
+// decodeBase64Flexible tries multiple base64 encodings
+func decodeBase64Flexible(s string) (string, error) {
+	// Try standard base64
+	if decoded, err := base64.StdEncoding.DecodeString(s); err == nil {
+		return string(decoded), nil
+	}
+	// Try raw standard (no padding)
+	if decoded, err := base64.RawStdEncoding.DecodeString(s); err == nil {
+		return string(decoded), nil
+	}
+	// Try URL-safe base64
+	if decoded, err := base64.URLEncoding.DecodeString(s); err == nil {
+		return string(decoded), nil
+	}
+	// Try raw URL-safe
+	if decoded, err := base64.RawURLEncoding.DecodeString(s); err == nil {
+		return string(decoded), nil
+	}
+	return "", fmt.Errorf("not base64")
+}
+
+// normalizeNonStandardLink converts non-standard Base64 encoded links to standard format.
+// Non-standard format: protocol://Base64(user:pass@server:port)?query_params#fragment
+// or: protocol://Base64(method:pass@server:port)#fragment
+// Returns the normalized link and whether it was converted.
+func normalizeNonStandardLink(link string) (string, bool) {
+	// Find the scheme
+	schemeEnd := strings.Index(link, "://")
+	if schemeEnd < 0 {
+		return link, false
+	}
+	scheme := link[:schemeEnd]
+	rest := link[schemeEnd+3:]
+
+	// Split off query and fragment
+	base64Part := rest
+	queryPart := ""
+	fragmentPart := ""
+
+	if idx := strings.Index(base64Part, "?"); idx != -1 {
+		queryPart = base64Part[idx:]
+		base64Part = base64Part[:idx]
+		// Fragment might be in query part
+		if fidx := strings.Index(queryPart, "#"); fidx != -1 {
+			fragmentPart = queryPart[fidx:]
+			queryPart = queryPart[:fidx]
+		}
+	} else if idx := strings.Index(base64Part, "#"); idx != -1 {
+		fragmentPart = base64Part[idx:]
+		base64Part = base64Part[:idx]
+	}
+
+	// Try to decode the base64 part
+	decoded, err := decodeBase64Flexible(base64Part)
+	if err != nil {
+		return link, false
+	}
+
+	// Check if decoded looks like user:pass@server:port or server:port
+	if !strings.Contains(decoded, "@") && !strings.Contains(decoded, ":") {
+		return link, false
+	}
+
+	// URL-decode the decoded string (some have %3A etc)
+	if unescaped, err := url.QueryUnescape(decoded); err == nil {
+		decoded = unescaped
+	}
+
+	// Reconstruct as standard link
+	normalized := scheme + "://" + decoded + queryPart + fragmentPart
+
+	// For query-based params, convert remarks to fragment if no fragment
+	if fragmentPart == "" && queryPart != "" {
+		parsed, err := url.Parse(normalized)
+		if err == nil {
+			remarks := parsed.Query().Get("remarks")
+			if remarks != "" {
+				q := parsed.Query()
+				q.Del("remarks")
+				parsed.RawQuery = q.Encode()
+				parsed.Fragment = remarks
+				normalized = parsed.String()
+			}
+		}
+	}
+
+	return normalized, true
+}
+
+// convertNonStandardToClashMap handles non-standard Base64 links with query-based params
+// and converts them to Clash proxy maps directly.
+func convertNonStandardToClashMap(link string, name string, nodeType string) (map[string]interface{}, error) {
+	schemeEnd := strings.Index(link, "://")
+	if schemeEnd < 0 {
+		return nil, fmt.Errorf("invalid link")
+	}
+	rest := link[schemeEnd+3:]
+
+	// Split base64 part from query
+	base64Part := rest
+	queryStr := ""
+	if idx := strings.Index(base64Part, "?"); idx != -1 {
+		queryStr = base64Part[idx+1:]
+		base64Part = base64Part[:idx]
+	}
+	if idx := strings.Index(base64Part, "#"); idx != -1 {
+		base64Part = base64Part[:idx]
+	}
+	// Remove fragment from query
+	if idx := strings.Index(queryStr, "#"); idx != -1 {
+		queryStr = queryStr[:idx]
+	}
+
+	decoded, err := decodeBase64Flexible(base64Part)
+	if err != nil {
+		return nil, fmt.Errorf("cannot decode base64: %w", err)
+	}
+	if unescaped, err := url.QueryUnescape(decoded); err == nil {
+		decoded = unescaped
+	}
+
+	// Parse decoded: user:pass@server:port or method:pass@server:port
+	var userPart, serverPart string
+	if atIdx := strings.LastIndex(decoded, "@"); atIdx != -1 {
+		userPart = decoded[:atIdx]
+		serverPart = decoded[atIdx+1:]
+	} else {
+		serverPart = decoded
+	}
+
+	host, portStr := splitHostPort(serverPart)
+	port := parsePortWithDefault(portStr, 0)
+
+	query := parseQuerySafe(queryStr)
+
+	m := map[string]interface{}{
+		"name":   name,
+		"type":   nodeType,
+		"server": host,
+		"port":   port,
+	}
+
+	switch nodeType {
+	case "vless":
+		// userPart = "auto:uuid"
+		uuid := userPart
+		if parts := strings.SplitN(userPart, ":", 2); len(parts) == 2 {
+			uuid = parts[1]
+		}
+		m["uuid"] = uuid
+
+		// obfs/transport
+		if obfs := query.Get("obfs"); obfs != "" {
+			switch obfs {
+			case "websocket":
+				m["network"] = "ws"
+				wsOpts := map[string]interface{}{}
+				if p := query.Get("path"); p != "" {
+					wsOpts["path"] = p
+				}
+				if opStr := query.Get("obfsParam"); opStr != "" {
+					var obfsParam map[string]interface{}
+					if json.Unmarshal([]byte(opStr), &obfsParam) == nil {
+						if h, ok := obfsParam["Host"].(string); ok && h != "" {
+							wsOpts["headers"] = map[string]interface{}{"Host": h}
+						}
+					}
+				}
+				if len(wsOpts) > 0 {
+					m["ws-opts"] = wsOpts
+				}
+			case "grpc":
+				m["network"] = "grpc"
+				if p := query.Get("path"); p != "" {
+					m["grpc-opts"] = map[string]interface{}{"grpc-service-name": p}
+				}
+			}
+		} else if p := query.Get("path"); p != "" {
+			// Default to ws if path is present
+			m["network"] = "ws"
+			wsOpts := map[string]interface{}{"path": p}
+			if opStr := query.Get("obfsParam"); opStr != "" {
+				var obfsParam map[string]interface{}
+				if json.Unmarshal([]byte(opStr), &obfsParam) == nil {
+					if h, ok := obfsParam["Host"].(string); ok && h != "" {
+						wsOpts["headers"] = map[string]interface{}{"Host": h}
+					}
+				}
+			}
+			m["ws-opts"] = wsOpts
+		}
+
+		// TLS
+		if query.Get("tls") == "1" {
+			m["tls"] = true
+			if peer := query.Get("peer"); peer != "" {
+				m["servername"] = peer
+			}
+		}
+		// Reality
+		if pbk := query.Get("pbk"); pbk != "" {
+			m["tls"] = true
+			realityOpts := map[string]interface{}{"public-key": pbk}
+			if sid := query.Get("sid"); sid != "" {
+				realityOpts["short-id"] = sid
+			}
+			m["reality-opts"] = realityOpts
+			if peer := query.Get("peer"); peer != "" {
+				m["servername"] = peer
+			}
+			m["client-fingerprint"] = "chrome"
+		}
+		// XTLS
+		if query.Get("xtls") == "2" {
+			m["flow"] = "xtls-rprx-vision"
+		}
+
+	case "vmess":
+		// userPart = "auto:uuid"
+		uuid := userPart
+		cipher := "auto"
+		if parts := strings.SplitN(userPart, ":", 2); len(parts) == 2 {
+			cipher = parts[0]
+			uuid = parts[1]
+		}
+		m["uuid"] = uuid
+		m["cipher"] = cipher
+		alterId := 0
+		if aid := query.Get("alterId"); aid != "" {
+			alterId = parseIntOrDefault(aid, 0)
+		}
+		m["alterId"] = alterId
+
+		// obfs/transport
+		if obfs := query.Get("obfs"); obfs == "websocket" {
+			m["network"] = "ws"
+			wsOpts := map[string]interface{}{}
+			if p := query.Get("path"); p != "" {
+				wsOpts["path"] = p
+			}
+			if opStr := query.Get("obfsParam"); opStr != "" {
+				var obfsParam map[string]interface{}
+				if json.Unmarshal([]byte(opStr), &obfsParam) == nil {
+					if h, ok := obfsParam["Host"].(string); ok && h != "" {
+						wsOpts["headers"] = map[string]interface{}{"Host": h}
+					} else if h, ok := obfsParam["HOST"].(string); ok && h != "" {
+						wsOpts["headers"] = map[string]interface{}{"Host": h}
+					}
+				}
+			}
+			if len(wsOpts) > 0 {
+				m["ws-opts"] = wsOpts
+			}
+		}
+
+		// TLS
+		if query.Get("tls") == "1" {
+			m["tls"] = true
+			if peer := query.Get("peer"); peer != "" {
+				m["servername"] = peer
+			}
+		}
+		if query.Get("allowInsecure") == "1" {
+			m["skip-cert-verify"] = true
+		}
+		if alpn := query.Get("alpn"); alpn != "" {
+			m["alpn"] = strings.Split(alpn, ",")
+		}
+
+	case "trojan":
+		m["password"] = userPart
+
+		if peer := query.Get("peer"); peer != "" {
+			m["sni"] = peer
+		}
+		if alpn := query.Get("alpn"); alpn != "" {
+			m["alpn"] = strings.Split(alpn, ",")
+		}
+		if query.Get("allowInsecure") == "1" {
+			m["skip-cert-verify"] = true
+		}
+
+	case "ss":
+		// userPart = "method:password"
+		if parts := strings.SplitN(userPart, ":", 2); len(parts) == 2 {
+			m["cipher"] = parts[0]
+			m["password"] = parts[1]
+		}
+
+	case "socks5", "socks":
+		m["type"] = "socks5"
+		m["udp"] = true
+		if userPart != "" {
+			if parts := strings.SplitN(userPart, ":", 2); len(parts) == 2 {
+				m["username"] = parts[0]
+				m["password"] = parts[1]
+			}
+		}
+	}
+
+	return m, nil
+}
+
+// getRawQueryParam extracts a query parameter value without decoding + as space.
+// This is needed for base64 values that contain + characters.
+func getRawQueryParam(rawQuery string, key string) string {
+	for _, part := range strings.Split(rawQuery, "&") {
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) == 2 {
+			k := decodeFragment(kv[0])
+			if k == key {
+				// Only percent-decode, don't convert + to space
+				val := strings.ReplaceAll(kv[1], "%2B", "+")
+				val = strings.ReplaceAll(val, "%2b", "+")
+				if unescaped, err := url.PathUnescape(val); err == nil {
+					return unescaped
+				}
+				return val
+			}
+		}
+	}
+	return ""
 }
 
 func portToInt(port string) int {
@@ -582,16 +930,32 @@ func DetectRegion(name string) string {
 // VmessLinkToClashMap parses a vmess:// link into a Clash-compatible proxy map.
 func VmessLinkToClashMap(link string, name string) (map[string]interface{}, error) {
 	encoded := strings.TrimPrefix(link, "vmess://")
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
+
+	// Split off query/fragment before base64 decode
+	encodedBase64 := encoded
+	if idx := strings.Index(encodedBase64, "?"); idx != -1 {
+		encodedBase64 = encodedBase64[:idx]
+	}
+	if idx := strings.Index(encodedBase64, "#"); idx != -1 {
+		encodedBase64 = encodedBase64[:idx]
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(encodedBase64)
 	if err != nil {
-		decoded, err = base64.RawStdEncoding.DecodeString(encoded)
+		decoded, err = base64.RawStdEncoding.DecodeString(encodedBase64)
 		if err != nil {
-			return nil, err
+			decoded, err = base64.RawURLEncoding.DecodeString(encodedBase64)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
+
+	// Try standard JSON vmess format
 	var cfg map[string]interface{}
 	if err := json.Unmarshal(decoded, &cfg); err != nil {
-		return nil, err
+		// Non-standard format: Base64(auto:uuid@server:port)?query_params
+		return convertNonStandardToClashMap(link, name, "vmess")
 	}
 
 	m := map[string]interface{}{
@@ -649,6 +1013,17 @@ func VmessLinkToClashMap(link string, name string) (map[string]interface{}, erro
 				if len(h2Opts) > 0 {
 					m["h2-opts"] = h2Opts
 				}
+			} else if net == "httpupgrade" {
+				huOpts := map[string]interface{}{}
+				if path, ok := cfg["path"].(string); ok && path != "" {
+					huOpts["path"] = path
+				}
+				if host, ok := cfg["host"].(string); ok && host != "" {
+					huOpts["host"] = host
+				}
+				if len(huOpts) > 0 {
+					m["httpupgrade-opts"] = huOpts
+				}
 			}
 		}
 	}
@@ -669,9 +1044,15 @@ func VlessLinkToClashMap(link string, name string) (map[string]interface{}, erro
 	if err != nil {
 		return nil, err
 	}
+
+	// Detect non-standard Base64 format: vless://Base64(auto:uuid@server:port)?params
+	if u.User == nil || u.User.Username() == "" || u.Hostname() == "" {
+		return convertNonStandardToClashMap(link, name, "vless")
+	}
+
 	q := u.Query()
 	host, portStr := splitHostPort(u.Host)
-	port, _ := strconv.Atoi(portStr)
+	port := parsePortWithDefault(portStr, 0)
 
 	m := map[string]interface{}{
 		"name":   name,
@@ -697,6 +1078,28 @@ func VlessLinkToClashMap(link string, name string) (map[string]interface{}, erro
 			if sn := q.Get("serviceName"); sn != "" {
 				m["grpc-opts"] = map[string]interface{}{"grpc-service-name": sn}
 			}
+		} else if t == "h2" {
+			h2Opts := map[string]interface{}{}
+			if p := q.Get("path"); p != "" {
+				h2Opts["path"] = p
+			}
+			if h := q.Get("host"); h != "" {
+				h2Opts["host"] = []string{h}
+			}
+			if len(h2Opts) > 0 {
+				m["h2-opts"] = h2Opts
+			}
+		} else if t == "httpupgrade" {
+			huOpts := map[string]interface{}{}
+			if p := q.Get("path"); p != "" {
+				huOpts["path"] = p
+			}
+			if h := q.Get("host"); h != "" {
+				huOpts["host"] = h
+			}
+			if len(huOpts) > 0 {
+				m["httpupgrade-opts"] = huOpts
+			}
 		}
 	}
 	sec := q.Get("security")
@@ -710,13 +1113,22 @@ func VlessLinkToClashMap(link string, name string) (map[string]interface{}, erro
 				"public-key": q.Get("pbk"),
 				"short-id":   q.Get("sid"),
 			}
-			if fp := q.Get("fp"); fp != "" {
-				m["client-fingerprint"] = fp
-			}
+		}
+		if fp := q.Get("fp"); fp != "" {
+			m["client-fingerprint"] = fp
 		}
 	}
 	if flow := q.Get("flow"); flow != "" {
 		m["flow"] = flow
+	}
+	if alpn := q.Get("alpn"); alpn != "" {
+		m["alpn"] = strings.Split(alpn, ",")
+	}
+	if q.Get("allowInsecure") == "1" || q.Get("insecure") == "1" {
+		m["skip-cert-verify"] = true
+	}
+	if enc := q.Get("encryption"); enc != "" && enc != "none" {
+		m["encryption"] = enc
 	}
 	return m, nil
 }
@@ -729,17 +1141,24 @@ func TrojanLinkToClashMap(link string, name string) (map[string]interface{}, err
 	}
 	q := u.Query()
 	host, portStr := splitHostPort(u.Host)
-	port, _ := strconv.Atoi(portStr)
+	port := parsePortWithDefault(portStr, 0)
+
+	password := ""
+	if u.User != nil {
+		password = u.User.Username()
+	}
 
 	m := map[string]interface{}{
 		"name":     name,
 		"type":     "trojan",
 		"server":   host,
 		"port":     port,
-		"password": u.User.Username(),
+		"password": password,
 	}
 	if sni := q.Get("sni"); sni != "" {
 		m["sni"] = sni
+	} else if peer := q.Get("peer"); peer != "" {
+		m["sni"] = peer
 	}
 	if t := q.Get("type"); t != "" && t != "tcp" {
 		m["network"] = t
@@ -754,10 +1173,53 @@ func TrojanLinkToClashMap(link string, name string) (map[string]interface{}, err
 			if len(wsOpts) > 0 {
 				m["ws-opts"] = wsOpts
 			}
+		} else if t == "grpc" {
+			if sn := q.Get("serviceName"); sn != "" {
+				m["grpc-opts"] = map[string]interface{}{"grpc-service-name": sn}
+			}
 		}
 	}
 	if q.Get("allowInsecure") == "1" || q.Get("insecure") == "1" {
 		m["skip-cert-verify"] = true
+	}
+	if alpn := q.Get("alpn"); alpn != "" {
+		m["alpn"] = strings.Split(alpn, ",")
+	}
+	if fp := q.Get("fp"); fp != "" {
+		m["client-fingerprint"] = fp
+	}
+	// Plugin support (obfs-local / v2ray-plugin etc.)
+	if pluginStr := q.Get("plugin"); pluginStr != "" {
+		parts := strings.Split(pluginStr, ";")
+		if len(parts) > 0 {
+			pluginName := strings.TrimSpace(parts[0])
+			switch pluginName {
+			case "simple-obfs", "obfs-local":
+				pluginName = "obfs"
+			}
+			m["plugin"] = pluginName
+			pluginOpts := map[string]interface{}{}
+			for _, part := range parts[1:] {
+				kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+				if len(kv) == 2 {
+					key := strings.TrimSpace(kv[0])
+					val := strings.TrimSpace(kv[1])
+					switch key {
+					case "obfs":
+						pluginOpts["mode"] = val
+					case "obfs-host":
+						pluginOpts["host"] = val
+					case "obfs-uri":
+						pluginOpts["path"] = val
+					default:
+						pluginOpts[key] = val
+					}
+				}
+			}
+			if len(pluginOpts) > 0 {
+				m["plugin-opts"] = pluginOpts
+			}
+		}
 	}
 	return m, nil
 }
@@ -768,15 +1230,48 @@ func ShadowsocksLinkToClashMap(link string, name string) (map[string]interface{}
 	if err != nil {
 		return nil, err
 	}
-	var cipher, password string
-	userInfo := u.User.Username()
-	// ss:// can encode method:password in base64 as the userinfo
-	decoded, err := base64.StdEncoding.DecodeString(userInfo)
-	if err != nil {
-		decoded, err = base64.RawStdEncoding.DecodeString(userInfo)
+	var cipher, password, host string
+	var port int
+
+	// Try non-standard format first: ss://Base64(method:pass@server:port)#name
+	encoded := strings.TrimPrefix(link, "ss://")
+	base64Part := encoded
+	if idx := strings.Index(base64Part, "#"); idx != -1 {
+		base64Part = base64Part[:idx]
 	}
-	if err == nil && strings.Contains(string(decoded), ":") {
-		parts := strings.SplitN(string(decoded), ":", 2)
+	if idx := strings.Index(base64Part, "?"); idx != -1 {
+		base64Part = base64Part[:idx]
+	}
+
+	if decoded, err := decodeBase64Flexible(base64Part); err == nil && strings.Contains(decoded, "@") {
+		// Full Base64 format: method:pass@server:port
+		atIdx := strings.LastIndex(decoded, "@")
+		userPart := decoded[:atIdx]
+		serverPart := decoded[atIdx+1:]
+		host, portStr := splitHostPort(serverPart)
+		port = parsePortWithDefault(portStr, 0)
+		if parts := strings.SplitN(userPart, ":", 2); len(parts) == 2 {
+			cipher = parts[0]
+			password = parts[1]
+		}
+		m := map[string]interface{}{
+			"name":     name,
+			"type":     "ss",
+			"server":   host,
+			"port":     port,
+			"cipher":   cipher,
+			"password": password,
+		}
+		return m, nil
+	}
+
+	// Standard format: ss://Base64(method:password)@server:port or ss://method:password@server:port
+	userInfo := ""
+	if u.User != nil {
+		userInfo = u.User.Username()
+	}
+	if decoded, err := decodeBase64Flexible(userInfo); err == nil && strings.Contains(decoded, ":") {
+		parts := strings.SplitN(decoded, ":", 2)
 		cipher = parts[0]
 		password = parts[1]
 	} else {
@@ -786,7 +1281,7 @@ func ShadowsocksLinkToClashMap(link string, name string) (map[string]interface{}
 		}
 	}
 	host, portStr := splitHostPort(u.Host)
-	port, _ := strconv.Atoi(portStr)
+	port = parsePortWithDefault(portStr, 0)
 
 	m := map[string]interface{}{
 		"name":     name,
@@ -796,6 +1291,43 @@ func ShadowsocksLinkToClashMap(link string, name string) (map[string]interface{}
 		"cipher":   cipher,
 		"password": password,
 	}
+
+	// 解析 plugin 参数 (simple-obfs, v2ray-plugin 等)
+	if pluginStr := u.Query().Get("plugin"); pluginStr != "" {
+		parts := strings.Split(pluginStr, ";")
+		if len(parts) > 0 {
+			pluginName := strings.TrimSpace(parts[0])
+			switch pluginName {
+			case "simple-obfs", "obfs-local":
+				pluginName = "obfs"
+			}
+			m["plugin"] = pluginName
+			pluginOpts := map[string]interface{}{}
+			for _, part := range parts[1:] {
+				kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+				if len(kv) == 2 {
+					key := strings.TrimSpace(kv[0])
+					val := strings.TrimSpace(kv[1])
+					switch key {
+					case "obfs":
+						pluginOpts["mode"] = val
+					case "obfs-host":
+						pluginOpts["host"] = val
+					case "obfs-uri", "path":
+						pluginOpts["path"] = val
+					case "tls":
+						pluginOpts["tls"] = true
+					default:
+						pluginOpts[key] = val
+					}
+				}
+			}
+			if len(pluginOpts) > 0 {
+				m["plugin-opts"] = pluginOpts
+			}
+		}
+	}
+
 	return m, nil
 }
 
@@ -817,7 +1349,7 @@ func SSRLinkToClashMap(link string, name string) (map[string]interface{}, error)
 	}
 
 	host := parts[0]
-	port, _ := strconv.Atoi(parts[1])
+	port := parsePortWithDefault(parts[1], 0)
 	protocol := parts[2]
 	method := parts[3]
 	obfs := parts[4]
@@ -825,7 +1357,10 @@ func SSRLinkToClashMap(link string, name string) (map[string]interface{}, error)
 
 	passwordBytes, err := base64.RawURLEncoding.DecodeString(passwordB64)
 	if err != nil {
-		passwordBytes, _ = base64.StdEncoding.DecodeString(passwordB64)
+		passwordBytes, err = base64.StdEncoding.DecodeString(passwordB64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ssr password encoding: %w", err)
+		}
 	}
 	password := string(passwordBytes)
 
@@ -841,7 +1376,7 @@ func SSRLinkToClashMap(link string, name string) (map[string]interface{}, error)
 	}
 
 	if len(mainAndParams) > 1 {
-		params, _ := url.ParseQuery(mainAndParams[1])
+		params := parseQuerySafe(mainAndParams[1])
 		if pp := params.Get("protoparam"); pp != "" {
 			ppDecoded, err := base64.RawURLEncoding.DecodeString(pp)
 			if err == nil {
@@ -867,7 +1402,7 @@ func HysteriaLinkToClashMap(link string, name string) (map[string]interface{}, e
 	}
 	q := u.Query()
 	host, portStr := splitHostPort(u.Host)
-	port, _ := strconv.Atoi(portStr)
+	port := parsePortWithDefault(portStr, 0)
 
 	m := map[string]interface{}{
 		"name":   name,
@@ -893,6 +1428,12 @@ func HysteriaLinkToClashMap(link string, name string) (map[string]interface{}, e
 	if proto := q.Get("protocol"); proto != "" {
 		m["protocol"] = proto
 	}
+	if alpn := q.Get("alpn"); alpn != "" {
+		m["alpn"] = strings.Split(alpn, ",")
+	}
+	if obfs := q.Get("obfs"); obfs != "" {
+		m["obfs"] = obfs
+	}
 	return m, nil
 }
 
@@ -904,7 +1445,7 @@ func Hysteria2LinkToClashMap(link string, name string) (map[string]interface{}, 
 	}
 	q := u.Query()
 	host, portStr := splitHostPort(u.Host)
-	port, _ := strconv.Atoi(portStr)
+	port := parsePortWithDefault(portStr, 0)
 
 	password := ""
 	if u.User != nil {
@@ -924,6 +1465,18 @@ func Hysteria2LinkToClashMap(link string, name string) (map[string]interface{}, 
 	if insecure := q.Get("insecure"); insecure == "1" {
 		m["skip-cert-verify"] = true
 	}
+	if alpn := q.Get("alpn"); alpn != "" {
+		m["alpn"] = strings.Split(alpn, ",")
+	}
+	if fp := q.Get("fp"); fp != "" {
+		m["client-fingerprint"] = fp
+	}
+	if obfs := q.Get("obfs"); obfs != "" {
+		m["obfs"] = obfs
+		if obfsPw := q.Get("obfs-password"); obfsPw != "" {
+			m["obfs-password"] = obfsPw
+		}
+	}
 	return m, nil
 }
 
@@ -935,14 +1488,23 @@ func TUICLinkToClashMap(link string, name string) (map[string]interface{}, error
 	}
 	q := u.Query()
 	host, portStr := splitHostPort(u.Host)
-	port, _ := strconv.Atoi(portStr)
+	port := parsePortWithDefault(portStr, 0)
 
 	uuid := ""
 	password := ""
 	if u.User != nil {
-		uuid = u.User.Username()
+		userInfo := u.User.Username()
 		if p, ok := u.User.Password(); ok {
+			// Standard format: uuid:password in URL userinfo
+			uuid = userInfo
 			password = p
+		} else if strings.Contains(userInfo, ":") {
+			// URL-encoded colon: tuic://uuid%3Apassword@host:port
+			parts := strings.SplitN(userInfo, ":", 2)
+			uuid = parts[0]
+			password = parts[1]
+		} else {
+			uuid = userInfo
 		}
 	}
 
@@ -972,11 +1534,78 @@ func SOCKSLinkToClashMap(link string, name string) (map[string]interface{}, erro
 	if err != nil {
 		return nil, err
 	}
-	host, portStr := splitHostPort(u.Host)
-	port, _ := strconv.Atoi(portStr)
-	if port == 0 {
-		port = 1080
+
+	// Check for fully Base64 encoded format: socks://Base64(user:pass@host:port)?params
+	// or socks://Base64(host:port)?params
+	q := u.Query()
+	host := u.Hostname()
+	portStr := u.Port()
+
+	var username, password string
+	hasPassword := false
+
+	if host == "" || (u.User == nil && (q.Get("remarks") != "" || q.Get("gost") != "")) {
+		// Non-standard: entire authority is Base64
+		encoded := strings.TrimPrefix(link, "socks://")
+		encoded = strings.TrimPrefix(encoded, "socks5://")
+		base64Part := encoded
+		if idx := strings.Index(base64Part, "?"); idx != -1 {
+			base64Part = base64Part[:idx]
+		}
+		if idx := strings.Index(base64Part, "#"); idx != -1 {
+			base64Part = base64Part[:idx]
+		}
+		if decoded, err := decodeBase64Flexible(base64Part); err == nil {
+			// Split user@server BEFORE url-decoding, so %3A in username is preserved
+			if atIdx := strings.LastIndex(decoded, "@"); atIdx != -1 {
+				userPart := decoded[:atIdx]
+				serverPart := decoded[atIdx+1:]
+				// URL-decode server part
+				if unescaped, e := url.QueryUnescape(serverPart); e == nil {
+					serverPart = unescaped
+				}
+				host, portStr = splitHostPort(serverPart)
+				// Split user:pass on first unencoded colon, then URL-decode each part
+				if parts := strings.SplitN(userPart, ":", 2); len(parts) == 2 {
+					u1, _ := url.QueryUnescape(parts[0])
+					u2, _ := url.QueryUnescape(parts[1])
+					username = u1
+					password = u2
+					hasPassword = true
+				} else {
+					if u1, e := url.QueryUnescape(userPart); e == nil {
+						username = u1
+					}
+				}
+			} else {
+				if unescaped, e := url.QueryUnescape(decoded); e == nil {
+					decoded = unescaped
+				}
+				host, portStr = splitHostPort(decoded)
+			}
+		}
+	} else {
+		host, portStr = splitHostPort(u.Host)
+		if u.User != nil {
+			username = u.User.Username()
+			pw, hasPw := u.User.Password()
+			if hasPw {
+				password = pw
+				hasPassword = true
+			}
+
+			// GOST 格式: Base64 编码的 user:pass
+			if decoded, err := decodeBase64Flexible(username); err == nil {
+				if parts := strings.SplitN(decoded, ":", 2); len(parts) == 2 {
+					username = parts[0]
+					password = parts[1]
+					hasPassword = true
+				}
+			}
+		}
 	}
+
+	port := parsePortWithDefault(portStr, 1080)
 	m := map[string]interface{}{
 		"name":   name,
 		"type":   "socks5",
@@ -984,12 +1613,52 @@ func SOCKSLinkToClashMap(link string, name string) (map[string]interface{}, erro
 		"port":   port,
 		"udp":    true,
 	}
-	if u.User != nil {
-		m["username"] = u.User.Username()
-		if pw, ok := u.User.Password(); ok {
-			m["password"] = pw
+	if username != "" {
+		m["username"] = username
+	}
+	if hasPassword {
+		m["password"] = password
+	}
+
+	// GOST WebSocket 传输层支持 (gost param is Base64 encoded JSON)
+	if gostB64 := q.Get("gost"); gostB64 != "" {
+		if gostJSON, err := decodeBase64Flexible(gostB64); err == nil {
+			var gostCfg map[string]interface{}
+			if json.Unmarshal([]byte(gostJSON), &gostCfg) == nil {
+				route, _ := gostCfg["route"].(string)
+				if route == "ws" {
+					m["network"] = "ws"
+					wsOpts := map[string]interface{}{}
+					if p, ok := gostCfg["path"].(string); ok && p != "" {
+						wsOpts["path"] = p
+					}
+					if h, ok := gostCfg["host"].(string); ok && h != "" {
+						wsOpts["headers"] = map[string]interface{}{"Host": h}
+					}
+					if len(wsOpts) > 0 {
+						m["ws-opts"] = wsOpts
+					}
+				}
+			}
+		} else {
+			// Fallback: try as URL query
+			gostParams := parseQuerySafe(gostB64)
+			if t := gostParams.Get("type"); t == "ws" || strings.Contains(gostB64, "ws") {
+				m["network"] = "ws"
+				wsOpts := map[string]interface{}{}
+				if p := gostParams.Get("path"); p != "" {
+					wsOpts["path"] = p
+				}
+				if h := gostParams.Get("host"); h != "" {
+					wsOpts["headers"] = map[string]interface{}{"Host": h}
+				}
+				if len(wsOpts) > 0 {
+					m["ws-opts"] = wsOpts
+				}
+			}
 		}
 	}
+
 	return m, nil
 }
 
@@ -999,15 +1668,53 @@ func HTTPLinkToClashMap(link string, name string) (map[string]interface{}, error
 	if err != nil {
 		return nil, err
 	}
-	host, portStr := splitHostPort(u.Host)
-	port, _ := strconv.Atoi(portStr)
-	if port == 0 {
-		if strings.HasPrefix(link, "https://") {
-			port = 443
-		} else {
-			port = 80
+
+	host := u.Hostname()
+	portStr := u.Port()
+	var username, password string
+
+	// Check for non-standard Base64 format: http://Base64(user:pass@server:port)?params
+	if host == "" || (u.User == nil && u.Query().Get("method") != "") {
+		encoded := strings.TrimPrefix(link, "http://")
+		encoded = strings.TrimPrefix(encoded, "https://")
+		base64Part := encoded
+		if idx := strings.Index(base64Part, "?"); idx != -1 {
+			base64Part = base64Part[:idx]
+		}
+		if idx := strings.Index(base64Part, "#"); idx != -1 {
+			base64Part = base64Part[:idx]
+		}
+		if decoded, err := decodeBase64Flexible(base64Part); err == nil {
+			if unescaped, e := url.QueryUnescape(decoded); e == nil {
+				decoded = unescaped
+			}
+			if atIdx := strings.LastIndex(decoded, "@"); atIdx != -1 {
+				userPart := decoded[:atIdx]
+				serverPart := decoded[atIdx+1:]
+				host, portStr = splitHostPort(serverPart)
+				if parts := strings.SplitN(userPart, ":", 2); len(parts) == 2 {
+					username = parts[0]
+					password = parts[1]
+				}
+			} else {
+				host, portStr = splitHostPort(decoded)
+			}
+		}
+	} else {
+		host, portStr = splitHostPort(u.Host)
+		if u.User != nil {
+			username = u.User.Username()
+			if pw, ok := u.User.Password(); ok {
+				password = pw
+			}
 		}
 	}
+
+	defaultPort := 80
+	if strings.HasPrefix(link, "https://") {
+		defaultPort = 443
+	}
+	port := parsePortWithDefault(portStr, defaultPort)
 	m := map[string]interface{}{
 		"name":   name,
 		"type":   "http",
@@ -1017,11 +1724,11 @@ func HTTPLinkToClashMap(link string, name string) (map[string]interface{}, error
 	if strings.HasPrefix(link, "https://") {
 		m["tls"] = true
 	}
-	if u.User != nil {
-		m["username"] = u.User.Username()
-		if pw, ok := u.User.Password(); ok {
-			m["password"] = pw
-		}
+	if username != "" {
+		m["username"] = username
+	}
+	if password != "" {
+		m["password"] = password
 	}
 	return m, nil
 }
@@ -1033,10 +1740,7 @@ func AnytlsLinkToClashMap(link string, name string) (map[string]interface{}, err
 		return nil, err
 	}
 	host, portStr := splitHostPort(u.Host)
-	port, _ := strconv.Atoi(portStr)
-	if port == 0 {
-		port = 443
-	}
+	port := parsePortWithDefault(portStr, 443)
 	password := ""
 	if u.User != nil {
 		password = u.User.Username()
@@ -1057,6 +1761,68 @@ func AnytlsLinkToClashMap(link string, name string) (map[string]interface{}, err
 		"udp":                true,
 		"client-fingerprint": "chrome",
 		"sni":                sni,
+	}
+	return m, nil
+}
+
+// WireGuardLinkToClashMap parses a wg:// link into a Clash-compatible proxy map.
+func WireGuardLinkToClashMap(link string, name string) (map[string]interface{}, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	host, portStr := splitHostPort(u.Host)
+	port := parsePortWithDefault(portStr, 51820)
+
+	privateKey := ""
+	if u.User != nil {
+		privateKey = u.User.Username()
+	}
+	// privateKey may also be in query params
+	// Use RawQuery to avoid + being decoded as space
+	if pk := getRawQueryParam(u.RawQuery, "privateKey"); pk != "" {
+		privateKey = pk
+	}
+
+	m := map[string]interface{}{
+		"name":        name,
+		"type":        "wireguard",
+		"server":      host,
+		"port":        port,
+		"private-key": privateKey,
+		"udp":         true,
+	}
+
+	if pk := q.Get("publicKey"); pk != "" {
+		m["public-key"] = pk
+	}
+	if ip := q.Get("ip"); ip != "" {
+		// ip may contain both ipv4 and ipv6 separated by comma
+		ips := strings.Split(ip, ",")
+		m["ip"] = strings.TrimSpace(ips[0])
+		if len(ips) > 1 {
+			m["ipv6"] = strings.TrimSpace(ips[1])
+		}
+	}
+	if ipv6 := q.Get("ipv6"); ipv6 != "" {
+		m["ipv6"] = ipv6
+	}
+	if mtu := q.Get("mtu"); mtu != "" {
+		if mtuInt, err := strconv.Atoi(mtu); err == nil {
+			m["mtu"] = mtuInt
+		}
+	}
+	if psk := q.Get("presharedKey"); psk != "" {
+		m["preshared-key"] = psk
+	}
+	if reserved := q.Get("reserved"); reserved != "" {
+		m["reserved"] = reserved
+	}
+	if keepalive := q.Get("keepalive"); keepalive != "" {
+		if ka, err := strconv.Atoi(keepalive); err == nil {
+			m["keepalive"] = ka
+		}
 	}
 	return m, nil
 }
@@ -1086,6 +1852,8 @@ func NodeConfigToClashMap(nodeType string, configLink string, nodeName string) (
 		return HTTPLinkToClashMap(configLink, nodeName)
 	case "anytls":
 		return AnytlsLinkToClashMap(configLink, nodeName)
+	case "wireguard":
+		return WireGuardLinkToClashMap(configLink, nodeName)
 	default:
 		return nil, fmt.Errorf("unsupported type: %s", nodeType)
 	}

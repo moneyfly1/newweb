@@ -62,9 +62,15 @@ func UpdateCurrentUser(c *gin.Context) {
 		updates["timezone"] = req.Timezone
 	}
 	if len(updates) > 0 {
-		db.Model(user).Updates(updates)
+		if err := db.Model(user).Updates(updates).Error; err != nil {
+			utils.InternalError(c, "更新用户信息失败")
+			return
+		}
 	}
-	db.First(user, user.ID)
+	if err := db.First(user, user.ID).Error; err != nil {
+		utils.InternalError(c, "读取用户信息失败")
+		return
+	}
 	utils.Success(c, user)
 }
 
@@ -86,8 +92,15 @@ func ChangePassword(c *gin.Context) {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	hashed, _ := utils.HashPassword(req.NewPassword)
-	database.GetDB().Model(user).Update("password", hashed)
+	hashed, err := utils.HashPassword(req.NewPassword)
+	if err != nil {
+		utils.InternalError(c, "密码加密失败")
+		return
+	}
+	if err := database.GetDB().Model(user).Update("password", hashed).Error; err != nil {
+		utils.InternalError(c, "更新密码失败")
+		return
+	}
 	utils.SuccessMessage(c, "密码修改成功")
 }
 
@@ -112,7 +125,10 @@ func UpdatePreferences(c *gin.Context) {
 	if req.Timezone != "" {
 		updates["timezone"] = req.Timezone
 	}
-	database.GetDB().Model(user).Updates(updates)
+	if err := database.GetDB().Model(user).Updates(updates).Error; err != nil {
+		utils.InternalError(c, "更新偏好设置失败")
+		return
+	}
 	utils.SuccessMessage(c, "偏好设置已更新")
 }
 
@@ -161,7 +177,10 @@ func UpdateNotificationSettings(c *gin.Context) {
 	if req.NotifySubscription != nil {
 		updates["notify_subscription"] = *req.NotifySubscription
 	}
-	database.GetDB().Model(user).Updates(updates)
+	if err := database.GetDB().Model(user).Updates(updates).Error; err != nil {
+		utils.InternalError(c, "更新通知设置失败")
+		return
+	}
 	utils.SuccessMessage(c, "通知设置已更新")
 }
 
@@ -187,7 +206,10 @@ func UpdatePrivacySettings(c *gin.Context) {
 	if req.Analytics != nil {
 		updates["analytics"] = *req.Analytics
 	}
-	database.GetDB().Model(user).Updates(updates)
+	if err := database.GetDB().Model(user).Updates(updates).Error; err != nil {
+		utils.InternalError(c, "更新隐私设置失败")
+		return
+	}
 	utils.SuccessMessage(c, "隐私设置已更新")
 }
 
@@ -296,10 +318,13 @@ func BindTelegram(c *gin.Context) {
 
 	// Bind
 	tgUsername := req.Username
-	db.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+	if err := db.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
 		"telegram_id":       req.ID,
 		"telegram_username": &tgUsername,
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "Telegram 绑定失败")
+		return
+	}
 
 	utils.SuccessMessage(c, "Telegram 绑定成功")
 }
@@ -307,9 +332,12 @@ func BindTelegram(c *gin.Context) {
 // UnbindTelegram 解绑 Telegram 账号
 func UnbindTelegram(c *gin.Context) {
 	userID := c.GetUint("user_id")
-	database.GetDB().Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+	if err := database.GetDB().Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
 		"telegram_id":       nil,
 		"telegram_username": nil,
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "Telegram 解绑失败")
+		return
+	}
 	utils.SuccessMessage(c, "Telegram 已解绑")
 }

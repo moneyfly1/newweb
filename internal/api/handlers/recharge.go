@@ -76,10 +76,13 @@ func CreateRecharge(c *gin.Context) {
 		}
 
 		pmName := payConfig.PayType
-		db.Model(&record).Updates(map[string]interface{}{
+		if err := db.Model(&record).Updates(map[string]interface{}{
 			"payment_method":         &pmName,
 			"payment_transaction_id": &txID,
-		})
+		}).Error; err != nil {
+			utils.InternalError(c, "更新充值记录失败")
+			return
+		}
 
 		if payConfig.PayType == "epay" || payConfig.PayType == "alipay" || payConfig.PayType == "wxpay" || payConfig.PayType == "qqpay" {
 			orderName := "充值-" + record.OrderNo
@@ -92,8 +95,14 @@ func CreateRecharge(c *gin.Context) {
 						notifyURL, returnURL := services.BuildPaymentURLs("alipay", record.OrderNo)
 						paymentURL, err := services.AlipayCreateOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
 						if err == nil {
-							db.Model(&record).Update("payment_url", &paymentURL)
-							db.First(&record, record.ID)
+							if err := db.Model(&record).Update("payment_url", &paymentURL).Error; err != nil {
+								utils.InternalError(c, "更新支付链接失败")
+								return
+							}
+							if err := db.First(&record, record.ID).Error; err != nil {
+								utils.InternalError(c, "读取充值记录失败")
+								return
+							}
 							utils.Success(c, gin.H{
 								"record":         record,
 								"transaction_id": txID,
@@ -125,8 +134,14 @@ func CreateRecharge(c *gin.Context) {
 				return
 			}
 
-			db.Model(&record).Update("payment_url", &paymentURL)
-			db.First(&record, record.ID)
+			if err := db.Model(&record).Update("payment_url", &paymentURL).Error; err != nil {
+				utils.InternalError(c, "更新支付链接失败")
+				return
+			}
+			if err := db.First(&record, record.ID).Error; err != nil {
+				utils.InternalError(c, "读取充值记录失败")
+				return
+			}
 
 			utils.Success(c, gin.H{
 				"record":         record,
@@ -149,6 +164,9 @@ func CancelRecharge(c *gin.Context) {
 		utils.NotFound(c, "充值记录不存在")
 		return
 	}
-	db.Model(&record).Update("status", "cancelled")
+	if err := db.Model(&record).Update("status", "cancelled").Error; err != nil {
+		utils.InternalError(c, "取消充值失败")
+		return
+	}
 	utils.SuccessMessage(c, "充值已取消")
 }

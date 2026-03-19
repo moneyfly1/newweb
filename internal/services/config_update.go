@@ -26,12 +26,13 @@ type ConfigUpdateConfig struct {
 }
 
 type ConfigUpdateService struct {
-	mu        sync.Mutex
-	running   bool
-	logs      []LogEntry
-	stopCh    chan struct{}
-	ticker    *time.Ticker
-	scheduled bool
+	mu             sync.Mutex
+	running        bool
+	logs           []LogEntry
+	runStopCh      chan struct{}
+	scheduleStopCh chan struct{}
+	ticker         *time.Ticker
+	scheduled      bool
 }
 
 var (
@@ -97,6 +98,7 @@ func (s *ConfigUpdateService) Start() error {
 		return fmt.Errorf("更新任务正在运行中")
 	}
 	s.running = true
+	s.runStopCh = make(chan struct{})
 	s.mu.Unlock()
 
 	go func() {
@@ -112,11 +114,11 @@ func (s *ConfigUpdateService) Start() error {
 func (s *ConfigUpdateService) Stop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.stopCh != nil {
+	if s.runStopCh != nil {
 		select {
-		case <-s.stopCh:
+		case <-s.runStopCh:
 		default:
-			close(s.stopCh)
+			close(s.runStopCh)
 		}
 	}
 	s.running = false
@@ -151,7 +153,7 @@ func (s *ConfigUpdateService) StartSchedule() {
 		interval = 60
 	}
 	s.scheduled = true
-	s.stopCh = make(chan struct{})
+	s.scheduleStopCh = make(chan struct{})
 	s.ticker = time.NewTicker(time.Duration(interval) * time.Minute)
 	s.mu.Unlock()
 
@@ -172,7 +174,7 @@ func (s *ConfigUpdateService) StartSchedule() {
 				s.mu.Lock()
 				s.running = false
 				s.mu.Unlock()
-			case <-s.stopCh:
+			case <-s.scheduleStopCh:
 				return
 			}
 		}
@@ -186,11 +188,11 @@ func (s *ConfigUpdateService) StopSchedule() {
 	if s.ticker != nil {
 		s.ticker.Stop()
 	}
-	if s.stopCh != nil {
+	if s.scheduleStopCh != nil {
 		select {
-		case <-s.stopCh:
+		case <-s.scheduleStopCh:
 		default:
-			close(s.stopCh)
+			close(s.scheduleStopCh)
 		}
 	}
 	s.scheduled = false
@@ -198,10 +200,6 @@ func (s *ConfigUpdateService) StopSchedule() {
 }
 
 func (s *ConfigUpdateService) runUpdate() {
-	s.mu.Lock()
-	s.stopCh = make(chan struct{})
-	s.mu.Unlock()
-
 	s.addLog("info", "开始更新节点...")
 
 	cfg, err := s.LoadConfig()
@@ -224,11 +222,9 @@ func (s *ConfigUpdateService) runUpdate() {
 		}
 
 		// Check stop signal
-		select {
-		case <-s.stopCh:
+		if s.shouldStopRun() {
 			s.addLog("info", "更新已被中断")
 			return
-		default:
 		}
 
 		s.addLog("info", fmt.Sprintf("正在获取订阅: %s", u))
@@ -268,30 +264,68 @@ func (s *ConfigUpdateService) runUpdate() {
 
 	// Delete old auto-imported nodes and reset auto-increment
 	result := db.Where("is_manual = ?", false).Delete(&models.Node{})
+	if result.Error != nil {
+		s.addLog("error", fmt.Sprintf("删除旧节点失败: %v", result.Error))
+		return
+	}
 	s.addLog("info", fmt.Sprintf("已删除 %d 个旧的自动导入节点", result.RowsAffected))
 
 	// Check if there are any manual nodes left
 	var manualCount int64
-	db.Model(&models.Node{}).Where("is_manual = ?", true).Count(&manualCount)
+	if err := db.Model(&models.Node{}).Where("is_manual = ?", true).Count(&manualCount).Error; err != nil {
+		s.addLog("error", fmt.Sprintf("统计手动节点失败: %v", err))
+		return
+	}
 	if manualCount == 0 {
 		// No nodes left at all, reset the auto-increment sequence
-		db.Exec("DELETE FROM sqlite_sequence WHERE name = 'nodes'")
-		s.addLog("info", "已重置节点ID序列")
+		if err := db.Exec("DELETE FROM sqlite_sequence WHERE name = 'nodes'").Error; err != nil {
+			s.addLog("error", fmt.Sprintf("重置节点ID序列失败: %v", err))
+		} else {
+			s.addLog("info", "已重置节点ID序列")
+		}
 	}
 
 	// Insert new nodes (order after manual nodes)
 	var maxOrder int
-	db.Model(&models.Node{}).Where("is_manual = ?", true).Select("COALESCE(MAX(order_index), -1)").Scan(&maxOrder)
+	if err := db.Model(&models.Node{}).Where("is_manual = ?", true).Select("COALESCE(MAX(order_index), -1)").Scan(&maxOrder).Error; err != nil {
+		s.addLog("error", fmt.Sprintf("读取最大排序号失败: %v", err))
+		return
+	}
 	successCount := 0
 	for i, node := range allNodes {
 		node.IsManual = false
 		node.OrderIndex = maxOrder + 1 + i
 		if err := db.Create(&node).Error; err == nil {
 			successCount++
+		} else {
+			s.addLog("error", fmt.Sprintf("导入节点失败(%s): %v", node.Name, err))
 		}
 	}
 
 	s.addLog("success", fmt.Sprintf("更新完成: 共 %d 个节点，成功导入 %d 个", len(allNodes), successCount))
+}
+
+func (s *ConfigUpdateService) shouldStopRun() bool {
+	s.mu.Lock()
+	runStopCh := s.runStopCh
+	scheduleStopCh := s.scheduleStopCh
+	s.mu.Unlock()
+
+	if runStopCh != nil {
+		select {
+		case <-runStopCh:
+			return true
+		default:
+		}
+	}
+	if scheduleStopCh != nil {
+		select {
+		case <-scheduleStopCh:
+			return true
+		default:
+		}
+	}
+	return false
 }
 
 func (s *ConfigUpdateService) filterNodes(nodes []models.Node, keywords []string) []models.Node {

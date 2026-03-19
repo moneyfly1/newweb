@@ -41,7 +41,9 @@ func CreateAdminAuditLog(c *gin.Context, action string, targetType string, targe
 		RequestPath:       &path,
 	}
 
-	database.GetDB().Create(&log)
+	if err := database.GetDB().Create(&log).Error; err != nil {
+		SysError("security", fmt.Sprintf("写入管理员审计日志失败: %v", err))
+	}
 }
 
 // CreateSecurityEvent 记录安全事件
@@ -56,7 +58,9 @@ func CreateSecurityEvent(eventType string, severity string, description string, 
 		Severity:    severity,
 		Description: &description,
 	}
-	db.Create(&log)
+	if err := db.Create(&log).Error; err != nil {
+		SysError("security", fmt.Sprintf("写入安全事件失败: %v", err))
+	}
 
 	// 注意：安全告警通知功能已实现在 services/security_alert.go
 	// 可以在需要时调用 services.SendSecurityAlert()

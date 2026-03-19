@@ -63,7 +63,10 @@ func DeleteDevice(c *gin.Context) {
 
 	// Decrement current devices count (atomic, floor at 0)
 	if sub.CurrentDevices > 0 {
-		db.Model(&sub).UpdateColumn("current_devices", gorm.Expr("CASE WHEN current_devices > 0 THEN current_devices - 1 ELSE 0 END"))
+		if err := db.Model(&sub).UpdateColumn("current_devices", gorm.Expr("CASE WHEN current_devices > 0 THEN current_devices - 1 ELSE 0 END")).Error; err != nil {
+			utils.InternalError(c, "更新设备计数失败")
+			return
+		}
 	}
 
 	utils.SuccessMessage(c, "设备已删除")

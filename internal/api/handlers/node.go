@@ -217,9 +217,12 @@ func TestNode(c *gin.Context) {
 	if reachable {
 		status = "online"
 	}
-	db.Model(&node).Updates(map[string]interface{}{
+	if err := db.Model(&node).Updates(map[string]interface{}{
 		"status": status, "latency": latency, "last_test": &now,
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "更新节点测试结果失败")
+		return
+	}
 
 	utils.Success(c, gin.H{
 		"node_id":   node.ID,
@@ -263,9 +266,11 @@ func BatchTestNodes(c *gin.Context) {
 			if reachable {
 				status = "online"
 			}
-			db.Model(&n).Updates(map[string]interface{}{
+			if err := db.Model(&n).Updates(map[string]interface{}{
 				"status": status, "latency": latency, "last_test": &now,
-			})
+			}).Error; err != nil {
+				utils.SysError("node", fmt.Sprintf("批量更新节点测试结果失败: node=%d err=%v", n.ID, err))
+			}
 			mu.Lock()
 			results = append(results, Result{
 				NodeID: n.ID, Name: n.Name,

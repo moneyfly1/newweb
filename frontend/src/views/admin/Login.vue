@@ -62,6 +62,7 @@ import { useRouter } from 'vue-router'
 import { useMessage, type FormInst } from 'naive-ui'
 import { PersonOutline, LockClosedOutline, ArrowBackOutline } from '@vicons/ionicons5'
 import { useUserStore } from '@/stores/user'
+import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const message = useMessage()
@@ -90,7 +91,7 @@ async function handleLogin() {
     message.success('登录成功')
     router.push('/admin')
   } catch (e: any) {
-    message.error(e.message || '登录失败')
+    message.error(getErrorMessage(e, '登录失败'))
   } finally {
     loading.value = false
   }

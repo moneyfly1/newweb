@@ -148,7 +148,10 @@ func ReplyTicket(c *gin.Context) {
 
 	// Update ticket status to processing if it was pending
 	if ticket.Status == string(models.TicketStatusPending) {
-		db.Model(&ticket).Update("status", string(models.TicketStatusProcessing))
+		if err := db.Model(&ticket).Update("status", string(models.TicketStatusProcessing)).Error; err != nil {
+			utils.InternalError(c, "更新工单状态失败")
+			return
+		}
 	}
 
 	utils.Success(c, reply)
@@ -176,10 +179,13 @@ func CloseTicket(c *gin.Context) {
 	}
 
 	now := time.Now()
-	db.Model(&ticket).Updates(map[string]interface{}{
+	if err := db.Model(&ticket).Updates(map[string]interface{}{
 		"status":    string(models.TicketStatusClosed),
 		"closed_at": &now,
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "关闭工单失败")
+		return
+	}
 
 	utils.SuccessMessage(c, "工单已关闭")
 }

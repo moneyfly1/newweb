@@ -64,6 +64,7 @@ import { useMessage, type FormInst } from 'naive-ui'
 import { MailOutline, LockClosedOutline } from '@vicons/ionicons5'
 import { useUserStore } from '@/stores/user'
 import { getPublicConfig } from '@/api/common'
+import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
 const message = useMessage()
@@ -89,7 +90,7 @@ async function handleLogin() {
     message.success('登录成功')
     router.push(userStore.isAdmin ? '/admin' : '/')
   } catch (e: any) {
-    message.error(e.message || '登录失败')
+    message.error(getErrorMessage(e, '登录失败'))
   } finally {
     loading.value = false
   }
@@ -104,7 +105,7 @@ function loadTelegramWidget() {
       message.success('登录成功')
       router.push(userStore.isAdmin ? '/admin' : '/')
     } catch (e: any) {
-      message.error(e.message || 'Telegram 登录失败')
+      message.error(getErrorMessage(e, 'Telegram 登录失败'))
     }
   }
   const script = document.createElement('script')

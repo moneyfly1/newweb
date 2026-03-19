@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -108,7 +109,10 @@ func Register(c *gin.Context) {
 			return
 		}
 		vc.MarkAsUsed()
-		db.Save(&vc)
+		if err := db.Save(&vc).Error; err != nil {
+			utils.InternalError(c, "更新验证码状态失败")
+			return
+		}
 	}
 
 	// 检查用户名和邮箱是否已存在
@@ -162,6 +166,10 @@ func Register(c *gin.Context) {
 
 	// 开启事务：创建用户、更新邀请码、发放奖励、创建订阅
 	tx := db.Begin()
+	if tx.Error != nil {
+		utils.InternalError(c, "创建事务失败")
+		return
+	}
 
 	// Re-validate invite code with row lock inside transaction
 	if req.InviteCode != "" {
@@ -192,7 +200,7 @@ func Register(c *gin.Context) {
 
 	// 更新邀请码使用次数
 	if req.InviteCode != "" {
-		if err := tx.Model(&models.InviteCode{}).Where("code = ?", req.InviteCode).
+		if err := tx.Model(&models.InviteCode{}).Where("UPPER(code) = UPPER(?)", req.InviteCode).
 			UpdateColumn("used_count", gorm.Expr("used_count + 1")).Error; err != nil {
 			tx.Rollback()
 			utils.InternalError(c, "更新邀请码失败")
@@ -203,7 +211,7 @@ func Register(c *gin.Context) {
 	// 创建邀请关系 + 发放奖励
 	if req.InviteCode != "" && user.InvitedBy != nil {
 		var inviteCode models.InviteCode
-		if tx.Where("UPPER(code) = UPPER(?)", req.InviteCode).First(&inviteCode).Error == nil {
+		if err := tx.Where("UPPER(code) = UPPER(?)", req.InviteCode).First(&inviteCode).Error; err == nil {
 			relation := models.InviteRelation{
 				InviteCodeID: inviteCode.ID,
 				InviterID:    inviteCode.UserID,
@@ -215,38 +223,58 @@ func Register(c *gin.Context) {
 				relation.InviterRewardGiven = true
 				var inviter models.User
 				if tx.First(&inviter, inviteCode.UserID).Error == nil {
-					tx.Model(&inviter).UpdateColumn("balance", gorm.Expr("balance + ?", inviteCode.InviterReward))
+					if err := tx.Model(&inviter).UpdateColumn("balance", gorm.Expr("balance + ?", inviteCode.InviterReward)).Error; err != nil {
+						tx.Rollback()
+						utils.InternalError(c, "发放邀请奖励失败")
+						return
+					}
 					desc := fmt.Sprintf("邀请用户 %s 注册奖励", user.Username)
-					tx.Create(&models.BalanceLog{
+					if err := tx.Create(&models.BalanceLog{
 						UserID:        inviter.ID,
 						ChangeType:    "invite_reward",
 						Amount:        inviteCode.InviterReward,
 						BalanceBefore: inviter.Balance,
 						BalanceAfter:  inviter.Balance + inviteCode.InviterReward,
 						Description:   &desc,
-					})
+					}).Error; err != nil {
+						tx.Rollback()
+						utils.InternalError(c, "记录邀请奖励失败")
+						return
+					}
 				}
 			}
 			// 发放被邀请人奖励
 			if inviteCode.InviteeReward > 0 {
 				relation.InviteeRewardAmount = inviteCode.InviteeReward
 				relation.InviteeRewardGiven = true
-				tx.Model(&user).UpdateColumn("balance", gorm.Expr("balance + ?", inviteCode.InviteeReward))
+				if err := tx.Model(&user).UpdateColumn("balance", gorm.Expr("balance + ?", inviteCode.InviteeReward)).Error; err != nil {
+					tx.Rollback()
+					utils.InternalError(c, "发放受邀奖励失败")
+					return
+				}
 				desc := fmt.Sprintf("受邀注册奖励 (邀请码: %s)", req.InviteCode)
-				tx.Create(&models.BalanceLog{
+				if err := tx.Create(&models.BalanceLog{
 					UserID:        user.ID,
 					ChangeType:    "invite_reward",
 					Amount:        inviteCode.InviteeReward,
 					BalanceBefore: 0,
 					BalanceAfter:  inviteCode.InviteeReward,
 					Description:   &desc,
-				})
+				}).Error; err != nil {
+					tx.Rollback()
+					utils.InternalError(c, "记录受邀奖励失败")
+					return
+				}
 			}
 			if err := tx.Create(&relation).Error; err != nil {
 				tx.Rollback()
 				utils.InternalError(c, "创建邀请关系失败")
 				return
 			}
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			tx.Rollback()
+			utils.InternalError(c, "读取邀请码失败")
+			return
 		}
 	}
 
@@ -259,7 +287,9 @@ func Register(c *gin.Context) {
 	}
 	subscribeDays := 0
 	if v := settings["default_subscribe_days"]; v != "" {
-		_, _ = fmt.Sscanf(v, "%d", &subscribeDays)
+		if _, err := fmt.Sscanf(v, "%d", &subscribeDays); err != nil {
+			subscribeDays = 0
+		}
 	}
 	expireTime := time.Now()
 	if subscribeDays > 0 {
@@ -362,7 +392,9 @@ func Login(c *gin.Context) {
 	}
 	if userNotFound || !utils.CheckPassword(req.Password, passwordToCheck) {
 		attempt.Success = false
-		db.Create(&attempt)
+		if err := db.Create(&attempt).Error; err != nil {
+			utils.SysError("auth", fmt.Sprintf("记录登录失败尝试失败: %v", err))
+		}
 		utils.Unauthorized(c, "用户名或密码错误")
 		return
 	}
@@ -373,33 +405,42 @@ func Login(c *gin.Context) {
 	}
 
 	attempt.Success = true
-	db.Create(&attempt)
+	if err := db.Create(&attempt).Error; err != nil {
+		utils.SysError("auth", fmt.Sprintf("记录登录成功尝试失败: %v", err))
+	}
 
 	// 更新最后登录时间
-	db.Model(&user).Update("last_login", time.Now())
+	if err := db.Model(&user).Update("last_login", time.Now()).Error; err != nil {
+		utils.InternalError(c, "更新登录状态失败")
+		return
+	}
 
 	// 记录登录历史
 	loginIP := utils.GetRealClientIP(c)
 	loginUA := c.GetHeader("User-Agent")
 	loginLocation := utils.GetIPLocation(loginIP)
-	db.Create(&models.LoginHistory{
+	if err := db.Create(&models.LoginHistory{
 		UserID:      user.ID,
 		IPAddress:   &loginIP,
 		UserAgent:   &loginUA,
 		Location:    &loginLocation,
 		LoginStatus: "success",
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "记录登录历史失败")
+		return
+	}
 
-	// 异常登录检测：检查是否为新 IP
+	// 异常登录检测：比较上次登录IP与本次IP
 	abnormalAlertGlobal := utils.IsBoolSettingDefault("abnormal_login_alert", true)
 	if abnormalAlertGlobal && user.AbnormalLoginAlertEnabled {
-		var prevCount int64
-		db.Model(&models.LoginHistory{}).Where("user_id = ? AND ip_address = ? AND id < (SELECT MAX(id) FROM login_history WHERE user_id = ?)",
-			user.ID, loginIP, user.ID).Count(&prevCount)
-		if prevCount == 0 && user.LastLogin != nil {
+		var lastLogin models.LoginHistory
+		err := db.Where("user_id = ? AND login_status = 'success'", user.ID).
+			Order("id DESC").Offset(1).First(&lastLogin).Error
+		if err == nil && lastLogin.IPAddress != nil && *lastLogin.IPAddress != loginIP {
 			go services.NotifyUser(user.ID, "abnormal_login", map[string]string{
 				"ip": loginIP, "location": loginLocation,
-				"time": time.Now().Format("2006-01-02 15:04:05"), "user_agent": loginUA,
+				"last_ip": *lastLogin.IPAddress,
+				"time":    time.Now().Format("2006-01-02 15:04:05"), "user_agent": loginUA,
 			})
 		}
 	}
@@ -428,7 +469,9 @@ func Logout(c *gin.Context) {
 	tokenString, _ := c.Get("token")
 	if token, ok := tokenString.(string); ok {
 		tokenHash := utils.SHA256Hash(token)
-		_ = models.AddToBlacklist(database.GetDB(), tokenHash, c.GetUint("user_id"), time.Now().Add(24*time.Hour))
+		if err := models.AddToBlacklist(database.GetDB(), tokenHash, c.GetUint("user_id"), time.Now().Add(24*time.Hour)); err != nil {
+			utils.SysError("auth", fmt.Sprintf("登出加入黑名单失败: %v", err))
+		}
 	}
 	utils.SuccessMessage(c, "已登出")
 }
@@ -481,7 +524,9 @@ func RefreshToken(c *gin.Context) {
 	// 将旧的 refresh token 加入黑名单（防止重用）
 	db := database.GetDB()
 	expiresAt := time.Now().Add(time.Duration(config.AppConfig.RefreshTokenExpireDays) * 24 * time.Hour)
-	_ = models.AddToBlacklist(db, tokenHash, user.ID, expiresAt)
+	if err := models.AddToBlacklist(db, tokenHash, user.ID, expiresAt); err != nil {
+		utils.SysError("auth", fmt.Sprintf("refresh token 加入黑名单失败: %v", err))
+	}
 
 	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
 	newRefreshToken, _ := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
@@ -508,12 +553,15 @@ func SendVerificationCode(c *gin.Context) {
 
 	code := utils.GenerateVerificationCode()
 	db := database.GetDB()
-	db.Create(&models.VerificationCode{
+	if err := db.Create(&models.VerificationCode{
 		Email:     req.Email,
 		Code:      code,
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 		Purpose:   req.Purpose,
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "验证码保存失败")
+		return
+	}
 
 	// 发送验证码邮件
 	subject, body := services.RenderEmail("verification", map[string]string{"code": code})
@@ -540,7 +588,10 @@ func VerifyCode(c *gin.Context) {
 	}
 
 	vc.MarkAsUsed()
-	database.GetDB().Save(&vc)
+	if err := database.GetDB().Save(&vc).Error; err != nil {
+		utils.InternalError(c, "更新验证码状态失败")
+		return
+	}
 	utils.SuccessMessage(c, "验证成功")
 }
 
@@ -563,12 +614,15 @@ func ForgotPassword(c *gin.Context) {
 	}
 
 	code := utils.GenerateVerificationCode()
-	db.Create(&models.VerificationCode{
+	if err := db.Create(&models.VerificationCode{
 		Email:     req.Email,
 		Code:      code,
 		ExpiresAt: time.Now().Add(15 * time.Minute),
 		Purpose:   "reset_password",
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "验证码保存失败")
+		return
+	}
 
 	// 发送重置密码邮件
 	subject, body := services.RenderEmail("reset_password", map[string]string{"code": code})
@@ -607,9 +661,15 @@ func ResetPassword(c *gin.Context) {
 		return
 	}
 
-	db.Model(&models.User{}).Where("email = ?", req.Email).Update("password", hashedPassword)
+	if err := db.Model(&models.User{}).Where("email = ?", req.Email).Update("password", hashedPassword).Error; err != nil {
+		utils.InternalError(c, "更新密码失败")
+		return
+	}
 	vc.MarkAsUsed()
-	db.Save(&vc)
+	if err := db.Save(&vc).Error; err != nil {
+		utils.InternalError(c, "更新验证码状态失败")
+		return
+	}
 
 	utils.SuccessMessage(c, "密码重置成功")
 }
@@ -656,11 +716,17 @@ func TelegramLogin(c *gin.Context) {
 
 	// Update Telegram username if changed
 	if req.Username != "" {
-		db.Model(&user).Update("telegram_username", req.Username)
+		if err := db.Model(&user).Update("telegram_username", req.Username).Error; err != nil {
+			utils.InternalError(c, "更新 Telegram 用户名失败")
+			return
+		}
 	}
 
 	// Update last login
-	db.Model(&user).Update("last_login", time.Now())
+	if err := db.Model(&user).Update("last_login", time.Now()).Error; err != nil {
+		utils.InternalError(c, "更新登录状态失败")
+		return
+	}
 
 	// Generate tokens
 	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)

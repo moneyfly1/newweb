@@ -15,15 +15,9 @@ const instance = axios.create({
   timeout: 15000,
 })
 
-instance.interceptors.request.use((config) => {
-  const userStore = useUserStore()
-  if (userStore.token) {
-    config.headers.Authorization = `Bearer ${userStore.token}`
-  }
-  return config
-})
-
 let isRefreshing = false
+let csrfTokenCache = ''
+let csrfTokenPromise: Promise<string> | null = null
 let pendingRequests: Array<{
   resolve: (config: InternalAxiosRequestConfig) => void
   reject: (error: any) => void
@@ -40,7 +34,59 @@ function processQueue(error: any, newToken: string | null) {
   pendingRequests = []
 }
 
+export function clearRequestSessionCache() {
+  csrfTokenCache = ''
+  csrfTokenPromise = null
+}
+
+async function ensureCSRFToken(): Promise<string> {
+  const userStore = useUserStore()
+  if (!userStore.token) {
+    return ''
+  }
+  if (csrfTokenCache) {
+    return csrfTokenCache
+  }
+  if (csrfTokenPromise) {
+    return csrfTokenPromise
+  }
+
+  csrfTokenPromise = instance.get('/csrf-token')
+    .then((res: any) => {
+      const token = res?.data?.csrf_token || ''
+      csrfTokenCache = token
+      return token
+    })
+    .catch(() => '')
+    .finally(() => {
+      csrfTokenPromise = null
+    })
+
+  return csrfTokenPromise
+}
+
 let isLoggingOut = false
+
+instance.interceptors.request.use(async (config) => {
+  const userStore = useUserStore()
+  if (userStore.token) {
+    config.headers.Authorization = `Bearer ${userStore.token}`
+  }
+
+  const method = (config.method || 'get').toUpperCase()
+  const url = config.url || ''
+  const isAuthEndpoint = url.startsWith('/auth/')
+  const needsCSRF = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
+  if (needsCSRF && userStore.token && !isAuthEndpoint) {
+    const csrfToken = await ensureCSRFToken()
+    if (csrfToken) {
+      config.headers = config.headers || {}
+      ;(config.headers as any)['X-CSRF-Token'] = csrfToken
+    }
+  }
+
+  return config
+})
 
 instance.interceptors.response.use(
   (response) => {
@@ -69,6 +115,7 @@ instance.interceptors.response.use(
           return new Promise((resolve, reject) => {
             pendingRequests.push({ resolve, reject })
           }).then(() => {
+            originalRequest.headers = originalRequest.headers || {}
             originalRequest.headers.Authorization = `Bearer ${userStore.token}`
             return instance(originalRequest)
           })
@@ -84,6 +131,7 @@ instance.interceptors.response.use(
           if (newToken) {
             userStore.token = newToken
             if (newRefresh) userStore.refreshTokenVal = newRefresh
+            csrfTokenCache = ''
             localStorage.setItem('token', newToken)
             if (newRefresh) localStorage.setItem('refresh_token', newRefresh)
             processQueue(null, newToken)
@@ -100,8 +148,22 @@ instance.interceptors.response.use(
       // Refresh failed or no refresh token — logout
       if (!isLoggingOut) {
         isLoggingOut = true
+        csrfTokenCache = ''
         userStore.logout(true)
         router.push('/login').finally(() => { isLoggingOut = false })
+      }
+    }
+
+    // CSRF token may be expired after server restart/token rotation; refresh once and retry.
+    const csrfMsg = error.response?.data?.message || ''
+    if (error.response?.status === 403 && originalRequest && !originalRequest._csrfRetry && String(csrfMsg).toLowerCase().includes('csrf')) {
+      originalRequest._csrfRetry = true
+      csrfTokenCache = ''
+      const csrfToken = await ensureCSRFToken()
+      if (csrfToken) {
+        originalRequest.headers = originalRequest.headers || {}
+        originalRequest.headers['X-CSRF-Token'] = csrfToken
+        return instance(originalRequest)
       }
     }
 

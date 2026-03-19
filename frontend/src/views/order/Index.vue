@@ -197,6 +197,7 @@ import { listOrders, payOrder, cancelOrder, createPayment, getOrderStatus } from
 import { listRechargeRecords, cancelRecharge, getPaymentMethods } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 import { safeRedirect } from '@/utils/security'
+import { getErrorMessage } from '@/utils/error'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const router = useRouter()
@@ -334,7 +335,7 @@ const loadOrders = async () => {
     const res = await listOrders(params)
     orders.value = res.data?.items || []
     orderPagination.value.itemCount = res.data?.total || 0
-  } catch (e: any) { message.error(e.message || '加载订单失败') }
+  } catch (e: any) { message.error(getErrorMessage(e, '加载订单失败')) }
   finally { ordersLoading.value = false }
 }
 
@@ -344,7 +345,7 @@ const loadRechargeRecords = async () => {
     const res = await listRechargeRecords({ page: rechargePagination.value.page, page_size: rechargePagination.value.pageSize })
     rechargeRecords.value = res.data?.items || []
     rechargePagination.value.itemCount = res.data?.total || 0
-  } catch (e: any) { message.error(e.message || '加载充值记录失败') }
+  } catch (e: any) { message.error(getErrorMessage(e, '加载充值记录失败')) }
   finally { rechargeLoading.value = false }
 }
 
@@ -412,7 +413,7 @@ const handlePay = async () => {
         loadOrders()
       }
     }
-  } catch (e: any) { message.error(e.message || '支付失败') }
+  } catch (e: any) { message.error(getErrorMessage(e, '支付失败')) }
   finally { paying.value = false }
 }
 
@@ -425,7 +426,7 @@ const handleCancelOrder = (order: any) => {
     positiveText: '确定', negativeText: '取消',
     onPositiveClick: async () => {
       try { await cancelOrder(order.order_no); message.success('订单已取消'); loadOrders() }
-      catch (e: any) { message.error(e.message || '取消订单失败') }
+      catch (e: any) { message.error(getErrorMessage(e, '取消订单失败')) }
     }
   })
 }
@@ -437,7 +438,7 @@ const handleCancelRecharge = (record: any) => {
     positiveText: '确定', negativeText: '取消',
     onPositiveClick: async () => {
       try { await cancelRecharge(record.id); message.success('充值已取消'); loadRechargeRecords() }
-      catch (e: any) { message.error(e.message || '取消充值失败') }
+      catch (e: any) { message.error(getErrorMessage(e, '取消充值失败')) }
     }
   })
 }

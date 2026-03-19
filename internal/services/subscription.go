@@ -50,12 +50,14 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			if extendMonths > 0 {
 				newExpire = newExpire.AddDate(0, extendMonths, 0)
 			}
-			db.Model(&sub).Updates(map[string]interface{}{
+			if err := db.Model(&sub).Updates(map[string]interface{}{
 				"device_limit": newLimit,
 				"expire_time":  newExpire,
 				"is_active":    true,
 				"status":       "active",
-			})
+			}).Error; err != nil {
+				return fmt.Errorf("更新升级订阅失败: %w", err)
+			}
 			pkgName = fmt.Sprintf("订阅升级: +%d设备", addDevices)
 			if extendMonths > 0 {
 				pkgName = fmt.Sprintf("订阅升级: +%d设备, 续期%d月", addDevices, extendMonths)
@@ -144,7 +146,9 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			pkgID := int64(order.PackageID)
 			updates["package_id"] = &pkgID
 		}
-		db.Model(&sub).Updates(updates)
+		if err := db.Model(&sub).Updates(updates).Error; err != nil {
+			return fmt.Errorf("更新订阅失败: %w", err)
+		}
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "extend", "system", nil, fmt.Sprintf("购买套餐续期订阅: %s, +%d天", pkgName, durationDays), nil, nil)
 		fmt.Printf("[subscription] 订阅续期成功: subscription_id=%d, new_expire=%s\n", sub.ID, newExpire.Format("2006-01-02"))
 	}
@@ -209,9 +213,12 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 		return
 	}
 	// Re-read balance for accurate log
-	db.First(&inviter, inviter.ID)
+	if err := db.First(&inviter, inviter.ID).Error; err != nil {
+		utils.SysError("subscription", fmt.Sprintf("返佣后读取邀请人余额失败: inviter=%d err=%v", inviter.ID, err))
+		return
+	}
 	desc := fmt.Sprintf("邀请用户购买返佣 (订单: %s, 比例: %.1f%%)", order.OrderNo, rate)
-	db.Create(&models.BalanceLog{
+	if err := db.Create(&models.BalanceLog{
 		UserID:         inviter.ID,
 		ChangeType:     "invite_commission",
 		Amount:         commission,
@@ -219,10 +226,13 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 		BalanceAfter:   inviter.Balance,
 		RelatedOrderID: func() *int64 { id := int64(order.ID); return &id }(),
 		Description:    &desc,
-	})
+	}).Error; err != nil {
+		utils.SysError("subscription", fmt.Sprintf("记录返佣余额日志失败: inviter=%d order=%d err=%v", inviter.ID, order.ID, err))
+		return
+	}
 	orderID := int64(order.ID)
 	relationID := int64(relation.ID)
-	db.Create(&models.CommissionLog{
+	if err := db.Create(&models.CommissionLog{
 		InviterID:        relation.InviterID,
 		InviteeID:        relation.InviteeID,
 		InviteRelationID: &relationID,
@@ -231,11 +241,16 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 		RelatedOrderID:   &orderID,
 		Status:           "settled",
 		Description:      &desc,
-	})
-	db.Model(&relation).Updates(map[string]interface{}{
+	}).Error; err != nil {
+		utils.SysError("subscription", fmt.Sprintf("记录返佣日志失败: relation=%d order=%d err=%v", relation.ID, order.ID, err))
+		return
+	}
+	if err := db.Model(&relation).Updates(map[string]interface{}{
 		"invitee_total_consumption": gorm.Expr("invitee_total_consumption + ?", payAmount),
 		"invitee_first_order_id":    order.ID,
-	})
+	}).Error; err != nil {
+		utils.SysError("subscription", fmt.Sprintf("更新邀请关系返佣信息失败: relation=%d order=%d err=%v", relation.ID, order.ID, err))
+	}
 }
 
 // ── Subscription format generators ──

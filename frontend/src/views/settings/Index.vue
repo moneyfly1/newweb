@@ -163,6 +163,7 @@ import { useAppStore } from '@/stores/app'
 import { updateProfile, changePassword, getNotificationSettings, updateNotificationSettings, getPrivacySettings, updatePrivacySettings, getLoginHistory, bindTelegram, unbindTelegram } from '@/api/user'
 import { getPublicConfig } from '@/api/common'
 import { translateLoginStatus, parseDeviceInfo, formatLocation } from '@/utils/i18n'
+import { getErrorMessage } from '@/utils/error'
 
 const message = useMessage()
 const userStore = useUserStore()
@@ -225,7 +226,7 @@ async function saveProfile() {
     appStore.setTheme(profileForm.value.theme)
     message.success('保存成功')
     await userStore.fetchUser()
-  } catch (e: any) { message.error(e.message || '保存失败') }
+  } catch (e: any) { message.error(getErrorMessage(e, '保存失败')) }
   finally { savingProfile.value = false }
 }
 
@@ -236,15 +237,15 @@ async function savePw() {
     await changePassword({ old_password: pwForm.value.old_password, new_password: pwForm.value.new_password })
     message.success('密码修改成功')
     pwForm.value = { old_password: '', new_password: '', confirm_password: '' }
-  } catch (e: any) { message.error(e.message || '修改失败') }
+  } catch (e: any) { message.error(getErrorMessage(e, '修改失败')) }
   finally { savingPw.value = false }
 }
 
 async function saveNotif() {
-  try { await updateNotificationSettings(notifForm.value); message.success('通知设置已保存') } catch (e: any) { message.error(e.message || '保存通知设置失败') }
+  try { await updateNotificationSettings(notifForm.value); message.success('通知设置已保存') } catch (e: any) { message.error(getErrorMessage(e, '保存通知设置失败')) }
 }
 async function savePrivacy() {
-  try { await updatePrivacySettings(privacyForm.value); message.success('隐私设置已保存') } catch (e: any) { message.error(e.message || '保存隐私设置失败') }
+  try { await updatePrivacySettings(privacyForm.value); message.success('隐私设置已保存') } catch (e: any) { message.error(getErrorMessage(e, '保存隐私设置失败')) }
 }
 
 async function handleUnbindTelegram() {
@@ -254,7 +255,7 @@ async function handleUnbindTelegram() {
     message.success('Telegram 已解绑')
     await userStore.fetchUser()
   } catch (e: any) {
-    message.error(e.message || '解绑失败')
+    message.error(getErrorMessage(e, '解绑失败'))
   } finally {
     unbindingTelegram.value = false
   }
@@ -268,7 +269,7 @@ function loadTelegramBindWidget() {
       message.success('Telegram 绑定成功')
       await userStore.fetchUser()
     } catch (e: any) {
-      message.error(e.message || '绑定失败')
+      message.error(getErrorMessage(e, '绑定失败'))
     }
   }
   const script = document.createElement('script')
@@ -298,7 +299,7 @@ onMounted(async () => {
   try {
     const res: any = await getLoginHistory()
     loginHistory.value = res.data?.items || []
-  } catch (e: any) { message.error(e.message || '加载登录历史失败') }
+  } catch (e: any) { message.error(getErrorMessage(e, '加载登录历史失败')) }
   finally { loadingHistory.value = false }
   // Load Telegram config
   try {

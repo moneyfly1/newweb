@@ -56,7 +56,9 @@ func GetPaymentMethods(c *gin.Context) {
 	if isEnabled(cfgMap["pay_epay_enabled"]) && epayConfigured {
 		if !hasPayType("epay") {
 			pc := models.PaymentConfig{PayType: "epay", Status: 1, SortOrder: 100}
-			db.Create(&pc)
+			if err := db.Create(&pc).Error; err != nil {
+				utils.SysError("payment", fmt.Sprintf("创建支付配置失败(epay): %v", err))
+			}
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "epay", "sort_order": 100})
 		}
 	}
@@ -66,7 +68,9 @@ func GetPaymentMethods(c *gin.Context) {
 	if isEnabled(cfgMap["pay_alipay_enabled"]) && (epayConfigured || alipayDirectConfigured) {
 		if !hasPayType("alipay") {
 			pc := models.PaymentConfig{PayType: "alipay", Status: 1, SortOrder: 101}
-			db.Create(&pc)
+			if err := db.Create(&pc).Error; err != nil {
+				utils.SysError("payment", fmt.Sprintf("创建支付配置失败(alipay): %v", err))
+			}
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "alipay", "sort_order": 101})
 		}
 	}
@@ -75,7 +79,9 @@ func GetPaymentMethods(c *gin.Context) {
 	if isEnabled(cfgMap["pay_wechat_enabled"]) && epayConfigured {
 		if !hasPayType("wxpay") {
 			pc := models.PaymentConfig{PayType: "wxpay", Status: 1, SortOrder: 102}
-			db.Create(&pc)
+			if err := db.Create(&pc).Error; err != nil {
+				utils.SysError("payment", fmt.Sprintf("创建支付配置失败(wxpay): %v", err))
+			}
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "wxpay", "sort_order": 102})
 		}
 	}
@@ -85,7 +91,9 @@ func GetPaymentMethods(c *gin.Context) {
 	if isEnabled(cfgMap["pay_stripe_enabled"]) && stripeConfigured {
 		if !hasPayType("stripe") {
 			pc := models.PaymentConfig{PayType: "stripe", Status: 1, SortOrder: 103}
-			db.Create(&pc)
+			if err := db.Create(&pc).Error; err != nil {
+				utils.SysError("payment", fmt.Sprintf("创建支付配置失败(stripe): %v", err))
+			}
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "stripe", "sort_order": 103})
 		}
 	}
@@ -95,7 +103,9 @@ func GetPaymentMethods(c *gin.Context) {
 	if isEnabled(cfgMap["pay_crypto_enabled"]) && cryptoConfigured {
 		if !hasPayType("crypto") {
 			pc := models.PaymentConfig{PayType: "crypto", Status: 1, SortOrder: 104}
-			db.Create(&pc)
+			if err := db.Create(&pc).Error; err != nil {
+				utils.SysError("payment", fmt.Sprintf("创建支付配置失败(crypto): %v", err))
+			}
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "crypto", "sort_order": 104})
 		}
 	}
@@ -196,7 +206,10 @@ func CreatePayment(c *gin.Context) {
 					if err == nil {
 						// 更新订单的 payment_transaction_id，关联支付事务
 						ptxID := fmt.Sprintf("%d", transaction.ID)
-						db.Model(&order).Update("payment_transaction_id", &ptxID)
+						if err := db.Model(&order).Update("payment_transaction_id", &ptxID).Error; err != nil {
+							utils.InternalError(c, "更新订单支付信息失败")
+							return
+						}
 						utils.LogPayment("[CreatePayment] ✅ 支付宝订单创建成功 - txID=%s, order_no=%s, order_id=%d", outTradeNo, order.OrderNo, order.ID)
 						utils.Success(c, gin.H{
 							"message":        "支付创建成功",
@@ -389,10 +402,13 @@ func CreateRechargePayment(c *gin.Context) {
 
 	// Update recharge record with payment info
 	pmName := payConfig.PayType
-	db.Model(&record).Updates(map[string]interface{}{
+	if err := db.Model(&record).Updates(map[string]interface{}{
 		"payment_method":         &pmName,
 		"payment_transaction_id": &txID,
-	})
+	}).Error; err != nil {
+		utils.InternalError(c, "更新充值记录失败")
+		return
+	}
 
 	// Handle epay-type payments
 	if payConfig.PayType == "epay" || payConfig.PayType == "alipay" || payConfig.PayType == "wxpay" || payConfig.PayType == "qqpay" {
@@ -417,10 +433,13 @@ func CreateRechargePayment(c *gin.Context) {
 					}
 					if err == nil {
 						// 更新充值记录，关联支付事务ID和支付URL
-						db.Model(&record).Updates(map[string]interface{}{
+						if err := db.Model(&record).Updates(map[string]interface{}{
 							"payment_url":            &paymentURL,
 							"payment_transaction_id": &txID,
-						})
+						}).Error; err != nil {
+							utils.InternalError(c, "更新充值支付信息失败")
+							return
+						}
 						utils.LogPayment("[CreateRechargePayment] ✅ 充值支付宝订单创建成功 - txID=%s, order_no=%s", outTradeNo, record.OrderNo)
 						utils.Success(c, gin.H{
 							"message":        "支付创建成功",
@@ -462,7 +481,10 @@ func CreateRechargePayment(c *gin.Context) {
 		}
 
 		// Store payment URL on the recharge record
-		db.Model(&record).Update("payment_url", &paymentURL)
+		if err := db.Model(&record).Update("payment_url", &paymentURL).Error; err != nil {
+			utils.InternalError(c, "保存支付链接失败")
+			return
+		}
 
 		utils.Success(c, gin.H{
 			"message":        "支付创建成功",
@@ -510,7 +532,10 @@ func CreateRechargePayment(c *gin.Context) {
 			return
 		}
 
-		db.Model(&record).Update("payment_url", &checkoutURL)
+		if err := db.Model(&record).Update("payment_url", &checkoutURL).Error; err != nil {
+			utils.InternalError(c, "保存支付链接失败")
+			return
+		}
 
 		utils.Success(c, gin.H{
 			"message":        "支付创建成功",
@@ -678,19 +703,25 @@ func PaymentNotify(c *gin.Context) {
 			if extTxID != "" {
 				updates["external_transaction_id"] = &extTxID
 			}
-			tx.Model(&txn).Updates(updates)
+			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
+				return err
+			}
 
 			// Mark order as paid and activate subscription
 			var order models.Order
 			if err := tx.First(&order, txn.OrderID).Error; err == nil && order.Status == "pending" {
 				now := time.Now()
 				pmName := payType
-				tx.Model(&order).Updates(map[string]interface{}{
+				if err := tx.Model(&order).Updates(map[string]interface{}{
 					"status":              "paid",
 					"payment_method_name": &pmName,
 					"payment_time":        &now,
-				})
-				_ = services.ActivateSubscription(tx, &order, payType)
+				}).Error; err != nil {
+					return err
+				}
+				if err := services.ActivateSubscription(tx, &order, payType); err != nil {
+					return err
+				}
 			}
 
 			return nil
@@ -701,7 +732,9 @@ func PaymentNotify(c *gin.Context) {
 		}
 	}
 
-	db.Create(&callback)
+	if err := db.Create(&callback).Error; err != nil {
+		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+	}
 	c.String(200, "success")
 }
 
@@ -715,7 +748,11 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 			}
 		}
 	} else {
-		_ = c.Request.ParseForm()
+		if err := c.Request.ParseForm(); err != nil {
+			utils.SysError("payment", fmt.Sprintf("易支付回调解析表单失败: %v", err))
+			c.String(400, "fail")
+			return
+		}
 		for k, v := range c.Request.PostForm {
 			if len(v) > 0 {
 				params[k] = v[0]
@@ -769,7 +806,9 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 			RawRequest:   &rawStr,
 			Processed:    false,
 		}
-		db.Create(&callback)
+		if err := db.Create(&callback).Error; err != nil {
+			utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+		}
 		c.String(200, "success")
 		return
 	}
@@ -817,7 +856,9 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 			if tradeNo != "" {
 				updates["external_transaction_id"] = &tradeNo
 			}
-			tx.Model(&txn).Updates(updates)
+			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
+				return err
+			}
 
 			// Determine if this is a recharge or order payment by transaction ID prefix
 			if strings.HasPrefix(outTradeNo, "RCH") {
@@ -834,7 +875,9 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 				s := err.Error()
 				callback.ProcessingResult = &s
 				callback.Processed = false
-				db.Create(&callback)
+				if err := db.Create(&callback).Error; err != nil {
+					utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+				}
 				c.String(200, "success")
 				return
 			}
@@ -845,7 +888,9 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 		}
 	}
 
-	db.Create(&callback)
+	if err := db.Create(&callback).Error; err != nil {
+		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+	}
 	c.String(200, "success")
 }
 
@@ -861,10 +906,12 @@ func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransact
 		}
 
 		now := time.Now()
-		tx.Model(&record).Updates(map[string]interface{}{
+		if err := tx.Model(&record).Updates(map[string]interface{}{
 			"status":  "paid",
 			"paid_at": &now,
-		})
+		}).Error; err != nil {
+			return err
+		}
 
 		// Add balance to user atomically
 		if err := tx.Model(&models.User{}).Where("id = ?", record.UserID).
@@ -998,7 +1045,9 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 			}
 			errMsg := fmt.Sprintf("找不到订单: %v", err)
 			callback.ErrorMessage = &errMsg
-			db.Create(&callback)
+			if err := db.Create(&callback).Error; err != nil {
+				utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+			}
 			c.String(200, "success")
 			return
 		}
@@ -1015,7 +1064,9 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 			}
 			errMsg := fmt.Sprintf("找不到支付事务: %v", err)
 			callback.ErrorMessage = &errMsg
-			db.Create(&callback)
+			if err := db.Create(&callback).Error; err != nil {
+				utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+			}
 			c.String(200, "success")
 			return
 		}
@@ -1065,7 +1116,9 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 			if tradeNo != "" {
 				updates["external_transaction_id"] = &tradeNo
 			}
-			tx.Model(&txn).Updates(updates)
+			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
+				return err
+			}
 
 			// Determine if this is a recharge or order payment
 			if strings.HasPrefix(outTradeNo, "RCH") {
@@ -1083,7 +1136,9 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 				s := err.Error()
 				callback.ProcessingResult = &s
 				callback.Processed = false
-				db.Create(&callback)
+				if err := db.Create(&callback).Error; err != nil {
+					utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+				}
 				c.String(200, "success")
 				return
 			}
@@ -1093,7 +1148,9 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 		}
 	}
 
-	db.Create(&callback)
+	if err := db.Create(&callback).Error; err != nil {
+		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+	}
 	c.String(200, "success")
 }
 
@@ -1219,7 +1276,9 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 			RawRequest:   &rawStr,
 			Processed:    false,
 		}
-		db.Create(&callback)
+		if err := db.Create(&callback).Error; err != nil {
+			utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+		}
 		c.String(200, "ok")
 		return
 	}
@@ -1240,7 +1299,9 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 			RawRequest:   &rawStr,
 			Processed:    false,
 		}
-		db.Create(&callback)
+		if err := db.Create(&callback).Error; err != nil {
+			utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+		}
 		c.String(200, "ok")
 		return
 	}
@@ -1304,7 +1365,9 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 			if extTxID != "" {
 				updates["external_transaction_id"] = &extTxID
 			}
-			tx.Model(&txn).Updates(updates)
+			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
+				return err
+			}
 
 			// Determine if this is a recharge or order payment
 			if strings.HasPrefix(txIDVal, "RCH") {
@@ -1321,7 +1384,9 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 		}
 	}
 
-	db.Create(&callback)
+	if err := db.Create(&callback).Error; err != nil {
+		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+	}
 	c.String(200, "ok")
 }
 

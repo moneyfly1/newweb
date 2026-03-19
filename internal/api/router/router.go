@@ -97,7 +97,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	// ===== 需要认证的路由 =====
 	authorized := api.Group("")
-	authorized.Use(middleware.AuthRequired())
+	authorized.Use(middleware.AuthRequired(), middleware.CSRFProtection())
 	{
 		// CSRF token
 		authorized.GET("/csrf-token", middleware.GetCSRFToken)
@@ -227,7 +227,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	// ===== 管理员路由 =====
 	admin := api.Group("/admin")
-	admin.Use(middleware.AuthRequired(), middleware.AdminRequired(), middleware.IPWhitelist())
+	admin.Use(middleware.AuthRequired(), middleware.AdminRequired(), middleware.IPWhitelist(), middleware.CSRFProtection())
 	{
 		// 仪表盘
 		admin.GET("/dashboard", handlers.AdminDashboard)

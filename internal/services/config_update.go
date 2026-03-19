@@ -217,7 +217,7 @@ func (s *ConfigUpdateService) runUpdate() {
 
 	var allNodes []models.Node
 
-	for _, u := range cfg.URLs {
+	for urlIdx, u := range cfg.URLs {
 		u = strings.TrimSpace(u)
 		if u == "" {
 			continue
@@ -242,6 +242,11 @@ func (s *ConfigUpdateService) runUpdate() {
 		if err != nil {
 			s.addLog("error", fmt.Sprintf("解析节点失败 [%s]: %s", u, err.Error()))
 			continue
+		}
+
+		// 记录订阅来源编号（从1开始）
+		for i := range nodes {
+			nodes[i].SourceIndex = urlIdx + 1
 		}
 
 		s.addLog("info", fmt.Sprintf("从 %s 解析到 %d 个节点", u, len(nodes)))

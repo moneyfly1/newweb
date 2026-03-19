@@ -1,7 +1,8 @@
 package services
 
 import (
-	"crypto/md5"
+	"crypto/hmac"
+	"crypto/md5" // #nosec G501 -- EasyPay protocol mandates MD5 signing.
 	"fmt"
 	"io"
 	"net/http"
@@ -72,7 +73,7 @@ func EpayVerifySign(params map[string]string, secretKey string) bool {
 		return false
 	}
 	expected := epaySign(params, secretKey)
-	return sign == expected
+	return hmac.Equal([]byte(sign), []byte(expected))
 }
 
 // epaySign generates MD5 signature for EasyPay API
@@ -94,6 +95,7 @@ func epaySign(params map[string]string, secretKey string) string {
 	}
 	str := strings.Join(parts, "&") + secretKey
 
+	// #nosec G401 -- EasyPay requires MD5 as part of its signature specification.
 	hash := md5.Sum([]byte(str))
 	return fmt.Sprintf("%x", hash)
 }

@@ -2,10 +2,13 @@ package database
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"gorm.io/gorm"
 )
+
+var validColumnName = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.]*$`)
 
 // QueryBuilder 数据库查询构建器
 type QueryBuilder struct {
@@ -56,6 +59,10 @@ func (qb *QueryBuilder) Filter(field, op string, value interface{}) *QueryBuilde
 	if value == nil || value == "" {
 		return qb
 	}
+	if !validColumnName.MatchString(field) {
+		qb.err = fmt.Errorf("invalid column name: %s", field)
+		return qb
+	}
 
 	switch op {
 	case "=", "!=", ">", ">=", "<", "<=":
@@ -97,6 +104,10 @@ func (qb *QueryBuilder) Search(fields []string, keyword string) *QueryBuilder {
 	var conditions []string
 	var args []interface{}
 	for _, field := range fields {
+		if !validColumnName.MatchString(field) {
+			qb.err = fmt.Errorf("invalid column name: %s", field)
+			return qb
+		}
 		conditions = append(conditions, fmt.Sprintf("%s LIKE ?", field))
 		args = append(args, "%"+keyword+"%")
 	}
@@ -112,6 +123,10 @@ func (qb *QueryBuilder) Sort(field, order string) *QueryBuilder {
 		return qb
 	}
 	if field == "" {
+		return qb
+	}
+	if !validColumnName.MatchString(field) {
+		qb.err = fmt.Errorf("invalid column name: %s", field)
 		return qb
 	}
 
@@ -255,6 +270,10 @@ func (qb *QueryBuilder) DateRange(field, startDate, endDate string) *QueryBuilde
 	if qb.err != nil {
 		return qb
 	}
+	if !validColumnName.MatchString(field) {
+		qb.err = fmt.Errorf("invalid column name: %s", field)
+		return qb
+	}
 	if startDate != "" {
 		qb.db = qb.db.Where(fmt.Sprintf("%s >= ?", field), startDate)
 	}
@@ -271,6 +290,10 @@ func (qb *QueryBuilder) FilterMap(filters map[string]interface{}) *QueryBuilder 
 	}
 	for field, value := range filters {
 		if value != nil && value != "" {
+			if !validColumnName.MatchString(field) {
+				qb.err = fmt.Errorf("invalid column name: %s", field)
+				return qb
+			}
 			qb.db = qb.db.Where(fmt.Sprintf("%s = ?", field), value)
 		}
 	}

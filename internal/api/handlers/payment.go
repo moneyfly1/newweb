@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -1469,7 +1470,7 @@ func PaymentReturn(c *gin.Context) {
 	// Redirect to frontend payment return page
 	redirectURL := siteURL + "/payment/return"
 	if orderNo != "" {
-		redirectURL += "?order_no=" + orderNo
+		redirectURL += "?order_no=" + url.QueryEscape(orderNo)
 	}
 
 	utils.LogCallback("[PaymentReturn] 重定向到: %s", redirectURL)

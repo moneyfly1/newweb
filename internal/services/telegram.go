@@ -67,5 +67,5 @@ func VerifyTelegramLogin(data *TelegramLoginData) bool {
 	mac.Write([]byte(dataCheckString))
 	expectedHash := hex.EncodeToString(mac.Sum(nil))
 
-	return expectedHash == data.Hash
+	return hmac.Equal([]byte(expectedHash), []byte(data.Hash))
 }

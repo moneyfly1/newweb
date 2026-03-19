@@ -31,9 +31,10 @@ func AdminDashboard(c *gin.Context) {
 	db := database.GetDB()
 
 	now := time.Now()
-	today := now.Format("2006-01-02")
-	monthStart := now.Format("2006-01") + "-01"
-	thirtyDaysAgo := now.AddDate(0, 0, -29).Format("2006-01-02")
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	tomorrowStart := todayStart.AddDate(0, 0, 1)
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	thirtyDaysAgo := todayStart.AddDate(0, 0, -29)
 
 	var userCount, orderCount, subCount int64
 	var revenueToday, revenueMonth float64
@@ -68,14 +69,14 @@ func AdminDashboard(c *gin.Context) {
 	go func() {
 		runQuery(func() error {
 			return db.Model(&models.Order{}).
-				Where("status IN ? AND DATE(payment_time) = ?", []string{"paid", "completed"}, today).
+				Where("status IN ? AND payment_time >= ? AND payment_time < ?", []string{"paid", "completed"}, todayStart, tomorrowStart).
 				Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&revenueToday).Error
 		})
 	}()
 	go func() {
 		runQuery(func() error {
 			return db.Model(&models.Order{}).
-				Where("status IN ? AND DATE(payment_time) >= ?", []string{"paid", "completed"}, monthStart).
+				Where("status IN ? AND payment_time >= ?", []string{"paid", "completed"}, monthStart).
 				Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&revenueMonth).Error
 		})
 	}()
@@ -102,7 +103,7 @@ func AdminDashboard(c *gin.Context) {
 	go func() {
 		runQuery(func() error {
 			return db.Model(&models.Order{}).
-				Where("status IN ? AND DATE(payment_time) >= ?", []string{"paid", "completed"}, thirtyDaysAgo).
+				Where("status IN ? AND payment_time >= ?", []string{"paid", "completed"}, thirtyDaysAgo).
 				Select("DATE(payment_time) as date, COALESCE(SUM(COALESCE(final_amount, amount)), 0) as value").
 				Group("DATE(payment_time)").
 				Order("date ASC").
@@ -112,7 +113,7 @@ func AdminDashboard(c *gin.Context) {
 	go func() {
 		runQuery(func() error {
 			return db.Model(&models.User{}).
-				Where("DATE(created_at) >= ?", thirtyDaysAgo).
+				Where("created_at >= ?", thirtyDaysAgo).
 				Select("DATE(created_at) as date, COUNT(*) as value").
 				Group("DATE(created_at)").
 				Order("date ASC").
@@ -2405,6 +2406,7 @@ func AdminCreateBackup(c *gin.Context) {
 	}
 	defer src.Close()
 
+	// #nosec G304 -- dbBackupPath is server-generated under fixed backups directory.
 	dst, err := os.Create(dbBackupPath)
 	if err != nil {
 		utils.InternalError(c, "创建备份文件失败: "+err.Error())
@@ -2419,15 +2421,13 @@ func AdminCreateBackup(c *gin.Context) {
 
 	// Create ZIP file containing db + .env
 	zipPath := filepath.Join(backupDir, fmt.Sprintf("cboard_backup_%s.zip", timestamp))
+	// #nosec G304 -- zipPath is server-generated under fixed backups directory.
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
 		utils.InternalError(c, "创建ZIP文件失败: "+err.Error())
 		return
 	}
-	defer zipFile.Close()
-
 	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close()
 
 	// Add database to ZIP
 	if err := addFileToZip(zipWriter, dbBackupPath, filepath.Base(dbBackupPath)); err != nil {
@@ -2438,8 +2438,14 @@ func AdminCreateBackup(c *gin.Context) {
 	// 注意：不备份 .env 文件以防止敏感信息泄露（数据库密码、API密钥、支付密钥等）
 	// 如需备份配置，请使用加密存储或单独的安全备份方案
 
-	_ = zipWriter.Close()
-	_ = zipFile.Close()
+	if err := zipWriter.Close(); err != nil {
+		utils.InternalError(c, "关闭ZIP写入失败: "+err.Error())
+		return
+	}
+	if err := zipFile.Close(); err != nil {
+		utils.InternalError(c, "关闭ZIP文件失败: "+err.Error())
+		return
+	}
 
 	info, _ := os.Stat(dbBackupPath)
 	zipInfo, _ := os.Stat(zipPath)
@@ -2503,6 +2509,10 @@ func AdminCreateBackup(c *gin.Context) {
 
 // addFileToZip adds a file to the zip archive
 func addFileToZip(zipWriter *zip.Writer, filePath, nameInZip string) error {
+	if strings.Contains(nameInZip, "..") || strings.ContainsAny(nameInZip, `/\`) {
+		return fmt.Errorf("invalid zip entry name")
+	}
+	// #nosec G304 -- filePath comes from controlled backup generation flow.
 	file, err := os.Open(filePath)
 	if err != nil {
 		return err
@@ -3387,12 +3397,21 @@ func AdminExportFinancialReport(c *gin.Context) {
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	// BOM for Excel UTF-8
-	c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
-	c.Writer.WriteString("日期,收入,订单数,充值,新用户\n")
+	if _, err := c.Writer.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
+		utils.InternalError(c, "导出失败")
+		return
+	}
+	if _, err := c.Writer.WriteString("日期,收入,订单数,充值,新用户\n"); err != nil {
+		utils.InternalError(c, "导出失败")
+		return
+	}
 	for _, row := range rows {
 		line := fmt.Sprintf("%s,%.2f,%d,%.2f,%d\n",
-			row.Date, row.Revenue, row.Orders, rechargeMap[row.Date], userMap[row.Date])
-		c.Writer.WriteString(line)
+			sanitizeCSVCell(row.Date), row.Revenue, row.Orders, rechargeMap[row.Date], userMap[row.Date])
+		if _, err := c.Writer.WriteString(line); err != nil {
+			utils.InternalError(c, "导出失败")
+			return
+		}
 	}
 }
 
@@ -3546,12 +3565,18 @@ func AdminExportUsersCSV(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 
 	// Write BOM for Excel compatibility
-	c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
+	if _, err := c.Writer.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
+		utils.InternalError(c, "导出失败")
+		return
+	}
 
 	writer := csv.NewWriter(c.Writer)
 	defer writer.Flush()
 
-	writer.Write([]string{"ID", "用户名", "邮箱", "余额", "是否激活", "注册时间", "最后登录"})
+	if err := writer.Write([]string{"ID", "用户名", "邮箱", "余额", "是否激活", "注册时间", "最后登录"}); err != nil {
+		utils.InternalError(c, "导出失败")
+		return
+	}
 
 	for _, u := range users {
 		isActive := "否"
@@ -3562,15 +3587,34 @@ func AdminExportUsersCSV(c *gin.Context) {
 		if u.LastLogin != nil {
 			lastLogin = u.LastLogin.Format("2006-01-02 15:04:05")
 		}
-		writer.Write([]string{
+		if err := writer.Write([]string{
 			strconv.FormatUint(uint64(u.ID), 10),
-			u.Username,
-			u.Email,
+			sanitizeCSVCell(u.Username),
+			sanitizeCSVCell(u.Email),
 			fmt.Sprintf("%.2f", u.Balance),
 			isActive,
 			u.CreatedAt.Format("2006-01-02 15:04:05"),
 			lastLogin,
-		})
+		}); err != nil {
+			utils.InternalError(c, "导出失败")
+			return
+		}
+	}
+	if err := writer.Error(); err != nil {
+		utils.InternalError(c, "导出失败")
+		return
+	}
+}
+
+func sanitizeCSVCell(v string) string {
+	if v == "" {
+		return v
+	}
+	switch v[0] {
+	case '=', '+', '-', '@':
+		return "'" + v
+	default:
+		return v
 	}
 }
 

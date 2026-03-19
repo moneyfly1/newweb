@@ -220,6 +220,10 @@ func (c *GitClient) getFileSHA(filePath string) (string, error) {
 
 // UploadBackupWithProgress 上传备份文件（带进度回调）
 func (c *GitClient) UploadBackupWithProgress(filePath string, progressCallback func(int, string)) error {
+	if err := validateUploadFilePath(filePath); err != nil {
+		return err
+	}
+
 	if progressCallback != nil {
 		progressCallback(2, "正在检查仓库...")
 	}
@@ -233,6 +237,7 @@ func (c *GitClient) UploadBackupWithProgress(filePath string, progressCallback f
 		progressCallback(5, "正在打开文件...")
 	}
 
+	// #nosec G304 -- file path is validated by validateUploadFilePath before open.
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("打开文件失败: %w", err)
@@ -426,6 +431,23 @@ func (c *GitClient) UploadBackupWithProgress(filePath string, progressCallback f
 		progressCallback(100, "上传完成")
 	}
 
+	return nil
+}
+
+func validateUploadFilePath(filePath string) error {
+	clean := filepath.Clean(filePath)
+	// Reject path traversal
+	if strings.Contains(clean, "..") {
+		return fmt.Errorf("非法文件路径: 不允许路径穿越")
+	}
+	base := filepath.Base(clean)
+	if base == "." || base == string(filepath.Separator) || strings.TrimSpace(base) == "" {
+		return fmt.Errorf("非法文件路径")
+	}
+	ext := strings.ToLower(filepath.Ext(base))
+	if ext != ".zip" && ext != ".db" {
+		return fmt.Errorf("不支持的备份文件类型: %s", ext)
+	}
 	return nil
 }
 

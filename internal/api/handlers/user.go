@@ -33,6 +33,14 @@ func UpdateCurrentUser(c *gin.Context) {
 	db := database.GetDB()
 	updates := map[string]interface{}{}
 	if req.Username != "" && req.Username != user.Username {
+		if len(req.Username) < 3 || len(req.Username) > 32 {
+			utils.BadRequest(c, "用户名长度需在3-32个字符之间")
+			return
+		}
+		if strings.ContainsAny(req.Username, `'"\\<>&`) {
+			utils.BadRequest(c, "用户名包含非法字符")
+			return
+		}
 		var count int64
 		db.Model(&models.User{}).Where("username = ? AND id != ?", req.Username, user.ID).Count(&count)
 		if count > 0 {
@@ -42,6 +50,10 @@ func UpdateCurrentUser(c *gin.Context) {
 		updates["username"] = req.Username
 	}
 	if req.Nickname != "" {
+		if len(req.Nickname) > 64 {
+			utils.BadRequest(c, "昵称长度不能超过64个字符")
+			return
+		}
 		updates["nickname"] = &req.Nickname
 	}
 	if req.Avatar != "" {
@@ -53,12 +65,25 @@ func UpdateCurrentUser(c *gin.Context) {
 		updates["avatar"] = &req.Avatar
 	}
 	if req.Theme != "" {
+		allowedThemes := map[string]bool{"light": true, "dark": true, "auto": true}
+		if !allowedThemes[req.Theme] {
+			utils.BadRequest(c, "不支持的主题")
+			return
+		}
 		updates["theme"] = req.Theme
 	}
 	if req.Language != "" {
+		if len(req.Language) > 10 {
+			utils.BadRequest(c, "语言代码格式不正确")
+			return
+		}
 		updates["language"] = req.Language
 	}
 	if req.Timezone != "" {
+		if len(req.Timezone) > 50 {
+			utils.BadRequest(c, "时区格式不正确")
+			return
+		}
 		updates["timezone"] = req.Timezone
 	}
 	if len(updates) > 0 {

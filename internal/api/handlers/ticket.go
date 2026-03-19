@@ -40,7 +40,7 @@ func CreateTicket(c *gin.Context) {
 
 	var req struct {
 		Title    string `json:"title" binding:"required,max=200"`
-		Content  string `json:"content" binding:"required"`
+		Content  string `json:"content" binding:"required,max=5000"`
 		Type     string `json:"type"`
 		Priority string `json:"priority"`
 	}
@@ -116,7 +116,7 @@ func ReplyTicket(c *gin.Context) {
 	}
 
 	var req struct {
-		Content string `json:"content" binding:"required"`
+		Content string `json:"content" binding:"required,max=5000"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())

@@ -115,7 +115,11 @@ const inviteRequired = computed(() => {
 
 const form = ref({ username: '', email: '', password: '', invite_code: '', verification_code: '' })
 const rules = computed(() => ({
-  username: { required: true, message: '请输入用户名', trigger: 'blur' },
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 3, max: 32, message: '用户名长度需在3-32个字符之间', trigger: 'blur' },
+    { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '用户名只能包含字母、数字、下划线和中文', trigger: 'blur' },
+  ],
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },
     { type: 'email' as const, message: '邮箱格式不正确', trigger: 'blur' },

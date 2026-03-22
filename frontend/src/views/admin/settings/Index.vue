@@ -269,7 +269,7 @@
                     <n-switch v-model:value="form.notify_telegram_enabled" />
                   </n-form-item>
                   <n-form-item label="Bot Token">
-                    <n-input v-model:value="form.notify_telegram_bot_token" placeholder="请输入 Bot Token" />
+                    <n-input v-model:value="form.notify_telegram_bot_token" placeholder="请输入 Bot Token" type="password" show-password-on="click" />
                   </n-form-item>
                   <n-form-item label="Chat ID">
                     <n-input v-model:value="form.notify_telegram_chat_id" placeholder="请输入 Chat ID" />
@@ -286,7 +286,7 @@
                     <n-input v-model:value="form.notify_bark_server" placeholder="https://api.day.app" />
                   </n-form-item>
                   <n-form-item label="Device Key">
-                    <n-input v-model:value="form.notify_bark_device_key" placeholder="请输入 Device Key" />
+                    <n-input v-model:value="form.notify_bark_device_key" placeholder="请输入 Device Key" type="password" show-password-on="click" />
                   </n-form-item>
                 </n-form>
               </n-card>

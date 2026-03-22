@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func ListOrders(c *gin.Context) {
@@ -102,17 +103,16 @@ func CreateOrder(c *gin.Context) {
 	amount := pkg.Price
 	var discountAmount float64
 	var couponID *int64
+	var validatedCoupon *models.Coupon
 	if req.CouponCode != "" {
 		var coupon models.Coupon
 		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
 			now := time.Now()
 			if now.After(coupon.ValidFrom) && now.Before(coupon.ValidUntil) {
-				// Check total quantity
 				if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
 					utils.BadRequest(c, "优惠券已被领完")
 					return
 				}
-				// Check per-user usage
 				var usageCount int64
 				db.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_id = ?", coupon.ID, userID).Count(&usageCount)
 				if int(usageCount) >= coupon.MaxUsesPerUser {
@@ -134,6 +134,7 @@ func CreateOrder(c *gin.Context) {
 				discountAmount = math.Round(discountAmount*100) / 100
 				cid := int64(coupon.ID)
 				couponID = &cid
+				validatedCoupon = &coupon
 			}
 		}
 	}
@@ -151,24 +152,55 @@ func CreateOrder(c *gin.Context) {
 		FinalAmount:    &finalAmount,
 		ExpireTime:     &expireTime,
 	}
-	if err := db.Create(&order).Error; err != nil {
+
+	// 使用事务确保订单创建和优惠券使用的原子性
+	tx := db.Begin()
+	if tx.Error != nil {
+		utils.InternalError(c, "创建事务失败")
+		return
+	}
+
+	if err := tx.Create(&order).Error; err != nil {
+		tx.Rollback()
 		utils.InternalError(c, "创建订单失败")
 		return
 	}
-	// Record coupon usage
-	if couponID != nil {
-		if err := db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: discountAmount}).Error; err != nil {
+
+	if couponID != nil && validatedCoupon != nil {
+		// 在事务内再次验证优惠券数量（使用行锁防止并发超量）
+		var freshCoupon models.Coupon
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&freshCoupon, *couponID).Error; err != nil {
+			tx.Rollback()
+			utils.InternalError(c, "优惠券锁定失败")
+			return
+		}
+		if freshCoupon.TotalQuantity != nil && freshCoupon.UsedQuantity >= int(*freshCoupon.TotalQuantity) {
+			tx.Rollback()
+			utils.BadRequest(c, "优惠券已被领完")
+			return
+		}
+
+		if err := tx.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: discountAmount}).Error; err != nil {
+			tx.Rollback()
 			utils.InternalError(c, "记录优惠券使用失败")
 			return
 		}
-		if err := db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1")).Error; err != nil {
+		if err := tx.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1")).Error; err != nil {
+			tx.Rollback()
 			utils.InternalError(c, "更新优惠券使用次数失败")
 			return
 		}
 	}
 
+	if err := tx.Commit().Error; err != nil {
+		utils.InternalError(c, "订单事务提交失败")
+		return
+	}
+
 	// 通知用户新订单 + 通知管理员
 	user := c.MustGet("user").(*models.User)
+	utils.LogOrder("订单创建成功: order_no=%s user_id=%d username=%s package=%s amount=%.2f ip=%s",
+		orderNo, userID, user.Username, pkg.Name, finalAmount, utils.GetRealClientIP(c))
 	go services.NotifyUser(userID, "new_order", map[string]string{
 		"order_no": orderNo, "package_name": pkg.Name, "amount": fmt.Sprintf("%.2f", finalAmount),
 	})
@@ -224,9 +256,15 @@ func PayOrder(c *gin.Context) {
 			utils.BadRequest(c, "订单已支付或已取消")
 			return
 		}
-		if err := tx.Model(user).UpdateColumn("balance", gorm.Expr("balance - ?", payAmount)).Error; err != nil {
+		if err := tx.Model(user).Where("balance >= ?", payAmount).UpdateColumn("balance", gorm.Expr("balance - ?", payAmount)).Error; err != nil {
 			tx.Rollback()
-			utils.InternalError(c, "扣减余额失败")
+			utils.BadRequest(c, "余额不足或扣减失败")
+			return
+		}
+		// 验证确实更新了行（防止 WHERE 条件不满足时静默成功）
+		if tx.RowsAffected == 0 {
+			tx.Rollback()
+			utils.BadRequest(c, "余额不足")
 			return
 		}
 		// 记录余额消费日志
@@ -295,7 +333,7 @@ func PayOrder(c *gin.Context) {
 			}
 			sub = models.Subscription{
 				UserID:          userID,
-				SubscriptionURL: utils.GenerateRandomString(32),
+				SubscriptionURL: utils.GenerateRandomString(64),
 				DeviceLimit:     deviceLimit,
 				IsActive:        true,
 				Status:          "active",
@@ -360,6 +398,8 @@ func PayOrder(c *gin.Context) {
 		}
 		// 发送支付成功邮件 + 通知管理员
 		payAmountStr := fmt.Sprintf("%.2f", payAmount)
+		utils.LogOrder("余额支付成功: order_no=%s user_id=%d username=%s amount=%s ip=%s",
+			orderNo, userID, user.Username, payAmountStr, utils.GetRealClientIP(c))
 		var subURL string
 		var userSub models.Subscription
 		if database.GetDB().Where("user_id = ?", user.ID).First(&userSub).Error == nil {
@@ -401,6 +441,7 @@ func CancelOrder(c *gin.Context) {
 		utils.InternalError(c, "取消订单失败")
 		return
 	}
+	utils.LogOrder("订单已取消: order_no=%s user_id=%d ip=%s", orderNo, userID, utils.GetRealClientIP(c))
 	utils.SuccessMessage(c, "订单已取消")
 }
 

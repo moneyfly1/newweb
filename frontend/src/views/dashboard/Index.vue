@@ -61,22 +61,24 @@
             <n-button text type="primary" size="small" @click="$router.push('/subscription')">管理</n-button>
           </div>
           <n-spin :show="subscriptionLoading">
-            <div v-if="subscription.clash_url || subscription.universal_url || subscription.subscription_url" class="sub-info">
+            <div v-if="subscription.token_url || subscription.token_clash_url" class="sub-info">
               <div class="sub-stats-row">
                 <div class="sub-stat"><span class="sub-stat-label">剩余</span><n-tag :type="remainingDaysType" size="small" :bordered="false">{{ remainingDays }}天</n-tag></div>
                 <div class="sub-stat"><span class="sub-stat-label">设备</span><span class="sub-stat-val">{{ subscription.current_devices || 0 }}/{{ subscription.device_limit || 0 }}</span></div>
                 <div class="sub-stat"><span class="sub-stat-label">状态</span><n-tag :type="subscription.is_active ? 'success' : 'error'" size="small" :bordered="false">{{ subscription.is_active ? '使用中' : '未激活' }}</n-tag></div>
               </div>
               <div class="sub-urls">
-                <div class="sub-url-row" v-if="subscription.clash_url">
+                <div class="sub-url-row" v-if="subscription.token_clash_url">
                   <span class="sub-url-label">Clash</span>
-                  <n-input :value="subscription.clash_url" readonly size="tiny" style="flex:1" />
-                  <n-button size="tiny" @click="copyText(subscription.clash_url, 'Clash')"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
+                  <n-input :value="showSubUrls ? subscription.token_clash_url : maskUrl(subscription.token_clash_url)" readonly size="tiny" style="flex:1" />
+                  <n-button size="tiny" @click="showSubUrls = !showSubUrls"><template #icon><n-icon :component="showSubUrls ? EyeOffOutline : EyeOutline" /></template></n-button>
+                  <n-button size="tiny" @click="copyText(subscription.token_clash_url, 'Clash')"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
                 </div>
-                <div class="sub-url-row" v-if="subscription.universal_url">
+                <div class="sub-url-row" v-if="subscription.token_url">
                   <span class="sub-url-label">通用</span>
-                  <n-input :value="subscription.universal_url" readonly size="tiny" style="flex:1" />
-                  <n-button size="tiny" @click="copyText(subscription.universal_url, '通用')"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
+                  <n-input :value="showSubUrls ? subscription.token_url : maskUrl(subscription.token_url)" readonly size="tiny" style="flex:1" />
+                  <n-button size="tiny" @click="showSubUrls = !showSubUrls"><template #icon><n-icon :component="showSubUrls ? EyeOffOutline : EyeOutline" /></template></n-button>
+                  <n-button size="tiny" @click="copyText(subscription.token_url, '通用')"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
                 </div>
               </div>
             </div>
@@ -193,19 +195,20 @@
     <!-- QR Code Modal -->
     <n-modal v-model:show="showQrCode" preset="card" title="Shadowrocket 二维码" style="max-width: 360px;">
       <div style="text-align: center;">
-        <img v-if="qrCodeUrl" :src="qrCodeUrl" alt="订阅二维码" style="max-width: 200px; border-radius: 8px;" />
+        <canvas ref="dashQrCanvas" style="max-width: 200px; border-radius: 8px;" />
         <p style="margin-top: 10px; font-size: 13px; color: #999;">使用 Shadowrocket 扫描二维码即可添加订阅</p>
       </div>
     </n-modal>
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useMessage } from 'naive-ui'
+import QRCode from 'qrcode'
 import {
   WalletOutline, RibbonOutline, CartOutline, LinkOutline,
   ChatbubblesOutline, PeopleOutline, CopyOutline, CloudDownloadOutline,
-  DownloadOutline, QrCodeOutline, CalendarOutline,
+  DownloadOutline, QrCodeOutline, CalendarOutline, EyeOutline, EyeOffOutline,
 } from '@vicons/ionicons5'
 import { getDashboardInfo, checkIn, getCheckInStatus } from '@/api/user'
 import { listPublicAnnouncements, getPublicConfig } from '@/api/common'
@@ -223,6 +226,13 @@ const announcementsLoading = ref(false)
 const ordersLoading = ref(false)
 const subscriptionLoading = ref(false)
 const showQrCode = ref(false)
+const dashQrCanvas = ref<HTMLCanvasElement | null>(null)
+const showSubUrls = ref(false)
+
+function maskUrl(url: string) {
+  if (!url || url.length < 20) return '••••••••'
+  return url.substring(0, 20) + '••••••••' + url.substring(url.length - 6)
+}
 const clientConfig = ref<Record<string, string>>({})
 const checkinStatus = ref<any>({})
 const checkinLoading = ref(false)
@@ -289,13 +299,48 @@ const clientTabs = computed(() => [
 ].filter(t => t.clients.length))
 
 const quickSubItems = computed(() => {
-  const clash = subscription.value.clash_url || subscription.value.subscription_url
-  const universal = subscription.value.universal_url || subscription.value.subscription_url
+  const s = subscription.value
   return [
-    { name: 'Clash', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png', url: clash, client: 'clash', importable: true },
-    { name: 'Shadowrocket', icon: '🚀', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png', url: universal, client: 'shadowrocket', importable: true },
-    { name: 'V2Ray / Hiddify', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png', url: universal, client: 'v2ray', importable: false },
-    { name: 'Stash', icon: '🟡', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/stash.png', url: clash, client: 'stash', importable: true },
+    {
+      name: 'Clash / Meta', icon: '⚔️',
+      iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png',
+      url: s.token_clash_url, client: 'clash', importable: true,
+    },
+    {
+      name: 'Stash', icon: '📦',
+      iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/stash.png',
+      url: s.token_stash_url || s.token_clash_url, client: 'stash', importable: true,
+    },
+    {
+      name: 'Surge', icon: '🌊',
+      iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/surge.png',
+      url: s.token_surge_url, client: 'surge', importable: true,
+    },
+    {
+      name: 'Loon', icon: '🎈',
+      iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/loon.png',
+      url: s.token_loon_url, client: 'loon', importable: true,
+    },
+    {
+      name: 'QuantumultX', icon: '💠',
+      iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/quantumultx.png',
+      url: s.token_quantumultx_url, client: 'quantumultx', importable: true,
+    },
+    {
+      name: 'Shadowrocket', icon: '🔴',
+      iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png',
+      url: s.token_url, client: 'shadowrocket', importable: true,
+    },
+    {
+      name: 'SingBox', icon: '📱',
+      iconUrl: 'https://raw.githubusercontent.com/SagerNet/sing-box/testing/docs/assets/icon.svg',
+      url: s.token_singbox_url, client: 'singbox', importable: false,
+    },
+    {
+      name: 'V2Ray / Hiddify', icon: '🚀',
+      iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png',
+      url: s.token_url, client: 'v2ray', importable: false,
+    },
   ].filter(i => i.url)
 })
 
@@ -342,12 +387,21 @@ const remainingDaysType = computed(() => {
   return 'error'
 })
 
-const qrCodeUrl = computed(() => {
-  const url = subscription.value.universal_url || subscription.value.subscription_url
+// 本地生成 QR 码，不发送订阅 URL 到第三方服务
+const qrCodeData = computed(() => {
+  const url = subscription.value.token_url
   if (!url) return ''
   const subName = info.value.site_name || '订阅'
-  const urlWithName = url + (url.includes('#') ? '' : `#${encodeURIComponent(subName)}`)
-  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(urlWithName)}&ecc=M&margin=10`
+  return url + (url.includes('#') ? '' : `#${encodeURIComponent(subName)}`)
+})
+
+watch(showQrCode, async (val) => {
+  if (val && qrCodeData.value) {
+    await nextTick()
+    if (dashQrCanvas.value) {
+      QRCode.toCanvas(dashQrCanvas.value, qrCodeData.value, { width: 200, margin: 2 })
+    }
+  }
 })
 
 const orderStatusType = (status: string) => {
@@ -366,15 +420,24 @@ async function copyText(text: string, label: string) {
   ok ? message.success(`${label}已复制到剪贴板`) : message.error('复制失败，请手动复制')
 }
 function oneClickImport(client: string) {
-  const clashUrl = subscription.value.clash_url || subscription.value.subscription_url
-  const universalUrl = subscription.value.universal_url || subscription.value.subscription_url
-  if (!clashUrl && !universalUrl) { message.warning('暂无订阅地址'); return }
+  const s = subscription.value
   const subName = info.value.site_name || '订阅'
+  const getUrl = (key: string) => s[key] || s.token_url || ''
   switch (client) {
-    case 'clash': window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(subName)}`; break
-    case 'shadowrocket': window.location.href = `shadowrocket://add/sub://${btoa(universalUrl)}#${encodeURIComponent(subName)}`; break
-    case 'stash': window.location.href = `clash://install-config?url=${encodeURIComponent(clashUrl)}&name=${encodeURIComponent(subName)}`; break
-    default: copyText(universalUrl, '订阅地址'); return
+    case 'clash':
+      window.location.href = `clash://install-config?url=${encodeURIComponent(getUrl('token_clash_url'))}&name=${encodeURIComponent(subName)}`; break
+    case 'stash':
+      window.location.href = `stash://install-config?url=${encodeURIComponent(getUrl('token_stash_url') || getUrl('token_clash_url'))}&name=${encodeURIComponent(subName)}`; break
+    case 'surge':
+      window.location.href = `surge:///install-config?url=${encodeURIComponent(getUrl('token_surge_url'))}`; break
+    case 'loon':
+      window.location.href = `loon://import/proxy?url=${encodeURIComponent(getUrl('token_loon_url'))}`; break
+    case 'quantumultx':
+      window.location.href = `quantumult-x:///add-resource?remote-resource=${encodeURIComponent(JSON.stringify({ server_remote: [getUrl('token_quantumultx_url')] }))}`; break
+    case 'shadowrocket':
+      window.location.href = `shadowrocket://add/${encodeURIComponent(getUrl('token_url'))}`; break
+    default:
+      copyText(getUrl('token_url'), '订阅地址'); return
   }
   message.info(`正在打开 ${client} 客户端...`)
 }

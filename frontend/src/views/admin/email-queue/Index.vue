@@ -158,10 +158,10 @@
         </n-descriptions>
         <n-divider style="margin: 16px 0 12px;">邮件内容</n-divider>
         <div v-if="detailItem.content_type === 'html' || (detailItem.content && detailItem.content.includes('<'))" class="email-preview">
-          <iframe 
-            :srcdoc="sanitizeHtml(detailItem.content)" 
+          <iframe
+            :srcdoc="sanitizeHtml(detailItem.content)"
             style="width: 100%; min-height: 400px; border: 1px solid #ddd; border-radius: 4px;"
-            sandbox="allow-same-origin"
+            sandbox=""
             title="邮件预览"
           />
         </div>
@@ -192,6 +192,7 @@ import {
 import { listEmailQueue, retryEmail, deleteEmail } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { translateEmailType } from '@/utils/i18n'
+import DOMPurify from 'dompurify'
 
 const appStore = useAppStore()
 
@@ -211,26 +212,19 @@ const detailItem = ref(null)
 
 const formatTime = (t) => t ? new Date(t).toLocaleString('zh-CN') : '-'
 
-// 简单的 HTML 清理函数，移除危险的脚本标签和事件处理器
+// 使用 DOMPurify 安全清理 HTML，防止 XSS
 const sanitizeHtml = (html) => {
   if (!html) return ''
-  // 移除危险标签
-  let s = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-  s = s.replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
-  s = s.replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
-  s = s.replace(/<embed\b[^>]*\/?>/gi, '')
-  s = s.replace(/<form\b[^>]*>[\s\S]*?<\/form>/gi, '')
-  s = s.replace(/<link\b[^>]*\/?>/gi, '')
-  s = s.replace(/<meta\b[^>]*\/?>/gi, '')
-  s = s.replace(/<base\b[^>]*\/?>/gi, '')
-  // 移除事件处理器属性
-  s = s.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '')
-  s = s.replace(/\s*on\w+\s*=\s*[^\s>]*/gi, '')
-  // 移除危险协议
-  s = s.replace(/javascript\s*:/gi, '')
-  s = s.replace(/vbscript\s*:/gi, '')
-  s = s.replace(/data\s*:\s*text\/html/gi, '')
-  return s
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['h1','h2','h3','h4','h5','h6','p','br','hr','div','span','a','img',
+      'table','thead','tbody','tr','td','th','ul','ol','li','strong','em','b','i','u',
+      'blockquote','pre','code','center','font','small','big','sub','sup','style'],
+    ALLOWED_ATTR: ['href','src','alt','title','style','class','width','height','align',
+      'valign','bgcolor','color','border','cellpadding','cellspacing','colspan','rowspan',
+      'target','rel'],
+    ALLOW_DATA_ATTR: false,
+    ADD_ATTR: ['target'],
+  })
 }
 
 const handleDetail = (row) => {

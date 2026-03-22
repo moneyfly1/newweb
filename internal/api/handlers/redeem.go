@@ -56,7 +56,7 @@ func RedeemCode(c *gin.Context) {
 			var sub models.Subscription
 			if err := tx.Where("user_id = ?", userID).First(&sub).Error; err != nil {
 				// Create new subscription
-				subURL := utils.GenerateRandomString(32)
+				subURL := utils.GenerateRandomString(64)
 				sub = models.Subscription{
 					UserID:          userID,
 					SubscriptionURL: subURL,

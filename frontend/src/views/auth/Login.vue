@@ -98,8 +98,13 @@ async function handleLogin() {
 
 function loadTelegramWidget() {
   if (!telegramWidgetRef.value || !telegramBotUsername.value) return
-  // Define global callback
+  // Define global callback with nonce to prevent spoofing
+  const callbackNonce = Math.random().toString(36).substring(2)
+  ;(window as any).__telegramAuthNonce = callbackNonce
   ;(window as any).onTelegramAuth = async (user: any) => {
+    // 验证调用来源的 nonce
+    if ((window as any).__telegramAuthNonce !== callbackNonce) return
+    delete (window as any).__telegramAuthNonce
     try {
       await userStore.loginWithTelegram(user)
       message.success('登录成功')

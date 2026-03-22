@@ -729,8 +729,16 @@ func AdminLoginAsUser(c *gin.Context) {
 		return
 	}
 
-	accessToken, _ := generateToken(user.ID, "access", 2*time.Hour)
-	refreshToken, _ := generateToken(user.ID, "refresh", 24*time.Hour)
+	accessToken, err := generateToken(user.ID, "access", 2*time.Hour)
+	if err != nil {
+		utils.InternalError(c, "生成访问令牌失败")
+		return
+	}
+	refreshToken, err := generateToken(user.ID, "refresh", 24*time.Hour)
+	if err != nil {
+		utils.InternalError(c, "生成刷新令牌失败")
+		return
+	}
 
 	utils.CreateAuditLog(c, "login_as_user", "user", uint(id), fmt.Sprintf("以用户身份登录: %s", user.Username))
 	utils.Success(c, gin.H{
@@ -1028,7 +1036,22 @@ func AdminUpdatePackage(c *gin.Context) {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
-	if err := db.Model(&pkg).Updates(req).Error; err != nil {
+	allowed := map[string]bool{
+		"name": true, "description": true, "price": true, "duration_days": true,
+		"device_limit": true, "is_active": true, "sort_order": true, "features": true,
+		"original_price": true, "discount_text": true, "badge": true,
+	}
+	updates := make(map[string]interface{})
+	for k, v := range req {
+		if allowed[k] {
+			updates[k] = v
+		}
+	}
+	if len(updates) == 0 {
+		utils.BadRequest(c, "无有效更新字段")
+		return
+	}
+	if err := db.Model(&pkg).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新套餐失败")
 		return
 	}
@@ -1074,12 +1097,25 @@ func AdminListNodes(c *gin.Context) {
 }
 
 func AdminCreateNode(c *gin.Context) {
-	var node models.Node
-	if err := c.ShouldBindJSON(&node); err != nil {
+	var req struct {
+		Name          string  `json:"name" binding:"required"`
+		Region        string  `json:"region"`
+		Type          string  `json:"type"`
+		Status        string  `json:"status"`
+		Description   *string `json:"description"`
+		Config        *string `json:"config"`
+		IsRecommended bool    `json:"is_recommended"`
+		OrderIndex    int     `json:"order_index"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
-	node.IsManual = true // 管理员手动创建的节点，自动更新时不会被删除
+	node := models.Node{
+		Name: req.Name, Region: req.Region, Type: req.Type, Status: req.Status,
+		Description: req.Description, Config: req.Config, IsRecommended: req.IsRecommended,
+		OrderIndex: req.OrderIndex, IsManual: true,
+	}
 	if err := database.GetDB().Create(&node).Error; err != nil {
 		utils.InternalError(c, "创建节点失败")
 		return
@@ -1105,7 +1141,22 @@ func AdminUpdateNode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
-	if err := db.Model(&node).Updates(req).Error; err != nil {
+	allowed := map[string]bool{
+		"name": true, "region": true, "type": true, "status": true, "description": true,
+		"config": true, "is_recommended": true, "is_active": true, "is_manual": true,
+		"order_index": true, "source_index": true,
+	}
+	updates := make(map[string]interface{})
+	for k, v := range req {
+		if allowed[k] {
+			updates[k] = v
+		}
+	}
+	if len(updates) == 0 {
+		utils.BadRequest(c, "无有效更新字段")
+		return
+	}
+	if err := db.Model(&node).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新节点失败")
 		return
 	}
@@ -1245,10 +1296,22 @@ func AdminListCustomNodes(c *gin.Context) {
 }
 
 func AdminCreateCustomNode(c *gin.Context) {
-	var node models.CustomNode
-	if err := c.ShouldBindJSON(&node); err != nil {
+	var req struct {
+		Name        string `json:"name" binding:"required"`
+		DisplayName string `json:"display_name"`
+		Protocol    string `json:"protocol"`
+		Domain      string `json:"domain"`
+		Port        int    `json:"port"`
+		Config      string `json:"config"`
+		Status      string `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
+	}
+	node := models.CustomNode{
+		Name: req.Name, DisplayName: req.DisplayName, Domain: req.Domain, Port: req.Port,
+		Protocol: req.Protocol, Status: req.Status, Config: req.Config,
 	}
 	if err := database.GetDB().Create(&node).Error; err != nil {
 		utils.InternalError(c, "创建专线节点失败")
@@ -1274,7 +1337,22 @@ func AdminUpdateCustomNode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
-	if err := db.Model(&node).Updates(req).Error; err != nil {
+	allowed := map[string]bool{
+		"name": true, "display_name": true, "protocol": true, "domain": true, "port": true,
+		"config": true, "status": true, "is_active": true, "expire_time": true,
+		"follow_user_expire": true,
+	}
+	updates := make(map[string]interface{})
+	for k, v := range req {
+		if allowed[k] {
+			updates[k] = v
+		}
+	}
+	if len(updates) == 0 {
+		utils.BadRequest(c, "无有效更新字段")
+		return
+	}
+	if err := db.Model(&node).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新专线节点失败")
 		return
 	}
@@ -1662,7 +1740,7 @@ func AdminResetSubscription(c *gin.Context) {
 	}
 
 	oldURL := sub.SubscriptionURL
-	newURL := utils.GenerateRandomString(32)
+	newURL := utils.GenerateRandomString(64)
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("subscription_id = ?", sub.ID).Delete(&models.Device{}).Error; err != nil {
 			return err
@@ -1754,14 +1832,56 @@ func AdminListCoupons(c *gin.Context) {
 }
 
 func AdminCreateCoupon(c *gin.Context) {
-	var coupon models.Coupon
-	if err := c.ShouldBindJSON(&coupon); err != nil {
+	var req struct {
+		Code                string   `json:"code" binding:"required"`
+		Name                string   `json:"name"`
+		Description         string   `json:"description"`
+		Type                string   `json:"type" binding:"required"`
+		DiscountValue       float64  `json:"discount_value"`
+		MaxDiscount         *float64 `json:"max_discount"`
+		MinAmount           float64  `json:"min_amount"`
+		ValidFrom           string   `json:"valid_from" binding:"required"`
+		ValidUntil          string   `json:"valid_until" binding:"required"`
+		TotalQuantity       *int64   `json:"total_quantity"`
+		MaxUsesPerUser      int      `json:"max_uses_per_user"`
+		Status              string   `json:"status"`
+		ApplicablePackageIDs string  `json:"applicable_package_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
+	validFrom, err := time.Parse(time.RFC3339, req.ValidFrom)
+	if err != nil {
+		validFrom, err = time.Parse("2006-01-02", req.ValidFrom)
+		if err != nil {
+			utils.BadRequest(c, "valid_from 日期格式错误")
+			return
+		}
+	}
+	validUntil, err := time.Parse(time.RFC3339, req.ValidUntil)
+	if err != nil {
+		validUntil, err = time.Parse("2006-01-02", req.ValidUntil)
+		if err != nil {
+			utils.BadRequest(c, "valid_until 日期格式错误")
+			return
+		}
+	}
 	adminID := c.GetUint("user_id")
 	adminIDInt64 := int64(adminID)
-	coupon.CreatedBy = &adminIDInt64
+	coupon := models.Coupon{
+		Code: req.Code, Name: req.Name, Description: req.Description, Type: req.Type,
+		DiscountValue: req.DiscountValue, MaxDiscount: req.MaxDiscount, MinAmount: &req.MinAmount,
+		ValidFrom: validFrom, ValidUntil: validUntil, TotalQuantity: req.TotalQuantity,
+		MaxUsesPerUser: req.MaxUsesPerUser, Status: req.Status, CreatedBy: &adminIDInt64,
+		ApplicablePackages: req.ApplicablePackageIDs,
+	}
+	if coupon.Status == "" {
+		coupon.Status = "active"
+	}
+	if coupon.MaxUsesPerUser == 0 {
+		coupon.MaxUsesPerUser = 1
+	}
 
 	if err := database.GetDB().Create(&coupon).Error; err != nil {
 		utils.InternalError(c, "创建优惠券失败")
@@ -1936,10 +2056,29 @@ func AdminListUserLevels(c *gin.Context) {
 }
 
 func AdminCreateUserLevel(c *gin.Context) {
-	var level models.UserLevel
-	if err := c.ShouldBindJSON(&level); err != nil {
+	var req struct {
+		LevelName      string  `json:"level_name" binding:"required"`
+		LevelOrder     int     `json:"level_order"`
+		DiscountRate   float64 `json:"discount_rate"`
+		MinConsumption float64 `json:"min_consumption"`
+		Benefits       *string `json:"benefits"`
+		IconURL        *string `json:"icon_url"`
+		Color          string  `json:"color"`
+		IsActive       *bool   `json:"is_active"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
+	}
+	level := models.UserLevel{
+		LevelName: req.LevelName, LevelOrder: req.LevelOrder, DiscountRate: req.DiscountRate,
+		MinConsumption: req.MinConsumption, Benefits: req.Benefits, IconURL: req.IconURL,
+		Color: req.Color,
+	}
+	if req.IsActive != nil {
+		level.IsActive = *req.IsActive
+	} else {
+		level.IsActive = true
 	}
 	if err := database.GetDB().Create(&level).Error; err != nil {
 		utils.InternalError(c, "创建用户等级失败")
@@ -2679,7 +2818,7 @@ func AdminCreateUser(c *gin.Context) {
 	}
 
 	// Auto-create subscription for new user
-	subURL := utils.GenerateRandomString(32)
+	subURL := utils.GenerateRandomString(64)
 
 	// 设置到期时间和设备限制
 	expireTime := time.Now()
@@ -3755,7 +3894,7 @@ func AdminImportUsersCSV(c *gin.Context) {
 		}
 
 		// Create subscription
-		subURL := utils.GenerateRandomString(32)
+		subURL := utils.GenerateRandomString(64)
 
 		// 默认值
 		deviceLimit := 3

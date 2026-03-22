@@ -60,15 +60,12 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		auth.POST("/telegram", middleware.RateLimit(10, time.Minute), handlers.TelegramLogin)
 	}
 
-	// 公开订阅链接（添加严格的频率限制防枚举攻击）
-	// 降低到 20 请求/分钟以防止订阅 URL 枚举
+	// 订阅链接 - token 参数风格（业界标准）
+	// 通用订阅（自动识别客户端）：GET /api/v1/client/subscribe?token=TOKEN
+	// Clash 订阅：GET /api/v1/client/subscribe?token=TOKEN&type=clash
+	// 通用链接：GET /api/v1/client/subscribe?token=TOKEN&type=universal
 	subRL := middleware.RateLimit(20, time.Minute)
-	api.GET("/sub/clash/:url", subRL, handlers.GetSubscription)
-	api.GET("/sub/:url", subRL, handlers.GetUniversalSubscription)
-	// 兼容旧路径
-	api.GET("/subscribe/clash/:url", subRL, handlers.GetSubscription)
-	api.GET("/subscribe/universal/:url", subRL, handlers.GetUniversalSubscription)
-	api.GET("/subscribe/:url", subRL, handlers.GetSubscription)
+	api.GET("/client/subscribe", subRL, handlers.GetSubscription)
 
 	// 公开配置
 	api.GET("/config", handlers.GetPublicConfig)

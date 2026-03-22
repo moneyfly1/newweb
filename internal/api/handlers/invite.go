@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -20,7 +22,11 @@ func AdminListInviteCodes(c *gin.Context) {
 	search := c.Query("search")
 	query := db.Model(&models.InviteCode{})
 	if search != "" {
-		query = query.Where("code LIKE ? OR user_id IN (SELECT id FROM users WHERE username LIKE ? OR email LIKE ?)", "%"+search+"%", "%"+search+"%", "%"+search+"%")
+		// 转义 LIKE 通配符防止信息泄露
+		escapedSearch := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(search)
+		likePattern := "%" + escapedSearch + "%"
+		query = query.Where("code LIKE ? ESCAPE '\\' OR user_id IN (SELECT id FROM users WHERE username LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\')",
+			likePattern, likePattern, likePattern)
 	}
 	var total int64
 	query.Count(&total)
@@ -150,13 +156,18 @@ func CreateInviteCode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	// Bounds validation
-	if req.InviterReward < 0 || req.InviterReward > 10000 {
-		utils.BadRequest(c, "邀请人奖励需在 0 ~ 10000 之间")
+	// Bounds validation - 非管理员限制奖励金额
+	user := c.MustGet("user").(*models.User)
+	maxReward := 100.0 // 普通用户最大奖励
+	if user.IsAdmin {
+		maxReward = 10000.0
+	}
+	if req.InviterReward < 0 || req.InviterReward > maxReward {
+		utils.BadRequest(c, fmt.Sprintf("邀请人奖励需在 0 ~ %.0f 之间", maxReward))
 		return
 	}
-	if req.InviteeReward < 0 || req.InviteeReward > 10000 {
-		utils.BadRequest(c, "受邀人奖励需在 0 ~ 10000 之间")
+	if req.InviteeReward < 0 || req.InviteeReward > maxReward {
+		utils.BadRequest(c, fmt.Sprintf("受邀人奖励需在 0 ~ %.0f 之间", maxReward))
 		return
 	}
 	if req.MaxUses != nil && (*req.MaxUses < 1 || *req.MaxUses > 100000) {
@@ -265,11 +276,11 @@ func ValidateInviteCode(c *gin.Context) {
 		return
 	}
 	if invite.ExpiresAt != nil && time.Now().After(*invite.ExpiresAt) {
-		utils.BadRequest(c, "邀请码已过期")
+		utils.BadRequest(c, "邀请码已过期，请联系邀请人获取新邀请码")
 		return
 	}
 	if invite.MaxUses != nil && invite.UsedCount >= int(*invite.MaxUses) {
-		utils.BadRequest(c, "邀请码已达使用上限")
+		utils.BadRequest(c, "邀请码使用次数已达上限，请联系邀请人获取新邀请码")
 		return
 	}
 	utils.Success(c, gin.H{"valid": true, "invitee_reward": invite.InviteeReward})

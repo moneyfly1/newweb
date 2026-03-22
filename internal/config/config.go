@@ -96,8 +96,8 @@ func setDefaults() {
 
 	// JWT 默认值
 	viper.SetDefault("JWT_ALGORITHM", "HS256")
-	viper.SetDefault("ACCESS_TOKEN_EXPIRE_MINUTES", 1440)
-	viper.SetDefault("REFRESH_TOKEN_EXPIRE_DAYS", 7)
+	viper.SetDefault("ACCESS_TOKEN_EXPIRE_MINUTES", 1440)  // 24小时
+	viper.SetDefault("REFRESH_TOKEN_EXPIRE_DAYS", 30)      // 30天，保持用户长时间登录
 
 	// SMTP 默认值
 	viper.SetDefault("SMTP_PORT", 587)

@@ -45,6 +45,8 @@ func FetchSubscriptionContent(urlStr string) (string, error) {
 					return "", fmt.Errorf("access to private IP addresses is not allowed")
 				}
 			}
+		} else {
+			return "", fmt.Errorf("DNS lookup failed for %s: %w", parsedURL.Hostname(), err)
 		}
 	}
 
@@ -54,6 +56,23 @@ func FetchSubscriptionContent(urlStr string) (string, error) {
 			TLSClientConfig: &tls.Config{
 				MinVersion: tls.VersionTLS12,
 			},
+		},
+		// 防止通过重定向绕过 SSRF 检查
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("too many redirects")
+			}
+			// 对重定向目标也进行私有 IP 检查
+			if req.URL.Hostname() != "" {
+				if ips, err := net.LookupIP(req.URL.Hostname()); err == nil {
+					for _, ip := range ips {
+						if isPrivateIP(ip) {
+							return fmt.Errorf("redirect to private IP is not allowed")
+						}
+					}
+				}
+			}
+			return nil
 		},
 	}
 	req, err := http.NewRequest("GET", urlStr, nil)
@@ -1794,7 +1813,7 @@ func WireGuardLinkToClashMap(link string, name string) (map[string]interface{}, 
 		"udp":         true,
 	}
 
-	if pk := q.Get("publicKey"); pk != "" {
+	if pk := getRawQueryParam(u.RawQuery, "publicKey"); pk != "" {
 		m["public-key"] = pk
 	}
 	if ip := q.Get("ip"); ip != "" {
@@ -1813,7 +1832,7 @@ func WireGuardLinkToClashMap(link string, name string) (map[string]interface{}, 
 			m["mtu"] = mtuInt
 		}
 	}
-	if psk := q.Get("presharedKey"); psk != "" {
+	if psk := getRawQueryParam(u.RawQuery, "presharedKey"); psk != "" {
 		m["preshared-key"] = psk
 	}
 	if reserved := q.Get("reserved"); reserved != "" {
@@ -1918,9 +1937,62 @@ func GenerateClashYAMLWithDomain(nodes []models.Node, siteDomain string, subscri
 	return generateDefaultClashYAML(proxies, proxyNames, realNames, siteDomain, subscriptionName)
 }
 
+// GenerateStashYAMLWithDomain generates Stash YAML using stash_temp.yaml template.
+// Falls back to Clash YAML if the Stash template is not found.
+func GenerateStashYAMLWithDomain(nodes []models.Node, siteDomain string, subscriptionName string) string {
+	var proxies []map[string]interface{}
+	var proxyNames []string
+	var infoNames []string
+	usedNames := make(map[string]bool)
+
+	for _, n := range nodes {
+		if n.Config == nil || *n.Config == "" {
+			continue
+		}
+		name := n.Name
+		origName := name
+		counter := 1
+		for usedNames[name] {
+			name = fmt.Sprintf("%s_%d", origName, counter)
+			counter++
+		}
+		usedNames[name] = true
+		m, err := NodeConfigToClashMap(n.Type, *n.Config, name)
+		if err != nil {
+			continue
+		}
+		proxies = append(proxies, m)
+		proxyNames = append(proxyNames, name)
+		if server, ok := m["server"].(string); ok && server == "baidu.com" {
+			infoNames = append(infoNames, name)
+		}
+	}
+
+	infoSet := make(map[string]bool)
+	for _, n := range infoNames {
+		infoSet[n] = true
+	}
+	var realNames []string
+	for _, n := range proxyNames {
+		if !infoSet[n] {
+			realNames = append(realNames, n)
+		}
+	}
+
+	if result := generateFromTemplateFile("uploads/config/stash_temp.yaml", proxies, proxyNames, realNames, subscriptionName); result != "" {
+		return result
+	}
+	// Fall back to Clash YAML
+	return GenerateClashYAMLWithDomain(nodes, siteDomain, subscriptionName)
+}
+
 // generateFromTemplate loads uploads/config/temp.yaml and injects proxies + updates proxy-groups.
 func generateFromTemplate(proxies []map[string]interface{}, allNames, realNames []string, subscriptionName string) string {
-	data, err := os.ReadFile("uploads/config/temp.yaml")
+	return generateFromTemplateFile("uploads/config/temp.yaml", proxies, allNames, realNames, subscriptionName)
+}
+
+func generateFromTemplateFile(templatePath string, proxies []map[string]interface{}, allNames, realNames []string, subscriptionName string) string {
+	data, err := os.ReadFile(templatePath)
 	if err != nil {
 		return ""
 	}

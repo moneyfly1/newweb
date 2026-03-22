@@ -17,10 +17,12 @@ func SecurityHeaders() gin.HandlerFunc {
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Header("Cross-Origin-Opener-Policy", "same-origin")
 		c.Header("Cross-Origin-Resource-Policy", "same-origin")
+		c.Header("X-XSS-Protection", "0")
 		// CSP 配置：naive-ui 使用 CSS-in-JS，需要 style-src 'unsafe-inline'
-		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https:; frame-src https://telegram.org; object-src 'none'; base-uri 'self'; form-action 'self'")
+		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; frame-src https://telegram.org; object-src 'none'; base-uri 'self'; form-action 'self'")
 		c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		if c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
+		// HSTS: 当请求通过 TLS 或代理标记为 HTTPS 时设置
+		if c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") || strings.EqualFold(c.GetHeader("X-Scheme"), "https") {
 			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 		c.Next()

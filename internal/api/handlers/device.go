@@ -55,18 +55,16 @@ func DeleteDevice(c *gin.Context) {
 		return
 	}
 
-	// Soft-deactivate the device
-	if err := db.Model(&device).Update("is_active", false).Error; err != nil {
+	// 使用事务确保设备停用和计数更新的原子性
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&device).Update("is_active", false).Error; err != nil {
+			return err
+		}
+		// Decrement current devices count (atomic, floor at 0)
+		return tx.Model(&sub).UpdateColumn("current_devices", gorm.Expr("CASE WHEN current_devices > 0 THEN current_devices - 1 ELSE 0 END")).Error
+	}); err != nil {
 		utils.InternalError(c, "删除设备失败")
 		return
-	}
-
-	// Decrement current devices count (atomic, floor at 0)
-	if sub.CurrentDevices > 0 {
-		if err := db.Model(&sub).UpdateColumn("current_devices", gorm.Expr("CASE WHEN current_devices > 0 THEN current_devices - 1 ELSE 0 END")).Error; err != nil {
-			utils.InternalError(c, "更新设备计数失败")
-			return
-		}
 	}
 
 	utils.SuccessMessage(c, "设备已删除")

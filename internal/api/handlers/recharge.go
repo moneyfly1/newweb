@@ -18,6 +18,9 @@ func ListRechargeRecords(c *gin.Context) {
 	var items []models.RechargeRecord
 	var total int64
 	db := database.GetDB().Model(&models.RechargeRecord{}).Where("user_id = ?", userID)
+	if status := c.Query("status"); status != "" {
+		db = db.Where("status = ?", status)
+	}
 	db.Count(&total)
 	db.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&items)
 	utils.SuccessPage(c, items, total, p.Page, p.PageSize)

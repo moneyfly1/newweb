@@ -740,6 +740,8 @@ func PaymentNotify(c *gin.Context) {
 }
 
 func handleEpayNotify(c *gin.Context, db *gorm.DB) {
+	utils.LogCallback("========== 开始处理易支付回调 ==========")
+	utils.LogCallback("Method: %s, URL: %s, IP: %s", c.Request.Method, c.Request.URL.String(), utils.GetRealClientIP(c))
 	// EasyPay sends params via GET query or POST form
 	params := make(map[string]string)
 	if c.Request.Method == "GET" {
@@ -777,7 +779,10 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 
 	// Check trade status
 	tradeStatus := params["trade_status"]
+	utils.LogCallback("[Epay] trade_status=%s out_trade_no=%s trade_no=%s money=%s",
+		tradeStatus, params["out_trade_no"], params["trade_no"], params["money"])
 	if tradeStatus != "TRADE_SUCCESS" {
+		utils.LogCallback("[Epay] 交易状态非成功，忽略回调")
 		c.String(200, "success")
 		return
 	}
@@ -883,9 +888,11 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 				return
 			}
 			// Already processed (duplicate callback) - just log and return success
+			utils.LogCallback("[Epay] ⚠️  回调已处理（重复），忽略: out_trade_no=%s", outTradeNo)
 		} else {
 			result := "success"
 			callback.ProcessingResult = &result
+			utils.LogCallback("[Epay] ✅✅✅ 易支付回调处理成功: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
 		}
 	}
 

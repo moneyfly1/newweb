@@ -290,11 +290,11 @@ onMounted(async () => {
   try {
     const res: any = await getNotificationSettings()
     if (res.data) Object.assign(notifForm.value, res.data)
-  } catch (e: any) { console.warn('加载通知设置失败', e) }
+  } catch { /* 通知设置加载失败静默忽略 */ }
   try {
     const res: any = await getPrivacySettings()
     if (res.data) Object.assign(privacyForm.value, res.data)
-  } catch (e: any) { console.warn('加载隐私设置失败', e) }
+  } catch { /* 隐私设置加载失败静默忽略 */ }
   loadingHistory.value = true
   try {
     const res: any = await getLoginHistory()
@@ -311,7 +311,7 @@ onMounted(async () => {
         setTimeout(loadTelegramBindWidget, 100)
       }
     }
-  } catch (e: any) { console.warn('加载Telegram配置失败', e) }
+  } catch { /* Telegram配置加载失败静默忽略 */ }
 })
 </script>
 

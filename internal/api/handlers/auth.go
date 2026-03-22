@@ -296,7 +296,7 @@ func Register(c *gin.Context) {
 		expireTime = time.Now().AddDate(0, 0, subscribeDays)
 	}
 
-	subURL := utils.GenerateRandomString(32)
+	subURL := utils.GenerateRandomString(64)
 	subscription := models.Subscription{
 		UserID:          user.ID,
 		SubscriptionURL: subURL,
@@ -333,8 +333,16 @@ func Register(c *gin.Context) {
 	go services.NotifyAdmin("new_user", map[string]string{"username": user.Username, "email": user.Email})
 
 	// 生成 Token
-	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
-	refreshToken, _ := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
+	accessToken, err := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
+	if err != nil {
+		utils.InternalError(c, "生成访问令牌失败")
+		return
+	}
+	refreshToken, err := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
+	if err != nil {
+		utils.InternalError(c, "生成刷新令牌失败")
+		return
+	}
 
 	utils.Success(c, gin.H{
 		"user":          gin.H{"id": user.ID, "username": user.Username, "email": user.Email},
@@ -369,6 +377,16 @@ func Login(c *gin.Context) {
 			Where("username = ? AND success = 0 AND created_at > ?", req.Email, since).
 			Count(&failCount)
 		if failCount >= int64(maxAttempts) {
+			// 查询最早的失败记录，计算准确的解锁剩余时间
+			var earliest models.LoginAttempt
+			db.Where("username = ? AND success = 0 AND created_at > ?", req.Email, since).
+				Order("created_at ASC").First(&earliest)
+			unlockAt := earliest.CreatedAt.Add(time.Duration(lockoutMinutes) * time.Minute)
+			retryAfterSec := int(time.Until(unlockAt).Seconds())
+			if retryAfterSec < 0 {
+				retryAfterSec = 0
+			}
+			c.Header("Retry-After", fmt.Sprintf("%d", retryAfterSec))
 			utils.TooManyRequests(c, fmt.Sprintf("登录失败次数过多，请 %d 分钟后再试", lockoutMinutes))
 			return
 		}
@@ -450,8 +468,16 @@ func Login(c *gin.Context) {
 	if v := utils.GetIntSetting("session_timeout_minutes", 0); v > 0 {
 		accessExpireMinutes = v
 	}
-	accessToken, _ := generateToken(user.ID, "access", time.Duration(accessExpireMinutes)*time.Minute)
-	refreshToken, _ := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
+	accessToken, err := generateToken(user.ID, "access", time.Duration(accessExpireMinutes)*time.Minute)
+	if err != nil {
+		utils.InternalError(c, "生成访问令牌失败")
+		return
+	}
+	refreshToken, err := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
+	if err != nil {
+		utils.InternalError(c, "生成刷新令牌失败")
+		return
+	}
 
 	utils.Success(c, gin.H{
 		"user": gin.H{
@@ -466,6 +492,7 @@ func Login(c *gin.Context) {
 
 // Logout 登出
 func Logout(c *gin.Context) {
+	// 黑名单 access token
 	tokenString, _ := c.Get("token")
 	if token, ok := tokenString.(string); ok {
 		tokenHash := utils.SHA256Hash(token)
@@ -473,6 +500,19 @@ func Logout(c *gin.Context) {
 			utils.SysError("auth", fmt.Sprintf("登出加入黑名单失败: %v", err))
 		}
 	}
+
+	// 同时黑名单 refresh token（如果客户端提供了）
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if c.ShouldBindJSON(&req) == nil && req.RefreshToken != "" {
+		refreshHash := utils.SHA256Hash(req.RefreshToken)
+		expiresAt := time.Now().Add(time.Duration(config.AppConfig.RefreshTokenExpireDays) * 24 * time.Hour)
+		if err := models.AddToBlacklist(database.GetDB(), refreshHash, c.GetUint("user_id"), expiresAt); err != nil {
+			utils.SysError("auth", fmt.Sprintf("登出 refresh token 加入黑名单失败: %v", err))
+		}
+	}
+
 	utils.SuccessMessage(c, "已登出")
 }
 
@@ -528,8 +568,16 @@ func RefreshToken(c *gin.Context) {
 		utils.SysError("auth", fmt.Sprintf("refresh token 加入黑名单失败: %v", err))
 	}
 
-	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
-	newRefreshToken, _ := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
+	accessToken, err := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
+	if err != nil {
+		utils.InternalError(c, "生成访问令牌失败")
+		return
+	}
+	newRefreshToken, err := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
+	if err != nil {
+		utils.InternalError(c, "生成刷新令牌失败")
+		return
+	}
 
 	utils.Success(c, gin.H{
 		"access_token":  accessToken,
@@ -551,8 +599,20 @@ func SendVerificationCode(c *gin.Context) {
 		req.Purpose = "register"
 	}
 
-	code := utils.GenerateVerificationCode()
 	db := database.GetDB()
+
+	// 速率限制：同一邮箱 5 分钟内最多发送 3 次
+	var recentCount int64
+	since := time.Now().Add(-5 * time.Minute)
+	db.Model(&models.VerificationCode{}).
+		Where("email = ? AND purpose = ? AND created_at > ?", req.Email, req.Purpose, since).
+		Count(&recentCount)
+	if recentCount >= 3 {
+		utils.TooManyRequests(c, "发送频率过高，请 5 分钟后再试")
+		return
+	}
+
+	code := utils.GenerateVerificationCode()
 	if err := db.Create(&models.VerificationCode{
 		Email:     req.Email,
 		Code:      code,
@@ -606,6 +666,18 @@ func ForgotPassword(c *gin.Context) {
 	}
 
 	db := database.GetDB()
+
+	// 速率限制：同一邮箱 15 分钟内最多发送 3 次重置请求
+	var recentCount int64
+	since := time.Now().Add(-15 * time.Minute)
+	db.Model(&models.VerificationCode{}).
+		Where("email = ? AND purpose = ? AND created_at > ?", req.Email, "reset_password", since).
+		Count(&recentCount)
+	if recentCount >= 3 {
+		utils.TooManyRequests(c, "发送频率过高，请 15 分钟后再试")
+		return
+	}
+
 	var user models.User
 	if err := db.Where("email = ?", req.Email).First(&user).Error; err != nil {
 		// 不暴露用户是否存在
@@ -729,8 +801,16 @@ func TelegramLogin(c *gin.Context) {
 	}
 
 	// Generate tokens
-	accessToken, _ := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
-	refreshToken, _ := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
+	accessToken, err := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
+	if err != nil {
+		utils.InternalError(c, "生成访问令牌失败")
+		return
+	}
+	refreshToken, err := generateToken(user.ID, "refresh", time.Duration(config.AppConfig.RefreshTokenExpireDays)*24*time.Hour)
+	if err != nil {
+		utils.InternalError(c, "生成刷新令牌失败")
+		return
+	}
 
 	utils.Success(c, gin.H{
 		"user": gin.H{

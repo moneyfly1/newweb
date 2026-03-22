@@ -72,7 +72,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 				var userSub models.Subscription
 				if db.Where("user_id = ?", order.UserID).First(&userSub).Error == nil {
 					if siteURL := GetSiteURL(); siteURL != "" {
-						subURL = siteURL + "/api/v1/subscribe/" + userSub.SubscriptionURL
+						subURL = siteURL + "/api/v1/client/subscribe?token=" + userSub.SubscriptionURL
 					}
 				}
 				emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
@@ -111,7 +111,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			order.UserID, deviceLimit, durationDays)
 		sub = models.Subscription{
 			UserID:          order.UserID,
-			SubscriptionURL: utils.GenerateRandomString(32),
+			SubscriptionURL: utils.GenerateRandomString(64),
 			DeviceLimit:     deviceLimit,
 			IsActive:        true,
 			Status:          "active",
@@ -126,7 +126,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			return fmt.Errorf("创建订阅失败: %w", err)
 		}
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "activate", "system", nil, fmt.Sprintf("购买套餐激活订阅: %s", pkgName), nil, nil)
-		fmt.Printf("[subscription] 订阅创建成功: subscription_id=%d, url=%s\n", sub.ID, sub.SubscriptionURL)
+		fmt.Printf("[subscription] 订阅创建成功: subscription_id=%d\n", sub.ID)
 	} else {
 		// Extend existing subscription
 		fmt.Printf("[subscription] 续期现有订阅: subscription_id=%d, old_expire=%s, add_days=%d\n",
@@ -163,7 +163,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 		var userSub models.Subscription
 		if db.Where("user_id = ?", order.UserID).First(&userSub).Error == nil {
 			if siteURL := GetSiteURL(); siteURL != "" {
-				subURL = siteURL + "/api/v1/subscribe/" + userSub.SubscriptionURL
+				subURL = siteURL + "/api/v1/client/subscribe?token=" + userSub.SubscriptionURL
 			}
 		}
 		emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
@@ -185,8 +185,16 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 	if err := db.Where("invitee_id = ?", order.UserID).First(&relation).Error; err != nil {
 		return
 	}
-	// Only pay commission on first order
+	// Only pay commission on first order - use atomic CAS to prevent double payout
 	if relation.InviteeFirstOrderID != nil {
+		return
+	}
+	// 原子性设置 first_order_id，仅当仍为 NULL 时更新（防止并发双重发放）
+	result := db.Model(&models.InviteRelation{}).
+		Where("id = ? AND invitee_first_order_id IS NULL", relation.ID).
+		Update("invitee_first_order_id", order.ID)
+	if result.Error != nil || result.RowsAffected == 0 {
+		// 另一个并发请求已经设置了，跳过
 		return
 	}
 	rateStr := utils.GetSetting("invite_commission_rate")
@@ -247,7 +255,6 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 	}
 	if err := db.Model(&relation).Updates(map[string]interface{}{
 		"invitee_total_consumption": gorm.Expr("invitee_total_consumption + ?", payAmount),
-		"invitee_first_order_id":    order.ID,
 	}).Error; err != nil {
 		utils.SysError("subscription", fmt.Sprintf("更新邀请关系返佣信息失败: relation=%d order=%d err=%v", relation.ID, order.ID, err))
 	}
@@ -261,25 +268,34 @@ func GenerateSurgeConfig(nodes []models.Node, siteName string) string {
 	sb.WriteString(fmt.Sprintf("# %s Surge Config\n", siteName))
 	sb.WriteString("[Proxy]\n")
 	sb.WriteString("DIRECT = direct\n")
+	var names []string
 	for _, node := range nodes {
 		if node.Config == nil || *node.Config == "" {
+			continue
+		}
+		if strings.Contains(*node.Config, "baidu.com") {
 			continue
 		}
 		line := convertNodeToSurgeLine(node)
 		if line != "" {
 			sb.WriteString(line + "\n")
-		}
-	}
-	sb.WriteString("\n[Proxy Group]\n")
-	sb.WriteString("Proxy = select, ")
-	var names []string
-	for _, node := range nodes {
-		if node.Config != nil && *node.Config != "" {
 			names = append(names, node.Name)
 		}
 	}
-	sb.WriteString(strings.Join(names, ", "))
-	sb.WriteString("\n")
+	sb.WriteString("\n[Proxy Group]\n")
+	if len(names) > 0 {
+		sb.WriteString("Proxy = select, AutoTest, DIRECT, " + strings.Join(names, ", ") + "\n")
+		sb.WriteString("AutoTest = url-test, " + strings.Join(names, ", ") + ", url=http://www.gstatic.com/generate_204, interval=300, tolerance=50\n")
+	} else {
+		sb.WriteString("Proxy = select, DIRECT\n")
+	}
+	sb.WriteString("\n[Rule]\n")
+	sb.WriteString("DOMAIN-SET,https://cdn.jsdelivr.net/gh/Loyalsoldier/surge-rules@release/reject.txt,REJECT\n")
+	sb.WriteString("DOMAIN-SET,https://cdn.jsdelivr.net/gh/Loyalsoldier/surge-rules@release/proxy.txt,Proxy\n")
+	sb.WriteString("DOMAIN-SET,https://cdn.jsdelivr.net/gh/Loyalsoldier/surge-rules@release/direct.txt,DIRECT\n")
+	sb.WriteString("RULE-SET,https://cdn.jsdelivr.net/gh/Loyalsoldier/surge-rules@release/cncidr.txt,DIRECT\n")
+	sb.WriteString("GEOIP,CN,DIRECT,no-resolve\n")
+	sb.WriteString("FINAL,Proxy,dns-failed\n")
 	return sb.String()
 }
 
@@ -336,27 +352,60 @@ func GenerateShadowrocketBase64(nodes []models.Node) string {
 	return GenerateUniversalBase64(nodes)
 }
 
-// GenerateQuantumultXConfig generates QuantumultX server_remote format
+// GenerateQuantumultXConfig generates a full QuantumultX configuration profile.
 func GenerateQuantumultXConfig(nodes []models.Node) string {
-	var lines []string
+	var proxyLines []string
 	for _, node := range nodes {
 		if node.Config == nil || *node.Config == "" {
 			continue
 		}
+		if strings.Contains(*node.Config, "baidu.com") {
+			continue
+		}
 		config := *node.Config
+		var line string
 		if strings.HasPrefix(config, "ss://") {
-			line := convertSSToQuantumultX(node.Name, config)
-			if line != "" {
-				lines = append(lines, line)
-			}
+			line = convertSSToQuantumultX(node.Name, config)
 		} else if strings.HasPrefix(config, "trojan://") {
-			line := convertTrojanToQuantumultX(node.Name, config)
-			if line != "" {
-				lines = append(lines, line)
+			line = convertTrojanToQuantumultX(node.Name, config)
+		} else {
+			m, err := NodeConfigToClashMap(node.Type, config, node.Name)
+			if err == nil {
+				line = clashMapToQuantumultXLine(node.Name, m)
 			}
 		}
+		if line != "" {
+			proxyLines = append(proxyLines, line)
+		}
 	}
-	return strings.Join(lines, "\n")
+
+	var sb strings.Builder
+	sb.WriteString("[general]\n")
+	sb.WriteString("network_check_url = http://www.gstatic.com/generate_204\n")
+	sb.WriteString("server_check_url = http://www.gstatic.com/generate_204\n")
+	sb.WriteString("geo_location_checker = http://www.gstatic.com/generate_204\n\n")
+
+	sb.WriteString("[server_local]\n")
+	for _, l := range proxyLines {
+		sb.WriteString(l + "\n")
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("[filter_remote]\n")
+	sb.WriteString("https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Advertising/Advertising.list, tag=Advertising, force-policy=REJECT, update-interval=86400, opt-parser=true, enabled=true\n")
+	sb.WriteString("https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Global/Global.list, tag=Global, force-policy=Proxy, update-interval=86400, opt-parser=true, enabled=true\n")
+	sb.WriteString("https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/China/China.list, tag=China, force-policy=DIRECT, update-interval=86400, opt-parser=true, enabled=true\n\n")
+
+	sb.WriteString("[filter_local]\n")
+	sb.WriteString("GEOIP,CN,DIRECT\n")
+	sb.WriteString("FINAL,Proxy\n\n")
+
+	sb.WriteString("[rewrite_remote]\n\n")
+	sb.WriteString("[rewrite_local]\n\n")
+	sb.WriteString("[task_local]\n\n")
+	sb.WriteString("[mitm]\n")
+	sb.WriteString("skip_validating_cert = true\n")
+	return sb.String()
 }
 
 func convertSSToQuantumultX(name, config string) string {
@@ -387,6 +436,400 @@ func convertTrojanToQuantumultX(name, config string) string {
 		port = "443"
 	}
 	return fmt.Sprintf("trojan=%s:%s, password=%s, over-tls=true, tls-verification=false, tag=%s", host, port, password, name)
+}
+
+// clashMapToQuantumultXLine converts a clash map to a QuantumultX proxy line.
+func clashMapToQuantumultXLine(name string, m map[string]interface{}) string {
+	typ, _ := m["type"].(string)
+	server, _ := m["server"].(string)
+	port := clashMapPortStr(m)
+	if server == "" || port == "" {
+		return ""
+	}
+	switch typ {
+	case "ss":
+		cipher, _ := m["cipher"].(string)
+		password, _ := m["password"].(string)
+		return fmt.Sprintf("shadowsocks=%s:%s, method=%s, password=%s, tag=%s", server, port, cipher, password, name)
+	case "trojan":
+		password, _ := m["password"].(string)
+		sni := loonGetSNI(m)
+		skipVerify := "false"
+		if sv, ok := m["skip-cert-verify"].(bool); ok && sv {
+			skipVerify = "true"
+		}
+		line := fmt.Sprintf("trojan=%s:%s, password=%s, over-tls=true, tls-host=%s, tls-verification=%s, fast-open=false, udp-relay=false, tag=%s",
+			server, port, password, sni, func() string {
+				if skipVerify == "true" {
+					return "false"
+				}
+				return "true"
+			}(), name)
+		return line
+	case "vmess":
+		uuid, _ := m["uuid"].(string)
+		cipher, _ := m["cipher"].(string)
+		if cipher == "" || cipher == "auto" {
+			cipher = "chacha20-poly1305"
+		}
+		tls, _ := m["tls"].(bool)
+		sni, _ := m["servername"].(string)
+		network, _ := m["network"].(string)
+		tlsStr := "false"
+		if tls {
+			tlsStr = "true"
+		}
+		line := fmt.Sprintf("vmess=%s:%s, method=%s, password=%s", server, port, cipher, uuid)
+		if tls {
+			line += fmt.Sprintf(", obfs=over-tls, obfs-host=%s", sni)
+		}
+		if network == "ws" {
+			wsPath, wsHost := extractWSParams(m)
+			if tls {
+				line += fmt.Sprintf(", obfs=wss, obfs-uri=%s", wsPath)
+			} else {
+				line += fmt.Sprintf(", obfs=ws, obfs-uri=%s", wsPath)
+			}
+			if wsHost != "" {
+				line += fmt.Sprintf(", obfs-host=%s", wsHost)
+			}
+			_ = tlsStr
+		}
+		line += fmt.Sprintf(", tag=%s", name)
+		return line
+	case "vless":
+		uuid, _ := m["uuid"].(string)
+		sni, _ := m["servername"].(string)
+		return fmt.Sprintf("vless=%s:%s, password=%s, obfs=over-tls, obfs-host=%s, tag=%s", server, port, uuid, sni, name)
+	}
+	return ""
+}
+
+// GenerateLoonConfig generates Loon-compatible proxy configuration.
+func GenerateLoonConfig(nodes []models.Node, siteName string) string {
+	var proxyLines []string
+	var proxyNames []string
+	for _, node := range nodes {
+		if node.Config == nil || *node.Config == "" {
+			continue
+		}
+		// Skip info nodes (server = baidu.com placeholder)
+		if strings.Contains(*node.Config, "baidu.com") {
+			continue
+		}
+		m, err := NodeConfigToClashMap(node.Type, *node.Config, node.Name)
+		if err != nil {
+			continue
+		}
+		line := clashMapToLoonLine(node.Name, m)
+		if line != "" {
+			proxyLines = append(proxyLines, line)
+			proxyNames = append(proxyNames, node.Name)
+		}
+	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("# %s - Loon Config\n\n", siteName))
+	sb.WriteString("[Proxy]\n")
+	for _, l := range proxyLines {
+		sb.WriteString(l + "\n")
+	}
+	sb.WriteString("\n[Proxy Group]\n")
+	if len(proxyNames) > 0 {
+		sb.WriteString("Proxy = select, " + strings.Join(proxyNames, ", ") + "\n")
+	} else {
+		sb.WriteString("Proxy = select, DIRECT\n")
+	}
+	sb.WriteString("\n[Remote Rule]\n")
+	sb.WriteString("https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Loon/Advertising/Advertising.list, policy=REJECT, tag=Advertising, enabled=true\n")
+	sb.WriteString("https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Loon/Global/Global.list, policy=Proxy, tag=Global, enabled=true\n")
+	sb.WriteString("https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Loon/ChinaMax/ChinaMax.list, policy=DIRECT, tag=ChinaMax, enabled=true\n")
+	sb.WriteString("\n[Rule]\n")
+	sb.WriteString("GEOIP,CN,DIRECT,no-resolve\n")
+	sb.WriteString("FINAL,Proxy\n")
+	return sb.String()
+}
+
+func clashMapToLoonLine(name string, m map[string]interface{}) string {
+	typ, _ := m["type"].(string)
+	server, _ := m["server"].(string)
+	port := clashMapPortStr(m)
+	if server == "" || port == "" {
+		return ""
+	}
+	switch typ {
+	case "ss":
+		cipher, _ := m["cipher"].(string)
+		password, _ := m["password"].(string)
+		return fmt.Sprintf("%s = Shadowsocks,%s,%s,%s,%s,fast-open=false,udp=true", name, server, port, cipher, password)
+	case "vmess":
+		uuid, _ := m["uuid"].(string)
+		cipher, _ := m["cipher"].(string)
+		if cipher == "" || cipher == "auto" {
+			cipher = "auto"
+		}
+		tls, _ := m["tls"].(bool)
+		sni, _ := m["servername"].(string)
+		tlsStr := "false"
+		if tls {
+			tlsStr = "true"
+		}
+		network, _ := m["network"].(string)
+		if network == "ws" {
+			wsPath, wsHost := extractWSParams(m)
+			extra := ""
+			if wsHost != "" {
+				extra = ",host=" + wsHost
+			}
+			return fmt.Sprintf("%s = VMESS,%s,%s,%s,%s,over-tls=%s,tls-name=%s,transport=ws,path=%s%s",
+				name, server, port, cipher, uuid, tlsStr, sni, wsPath, extra)
+		}
+		return fmt.Sprintf("%s = VMESS,%s,%s,%s,%s,over-tls=%s,tls-name=%s", name, server, port, cipher, uuid, tlsStr, sni)
+	case "trojan":
+		password, _ := m["password"].(string)
+		sni := loonGetSNI(m)
+		skipVerify := "false"
+		if sv, ok := m["skip-cert-verify"].(bool); ok && sv {
+			skipVerify = "true"
+		}
+		return fmt.Sprintf("%s = Trojan,%s,%s,%s,over-tls=true,tls-name=%s,skip-cert-verify=%s", name, server, port, password, sni, skipVerify)
+	case "vless":
+		uuid, _ := m["uuid"].(string)
+		sni, _ := m["servername"].(string)
+		return fmt.Sprintf("%s = VLESS,%s,%s,%s,over-tls=true,tls-name=%s", name, server, port, uuid, sni)
+	}
+	return ""
+}
+
+// GenerateSingBoxConfig generates SingBox JSON outbound configuration.
+func GenerateSingBoxConfig(nodes []models.Node) string {
+	var outbounds []map[string]interface{}
+	var proxyNames []string
+	for _, node := range nodes {
+		if node.Config == nil || *node.Config == "" {
+			continue
+		}
+		if strings.Contains(*node.Config, "baidu.com") {
+			continue
+		}
+		m, err := NodeConfigToClashMap(node.Type, *node.Config, node.Name)
+		if err != nil {
+			continue
+		}
+		ob := clashMapToSingBoxOutbound(node.Name, m)
+		if ob != nil {
+			outbounds = append(outbounds, ob)
+			proxyNames = append(proxyNames, node.Name)
+		}
+	}
+	selectorOut := append([]string{}, proxyNames...)
+	selectorOut = append(selectorOut, "direct")
+	allOutbounds := []map[string]interface{}{
+		{"type": "selector", "tag": "Proxy", "outbounds": selectorOut},
+	}
+	allOutbounds = append(allOutbounds, outbounds...)
+	allOutbounds = append(allOutbounds,
+		map[string]interface{}{"type": "direct", "tag": "direct"},
+		map[string]interface{}{"type": "block", "tag": "block"},
+		map[string]interface{}{"type": "dns", "tag": "dns-out"},
+	)
+
+	config := map[string]interface{}{
+		"dns": map[string]interface{}{
+			"servers": []interface{}{
+				map[string]interface{}{"tag": "dns-direct", "address": "223.5.5.5", "strategy": "ipv4_only"},
+				map[string]interface{}{"tag": "dns-remote", "address": "8.8.8.8", "strategy": "ipv4_only", "detour": "Proxy"},
+			},
+			"rules": []interface{}{
+				map[string]interface{}{"outbound": "any", "server": "dns-direct"},
+				map[string]interface{}{"rule_set": "geosite-cn", "server": "dns-direct"},
+			},
+			"final": "dns-remote",
+		},
+		"outbounds": allOutbounds,
+		"route": map[string]interface{}{
+			"rule_set": []interface{}{
+				map[string]interface{}{
+					"tag": "geosite-ads", "type": "remote", "format": "binary",
+					"url":              "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
+					"download_detour": "direct",
+				},
+				map[string]interface{}{
+					"tag": "geosite-cn", "type": "remote", "format": "binary",
+					"url":              "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+					"download_detour": "direct",
+				},
+				map[string]interface{}{
+					"tag": "geoip-cn", "type": "remote", "format": "binary",
+					"url":              "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+					"download_detour": "direct",
+				},
+			},
+			"rules": []interface{}{
+				map[string]interface{}{"protocol": "dns", "outbound": "dns-out"},
+				map[string]interface{}{"rule_set": []string{"geosite-ads"}, "outbound": "block"},
+				map[string]interface{}{"rule_set": []string{"geosite-cn", "geoip-cn"}, "outbound": "direct"},
+			},
+			"final":                  "Proxy",
+			"auto_detect_interface": true,
+		},
+		"cache_file": map[string]interface{}{"enabled": true},
+	}
+	b, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+func clashMapToSingBoxOutbound(name string, m map[string]interface{}) map[string]interface{} {
+	typ, _ := m["type"].(string)
+	server, _ := m["server"].(string)
+	port := clashMapPortInt(m)
+	if server == "" || port == 0 {
+		return nil
+	}
+	switch typ {
+	case "ss":
+		cipher, _ := m["cipher"].(string)
+		password, _ := m["password"].(string)
+		return map[string]interface{}{
+			"type": "shadowsocks", "tag": name,
+			"server": server, "server_port": port,
+			"method": cipher, "password": password,
+		}
+	case "vmess":
+		uuid, _ := m["uuid"].(string)
+		alterId := clashMapIntField(m, "alterId")
+		security, _ := m["cipher"].(string)
+		if security == "" {
+			security = "auto"
+		}
+		tls, _ := m["tls"].(bool)
+		sni, _ := m["servername"].(string)
+		ob := map[string]interface{}{
+			"type": "vmess", "tag": name,
+			"server": server, "server_port": port,
+			"uuid": uuid, "alter_id": alterId, "security": security,
+		}
+		if tls {
+			ob["tls"] = map[string]interface{}{"enabled": true, "server_name": sni}
+		}
+		network, _ := m["network"].(string)
+		if network == "ws" {
+			wsPath, wsHost := extractWSParams(m)
+			transport := map[string]interface{}{"type": "ws", "path": wsPath}
+			if wsHost != "" {
+				transport["headers"] = map[string]interface{}{"Host": wsHost}
+			}
+			ob["transport"] = transport
+		}
+		return ob
+	case "trojan":
+		password, _ := m["password"].(string)
+		sni := loonGetSNI(m)
+		skipVerify, _ := m["skip-cert-verify"].(bool)
+		return map[string]interface{}{
+			"type": "trojan", "tag": name,
+			"server": server, "server_port": port,
+			"password": password,
+			"tls": map[string]interface{}{"enabled": true, "server_name": sni, "insecure": skipVerify},
+		}
+	case "vless":
+		uuid, _ := m["uuid"].(string)
+		sni, _ := m["servername"].(string)
+		return map[string]interface{}{
+			"type": "vless", "tag": name,
+			"server": server, "server_port": port,
+			"uuid": uuid,
+			"tls": map[string]interface{}{"enabled": true, "server_name": sni},
+		}
+	case "hysteria2":
+		password, _ := m["password"].(string)
+		sni := loonGetSNI(m)
+		return map[string]interface{}{
+			"type": "hysteria2", "tag": name,
+			"server": server, "server_port": port,
+			"password": password,
+			"tls": map[string]interface{}{"enabled": true, "server_name": sni},
+		}
+	case "hysteria":
+		authStr, _ := m["auth_str"].(string)
+		sni := loonGetSNI(m)
+		up, _ := m["up"].(string)
+		down, _ := m["down"].(string)
+		return map[string]interface{}{
+			"type": "hysteria", "tag": name,
+			"server": server, "server_port": port,
+			"auth_str": authStr, "up": up, "down": down,
+			"tls": map[string]interface{}{"enabled": true, "server_name": sni},
+		}
+	}
+	return nil
+}
+
+// Helper: get port as string from clash map
+func clashMapPortStr(m map[string]interface{}) string {
+	switch v := m["port"].(type) {
+	case int:
+		return strconv.Itoa(v)
+	case float64:
+		return strconv.Itoa(int(v))
+	case string:
+		return v
+	}
+	return ""
+}
+
+// Helper: get port as int from clash map
+func clashMapPortInt(m map[string]interface{}) int {
+	switch v := m["port"].(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	case string:
+		n, _ := strconv.Atoi(v)
+		return n
+	}
+	return 0
+}
+
+// Helper: get an int field from clash map (handles float64 from JSON)
+func clashMapIntField(m map[string]interface{}, key string) int {
+	switch v := m[key].(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	}
+	return 0
+}
+
+// Helper: extract ws path and host from clash map ws-opts
+func extractWSParams(m map[string]interface{}) (path, host string) {
+	path = "/"
+	wsOpts, _ := m["ws-opts"].(map[string]interface{})
+	if wsOpts == nil {
+		return
+	}
+	if p, ok := wsOpts["path"].(string); ok && p != "" {
+		path = p
+	}
+	if h, ok := wsOpts["headers"].(map[string]interface{}); ok {
+		if hv, ok := h["Host"].(string); ok {
+			host = hv
+		}
+	}
+	return
+}
+
+// Helper: get SNI from trojan/hysteria map (tries "sni" then "servername")
+func loonGetSNI(m map[string]interface{}) string {
+	if sni, ok := m["sni"].(string); ok && sni != "" {
+		return sni
+	}
+	sni, _ := m["servername"].(string)
+	return sni
 }
 
 // parseSSConfig extracts method, password, host, port from an SS URI (without ss:// prefix and fragment).

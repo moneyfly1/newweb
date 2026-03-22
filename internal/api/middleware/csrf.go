@@ -26,12 +26,12 @@ var store = &csrfStore{
 	tokens: make(map[uint]*csrfToken),
 }
 
-const csrfTokenExpiry = 24 * time.Hour
+const csrfTokenExpiry = 1 * time.Hour // 缩短到 1 小时
 
 // 定期清理过期 token
 func init() {
 	go func() {
-		ticker := time.NewTicker(1 * time.Hour)
+		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
 			store.mu.Lock()
@@ -74,6 +74,9 @@ func CSRFProtection() gin.HandlerFunc {
 			return
 		}
 
+		// 验证成功后立即轮换 token，防止重放
+		rotateCSRFToken(uid)
+
 		c.Next()
 	}
 }
@@ -103,10 +106,20 @@ func generateCSRFToken(userID uint) string {
 		}
 	}
 
-	// 生成新 token
+	return generateNewToken(userID)
+}
+
+// rotateCSRFToken 在验证成功后强制生成新 token
+func rotateCSRFToken(userID uint) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	generateNewToken(userID)
+}
+
+// generateNewToken 生成新 token 并存储（调用方需持有锁）
+func generateNewToken(userID uint) string {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		// 随机数生成失败，返回空字符串
 		return ""
 	}
 	token := base64.URLEncoding.EncodeToString(b)
@@ -132,7 +145,7 @@ func validateCSRFToken(userID uint, token string) bool {
 		return false
 	}
 
-	// 检查是否过期
+	// 检查是否过���
 	if time.Since(stored.createdAt) > csrfTokenExpiry {
 		return false
 	}

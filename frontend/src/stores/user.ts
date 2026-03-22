@@ -71,6 +71,7 @@ export const useUserStore = defineStore('user', () => {
   function logout(skipApi = false) {
     clearRequestSessionCache()
     const oldToken = token.value
+    const oldRefreshToken = refreshTokenVal.value
     token.value = ''
     refreshTokenVal.value = ''
     userInfo.value = null
@@ -78,9 +79,10 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('admin_token')
     localStorage.removeItem('admin_user')
+    localStorage.removeItem('admin_session')
     if (!skipApi && oldToken) {
       try {
-        request.post('/auth/logout', null, {
+        request.post('/auth/logout', { refresh_token: oldRefreshToken || undefined }, {
           headers: { Authorization: `Bearer ${oldToken}` },
         }).catch(() => {})
       } catch {}

@@ -1,0 +1,146 @@
+mixed-port: 7890
+allow-lan: true
+bind-address: '*'
+mode: rule
+log-level: info
+ipv6: false
+external-controller: 127.0.0.1:9090
+unified-delay: true
+tcp-concurrent: true
+profile:
+  store-selected: true
+  store-fake-ip: true
+dns:
+  enable: true
+  listen: 0.0.0.0:1053
+  ipv6: false
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+  - '*.lan'
+  - '*.local'
+  - localhost.ptlogin2.qq.com
+  - '+.msftconnecttest.com'
+  - '+.msftncsi.com'
+  default-nameserver:
+  - 223.5.5.5
+  - 119.29.29.29
+  nameserver:
+  - https://dns.alidns.com/dns-query
+  - https://doh.pub/dns-query
+  fallback:
+  - https://dns.cloudflare.com/dns-query
+  - https://dns.google/dns-query
+  - tls://dns.google:853
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+    ipcidr:
+    - 240.0.0.0/4
+proxies: []
+proxy-groups:
+- name: 🚀 节点选择
+  type: select
+  proxies:
+  - ♻️ 自动选择
+  - 🔰 故障转移
+  - DIRECT
+- name: ♻️ 自动选择
+  type: url-test
+  url: http://www.gstatic.com/generate_204
+  interval: 300
+  tolerance: 50
+  proxies: []
+- name: 🔰 故障转移
+  type: fallback
+  url: http://www.gstatic.com/generate_204
+  interval: 300
+  proxies: []
+- name: 🎬 流媒体
+  type: select
+  proxies:
+  - 🚀 节点选择
+  - ♻️ 自动选择
+  - DIRECT
+- name: 📲 Telegram
+  type: select
+  proxies:
+  - 🚀 节点选择
+  - ♻️ 自动选择
+- name: 🤖 OpenAI
+  type: select
+  proxies:
+  - 🚀 节点选择
+  - ♻️ 自动选择
+- name: 🎯 全球直连
+  type: select
+  proxies:
+  - DIRECT
+  - 🚀 节点选择
+- name: 🛑 广告拦截
+  type: select
+  proxies:
+  - REJECT
+  - DIRECT
+- name: 🐟 漏网之鱼
+  type: select
+  proxies:
+  - 🚀 节点选择
+  - DIRECT
+  - ♻️ 自动选择
+rule-providers:
+  reject:
+    type: http
+    behavior: domain
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt
+    path: ./ruleset/reject.yaml
+    interval: 86400
+  proxy:
+    type: http
+    behavior: domain
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt
+    path: ./ruleset/proxy.yaml
+    interval: 86400
+  direct:
+    type: http
+    behavior: domain
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt
+    path: ./ruleset/direct.yaml
+    interval: 86400
+  telegramcidr:
+    type: http
+    behavior: ipcidr
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/telegramcidr.txt
+    path: ./ruleset/telegramcidr.yaml
+    interval: 86400
+  cncidr:
+    type: http
+    behavior: ipcidr
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt
+    path: ./ruleset/cncidr.yaml
+    interval: 86400
+  lancidr:
+    type: http
+    behavior: ipcidr
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt
+    path: ./ruleset/lancidr.yaml
+    interval: 86400
+  applications:
+    type: http
+    behavior: classical
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/applications.txt
+    path: ./ruleset/applications.yaml
+    interval: 86400
+rules:
+- RULE-SET,applications,🎯 全球直连
+- DOMAIN,clash.razord.top,🎯 全球直连
+- DOMAIN,yacd.haishan.me,🎯 全球直连
+- RULE-SET,reject,🛑 广告拦截
+- RULE-SET,proxy,🚀 节点选择
+- RULE-SET,direct,🎯 全球直连
+- RULE-SET,telegramcidr,📲 Telegram,no-resolve
+- RULE-SET,cncidr,🎯 全球直连,no-resolve
+- RULE-SET,lancidr,🎯 全球直连,no-resolve
+- GEOIP,LAN,🎯 全球直连,no-resolve
+- GEOIP,CN,🎯 全球直连,no-resolve
+- MATCH,🐟 漏网之鱼

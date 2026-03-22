@@ -103,7 +103,13 @@ func createInfoNode(name string) models.Node {
 
 // buildSubscriptionContext validates subscription and prepares context
 func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
+	// 支持两种 URL 风格：
+	// 旧：/api/v1/sub/:url（路径参数）
+	// 新：/api/v1/client/subscribe?token=TOKEN（查询参数，参考业界标准风格）
 	url := c.Param("url")
+	if url == "" {
+		url = c.Query("token")
+	}
 	db := database.GetDB()
 
 	// 防止订阅地址枚举攻击：记录失败访问
@@ -455,9 +461,11 @@ func generateSubscriptionName(ctx *subscriptionContext) string {
 func GetSubscription(c *gin.Context) {
 	ctx := buildSubscriptionContext(c)
 
-	// If accessed via /sub/clash/ path, force clash format regardless of UA
-	// Otherwise check explicit format parameter, then auto-detect from client info
+	// 支持 ?format= 和 ?type= 两种参数名（兼容不同客户端）
 	subType := c.Query("format")
+	if subType == "" {
+		subType = c.Query("type")
+	}
 	if subType == "" {
 		if strings.Contains(c.Request.URL.Path, "/clash/") {
 			subType = "clash"
@@ -469,9 +477,12 @@ func GetSubscription(c *gin.Context) {
 	}
 
 	// Determine output format
-	useClash := subType == "clash" || subType == "stash"
+	useStash := subType == "stash"
+	useClash := subType == "clash" || subType == "classmeta" || subType == "mihomo"
 	useSurge := subType == "surge"
 	useQuantumultX := subType == "quantumult" || subType == "quantumultx"
+	useLoon := subType == "loon"
+	useSingBox := subType == "singbox" || subType == "sing-box"
 
 	var nodes []models.Node
 	if ctx.Status != subStatusOK {
@@ -483,7 +494,20 @@ func GetSubscription(c *gin.Context) {
 
 	subscriptionName := generateSubscriptionName(ctx)
 
-	if useClash {
+	if useStash {
+		yamlContent := services.GenerateStashYAMLWithDomain(nodes, ctx.SiteURL, subscriptionName)
+		fileName := subscriptionName
+		if strings.HasPrefix(subscriptionName, "到期: ") {
+			fileName = "到期时间" + strings.TrimPrefix(subscriptionName, "到期: ")
+		}
+		encodedName := url.QueryEscape(fileName)
+		c.Header("Content-Type", "text/yaml; charset=utf-8")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.yaml", encodedName))
+		c.Header("Subscription-Title", subscriptionName)
+		c.Header("Profile-Title", subscriptionName)
+		setSubscriptionHeaders(c, ctx)
+		c.Data(http.StatusOK, "text/yaml; charset=utf-8", []byte(yamlContent))
+	} else if useClash {
 		yamlContent := services.GenerateClashYAMLWithDomain(nodes, ctx.SiteURL, subscriptionName)
 		fileName := subscriptionName
 		if strings.HasPrefix(subscriptionName, "到期: ") {
@@ -514,6 +538,24 @@ func GetSubscription(c *gin.Context) {
 		c.Header("Profile-Title", subscriptionName)
 		setSubscriptionHeaders(c, ctx)
 		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(qxContent))
+	} else if useLoon {
+		loonContent := services.GenerateLoonConfig(nodes, ctx.SiteURL)
+		encodedName := url.QueryEscape(subscriptionName)
+		c.Header("Content-Type", "text/plain; charset=utf-8")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.conf", encodedName))
+		c.Header("Subscription-Title", subscriptionName)
+		c.Header("Profile-Title", subscriptionName)
+		setSubscriptionHeaders(c, ctx)
+		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(loonContent))
+	} else if useSingBox {
+		singboxContent := services.GenerateSingBoxConfig(nodes)
+		encodedName := url.QueryEscape(subscriptionName)
+		c.Header("Content-Type", "application/json; charset=utf-8")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.json", encodedName))
+		c.Header("Subscription-Title", subscriptionName)
+		c.Header("Profile-Title", subscriptionName)
+		setSubscriptionHeaders(c, ctx)
+		c.Data(http.StatusOK, "application/json; charset=utf-8", []byte(singboxContent))
 	} else {
 		encoded := services.GenerateUniversalBase64(nodes)
 		encodedName := url.QueryEscape(subscriptionName)
@@ -523,32 +565,6 @@ func GetSubscription(c *gin.Context) {
 		setSubscriptionHeaders(c, ctx)
 		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(encoded))
 	}
-}
-
-// GetUniversalSubscription serves base64-encoded protocol links (explicit).
-func GetUniversalSubscription(c *gin.Context) {
-	ctx := buildSubscriptionContext(c)
-
-	var nodes []models.Node
-	if ctx.Status != subStatusOK {
-		nodes = getErrorNodes(ctx)
-	} else {
-		nodes = append(getInfoNodes(ctx), ctx.Nodes...)
-		incrementSubscriptionCounter(ctx.Sub, "v2ray")
-	}
-
-	subscriptionName := generateSubscriptionName(ctx)
-
-	encoded := services.GenerateUniversalBase64(nodes)
-	setSubscriptionHeaders(c, ctx)
-
-	// Set profile name headers for Shadowrocket and other clients
-	encodedName := url.QueryEscape(subscriptionName)
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", encodedName))
-	c.Header("Subscription-Title", subscriptionName)
-	c.Header("Profile-Title", subscriptionName)
-
-	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(encoded))
 }
 
 // setSubscriptionHeaders sets common subscription response headers（Sparkle 等客户端用 Profile-Title / Profile-Update-Interval 显示名称与自动更新间隔）
@@ -597,10 +613,11 @@ func GetSubscriptionByFormat(c *gin.Context) {
 	case "clash":
 		GetSubscription(c)
 	case "v2ray", "base64", "universal":
-		GetUniversalSubscription(c)
+		// 通用 base64 格式，传 type=universal 参数
+		c.Request.URL.RawQuery += "&type=universal"
+		GetSubscription(c)
 	default:
-		// Default to base64 for unknown formats
-		GetUniversalSubscription(c)
+		GetSubscription(c)
 	}
 }
 
@@ -638,10 +655,14 @@ func GetUserSubscription(c *gin.Context) {
 	}
 
 	baseURL := getSubscriptionBaseURL()
-	var universalURL, clashURL string
-	if baseURL != "" && sub.SubscriptionURL != "" {
-		universalURL = fmt.Sprintf("%s/api/v1/sub/%s", baseURL, sub.SubscriptionURL)
-		clashURL = fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, sub.SubscriptionURL)
+	buildURL := func(typ string) string {
+		if baseURL == "" || sub.SubscriptionURL == "" {
+			return ""
+		}
+		if typ == "" {
+			return fmt.Sprintf("%s/api/v1/client/subscribe?token=%s", baseURL, sub.SubscriptionURL)
+		}
+		return fmt.Sprintf("%s/api/v1/client/subscribe?token=%s&type=%s", baseURL, sub.SubscriptionURL, typ)
 	}
 
 	// Get package name
@@ -654,25 +675,32 @@ func GetUserSubscription(c *gin.Context) {
 	}
 
 	result := gin.H{
-		"id":                 sub.ID,
-		"user_id":            sub.UserID,
-		"package_id":         sub.PackageID,
-		"package_name":       packageName,
-		"subscription_url":   sub.SubscriptionURL,
-		"universal_url":      universalURL,
-		"clash_url":          clashURL,
-		"device_limit":       sub.DeviceLimit,
-		"current_devices":    sub.CurrentDevices,
-		"universal_count":    sub.UniversalCount,
-		"clash_count":        sub.ClashCount,
-		"surge_count":        sub.SurgeCount,
-		"quanx_count":        sub.QuanXCount,
-		"shadowrocket_count": sub.ShadowrocketCount,
-		"is_active":          sub.IsActive,
-		"status":             sub.Status,
-		"expire_time":        sub.ExpireTime,
-		"created_at":         sub.CreatedAt,
-		"updated_at":         sub.UpdatedAt,
+		"id":                    sub.ID,
+		"user_id":               sub.UserID,
+		"package_id":            sub.PackageID,
+		"package_name":          packageName,
+		"subscription_url":      sub.SubscriptionURL,
+		"token_url":             buildURL(""),
+		"token_clash_url":       buildURL("clash"),
+		"token_stash_url":       buildURL("stash"),
+		"token_surge_url":       buildURL("surge"),
+		"token_quantumultx_url": buildURL("quantumultx"),
+		"token_loon_url":        buildURL("loon"),
+		"token_singbox_url":     buildURL("singbox"),
+		"device_limit":          sub.DeviceLimit,
+		"current_devices":       sub.CurrentDevices,
+		"universal_count":       sub.UniversalCount,
+		"clash_count":           sub.ClashCount,
+		"surge_count":           sub.SurgeCount,
+		"quanx_count":           sub.QuanXCount,
+		"shadowrocket_count":    sub.ShadowrocketCount,
+		"is_active":             sub.IsActive,
+		"status":                sub.Status,
+		"expire_time":           sub.ExpireTime,
+		"expire_at":             sub.ExpireTime.Format("2006-01-02"),
+		"days_remaining":        int(time.Until(sub.ExpireTime).Hours() / 24),
+		"created_at":            sub.CreatedAt,
+		"updated_at":            sub.UpdatedAt,
 	}
 	utils.Success(c, result)
 }
@@ -698,7 +726,7 @@ func ResetSubscription(c *gin.Context) {
 		return
 	}
 	oldURL := sub.SubscriptionURL
-	newURL := utils.GenerateRandomString(32)
+	newURL := utils.GenerateRandomString(64)
 	devicesBefore := sub.CurrentDevices
 	resetBy := "user"
 	if err := db.Transaction(func(tx *gorm.DB) error {

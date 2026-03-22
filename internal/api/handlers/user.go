@@ -13,7 +13,22 @@ import (
 
 func GetCurrentUser(c *gin.Context) {
 	user := c.MustGet("user").(*models.User)
-	utils.Success(c, user)
+	utils.Success(c, gin.H{
+		"id": user.ID, "username": user.Username, "email": user.Email,
+		"nickname": user.Nickname, "avatar": user.Avatar, "is_admin": user.IsAdmin,
+		"balance": user.Balance, "theme": user.Theme, "language": user.Language,
+		"timezone": user.Timezone, "is_active": user.IsActive,
+		"email_notifications": user.EmailNotifications,
+		"abnormal_login_alert_enabled": user.AbnormalLoginAlertEnabled,
+		"push_notifications": user.PushNotifications,
+		"notify_order": user.NotifyOrder, "notify_expiry": user.NotifyExpiry,
+		"notify_subscription": user.NotifySubscription,
+		"data_sharing": user.DataSharing, "analytics": user.Analytics,
+		"telegram_id": user.TelegramID, "telegram_username": user.TelegramUsername,
+		"user_level_id": user.UserLevelID,
+		"special_node_subscription_type": user.SpecialNodeSubscriptionType,
+		"created_at": user.CreatedAt,
+	})
 }
 
 func UpdateCurrentUser(c *gin.Context) {
@@ -58,7 +73,9 @@ func UpdateCurrentUser(c *gin.Context) {
 	}
 	if req.Avatar != "" {
 		parsed, err := url.Parse(req.Avatar)
-		if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || strings.Contains(req.Avatar, "javascript:") {
+		if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") ||
+			strings.Contains(strings.ToLower(req.Avatar), "javascript:") ||
+			strings.Contains(strings.ToLower(req.Avatar), "data:") {
 			utils.BadRequest(c, "头像链接格式不正确")
 			return
 		}
@@ -142,12 +159,25 @@ func UpdatePreferences(c *gin.Context) {
 	}
 	updates := map[string]interface{}{}
 	if req.Theme != "" {
+		allowedThemes := map[string]bool{"light": true, "dark": true, "auto": true}
+		if !allowedThemes[req.Theme] {
+			utils.BadRequest(c, "不支持的主题")
+			return
+		}
 		updates["theme"] = req.Theme
 	}
 	if req.Language != "" {
+		if len(req.Language) > 10 {
+			utils.BadRequest(c, "语言代码格式不正确")
+			return
+		}
 		updates["language"] = req.Language
 	}
 	if req.Timezone != "" {
+		if len(req.Timezone) > 50 {
+			utils.BadRequest(c, "时区格式不正确")
+			return
+		}
 		updates["timezone"] = req.Timezone
 	}
 	if err := database.GetDB().Model(user).Updates(updates).Error; err != nil {

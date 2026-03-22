@@ -66,6 +66,17 @@ func main() {
 	// 启动后台任务调度器（邮件队列、订阅过期检查、到期提醒等）
 	services.GetScheduler().Start()
 
+	// 初始化可信代理列表（仅在可信代理后才信任 X-Forwarded-For 等头）
+	trustedProxies := []string{
+		"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::1/128",
+		// Cloudflare IPv4
+		"173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
+		"141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
+		"197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+		"104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+	}
+	utils.SetTrustedProxies(trustedProxies)
+
 	// 设置路由
 	r := router.SetupRouter(cfg)
 
@@ -167,12 +178,12 @@ func createDefaultAdmin() {
 	log.Printf("========================================")
 	log.Printf("  默认管理员账户已创建")
 	log.Printf("  邮箱: %q", adminEmail)
-	log.Printf("  密码: %s", randomPass)
+	log.Printf("  初始密码已生成，请使用 --reset-password 命令重置密码")
 	log.Printf("  请登录后立即修改密码！")
 	log.Printf("========================================")
 
 	// Auto-create subscription for admin
-	subURL := utils.GenerateRandomString(32)
+	subURL := utils.GenerateRandomString(64)
 	db.Create(&models.Subscription{
 		UserID:          admin.ID,
 		SubscriptionURL: subURL,
@@ -286,7 +297,7 @@ func runResetPassword() {
 			if err := db.Create(&user).Error; err != nil {
 				log.Fatalf("创建管理员失败: %v", err)
 			}
-			subURL := utils.GenerateRandomString(32)
+			subURL := utils.GenerateRandomString(64)
 			db.Create(&models.Subscription{
 				UserID:          user.ID,
 				SubscriptionURL: subURL,
@@ -313,7 +324,7 @@ func ensureUserSubscriptions() {
 	var users []models.User
 	db.Where("id NOT IN (SELECT user_id FROM subscriptions)").Find(&users)
 	for _, user := range users {
-		subURL := utils.GenerateRandomString(32)
+		subURL := utils.GenerateRandomString(64)
 		sub := models.Subscription{
 			UserID:          user.ID,
 			SubscriptionURL: subURL,

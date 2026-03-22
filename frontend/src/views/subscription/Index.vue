@@ -97,10 +97,14 @@
             <div class="url-item">
               <div class="url-header">
                 <span class="url-type">通用订阅</span>
-                <n-tag size="small" type="info">Universal</n-tag>
+                <n-tag size="small" type="info">Universal / V2Ray / Shadowrocket</n-tag>
               </div>
               <div class="url-actions">
-                <n-input :value="subscriptionUrl" readonly size="small" />
+                <n-input :value="showSubUrls ? subscriptionUrl : maskUrl(subscriptionUrl)" readonly size="small" />
+                <n-button size="small" @click="showSubUrls = !showSubUrls">
+                  <template #icon><n-icon :component="showSubUrls ? EyeOffOutline : EyeOutline" /></template>
+                  {{ showSubUrls ? '隐藏' : '显示' }}
+                </n-button>
                 <n-button type="primary" size="small" @click="copyToClipboard(subscriptionUrl, '通用订阅地址')">
                   <template #icon><n-icon :component="CopyOutline" /></template>
                   复制
@@ -115,10 +119,10 @@
             <div class="url-item">
               <div class="url-header">
                 <span class="url-type">Clash 订阅</span>
-                <n-tag size="small" type="success">Clash</n-tag>
+                <n-tag size="small" type="success">Clash / Meta / ClashX</n-tag>
               </div>
               <div class="url-actions">
-                <n-input :value="clashUrl" readonly size="small" />
+                <n-input :value="showSubUrls ? clashUrl : maskUrl(clashUrl)" readonly size="small" />
                 <n-button type="primary" size="small" @click="copyToClipboard(clashUrl, 'Clash 订阅地址')">
                   <template #icon><n-icon :component="CopyOutline" /></template>
                   复制
@@ -153,7 +157,7 @@
               </div>
               <span class="format-item-name">{{ fmt.name }}</span>
               <div class="format-item-actions">
-                <n-button size="small" type="primary" @click.stop="copyToClipboard(getFormatUrl(fmt.type), fmt.name)">
+                <n-button size="small" type="primary" @click.stop="copyToClipboard(getFormatUrl(fmt), fmt.name)">
                   复制
                 </n-button>
                 <n-button size="small" @click.stop="importFormat(fmt)">
@@ -316,7 +320,7 @@ import {
   CopyOutline, TimeOutline, PhonePortraitOutline, TrashOutline,
   RefreshOutline, SwapHorizontalOutline, MailOutline,
   CheckmarkCircle, CloseCircle, AlertCircle, QrCodeOutline,
-  ArrowUpCircleOutline, WalletOutline, CalendarOutline
+  ArrowUpCircleOutline, WalletOutline, CalendarOutline, EyeOutline, EyeOffOutline
 } from '@vicons/ionicons5'
 import {
   getSubscription, getSubscriptionDevices, deleteDevice,
@@ -337,7 +341,13 @@ const router = useRouter()
 const subscription = ref<any>(null)
 const devices = ref<any[]>([])
 const loading = ref(false)
+const showSubUrls = ref(false)
 const showResetModal = ref(false)
+
+function maskUrl(url: string) {
+  if (!url || url.length < 20) return '••••••••'
+  return url.substring(0, 20) + '••••••••' + url.substring(url.length - 6)
+}
 const showConvertModal = ref(false)
 const sendingEmail = ref(false)
 const selectedFormat = ref('clash')
@@ -381,60 +391,91 @@ const balanceDeductAmount = computed(() => {
 })
 const remainingAmount = computed(() => Math.max(0, finalPayAmount.value - balanceDeductAmount.value))
 
+// 每个客户端的配置：type 对应后端 ?type=xxx 参数，urlKey 对应 GetUserSubscription 返回的字段名
 const formats = [
   {
     type: 'clash',
-    name: 'Clash',
-    icon: '\u2694\uFE0F',
+    name: 'Clash / Meta',
+    icon: '⚔️',
     iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png',
-    desc: 'Clash 系列',
-  },
-  {
-    type: 'v2ray',
-    name: 'V2Ray',
-    icon: '\uD83D\uDE80',
-    iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png',
-    desc: 'V2Ray 格式',
-  },
-  {
-    type: 'surge',
-    name: 'Surge',
-    icon: '\uD83C\uDF0A',
-    iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/surge.png',
-    desc: 'Surge 客户端',
-  },
-  {
-    type: 'shadowrocket',
-    name: 'Shadowrocket',
-    icon: '\uD83D\uDD35',
-    iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png',
-    desc: 'iOS 客户端',
-  },
-  {
-    type: 'quantumult',
-    name: 'Quantumult X',
-    icon: '\uD83D\uDCA0',
-    iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/quantumultx.png',
-    desc: 'iOS 客户端',
+    desc: 'Clash / Mihomo / ClashX',
+    urlKey: 'token_clash_url',
+    scheme: 'clash://install-config?url=',
   },
   {
     type: 'stash',
     name: 'Stash',
-    icon: '\uD83D\uDCE6',
+    icon: '📦',
     iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/stash.png',
     desc: 'iOS Clash',
+    urlKey: 'token_stash_url',
+    scheme: 'stash://install-config?url=',
+  },
+  {
+    type: 'surge',
+    name: 'Surge',
+    icon: '🌊',
+    iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/surge.png',
+    desc: 'macOS / iOS',
+    urlKey: 'token_surge_url',
+    scheme: 'surge:///install-config?url=',
+  },
+  {
+    type: 'loon',
+    name: 'Loon',
+    icon: '🎈',
+    iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/loon.png',
+    desc: 'iOS 客户端',
+    urlKey: 'token_loon_url',
+    scheme: 'loon://import/proxy?url=',
+  },
+  {
+    type: 'quantumultx',
+    name: 'Quantumult X',
+    icon: '💠',
+    iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/quantumultx.png',
+    desc: 'iOS 客户端',
+    urlKey: 'token_quantumultx_url',
+    scheme: 'quantumult-x:///add-resource?remote-resource=',
+  },
+  {
+    type: 'shadowrocket',
+    name: 'Shadowrocket',
+    icon: '🔴',
+    iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png',
+    desc: 'iOS 小火箭',
+    urlKey: 'token_url',
+    scheme: 'shadowrocket://add/',
+  },
+  {
+    type: 'singbox',
+    name: 'SingBox',
+    icon: '📱',
+    iconUrl: 'https://raw.githubusercontent.com/SagerNet/sing-box/testing/docs/assets/icon.svg',
+    desc: '全平台通用',
+    urlKey: 'token_singbox_url',
+    scheme: '',
+  },
+  {
+    type: 'v2ray',
+    name: 'V2Ray / Hiddify',
+    icon: '🚀',
+    iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png',
+    desc: '通用 Base64',
+    urlKey: 'token_url',
+    scheme: '',
   },
 ]
 
-const subscriptionUrl = computed(() => subscription.value?.universal_url || subscription.value?.subscription_url || '')
-const clashUrl = computed(() => subscription.value?.clash_url || subscription.value?.subscription_url || '')
+// 通用订阅 URL（Shadowrocket / V2Ray / Hiddify 使用）
+const subscriptionUrl = computed(() => subscription.value?.token_url || '')
+// Clash 订阅 URL
+const clashUrl = computed(() => subscription.value?.token_clash_url || '')
 
-const getFormatUrl = (type: string) => {
+// 根据格式定义获取对应 URL
+const getFormatUrl = (fmt: typeof formats[0]) => {
   if (!subscription.value) return ''
-  const base = subscription.value.subscription_url || subscription.value.universal_url || ''
-  if (!base) return ''
-  const sep = base.includes('?') ? '&' : '?'
-  return `${base}${sep}format=${type}`
+  return subscription.value[fmt.urlKey] || subscription.value.token_url || ''
 }
 
 const statusClass = computed(() => {
@@ -475,35 +516,23 @@ const copyToClipboard = async (text: string, label: string) => {
   ok ? message.success(`${label}已复制到剪贴板`) : message.error('复制失败，请手动复制')
 }
 
-const importFormat = (fmt: any) => {
-  const url = getFormatUrl(fmt.type)
+const importFormat = (fmt: typeof formats[0]) => {
+  const url = getFormatUrl(fmt)
   if (!url) { message.warning('暂无可用订阅'); return }
 
-  // V2RayN等桌面客户端没有URL Scheme，直接复制
-  if (fmt.type === 'v2ray') {
+  // V2RayN / Hiddify / SingBox 等桌面客户端没有 URL Scheme，直接复制
+  if (!fmt.scheme) {
     copyToClipboard(url, fmt.name)
-    message.info('V2RayN 请手动在客户端中添加订阅地址')
+    message.info(`${fmt.name} 请在客户端中手动添加订阅地址`)
     return
   }
 
-  const schemeMap: Record<string, string> = {
-    clash: 'clash://install-config?url=',
-    stash: 'stash://install-config?url=',
-    shadowrocket: 'shadowrocket://add/',
-    surge: 'surge:///install-config?url=',
-    quantumult: 'quantumult-x:///add-resource?remote-resource=',
-  }
-  const scheme = schemeMap[fmt.type]
-  if (scheme) {
-    try {
-      const fullUrl = scheme + encodeURIComponent(url)
-      window.location.href = fullUrl
-      message.success('正在打开客户端...')
-    } catch (e) {
-      message.error('打开失败，请确保已安装客户端')
-      copyToClipboard(url, fmt.name)
-    }
-  } else {
+  try {
+    const fullUrl = fmt.scheme + encodeURIComponent(url)
+    window.location.href = fullUrl
+    message.success('正在打开客户端...')
+  } catch (e) {
+    message.error('打开失败，请确保已安装客户端')
     copyToClipboard(url, fmt.name)
   }
 }
@@ -771,7 +800,7 @@ onUnmounted(() => { stopPayPolling() })
 .url-input { flex: 1; }
 
 /* Format Grid */
-.format-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.format-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .format-card { padding: 10px 8px; border-radius: 8px; border: 1.5px solid #e8e8e8; cursor: pointer; text-align: center; transition: all 0.2s; }
 .format-card:hover { border-color: #667eea; }
 .format-card.active { border-color: #667eea; background: #667eea08; }
@@ -805,8 +834,6 @@ onUnmounted(() => { stopPayPolling() })
   .url-row { flex-direction: column; align-items: flex-start; }
   .url-input-wrapper { width: 100%; }
   .format-grid { grid-template-columns: repeat(2, 1fr); }
-  .action-row { flex-direction: column; }
-  .action-row .n-button { width: 100%; }
 
   /* Modern Hero Mobile */
   .modern-hero { padding: 16px; }

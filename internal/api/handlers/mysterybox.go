@@ -28,10 +28,29 @@ func AdminListMysteryBoxPools(c *gin.Context) {
 
 // AdminCreateMysteryBoxPool POST /admin/mystery-box/pools
 func AdminCreateMysteryBoxPool(c *gin.Context) {
-	var pool models.MysteryBoxPool
-	if err := c.ShouldBindJSON(&pool); err != nil {
+	var req struct {
+		Name           string  `json:"name" binding:"required"`
+		Description    string  `json:"description"`
+		Price          float64 `json:"price" binding:"required,gt=0"`
+		IsActive       *bool   `json:"is_active"`
+		SortOrder      int     `json:"sort_order"`
+		MaxOpensPerDay *int    `json:"max_opens_per_day"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
+	}
+	pool := models.MysteryBoxPool{
+		Name: req.Name, Price: req.Price,
+		SortOrder: req.SortOrder, MaxOpensPerDay: req.MaxOpensPerDay,
+	}
+	if req.Description != "" {
+		pool.Description = &req.Description
+	}
+	if req.IsActive != nil {
+		pool.IsActive = *req.IsActive
+	} else {
+		pool.IsActive = true
 	}
 	if err := database.GetDB().Create(&pool).Error; err != nil {
 		utils.InternalError(c, "创建奖池失败")
@@ -105,12 +124,25 @@ func AdminAddPrize(c *gin.Context) {
 		utils.NotFound(c, "奖池不存在")
 		return
 	}
-	var prize models.MysteryBoxPrize
-	if err := c.ShouldBindJSON(&prize); err != nil {
+	var req struct {
+		Name     string  `json:"name" binding:"required"`
+		Type     string  `json:"type" binding:"required"`
+		Value    float64 `json:"value"`
+		Weight   int     `json:"weight"`
+		Stock    *int    `json:"stock"`
+		ImageURL *string `json:"image_url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	prize.PoolID = uint(poolID)
+	prize := models.MysteryBoxPrize{
+		PoolID: uint(poolID), Name: req.Name, Type: req.Type, Value: req.Value,
+		Weight: req.Weight, Stock: req.Stock, ImageURL: req.ImageURL,
+	}
+	if prize.Weight <= 0 {
+		prize.Weight = 1
+	}
 	if err := db.Create(&prize).Error; err != nil {
 		utils.InternalError(c, "添加奖品失败")
 		return
@@ -345,7 +377,7 @@ func OpenMysteryBox(c *gin.Context) {
 			var sub models.Subscription
 			if err := tx.Where("user_id = ?", userID).First(&sub).Error; err != nil {
 				sub = models.Subscription{
-					UserID: userID, SubscriptionURL: utils.GenerateRandomString(32),
+					UserID: userID, SubscriptionURL: utils.GenerateRandomString(64),
 					DeviceLimit: 3, IsActive: true, Status: "active",
 					ExpireTime: time.Now().AddDate(0, 0, days),
 				}

@@ -123,11 +123,18 @@ func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
 	return smtp.SendMail(addr, auth, envelopeFrom, []string{to}, []byte(msg))
 }
 
+// sanitizeHeader 清除 MIME header 中的换行符，防止邮件头注入
+func sanitizeHeader(s string) string {
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	return s
+}
+
 func buildMIME(from, to, subject, body string) string {
 	var sb strings.Builder
-	sb.WriteString("From: " + from + "\r\n")
-	sb.WriteString("To: " + to + "\r\n")
-	sb.WriteString("Subject: " + subject + "\r\n")
+	sb.WriteString("From: " + sanitizeHeader(from) + "\r\n")
+	sb.WriteString("To: " + sanitizeHeader(to) + "\r\n")
+	sb.WriteString("Subject: " + sanitizeHeader(subject) + "\r\n")
 	sb.WriteString("MIME-Version: 1.0\r\n")
 	sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
 	sb.WriteString("\r\n")

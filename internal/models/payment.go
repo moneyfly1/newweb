@@ -46,18 +46,18 @@ type PaymentConfig struct {
 	ID                   uint      `gorm:"primaryKey" json:"id"`
 	PayType              string    `gorm:"type:varchar(50)" json:"pay_type"`
 	AppID                *string   `gorm:"type:text" json:"app_id"`
-	MerchantPrivateKey   *string   `gorm:"type:text" json:"merchant_private_key"`
-	AlipayPublicKey      *string   `gorm:"type:text" json:"alipay_public_key"`
+	MerchantPrivateKey   *string   `gorm:"type:text" json:"-"`
+	AlipayPublicKey      *string   `gorm:"type:text" json:"-"`
 	WechatAppID          *string   `gorm:"type:text" json:"wechat_app_id"`
 	WechatMchID          *string   `gorm:"type:text" json:"wechat_mch_id"`
-	WechatAPIKey         *string   `gorm:"type:text" json:"wechat_api_key"`
+	WechatAPIKey         *string   `gorm:"type:text" json:"-"`
 	PaypalClientID       *string   `gorm:"type:text" json:"paypal_client_id"`
-	PaypalSecret         *string   `gorm:"type:text" json:"paypal_secret"`
+	PaypalSecret         *string   `gorm:"type:text" json:"-"`
 	StripePublishableKey *string   `gorm:"type:text" json:"stripe_publishable_key"`
-	StripeSecretKey      *string   `gorm:"type:text" json:"stripe_secret_key"`
+	StripeSecretKey      *string   `gorm:"type:text" json:"-"`
 	BankName             *string   `gorm:"type:text" json:"bank_name"`
 	AccountName          *string   `gorm:"type:text" json:"account_name"`
-	AccountNumber        *string   `gorm:"type:text" json:"account_number"`
+	AccountNumber        *string   `gorm:"type:text" json:"-"`
 	WalletAddress        *string   `gorm:"type:text" json:"wallet_address"`
 	Status               int       `gorm:"default:1" json:"status"`
 	ReturnURL            *string   `gorm:"type:text" json:"return_url"`
@@ -75,8 +75,8 @@ func (PaymentConfig) TableName() string {
 // PaymentNonce 支付回调防重放记录
 type PaymentNonce struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
-	TransactionID   string    `gorm:"type:varchar(100);uniqueIndex;not null" json:"transaction_id"`
-	CallbackType    string    `gorm:"type:varchar(50);not null" json:"callback_type"`
+	TransactionID   string    `gorm:"type:varchar(100);uniqueIndex:idx_nonce_tx_type;not null" json:"transaction_id"`
+	CallbackType    string    `gorm:"type:varchar(50);uniqueIndex:idx_nonce_tx_type;not null" json:"callback_type"`
 	ExternalTradeNo string    `gorm:"type:varchar(100);index" json:"external_trade_no"`
 	ProcessedAt     time.Time `gorm:"autoCreateTime;not null" json:"processed_at"`
 	ExpiresAt       time.Time `gorm:"not null;index" json:"expires_at"`
@@ -87,10 +87,11 @@ func (PaymentNonce) TableName() string {
 }
 
 // IsNonceProcessed 检查 nonce 是否已处理（防重放）
+// 注意：不过滤 expires_at，确保已处理的 nonce 永远有效，不受过期时间影响
 func IsNonceProcessed(db *gorm.DB, transactionID string, callbackType string) bool {
 	var nonce PaymentNonce
-	return db.Where("transaction_id = ? AND callback_type = ? AND expires_at > ?",
-		transactionID, callbackType, time.Now()).First(&nonce).Error == nil
+	return db.Where("transaction_id = ? AND callback_type = ?",
+		transactionID, callbackType).First(&nonce).Error == nil
 }
 
 // RecordNonce 记录已处理的 nonce
@@ -99,7 +100,7 @@ func RecordNonce(db *gorm.DB, transactionID string, callbackType string, externa
 		TransactionID:   transactionID,
 		CallbackType:    callbackType,
 		ExternalTradeNo: externalTradeNo,
-		ExpiresAt:       time.Now().Add(24 * time.Hour), // 24小时后过期
+		ExpiresAt:       time.Now().Add(30 * 24 * time.Hour), // 30天后才允许清理
 	}
 	return db.Create(&nonce).Error
 }

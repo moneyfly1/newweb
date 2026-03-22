@@ -525,8 +525,15 @@ const handleLoginAs = async (row) => {
   try {
     const res = await loginAsUser(row.user_id || row.id)
     const { access_token, user } = res.data
-    localStorage.setItem('admin_token', localStorage.getItem('token') || '')
-    localStorage.setItem('admin_user', localStorage.getItem('user') || '')
+    // 存储管理员 token 及过期时间（2小时自动清理）
+    const adminSession = {
+      token: localStorage.getItem('token') || '',
+      user: localStorage.getItem('user') || '',
+      expires: Date.now() + 2 * 60 * 60 * 1000 // 2小时过期
+    }
+    localStorage.setItem('admin_session', JSON.stringify(adminSession))
+    localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_user')
     localStorage.setItem('token', access_token)
     localStorage.setItem('user', JSON.stringify(user))
     window.open('/', '_blank')

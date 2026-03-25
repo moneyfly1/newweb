@@ -325,7 +325,7 @@ func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) []m
 			displayName = cn.Name
 		}
 		nodes = append(nodes, models.Node{
-			Name:     displayName,
+			Name:     "⭐ " + displayName,
 			Type:     cn.Protocol,
 			Status:   "online",
 			Config:   &config,

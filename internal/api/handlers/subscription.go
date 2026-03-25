@@ -646,6 +646,31 @@ func getSubscriptionBaseURL() string {
 	return strings.TrimRight(domain, "/")
 }
 
+func buildClientSubscriptionURL(baseURL, token, typ string) string {
+	if baseURL == "" || token == "" {
+		return ""
+	}
+	if typ == "" {
+		return fmt.Sprintf("%s/api/v1/client/subscribe?token=%s", baseURL, token)
+	}
+	return fmt.Sprintf("%s/api/v1/client/subscribe?token=%s&type=%s", baseURL, token, typ)
+}
+
+func buildSubscriptionURLs(baseURL, token string) gin.H {
+	return gin.H{
+		"universal_url":   buildClientSubscriptionURL(baseURL, token, ""),
+		"clash_url":       buildClientSubscriptionURL(baseURL, token, "clash"),
+		"stash_url":       buildClientSubscriptionURL(baseURL, token, "stash"),
+		"surge_url":       buildClientSubscriptionURL(baseURL, token, "surge"),
+		"quantumultx_url": buildClientSubscriptionURL(baseURL, token, "quantumultx"),
+		"loon_url":        buildClientSubscriptionURL(baseURL, token, "loon"),
+		"singbox_url":     buildClientSubscriptionURL(baseURL, token, "singbox"),
+		"shadowrocket_url": buildClientSubscriptionURL(baseURL, token, ""),
+		"v2ray_url":       buildClientSubscriptionURL(baseURL, token, ""),
+		"hiddify_url":     buildClientSubscriptionURL(baseURL, token, ""),
+	}
+}
+
 func GetUserSubscription(c *gin.Context) {
 	userID := c.MustGet("user_id").(uint)
 	var sub models.Subscription
@@ -655,15 +680,7 @@ func GetUserSubscription(c *gin.Context) {
 	}
 
 	baseURL := getSubscriptionBaseURL()
-	buildURL := func(typ string) string {
-		if baseURL == "" || sub.SubscriptionURL == "" {
-			return ""
-		}
-		if typ == "" {
-			return fmt.Sprintf("%s/api/v1/client/subscribe?token=%s", baseURL, sub.SubscriptionURL)
-		}
-		return fmt.Sprintf("%s/api/v1/client/subscribe?token=%s&type=%s", baseURL, sub.SubscriptionURL, typ)
-	}
+	subscriptionURLs := buildSubscriptionURLs(baseURL, sub.SubscriptionURL)
 
 	// Get package name
 	var packageName string
@@ -680,13 +697,16 @@ func GetUserSubscription(c *gin.Context) {
 		"package_id":            sub.PackageID,
 		"package_name":          packageName,
 		"subscription_url":      sub.SubscriptionURL,
-		"token_url":             buildURL(""),
-		"token_clash_url":       buildURL("clash"),
-		"token_stash_url":       buildURL("stash"),
-		"token_surge_url":       buildURL("surge"),
-		"token_quantumultx_url": buildURL("quantumultx"),
-		"token_loon_url":        buildURL("loon"),
-		"token_singbox_url":     buildURL("singbox"),
+		"token_url":             subscriptionURLs["universal_url"],
+		"token_clash_url":       subscriptionURLs["clash_url"],
+		"token_stash_url":       subscriptionURLs["stash_url"],
+		"token_surge_url":       subscriptionURLs["surge_url"],
+		"token_quantumultx_url": subscriptionURLs["quantumultx_url"],
+		"token_loon_url":        subscriptionURLs["loon_url"],
+		"token_singbox_url":     subscriptionURLs["singbox_url"],
+		"token_shadowrocket_url": subscriptionURLs["shadowrocket_url"],
+		"token_v2ray_url":       subscriptionURLs["v2ray_url"],
+		"token_hiddify_url":     subscriptionURLs["hiddify_url"],
 		"device_limit":          sub.DeviceLimit,
 		"current_devices":       sub.CurrentDevices,
 		"universal_count":       sub.UniversalCount,

@@ -38,7 +38,7 @@
               </div>
               <div class="card-row">
                 <span class="label">地区</span>
-                <span class="value">{{ device.region || '-' }}</span>
+                <span class="value">{{ formatLocation(device.region) }}</span>
               </div>
               <div class="card-row">
                 <span class="label">最后访问</span>
@@ -71,7 +71,7 @@ import { ref, h, onMounted } from 'vue'
 import { NButton, NTime, useMessage } from 'naive-ui'
 import { getSubscriptionDevices, deleteDevice } from '@/api/subscription'
 import { useAppStore } from '@/stores/app'
-import { parseDeviceInfo } from '@/utils/i18n'
+import { parseDeviceInfo, formatLocation } from '@/utils/i18n'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 interface Device {
@@ -120,7 +120,7 @@ const columns = [
     key: 'region',
     width: 120,
     resizable: true,
-    render: (row: Device) => row.region || '-'
+    render: (row: Device) => formatLocation(row.region)
   },
   {
     title: '最后访问',

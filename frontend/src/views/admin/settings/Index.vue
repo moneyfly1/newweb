@@ -481,6 +481,12 @@
 
               <n-card title="GitHub 备份设置" size="small" :bordered="true">
                 <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '160'" :model="form">
+                  <n-form-item label="GeoIP 本地数据">
+                    <n-space>
+                      <n-button :loading="updatingGeoIP" @click="handleUpdateGeoIP">手动更新 GeoIP / MMDB</n-button>
+                      <n-button :loading="backfillingLocations" @click="handleBackfillLocations">回填历史地区数据</n-button>
+                    </n-space>
+                  </n-form-item>
                   <n-form-item label="启用 GitHub 备份">
                     <n-switch v-model:value="form.backup_github_enabled" />
                   </n-form-item>
@@ -536,7 +542,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useMessage, NH4 } from 'naive-ui'
-import { getSettings, updateSettings, sendTestEmail, testTelegram, createBackup, listBackups, getUploadStatus, testGitHubConnection } from '@/api/admin'
+import { getSettings, updateSettings, sendTestEmail, testTelegram, createBackup, listBackups, getUploadStatus, testGitHubConnection, updateGeoIPFiles, backfillLocations } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -553,6 +559,8 @@ const backups = ref<any[]>([])
 const uploadTaskId = ref('')
 const uploadStatus = ref<any>(null)
 const testingGitHub = ref(false)
+const updatingGeoIP = ref(false)
+const backfillingLocations = ref(false)
 let uploadPollTimer: ReturnType<typeof setInterval> | null = null
 
 // Computed URL hints based on site_url
@@ -912,12 +920,38 @@ const stopUploadPolling = () => {
 const handleTestGitHub = async () => {
   testingGitHub.value = true
   try {
-    await testGitHubConnection({ token: form.value.backup_github_token, repo: form.value.backup_github_repo })
+    const repo = String(form.value.backup_github_repo || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/^\/+|\/+$/g, '')
+    await testGitHubConnection({ token: form.value.backup_github_token, repo })
+    form.value.backup_github_repo = repo
     message.success('GitHub 连接测试成功')
   } catch (error: any) {
     message.error(error.message || 'GitHub 连接测试失败')
   } finally {
     testingGitHub.value = false
+  }
+}
+
+const handleUpdateGeoIP = async () => {
+  updatingGeoIP.value = true
+  try {
+    const res = await updateGeoIPFiles()
+    message.success(res.message || 'GeoIP 数据更新成功')
+  } catch (error: any) {
+    message.error(error.message || 'GeoIP 数据更新失败')
+  } finally {
+    updatingGeoIP.value = false
+  }
+}
+
+const handleBackfillLocations = async () => {
+  backfillingLocations.value = true
+  try {
+    const res = await backfillLocations()
+    message.success(res.message || '历史地区数据回填完成')
+  } catch (error: any) {
+    message.error(error.message || '历史地区数据回填失败')
+  } finally {
+    backfillingLocations.value = false
   }
 }
 

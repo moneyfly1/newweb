@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -262,6 +263,36 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 
 // ── Subscription format generators ──
 
+func formatSafeNodeName(name string) string {
+	cleaned := strings.TrimSpace(name)
+	cleaned = strings.ReplaceAll(cleaned, "\r", " ")
+	cleaned = strings.ReplaceAll(cleaned, "\n", " ")
+	cleaned = strings.ReplaceAll(cleaned, "\t", " ")
+	cleaned = strings.Join(strings.Fields(cleaned), " ")
+	if cleaned == "" {
+		return "Node"
+	}
+	return cleaned
+}
+
+func formatSafeCommaName(name string) string {
+	cleaned := formatSafeNodeName(name)
+	cleaned = strings.ReplaceAll(cleaned, ",", " ")
+	cleaned = strings.Join(strings.Fields(cleaned), " ")
+	return cleaned
+}
+
+func formatSafeSingBoxTag(name string) string {
+	cleaned := formatSafeNodeName(name)
+	re := regexp.MustCompile(`[^\p{L}\p{N}_\-⭐ ]+`)
+	cleaned = re.ReplaceAllString(cleaned, "_")
+	cleaned = strings.Join(strings.Fields(cleaned), " ")
+	if cleaned == "" {
+		return "Node"
+	}
+	return cleaned
+}
+
 // GenerateSurgeConfig generates Surge-compatible proxy list
 func GenerateSurgeConfig(nodes []models.Node, siteName string) string {
 	var sb strings.Builder
@@ -279,7 +310,7 @@ func GenerateSurgeConfig(nodes []models.Node, siteName string) string {
 		line := convertNodeToSurgeLine(node)
 		if line != "" {
 			sb.WriteString(line + "\n")
-			names = append(names, node.Name)
+			names = append(names, formatSafeCommaName(node.Name))
 		}
 	}
 	sb.WriteString("\n[Proxy Group]\n")
@@ -322,6 +353,7 @@ func convertSSToSurge(name, config string) string {
 	if method == "" || host == "" {
 		return ""
 	}
+	name = formatSafeCommaName(name)
 	return fmt.Sprintf("%s = ss, %s, %s, encrypt-method=%s, password=%s", name, host, port, method, password)
 }
 
@@ -344,6 +376,7 @@ func convertTrojanToSurge(name, config string) string {
 	if sni == "" {
 		sni = host
 	}
+	name = formatSafeCommaName(name)
 	return fmt.Sprintf("%s = trojan, %s, %s, password=%s, sni=%s", name, host, port, password, sni)
 }
 
@@ -363,15 +396,16 @@ func GenerateQuantumultXConfig(nodes []models.Node) string {
 			continue
 		}
 		config := *node.Config
+		name := formatSafeCommaName(node.Name)
 		var line string
 		if strings.HasPrefix(config, "ss://") {
-			line = convertSSToQuantumultX(node.Name, config)
+			line = convertSSToQuantumultX(name, config)
 		} else if strings.HasPrefix(config, "trojan://") {
-			line = convertTrojanToQuantumultX(node.Name, config)
+			line = convertTrojanToQuantumultX(name, config)
 		} else {
 			m, err := NodeConfigToClashMap(node.Type, config, node.Name)
 			if err == nil {
-				line = clashMapToQuantumultXLine(node.Name, m)
+				line = clashMapToQuantumultXLine(name, m)
 			}
 		}
 		if line != "" {
@@ -417,6 +451,7 @@ func convertSSToQuantumultX(name, config string) string {
 	if method == "" || host == "" {
 		return ""
 	}
+	name = formatSafeCommaName(name)
 	return fmt.Sprintf("shadowsocks=%s:%s, method=%s, password=%s, tag=%s", host, port, method, password, name)
 }
 
@@ -435,6 +470,7 @@ func convertTrojanToQuantumultX(name, config string) string {
 	if port == "" {
 		port = "443"
 	}
+	name = formatSafeCommaName(name)
 	return fmt.Sprintf("trojan=%s:%s, password=%s, over-tls=true, tls-verification=false, tag=%s", host, port, password, name)
 }
 
@@ -521,10 +557,11 @@ func GenerateLoonConfig(nodes []models.Node, siteName string) string {
 		if err != nil {
 			continue
 		}
-		line := clashMapToLoonLine(node.Name, m)
+		name := formatSafeCommaName(node.Name)
+		line := clashMapToLoonLine(name, m)
 		if line != "" {
 			proxyLines = append(proxyLines, line)
-			proxyNames = append(proxyNames, node.Name)
+			proxyNames = append(proxyNames, name)
 		}
 	}
 	var sb strings.Builder
@@ -615,10 +652,11 @@ func GenerateSingBoxConfig(nodes []models.Node) string {
 		if err != nil {
 			continue
 		}
-		ob := clashMapToSingBoxOutbound(node.Name, m)
+		tagName := formatSafeSingBoxTag(node.Name)
+		ob := clashMapToSingBoxOutbound(tagName, m)
 		if ob != nil {
 			outbounds = append(outbounds, ob)
-			proxyNames = append(proxyNames, node.Name)
+			proxyNames = append(proxyNames, tagName)
 		}
 	}
 	selectorOut := append([]string{}, proxyNames...)

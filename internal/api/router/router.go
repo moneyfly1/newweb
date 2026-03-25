@@ -370,6 +370,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			settings.PUT("", handlers.AdminUpdateSettings)
 			settings.POST("/test-email", handlers.AdminSendTestEmail)
 			settings.POST("/test-telegram", handlers.AdminTestTelegram)
+			settings.POST("/update-geoip", handlers.AdminUpdateGeoIP)
+			settings.POST("/backfill-locations", handlers.AdminBackfillLocations)
 		}
 
 		// 公告

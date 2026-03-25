@@ -49,7 +49,7 @@
               </div>
               <div class="card-row">
                 <span class="label">位置</span>
-                <span class="value">{{ record.location || '-' }}</span>
+                <span class="value">{{ formatLocation(record.location) }}</span>
               </div>
               <div class="card-row">
                 <span class="label">状态</span>
@@ -80,6 +80,7 @@ import { ref, reactive, onMounted, h, computed } from 'vue'
 import { NTag, useMessage } from 'naive-ui'
 import { getLoginHistory } from '@/api/user'
 import { useAppStore } from '@/stores/app'
+import { formatLocation } from '@/utils/i18n'
 
 const appStore = useAppStore()
 const message = useMessage()
@@ -128,7 +129,7 @@ const columns = [
     render: (row: any) => formatDateTime(row.login_time),
   },
   { title: 'IP 地址', key: 'ip_address', width: 150, resizable: true },
-  { title: '位置', key: 'location', width: 150, resizable: true, render: (row: any) => row.location || '-' },
+  { title: '位置', key: 'location', width: 150, resizable: true, render: (row: any) => formatLocation(row.location) },
   {
     title: '设备信息',
     key: 'user_agent',

@@ -5,8 +5,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/oschwald/maxminddb-golang"
 )
 
 type IPInfo struct {
@@ -22,6 +27,18 @@ type ipLocationCacheEntry struct {
 	expireAt time.Time
 }
 
+type mmdbCityRecord struct {
+	Country struct {
+		Names map[string]string `maxminddb:"names"`
+	} `maxminddb:"country"`
+	Subdivisions []struct {
+		Names map[string]string `maxminddb:"names"`
+	} `maxminddb:"subdivisions"`
+	City struct {
+		Names map[string]string `maxminddb:"names"`
+	} `maxminddb:"city"`
+}
+
 const ipCacheMaxSize = 2048
 
 var (
@@ -29,6 +46,8 @@ var (
 	ipLocationCache  = make(map[string]ipLocationCacheEntry)
 	ipLocationMu     sync.RWMutex
 	ipLocationTTL    = 30 * time.Minute
+	mmdbReader       *maxminddb.Reader
+	mmdbOnce         sync.Once
 )
 
 func init() {
@@ -51,8 +70,66 @@ func ipCacheCleaner() {
 	}
 }
 
+func loadMMDBReader() *maxminddb.Reader {
+	mmdbOnce.Do(func() {
+		candidates := []string{
+			filepath.Join("uploads", "config", "geoip.metadb"),
+			filepath.Join("uploads", "config", "Country.mmdb"),
+			filepath.Join("uploads", "config", "GeoLite2-City.mmdb"),
+		}
+		for _, candidate := range candidates {
+			if _, err := os.Stat(candidate); err != nil {
+				continue
+			}
+			reader, err := maxminddb.Open(candidate)
+			if err == nil {
+				mmdbReader = reader
+				return
+			}
+		}
+	})
+	return mmdbReader
+}
+
+func lookupLocationFromMMDB(ip string) string {
+	reader := loadMMDBReader()
+	if reader == nil {
+		return ""
+	}
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return ""
+	}
+	var record mmdbCityRecord
+	if err := reader.Lookup(parsedIP, &record); err != nil {
+		return ""
+	}
+	parts := make([]string, 0, 3)
+	if country := record.Country.Names["zh-CN"]; country != "" {
+		parts = append(parts, country)
+	} else if country := record.Country.Names["en"]; country != "" {
+		parts = append(parts, country)
+	}
+	if len(record.Subdivisions) > 0 {
+		if region := record.Subdivisions[0].Names["zh-CN"]; region != "" {
+			parts = append(parts, region)
+		} else if region := record.Subdivisions[0].Names["en"]; region != "" {
+			parts = append(parts, region)
+		}
+	}
+	if city := record.City.Names["zh-CN"]; city != "" {
+		parts = append(parts, city)
+	} else if city := record.City.Names["en"]; city != "" {
+		parts = append(parts, city)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " ")
+}
+
 // GetIPLocation returns a location string for the given IP address.
-// Uses the free ip-api.com service. Returns empty string on failure.
+// Prefers local MMDB lookup and falls back to the free ip-api.com service.
 func GetIPLocation(ip string) string {
 	if ip == "" || ip == "127.0.0.1" || ip == "::1" {
 		return "本地"
@@ -75,6 +152,19 @@ func GetIPLocation(ip string) string {
 		return cached.location
 	}
 	ipLocationMu.RUnlock()
+
+	if location := lookupLocationFromMMDB(ip); location != "" {
+		ipLocationMu.Lock()
+		if len(ipLocationCache) >= ipCacheMaxSize {
+			ipLocationCache = make(map[string]ipLocationCacheEntry)
+		}
+		ipLocationCache[ip] = ipLocationCacheEntry{
+			location: location,
+			expireAt: now.Add(ipLocationTTL),
+		}
+		ipLocationMu.Unlock()
+		return location
+	}
 
 	urls := []string{
 		fmt.Sprintf("https://ip-api.com/json/%s?lang=zh-CN&fields=status,country,regionName,city,query", ip),

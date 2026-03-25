@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"net/http"
 	"net/mail"
 	"os"
 	"path/filepath"
@@ -287,11 +288,7 @@ func AdminGetUser(c *gin.Context) {
 
 	// Build subscription URLs
 	baseURL := getSubscriptionBaseURL()
-	subURLs := gin.H{}
-	if baseURL != "" && subscription.SubscriptionURL != "" {
-		subURLs["universal_url"] = fmt.Sprintf("%s/api/v1/sub/%s", baseURL, subscription.SubscriptionURL)
-		subURLs["clash_url"] = fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, subscription.SubscriptionURL)
-	}
+	subURLs := buildSubscriptionURLs(baseURL, subscription.SubscriptionURL)
 
 	// Package name
 	var packageName string
@@ -1702,10 +1699,9 @@ func AdminListSubscriptions(c *gin.Context) {
 	items := make([]SubItem, 0, len(subs))
 	for _, sub := range subs {
 		item := SubItem{Subscription: sub}
-		if baseURL != "" && sub.SubscriptionURL != "" {
-			item.UniversalURL = fmt.Sprintf("%s/api/v1/sub/%s", baseURL, sub.SubscriptionURL)
-			item.ClashURL = fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, sub.SubscriptionURL)
-		}
+		subURLs := buildSubscriptionURLs(baseURL, sub.SubscriptionURL)
+		item.UniversalURL, _ = subURLs["universal_url"].(string)
+		item.ClashURL, _ = subURLs["clash_url"].(string)
 		var user models.User
 		if db.Select("email, username, notes").First(&user, sub.UserID).Error == nil {
 			item.UserEmail = user.Email
@@ -1793,9 +1789,8 @@ func AdminGetSubscription(c *gin.Context) {
 
 	// Build full subscription URLs
 	baseURL := getSubscriptionBaseURL()
-	if baseURL != "" && sub.SubscriptionURL != "" {
-		result["universal_url"] = fmt.Sprintf("%s/api/v1/sub/%s", baseURL, sub.SubscriptionURL)
-		result["clash_url"] = fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, sub.SubscriptionURL)
+	for key, value := range buildSubscriptionURLs(baseURL, sub.SubscriptionURL) {
+		result[key] = value
 	}
 
 	var user models.User
@@ -2863,8 +2858,13 @@ func AdminTestGitHubConnection(c *gin.Context) {
 		utils.BadRequest(c, "仓库地址不能为空")
 		return
 	}
-	parts := strings.SplitN(req.Repo, "/", 2)
-	if len(parts) != 2 {
+	repo := strings.TrimSpace(req.Repo)
+	repo = strings.TrimPrefix(repo, "https://github.com/")
+	repo = strings.TrimPrefix(repo, "http://github.com/")
+	repo = strings.TrimSuffix(repo, ".git")
+	repo = strings.Trim(repo, "/")
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		utils.BadRequest(c, "仓库地址格式错误，应为 owner/repo")
 		return
 	}
@@ -2876,7 +2876,99 @@ func AdminTestGitHubConnection(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "GitHub 连接测试成功"})
 }
 
+func AdminBackfillLocations(c *gin.Context) {
+	db := database.GetDB()
+	backfilled := map[string]int64{}
+
+	updateTable := func(tableName string) error {
+		rows, err := db.Table(tableName).Select("id, ip_address").Where("(location IS NULL OR location = '') AND ip_address IS NOT NULL AND ip_address != ''").Rows()
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		var count int64
+		for rows.Next() {
+			var id uint
+			var ip string
+			if err := rows.Scan(&id, &ip); err != nil {
+				continue
+			}
+			location := utils.GetIPLocation(ip)
+			if location == "" {
+				continue
+			}
+			if err := db.Table(tableName).Where("id = ?", id).Update("location", location).Error; err == nil {
+				count++
+			}
+		}
+		backfilled[tableName] = count
+		return nil
+	}
+
+	for _, tableName := range []string{"login_history", "user_activities", "registration_logs", "subscription_logs", "balance_logs"} {
+		if err := updateTable(tableName); err != nil {
+			utils.InternalError(c, "回填 "+tableName+" 失败: "+err.Error())
+			return
+		}
+	}
+
+	utils.Success(c, gin.H{
+		"backfilled": backfilled,
+		"message":    "历史地区数据回填完成",
+	})
+}
+
 // ==================== Create User ====================
+
+func AdminUpdateGeoIP(c *gin.Context) {
+	resources := map[string]string{
+		"geoip.dat":    "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
+		"geosite.dat":  "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
+		"geoip.metadb": "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb",
+	}
+
+	if err := os.MkdirAll(filepath.Join("uploads", "config"), 0750); err != nil {
+		utils.InternalError(c, "创建 GeoIP 目录失败: "+err.Error())
+		return
+	}
+
+	httpClient := &http.Client{Timeout: 60 * time.Second}
+	updated := make([]string, 0, len(resources))
+	for fileName, fileURL := range resources {
+		resp, err := httpClient.Get(fileURL)
+		if err != nil {
+			utils.InternalError(c, "下载 "+fileName+" 失败: "+err.Error())
+			return
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			utils.InternalError(c, "下载 "+fileName+" 失败: "+resp.Status)
+			return
+		}
+		targetPath := filepath.Join("uploads", "config", fileName)
+		file, err := os.Create(targetPath)
+		if err != nil {
+			resp.Body.Close()
+			utils.InternalError(c, "写入 "+fileName+" 失败: "+err.Error())
+			return
+		}
+		if _, err := io.Copy(file, resp.Body); err != nil {
+			file.Close()
+			resp.Body.Close()
+			utils.InternalError(c, "保存 "+fileName+" 失败: "+err.Error())
+			return
+		}
+		file.Close()
+		resp.Body.Close()
+		updated = append(updated, fileName)
+	}
+
+	utils.Success(c, gin.H{
+		"updated": updated,
+		"message": "GeoIP 数据更新成功",
+	})
+}
 
 func AdminCreateUser(c *gin.Context) {
 	var req struct {

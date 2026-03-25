@@ -1,11 +1,31 @@
 <template>
   <div class="custom-nodes-container">
     <n-card :title="appStore.isMobile ? undefined : '专线节点管理'">
+      <template #header>
+        <div v-if="!appStore.isMobile" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%">
+          <span>专线节点管理</span>
+          <n-space>
+            <n-input
+              v-model:value="searchKeyword"
+              clearable
+              placeholder="搜索邮箱、账号、域名/IP、端口、节点名称"
+              style="width: 320px"
+              @keyup.enter="handleSearch"
+            />
+            <n-button @click="handleSearch">搜索</n-button>
+            <n-button @click="handleResetSearch">重置</n-button>
+          </n-space>
+        </div>
+      </template>
       <template v-if="!appStore.isMobile" #header-extra>
         <n-space>
           <n-button type="primary" @click="showImportDrawer = true">
             <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
             导入链接
+          </n-button>
+          <n-button type="info" :disabled="checkedRowKeys.length === 0" @click="handleBatchAssign">
+            <template #icon><n-icon><PeopleOutline /></n-icon></template>
+            批量分配 ({{ checkedRowKeys.length }})
           </n-button>
           <n-button type="error" :disabled="checkedRowKeys.length === 0" @click="handleBatchDelete">
             批量删除 ({{ checkedRowKeys.length }})
@@ -15,10 +35,26 @@
 
       <div v-if="appStore.isMobile" class="mobile-toolbar">
         <div class="mobile-toolbar-title">专线节点管理</div>
+        <div class="mobile-toolbar-search">
+          <n-input
+            v-model:value="searchKeyword"
+            clearable
+            placeholder="搜索邮箱、账号、域名/IP、端口、节点名称"
+            @keyup.enter="handleSearch"
+          />
+          <div class="mobile-toolbar-search-actions">
+            <n-button size="small" @click="handleSearch">搜索</n-button>
+            <n-button size="small" @click="handleResetSearch">重置</n-button>
+          </div>
+        </div>
         <div class="mobile-toolbar-row">
-          <n-button size="small" type="primary" @click="showImportModal = true">
+          <n-button size="small" type="primary" @click="showImportDrawer = true">
             <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
             导入链接
+          </n-button>
+          <n-button size="small" type="info" :disabled="checkedRowKeys.length === 0" @click="handleBatchAssign">
+            <template #icon><n-icon><PeopleOutline /></n-icon></template>
+            批量分配
           </n-button>
           <n-button size="small" type="error" :disabled="checkedRowKeys.length === 0" @click="handleBatchDelete">
             批量删除 ({{ checkedRowKeys.length }})
@@ -291,6 +327,7 @@ const tableData = ref([])
 const formRef = ref(null)
 const editId = ref(null)
 const assignNodeId = ref(null)
+const assignNodeIds = ref([])
 const assignUserIds = ref([])
 const userOptions = ref([])
 const showImportDrawer = ref(false)
@@ -300,6 +337,7 @@ const importLinks = ref('')
 const checkedRowKeys = ref([])
 const linkData = reactive({ link: '', name: '', protocol: '' })
 const sortState = ref({ sort: 'id', order: 'desc' })
+const searchKeyword = ref('')
 
 const formData = reactive({
   name: '',
@@ -431,6 +469,7 @@ const fetchData = async () => {
       page_size: pagination.pageSize,
       sort: sortState.value.sort,
       order: sortState.value.order,
+      search: searchKeyword.value.trim()
     })
     tableData.value = res.data.items || []
     pagination.itemCount = res.data.total || 0
@@ -470,6 +509,17 @@ const fetchUsers = async () => {
 
 const handlePageChange = (page) => {
   pagination.page = page
+  fetchData()
+}
+
+const handleSearch = () => {
+  pagination.page = 1
+  fetchData()
+}
+
+const handleResetSearch = () => {
+  searchKeyword.value = ''
+  pagination.page = 1
   fetchData()
 }
 
@@ -569,6 +619,18 @@ const handleDelete = (row) => {
 
 const handleAssign = (row) => {
   assignNodeId.value = row.id
+  assignNodeIds.value = [row.id]
+  assignUserIds.value = []
+  showAssignDrawer.value = true
+  if (userOptions.value.length === 0) {
+    fetchUsers()
+  }
+}
+
+const handleBatchAssign = () => {
+  if (checkedRowKeys.value.length === 0) return
+  assignNodeId.value = null
+  assignNodeIds.value = [...checkedRowKeys.value]
   assignUserIds.value = []
   showAssignDrawer.value = true
   if (userOptions.value.length === 0) {
@@ -582,13 +644,34 @@ const handleAssignSubmit = async () => {
     return
   }
 
+  if (assignNodeIds.value.length === 0) {
+    message.warning('请选择要分配的专线节点')
+    return
+  }
+
   assigning.value = true
   try {
-    await assignCustomNode(assignNodeId.value, {
-      user_ids: assignUserIds.value
-    })
-    message.success('分配节点成功')
+    const results = await Promise.allSettled(
+      assignNodeIds.value.map(id => assignCustomNode(id, {
+        user_ids: assignUserIds.value
+      }))
+    )
+    const successCount = results.filter(result => result.status === 'fulfilled').length
+    const failedCount = results.length - successCount
+
+    if (failedCount === 0) {
+      message.success(assignNodeIds.value.length === 1 ? '分配节点成功' : `批量分配成功，共 ${successCount} 个节点`)
+    } else if (successCount > 0) {
+      message.warning(`部分分配成功：成功 ${successCount} 个，失败 ${failedCount} 个`)
+    } else {
+      throw new Error('分配节点失败')
+    }
+
     showAssignDrawer.value = false
+    checkedRowKeys.value = []
+    assignNodeId.value = null
+    assignNodeIds.value = []
+    fetchData()
   } catch (error) {
     message.error(error.message || '分配节点失败')
   } finally {
@@ -722,5 +805,7 @@ onMounted(() => {
 }
 .mobile-toolbar { margin-bottom: 12px; }
 .mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
-.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
+.mobile-toolbar-search { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.mobile-toolbar-search-actions { display: flex; gap: 8px; }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 </style>

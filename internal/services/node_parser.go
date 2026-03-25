@@ -192,6 +192,139 @@ func ParseSubscriptionContent(content string) ([]models.Node, error) {
 	return ParseNodeLinks(content)
 }
 
+func ExtractDomainPortFromNodeLink(link string) (string, int, error) {
+	link = strings.TrimSpace(link)
+	if link == "" {
+		return "", 0, fmt.Errorf("empty link")
+	}
+
+	switch {
+	case strings.HasPrefix(link, "vmess://"):
+		return extractDomainPortFromVmessLink(link)
+	case strings.HasPrefix(link, "ssr://"):
+		proxy, err := SSRLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "ss://"):
+		proxy, err := ShadowsocksLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "vless://"):
+		proxy, err := VlessLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "trojan://"):
+		proxy, err := TrojanLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "hysteria2://"), strings.HasPrefix(link, "hy2://"):
+		proxy, err := Hysteria2LinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "hysteria://"):
+		proxy, err := HysteriaLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "tuic://"):
+		proxy, err := TUICLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "naive+https://"), strings.HasPrefix(link, "naive://"):
+		proxy, err := HTTPLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "socks5://"), strings.HasPrefix(link, "socks://"):
+		proxy, err := SOCKSLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "http://"), strings.HasPrefix(link, "https://"):
+		proxy, err := HTTPLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "wg://"):
+		proxy, err := WireGuardLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	case strings.HasPrefix(link, "anytls://"):
+		proxy, err := AnytlsLinkToClashMap(link, "")
+		if err != nil {
+			return "", 0, err
+		}
+		return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+	default:
+		u, err := url.Parse(link)
+		if err != nil {
+			return "", 0, err
+		}
+		host, portStr := splitHostPort(u.Host)
+		port := parsePortWithDefault(portStr, 0)
+		if host == "" || port <= 0 {
+			return "", 0, fmt.Errorf("unable to extract domain or port")
+		}
+		return host, port, nil
+	}
+}
+
+func extractDomainPortFromVmessLink(link string) (string, int, error) {
+	encoded := strings.TrimPrefix(link, "vmess://")
+	encodedBase64 := encoded
+	if idx := strings.Index(encodedBase64, "?"); idx != -1 {
+		encodedBase64 = encodedBase64[:idx]
+	}
+	if idx := strings.Index(encodedBase64, "#"); idx != -1 {
+		encodedBase64 = encodedBase64[:idx]
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(encodedBase64)
+	if err != nil {
+		decoded, err = base64.RawStdEncoding.DecodeString(encodedBase64)
+		if err != nil {
+			decoded, err = base64.RawURLEncoding.DecodeString(encodedBase64)
+			if err != nil {
+				return "", 0, err
+			}
+		}
+	}
+
+	var vmessConfig map[string]interface{}
+	if err := json.Unmarshal(decoded, &vmessConfig); err == nil {
+		host := stringFromMap(vmessConfig, "add")
+		port := intFromMap(vmessConfig, "port", 0)
+		if host == "" || port <= 0 {
+			return "", 0, fmt.Errorf("invalid vmess config")
+		}
+		return host, port, nil
+	}
+
+	proxy, err := VmessLinkToClashMap(link, "")
+	if err != nil {
+		return "", 0, err
+	}
+	return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
+}
+
 func parseClashSubscription(content string) ([]models.Node, bool, error) {
 	var sub clashSubscription
 	if err := yaml.Unmarshal([]byte(content), &sub); err != nil {
@@ -2057,16 +2190,26 @@ func SSRLinkToClashMap(link string, name string) (map[string]interface{}, error)
 
 	if len(mainAndParams) > 1 {
 		params := parseQuerySafe(mainAndParams[1])
+		if remarks := params.Get("remarks"); remarks != "" {
+			if decodedRemarks, err := decodeBase64Flexible(remarks); err == nil && decodedRemarks != "" {
+				m["name"] = decodedRemarks
+			}
+		}
 		if pp := params.Get("protoparam"); pp != "" {
-			ppDecoded, err := base64.RawURLEncoding.DecodeString(pp)
+			ppDecoded, err := decodeBase64Flexible(pp)
 			if err == nil {
-				m["protocol-param"] = string(ppDecoded)
+				m["protocol-param"] = ppDecoded
 			}
 		}
 		if op := params.Get("obfsparam"); op != "" {
-			opDecoded, err := base64.RawURLEncoding.DecodeString(op)
+			opDecoded, err := decodeBase64Flexible(op)
 			if err == nil {
-				m["obfs-param"] = string(opDecoded)
+				m["obfs-param"] = opDecoded
+			}
+		}
+		if group := params.Get("group"); group != "" {
+			if decodedGroup, err := decodeBase64Flexible(group); err == nil && decodedGroup != "" {
+				m["group"] = decodedGroup
 			}
 		}
 	}

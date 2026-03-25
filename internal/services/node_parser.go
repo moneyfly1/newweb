@@ -2201,7 +2201,9 @@ func SSRLinkToClashMap(link string, name string) (map[string]interface{}, error)
 		params := parseQuerySafe(mainAndParams[1])
 		if remarks := params.Get("remarks"); remarks != "" {
 			if decodedRemarks, err := decodeBase64Flexible(remarks); err == nil && decodedRemarks != "" {
-				m["name"] = decodedRemarks
+				if name == "" {
+					m["name"] = sanitizeNodeName(decodedRemarks)
+				}
 			}
 		}
 		if pp := params.Get("protoparam"); pp != "" {

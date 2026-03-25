@@ -242,6 +242,7 @@ import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { formatLocation } from '@/utils/i18n'
 import {
   listAdminSubscriptions, getAdminSubscription, resetAdminSubscription,
   extendSubscription, updateSubscriptionDeviceLimit, sendSubscriptionEmail,
@@ -353,6 +354,7 @@ const orderCols = [
 const deviceCols = [
   { title: '设备名', key: 'device_name', ellipsis: { tooltip: true }, render: (r) => r.device_name || r.software_name || '未知设备' },
   { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
+  { title: '地区', key: 'region', width: 150, render: (r) => formatLocation(r.region) },
   { title: '最后活跃', key: 'last_access', width: 160, render: (r) => fmtDate(r.last_access || r.updated_at) },
   {
     title: '操作', key: 'actions', width: 80,
@@ -361,7 +363,7 @@ const deviceCols = [
 ]
 const loginCols = [
   { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
-  { title: '位置', key: 'location', width: 100, render: (r) => r.location || '-' },
+  { title: '位置', key: 'location', width: 100, render: (r) => formatLocation(r.location) },
   { title: 'UA', key: 'user_agent', ellipsis: { tooltip: true }, render: (r) => r.user_agent || '-' },
   { title: '状态', key: 'login_status', width: 70, render: (r) => h(NTag, { type: r.login_status === 'success' ? 'success' : 'error', size: 'small' }, { default: () => r.login_status === 'success' ? '成功' : '失败' }) },
   { title: '时间', key: 'login_time', width: 160, render: (r) => fmtDate(r.login_time) }

@@ -207,10 +207,12 @@ func AdminListUsers(c *gin.Context) {
 	var users []models.User
 	query.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&users)
 
-	// Enrich with level name
+	// Enrich with level name and subscription fields needed by the edit dialog
 	type UserItem struct {
 		models.User
-		LevelName string `json:"level_name"`
+		LevelName  string     `json:"level_name"`
+		ExpireTime *time.Time `json:"expire_time"`
+		DeviceLimit int       `json:"device_limit"`
 	}
 	items := make([]UserItem, 0, len(users))
 	// Pre-load all levels
@@ -220,10 +222,28 @@ func AdminListUsers(c *gin.Context) {
 	for _, l := range levels {
 		levelMap[l.ID] = l.LevelName
 	}
+
+	subscriptionMap := make(map[uint]models.Subscription)
+	if len(users) > 0 {
+		userIDs := make([]uint, 0, len(users))
+		for _, u := range users {
+			userIDs = append(userIDs, u.ID)
+		}
+		var subscriptions []models.Subscription
+		db.Where("user_id IN ?", userIDs).Find(&subscriptions)
+		for _, sub := range subscriptions {
+			subscriptionMap[sub.UserID] = sub
+		}
+	}
+
 	for _, u := range users {
 		item := UserItem{User: u}
 		if u.UserLevelID != nil {
 			item.LevelName = levelMap[*u.UserLevelID]
+		}
+		if sub, ok := subscriptionMap[u.ID]; ok {
+			item.ExpireTime = &sub.ExpireTime
+			item.DeviceLimit = sub.DeviceLimit
 		}
 		items = append(items, item)
 	}
@@ -1285,12 +1305,28 @@ func AdminTestNode(c *gin.Context) {
 func AdminListCustomNodes(c *gin.Context) {
 	db := database.GetDB()
 	p := utils.GetPagination(c)
+	query := db.Model(&models.CustomNode{})
+
+	if search := strings.TrimSpace(c.Query("search")); search != "" {
+		like := "%" + search + "%"
+		var matchedNodeIDs []uint
+		db.Model(&models.UserCustomNode{}).
+			Joins("JOIN users ON users.id = user_custom_nodes.user_id").
+			Where("users.email LIKE ? OR users.username LIKE ?", like, like).
+			Distinct().
+			Pluck("user_custom_nodes.custom_node_id", &matchedNodeIDs)
+
+		query = query.Where(
+			db.Where("custom_nodes.name LIKE ? OR custom_nodes.display_name LIKE ? OR custom_nodes.domain LIKE ? OR CAST(custom_nodes.port AS CHAR) LIKE ?", like, like, like, like).
+				Or("custom_nodes.id IN ?", matchedNodeIDs),
+		)
+	}
 
 	var total int64
-	db.Model(&models.CustomNode{}).Count(&total)
+	query.Count(&total)
 
 	var nodes []models.CustomNode
-	db.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&nodes)
+	query.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&nodes)
 
 	utils.SuccessPage(c, nodes, total, p.Page, p.PageSize)
 }
@@ -1437,12 +1473,22 @@ func AdminImportCustomNodeLinks(c *gin.Context) {
 	db := database.GetDB()
 	successCount := 0
 	for _, node := range nodes {
+		domain := ""
+		port := 443
+		if node.Config != nil && *node.Config != "" {
+			if extractedDomain, extractedPort, extractErr := services.ExtractDomainPortFromNodeLink(*node.Config); extractErr == nil {
+				domain = extractedDomain
+				if extractedPort > 0 {
+					port = extractedPort
+				}
+			}
+		}
 		customNode := models.CustomNode{
 			Name:        node.Name,
 			DisplayName: node.Name,
 			Protocol:    node.Type,
-			Domain:      "",
-			Port:        443,
+			Domain:      domain,
+			Port:        port,
 			Config:      "",
 			IsActive:    true,
 		}

@@ -1333,21 +1333,30 @@ func AdminListCustomNodes(c *gin.Context) {
 
 func AdminCreateCustomNode(c *gin.Context) {
 	var req struct {
-		Name        string `json:"name" binding:"required"`
-		DisplayName string `json:"display_name"`
-		Protocol    string `json:"protocol"`
-		Domain      string `json:"domain"`
-		Port        int    `json:"port"`
-		Config      string `json:"config"`
-		Status      string `json:"status"`
+		Name             string     `json:"name" binding:"required"`
+		DisplayName      string     `json:"display_name"`
+		Protocol         string     `json:"protocol"`
+		Domain           string     `json:"domain"`
+		Port             int        `json:"port"`
+		Config           string     `json:"config"`
+		Status           string     `json:"status"`
+		ExpireTime       *time.Time `json:"expire_time"`
+		FollowUserExpire bool       `json:"follow_user_expire"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
 	node := models.CustomNode{
-		Name: req.Name, DisplayName: req.DisplayName, Domain: req.Domain, Port: req.Port,
-		Protocol: req.Protocol, Status: req.Status, Config: req.Config,
+		Name:             req.Name,
+		DisplayName:      req.DisplayName,
+		Domain:           req.Domain,
+		Port:             req.Port,
+		Protocol:         req.Protocol,
+		Status:           req.Status,
+		Config:           req.Config,
+		ExpireTime:       req.ExpireTime,
+		FollowUserExpire: req.FollowUserExpire,
 	}
 	if err := database.GetDB().Create(&node).Error; err != nil {
 		utils.InternalError(c, "创建专线节点失败")
@@ -1427,28 +1436,92 @@ func AdminAssignCustomNode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
-	db := database.GetDB()
-	// Verify custom node exists
-	var node models.CustomNode
-	if err := db.First(&node, id).Error; err != nil {
-		utils.NotFound(c, "专线节点不存在")
+	if len(req.UserIDs) == 0 {
+		utils.BadRequest(c, "请选择要分配的用户")
 		return
 	}
-
-	// Remove existing assignments and re-assign
-	if err := db.Where("custom_node_id = ?", id).Delete(&models.UserCustomNode{}).Error; err != nil {
-		utils.InternalError(c, "清理分配关系失败")
+	if err := replaceCustomNodeAssignments(database.GetDB(), uint(id), req.UserIDs); err != nil {
+		utils.InternalError(c, err.Error())
 		return
-	}
-	for _, uid := range req.UserIDs {
-		assignment := models.UserCustomNode{UserID: uid, CustomNodeID: uint(id)}
-		if err := db.Create(&assignment).Error; err != nil {
-			utils.InternalError(c, "分配专线节点失败")
-			return
-		}
 	}
 	utils.CreateAuditLog(c, "assign_custom_node", "custom_node", uint(id), fmt.Sprintf("分配专线节点给 %d 个用户", len(req.UserIDs)))
 	utils.SuccessMessage(c, "分配成功")
+}
+
+func AdminBatchAssignCustomNodes(c *gin.Context) {
+	var req struct {
+		IDs     []uint `json:"ids" binding:"required"`
+		UserIDs []uint `json:"user_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+	if len(req.IDs) == 0 {
+		utils.BadRequest(c, "请选择要分配的专线节点")
+		return
+	}
+	if len(req.UserIDs) == 0 {
+		utils.BadRequest(c, "请选择要分配的用户")
+		return
+	}
+
+	db := database.GetDB()
+	uniqueNodeIDs := uniqueUintSlice(req.IDs)
+	uniqueUserIDs := uniqueUintSlice(req.UserIDs)
+	successCount := 0
+
+	for _, nodeID := range uniqueNodeIDs {
+		if err := replaceCustomNodeAssignments(db, nodeID, uniqueUserIDs); err == nil {
+			successCount++
+		}
+	}
+
+	if successCount == 0 {
+		utils.InternalError(c, "批量分配失败")
+		return
+	}
+
+	utils.CreateAuditLog(c, "batch_assign_custom_node", "custom_node", 0, fmt.Sprintf("批量分配 %d 个专线节点给 %d 个用户", len(uniqueNodeIDs), len(uniqueUserIDs)))
+	utils.Success(c, gin.H{
+		"success": successCount,
+		"total":   len(uniqueNodeIDs),
+		"message": "批量分配成功",
+	})
+}
+
+func replaceCustomNodeAssignments(db *gorm.DB, nodeID uint, userIDs []uint) error {
+	var node models.CustomNode
+	if err := db.First(&node, nodeID).Error; err != nil {
+		return fmt.Errorf("专线节点不存在")
+	}
+
+	uniqueUserIDs := uniqueUintSlice(userIDs)
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("custom_node_id = ?", nodeID).Delete(&models.UserCustomNode{}).Error; err != nil {
+			return fmt.Errorf("清理分配关系失败")
+		}
+		for _, uid := range uniqueUserIDs {
+			assignment := models.UserCustomNode{UserID: uid, CustomNodeID: nodeID}
+			if err := tx.Create(&assignment).Error; err != nil {
+				return fmt.Errorf("分配专线节点失败")
+			}
+		}
+		return nil
+	})
+}
+
+func uniqueUintSlice(values []uint) []uint {
+	seen := make(map[uint]struct{}, len(values))
+	result := make([]uint, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func AdminImportCustomNodeLinks(c *gin.Context) {

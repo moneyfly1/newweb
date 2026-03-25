@@ -120,6 +120,7 @@ export const createCustomNode = (data: any) => request.post('/admin/custom-nodes
 export const updateCustomNode = (id: number, data: any) => request.put(`/admin/custom-nodes/${id}`, data)
 export const deleteCustomNode = (id: number) => request.delete(`/admin/custom-nodes/${id}`)
 export const assignCustomNode = (id: number, data: any) => request.post(`/admin/custom-nodes/${id}/assign`, data)
+export const batchAssignCustomNodes = (data: { ids: number[], user_ids: number[] }) => request.post('/admin/custom-nodes/batch-assign', data)
 export const importCustomNodeLinks = (data: { links: string }) => request.post('/admin/custom-nodes/import-links', data)
 export const batchDeleteCustomNodes = (data: { ids: number[] }) => request.post('/admin/custom-nodes/batch-delete', data)
 export const getCustomNodeLink = (id: number) => request.get(`/admin/custom-nodes/${id}/link`)

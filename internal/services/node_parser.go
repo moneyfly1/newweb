@@ -412,7 +412,7 @@ func isLikelyHTTPProxyLink(link string) bool {
 }
 
 func buildNode(name string, defaultName string, nodeType string, link string) *models.Node {
-	resolvedName := strings.TrimSpace(name)
+	resolvedName := sanitizeNodeName(name)
 	if resolvedName == "" {
 		resolvedName = defaultName
 	}
@@ -427,6 +427,15 @@ func buildNode(name string, defaultName string, nodeType string, link string) *m
 		IsActive: true,
 		IsManual: false,
 	}
+}
+
+func sanitizeNodeName(name string) string {
+	cleaned := strings.TrimSpace(name)
+	cleaned = strings.ReplaceAll(cleaned, "\r", " ")
+	cleaned = strings.ReplaceAll(cleaned, "\n", " ")
+	cleaned = strings.ReplaceAll(cleaned, "\t", " ")
+	cleaned = strings.Join(strings.Fields(cleaned), " ")
+	return cleaned
 }
 
 func decodeFragment(fragment string) string {
@@ -2699,7 +2708,10 @@ func GenerateClashYAMLWithDomain(nodes []models.Node, siteDomain string, subscri
 		if n.Config == nil || *n.Config == "" {
 			continue
 		}
-		name := n.Name
+		name := sanitizeNodeName(n.Name)
+		if name == "" {
+			name = fmt.Sprintf("%s Node", strings.ToUpper(n.Type))
+		}
 		origName := name
 		counter := 1
 		for usedNames[name] {
@@ -2753,7 +2765,10 @@ func GenerateStashYAMLWithDomain(nodes []models.Node, siteDomain string, subscri
 		if n.Config == nil || *n.Config == "" {
 			continue
 		}
-		name := n.Name
+		name := sanitizeNodeName(n.Name)
+		if name == "" {
+			name = fmt.Sprintf("%s Node", strings.ToUpper(n.Type))
+		}
 		origName := name
 		counter := 1
 		for usedNames[name] {

@@ -1,38 +1,32 @@
 <template>
   <div class="custom-nodes-container">
+    <div v-if="!appStore.isMobile" class="desktop-toolbar">
+      <div class="desktop-toolbar-search">
+        <n-input
+          v-model:value="searchKeyword"
+          clearable
+          placeholder="搜索邮箱、账号、域名/IP、端口、节点名称"
+          style="width: 320px"
+          @keyup.enter="handleSearch"
+        />
+        <n-button @click="handleSearch">搜索</n-button>
+        <n-button @click="handleResetSearch">重置</n-button>
+      </div>
+      <n-space>
+        <n-button type="primary" @click="showImportDrawer = true">
+          <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
+          导入链接
+        </n-button>
+        <n-button type="info" :disabled="checkedRowKeys.length === 0" @click="handleBatchAssign">
+          <template #icon><n-icon><PeopleOutline /></n-icon></template>
+          批量分配 ({{ checkedRowKeys.length }})
+        </n-button>
+        <n-button type="error" :disabled="checkedRowKeys.length === 0" @click="handleBatchDelete">
+          批量删除 ({{ checkedRowKeys.length }})
+        </n-button>
+      </n-space>
+    </div>
     <n-card :title="appStore.isMobile ? undefined : '专线节点管理'">
-      <template #header>
-        <div v-if="!appStore.isMobile" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%">
-          <span>专线节点管理</span>
-          <n-space>
-            <n-input
-              v-model:value="searchKeyword"
-              clearable
-              placeholder="搜索邮箱、账号、域名/IP、端口、节点名称"
-              style="width: 320px"
-              @keyup.enter="handleSearch"
-            />
-            <n-button @click="handleSearch">搜索</n-button>
-            <n-button @click="handleResetSearch">重置</n-button>
-          </n-space>
-        </div>
-      </template>
-      <template v-if="!appStore.isMobile" #header-extra>
-        <n-space>
-          <n-button type="primary" @click="showImportDrawer = true">
-            <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
-            导入链接
-          </n-button>
-          <n-button type="info" :disabled="checkedRowKeys.length === 0" @click="handleBatchAssign">
-            <template #icon><n-icon><PeopleOutline /></n-icon></template>
-            批量分配 ({{ checkedRowKeys.length }})
-          </n-button>
-          <n-button type="error" :disabled="checkedRowKeys.length === 0" @click="handleBatchDelete">
-            批量删除 ({{ checkedRowKeys.length }})
-          </n-button>
-        </n-space>
-      </template>
-
       <div v-if="appStore.isMobile" class="mobile-toolbar">
         <div class="mobile-toolbar-title">专线节点管理</div>
         <div class="mobile-toolbar-search">
@@ -304,6 +298,7 @@ import {
   updateCustomNode,
   deleteCustomNode,
   assignCustomNode,
+  batchAssignCustomNodes,
   listUsers,
   importCustomNodeLinks,
   batchDeleteCustomNodes,
@@ -651,20 +646,23 @@ const handleAssignSubmit = async () => {
 
   assigning.value = true
   try {
-    const results = await Promise.allSettled(
-      assignNodeIds.value.map(id => assignCustomNode(id, {
+    if (assignNodeIds.value.length === 1) {
+      await assignCustomNode(assignNodeIds.value[0], {
         user_ids: assignUserIds.value
-      }))
-    )
-    const successCount = results.filter(result => result.status === 'fulfilled').length
-    const failedCount = results.length - successCount
-
-    if (failedCount === 0) {
-      message.success(assignNodeIds.value.length === 1 ? '分配节点成功' : `批量分配成功，共 ${successCount} 个节点`)
-    } else if (successCount > 0) {
-      message.warning(`部分分配成功：成功 ${successCount} 个，失败 ${failedCount} 个`)
+      })
+      message.success('分配节点成功')
     } else {
-      throw new Error('分配节点失败')
+      const res = await batchAssignCustomNodes({
+        ids: assignNodeIds.value,
+        user_ids: assignUserIds.value
+      })
+      const successCount = res.data?.success || 0
+      const totalCount = res.data?.total || assignNodeIds.value.length
+      if (successCount !== totalCount) {
+        message.warning(`部分分配成功：成功 ${successCount} 个，失败 ${totalCount - successCount} 个`)
+      } else {
+        message.success(`批量分配成功，共 ${successCount} 个节点`)
+      }
     }
 
     showAssignDrawer.value = false
@@ -743,6 +741,22 @@ onMounted(() => {
 <style scoped>
 .custom-nodes-container {
   padding: 20px;
+}
+
+.desktop-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.desktop-toolbar-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .mobile-card-list {

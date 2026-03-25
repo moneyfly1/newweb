@@ -145,3 +145,10 @@ func TestSSRLinkToClashMapPreservesRemarksAndGroup(t *testing.T) {
 		t.Fatalf("expected obfs-param to be preserved, got %v", got)
 	}
 }
+
+func TestSanitizeNodeNameRemovesInvalidWhitespace(t *testing.T) {
+	got := sanitizeNodeName("  新加坡\r\nVIP\t节点  ")
+	if got != "新加坡 VIP 节点" {
+		t.Fatalf("expected sanitized name, got %q", got)
+	}
+}

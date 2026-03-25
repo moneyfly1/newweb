@@ -234,7 +234,7 @@ func (s *ConfigUpdateService) runUpdate() {
 			continue
 		}
 
-		nodes, err := ParseNodeLinks(content)
+		nodes, err := ParseSubscriptionContent(content)
 		if err != nil {
 			s.addLog("error", fmt.Sprintf("解析节点失败 [%s]: %s", u, err.Error()))
 			continue

@@ -1214,7 +1214,7 @@ func AdminImportNodes(c *gin.Context) {
 		return
 	}
 
-	nodes, err := services.ParseNodeLinks(content)
+	nodes, err := services.ParseSubscriptionContent(content)
 	if err != nil {
 		utils.BadRequest(c, "解析节点失败: "+err.Error())
 		return
@@ -1424,7 +1424,7 @@ func AdminImportCustomNodeLinks(c *gin.Context) {
 		return
 	}
 
-	nodes, err := services.ParseNodeLinks(req.Links)
+	nodes, err := services.ParseSubscriptionContent(req.Links)
 	if err != nil {
 		utils.BadRequest(c, "解析节点失败: "+err.Error())
 		return
@@ -1833,19 +1833,19 @@ func AdminListCoupons(c *gin.Context) {
 
 func AdminCreateCoupon(c *gin.Context) {
 	var req struct {
-		Code                string   `json:"code" binding:"required"`
-		Name                string   `json:"name"`
-		Description         string   `json:"description"`
-		Type                string   `json:"type" binding:"required"`
-		DiscountValue       float64  `json:"discount_value"`
-		MaxDiscount         *float64 `json:"max_discount"`
-		MinAmount           float64  `json:"min_amount"`
-		ValidFrom           string   `json:"valid_from" binding:"required"`
-		ValidUntil          string   `json:"valid_until" binding:"required"`
-		TotalQuantity       *int64   `json:"total_quantity"`
-		MaxUsesPerUser      int      `json:"max_uses_per_user"`
-		Status              string   `json:"status"`
-		ApplicablePackageIDs string  `json:"applicable_package_ids"`
+		Code                 string   `json:"code" binding:"required"`
+		Name                 string   `json:"name"`
+		Description          string   `json:"description"`
+		Type                 string   `json:"type" binding:"required"`
+		DiscountValue        float64  `json:"discount_value"`
+		MaxDiscount          *float64 `json:"max_discount"`
+		MinAmount            float64  `json:"min_amount"`
+		ValidFrom            string   `json:"valid_from" binding:"required"`
+		ValidUntil           string   `json:"valid_until" binding:"required"`
+		TotalQuantity        *int64   `json:"total_quantity"`
+		MaxUsesPerUser       int      `json:"max_uses_per_user"`
+		Status               string   `json:"status"`
+		ApplicablePackageIDs string   `json:"applicable_package_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())

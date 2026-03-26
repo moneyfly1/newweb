@@ -204,6 +204,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		{
 			recharge.GET("", handlers.ListRechargeRecords)
 			recharge.POST("", handlers.CreateRecharge)
+			recharge.GET("/:id/status", handlers.GetRechargeStatus)
 			recharge.POST("/:id/pay", handlers.CreateRechargePayment)
 			recharge.POST("/:id/cancel", handlers.CancelRecharge)
 		}

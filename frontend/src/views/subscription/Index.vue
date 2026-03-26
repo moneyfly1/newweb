@@ -572,15 +572,28 @@ const loadPaymentMethods = async () => {
 }
 const startPayPolling = (orderNo: string) => {
   stopPayPolling()
+  let pollAttempts = 0
+  const maxPollAttempts = 20
   payPollingStatus.value = true
   payPollTimer = setInterval(async () => {
     try {
+      pollAttempts += 1
       const res = await getOrderStatus(orderNo)
       if (res.data?.status === 'paid') {
         stopPayPolling(); showPayQrModal.value = false; showCryptoModal.value = false
-        message.success('支付成功，订阅已更新'); await loadData()
+        message.success('支付成功，订阅已更新（设备数和到期时间已刷新）'); await loadData()
+        return
       }
-    } catch {}
+      if (pollAttempts >= maxPollAttempts) {
+        stopPayPolling()
+        message.warning('升级结果确认超时，请手动刷新当前订阅页面查看')
+      }
+    } catch {
+      if (pollAttempts >= maxPollAttempts) {
+        stopPayPolling()
+        message.warning('升级结果确认超时，请手动刷新当前订阅页面查看')
+      }
+    }
   }, 3000)
 }
 const stopPayPolling = () => {

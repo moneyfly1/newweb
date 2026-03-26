@@ -51,15 +51,15 @@ const resultStatus = computed(() => {
 })
 
 const resultTitle = computed(() => {
-  if (status.value === 'success') return '支付成功'
-  if (status.value === 'fail') return '支付失败'
-  return '支付处理中'
+  if (status.value === 'success') return '系统已确认支付成功'
+  if (status.value === 'fail') return '支付确认失败'
+  return '系统正在确认支付结果'
 })
 
 const resultDesc = computed(() => {
-  if (status.value === 'success') return '您的订单已支付成功，订阅已生效'
-  if (status.value === 'fail') return '支付未完成，请重试或联系客服'
-  return '正在确认支付结果，请稍候...'
+  if (status.value === 'success') return '系统已确认回调，订单已生效，可前往订单或订阅页面查看最新结果'
+  if (status.value === 'fail') return '支付未完成、已取消，或系统确认超时，请稍后重试或联系客服'
+  return '已收到支付结果，正在等待系统最终确认，请稍候...'
 })
 
 const formatDateTime = (dateStr: string) => {
@@ -96,7 +96,7 @@ const checkOrderStatus = async () => {
         status.value = 'fail'
         loading.value = false
         stopPolling()
-        message.warning('支付确认超时，请稍后查看订单状态')
+        message.warning('系统确认超时，请稍后到订单页手动刷新查看支付结果')
       }
     }
   } catch (error: any) {

@@ -183,10 +183,20 @@ func AutoMigrate() error {
 		return fmt.Errorf("数据库未初始化，请先调用 InitDatabase")
 	}
 
+	var existingUserLevelColumns []string
+	if DB.Migrator().HasTable(&models.UserLevel{}) {
+		columnTypes, err := DB.Migrator().ColumnTypes(&models.UserLevel{})
+		if err != nil {
+			return fmt.Errorf("读取 user_levels 表结构失败: %w", err)
+		}
+		for _, ct := range columnTypes {
+			existingUserLevelColumns = append(existingUserLevelColumns, ct.Name())
+		}
+	}
+
 	err := DB.AutoMigrate(
 		// 用户相关
 		&models.User{},
-		&models.UserLevel{},
 		&models.TokenBlacklist{},
 
 		// 订阅与设备
@@ -284,7 +294,57 @@ func AutoMigrate() error {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
+	if len(existingUserLevelColumns) > 0 {
+		hasDeviceLimit := false
+		for _, name := range existingUserLevelColumns {
+			if strings.EqualFold(name, "device_limit") {
+				hasDeviceLimit = true
+				break
+			}
+		}
+		if hasDeviceLimit {
+			if err := restoreUserLevelDeviceLimitColumn(); err != nil {
+				return err
+			}
+		} else {
+			if err := DB.AutoMigrate(&models.UserLevel{}); err != nil {
+				return fmt.Errorf("数据库迁移 user_levels 失败: %w", err)
+			}
+		}
+	} else {
+		if err := DB.AutoMigrate(&models.UserLevel{}); err != nil {
+			return fmt.Errorf("数据库迁移 user_levels 失败: %w", err)
+		}
+	}
+
 	log.Println("数据库迁移完成")
+	return nil
+}
+
+type legacyUserLevel struct {
+	ID             uint      `gorm:"primaryKey"`
+	LevelName      string    `gorm:"column:level_name"`
+	LevelOrder     int       `gorm:"column:level_order"`
+	MinConsumption float64   `gorm:"column:min_consumption"`
+	DiscountRate   float64   `gorm:"column:discount_rate"`
+	DeviceLimit    int       `gorm:"column:device_limit"`
+	Benefits       *string   `gorm:"column:benefits"`
+	IconURL        *string   `gorm:"column:icon_url"`
+	Color          string    `gorm:"column:color"`
+	IsActive       bool      `gorm:"column:is_active"`
+	CreatedAt      time.Time `gorm:"column:created_at"`
+	UpdatedAt      time.Time `gorm:"column:updated_at"`
+}
+
+func (legacyUserLevel) TableName() string { return "user_levels" }
+
+func restoreUserLevelDeviceLimitColumn() error {
+	if DB.Migrator().HasColumn(&legacyUserLevel{}, "device_limit") {
+		return nil
+	}
+	if err := DB.Migrator().AddColumn(&legacyUserLevel{}, "device_limit"); err != nil {
+		return fmt.Errorf("恢复 user_levels.device_limit 字段失败: %w", err)
+	}
 	return nil
 }
 

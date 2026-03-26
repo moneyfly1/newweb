@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-email-queue-page">
+  <div class="admin-email-queue-page admin-page-shell">
     <!-- Stats Cards -->
     <n-grid :cols="4" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true" style="margin-bottom: 24px">
       <n-grid-item span="2 m:1">
@@ -81,6 +81,7 @@
         <!-- Data Table -->
         <template v-if="!appStore.isMobile">
           <n-data-table
+            class="unified-admin-table"
             :columns="columns"
             :data="emails"
             :loading="loading"
@@ -444,38 +445,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.admin-email-queue-page {
-  padding: 20px;
-}
-
-.stat-card {
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  overflow: hidden;
-  position: relative;
-}
-
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  opacity: 0.08;
-  transition: opacity 0.3s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.stat-card:hover::before {
-  opacity: 0.12;
-}
-
 .stat-card-blue::before {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }

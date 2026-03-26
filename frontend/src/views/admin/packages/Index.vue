@@ -1,26 +1,35 @@
 <template>
-  <div class="admin-packages-page">
-    <n-card :title="appStore.isMobile ? undefined : '套餐管理'" :bordered="false" class="page-card">
-      <template v-if="!appStore.isMobile" #header-extra>
-        <n-button type="primary" @click="handleCreate">
-          <template #icon>
-            <n-icon :component="AddOutline" />
-          </template>
-          新建套餐
-        </n-button>
-      </template>
-
-      <div v-if="appStore.isMobile" class="mobile-toolbar">
-        <div class="mobile-toolbar-title">套餐管理</div>
-        <n-button size="small" type="primary" @click="handleCreate">
-          <template #icon><n-icon :component="AddOutline" /></template>
-          新建套餐
-        </n-button>
+  <div class="admin-packages-page admin-page-shell">
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">套餐管理</h2>
+        <p class="page-subtitle">定义和管理订阅套餐，包含价格、时长、特性及设备数限制等配置</p>
       </div>
+      <div class="header-right">
+        <n-space>
+          <n-input
+            v-model:value="searchQuery"
+            placeholder="搜索套餐名称 / 描述"
+            clearable
+            style="width: 250px"
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix><n-icon :component="SearchOutline" /></template>
+          </n-input>
+          <n-button type="primary" @click="handleCreate">
+            <template #icon><n-icon :component="AddOutline" /></template>
+            新建套餐
+          </n-button>
+        </n-space>
+      </div>
+    </div>
+
+    <n-card :bordered="false" class="page-card admin-main-card">
 
       <n-space vertical :size="16">
         <template v-if="!appStore.isMobile">
           <n-data-table
+            class="unified-admin-table"
             :columns="columns"
             :data="packages"
             :loading="loading"
@@ -165,7 +174,7 @@
 <script setup>
 import { ref, reactive, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naive-ui'
-import { AddOutline } from '@vicons/ionicons5'
+import { AddOutline, SearchOutline } from '@vicons/ionicons5'
 import { listAdminPackages, createPackage, updatePackage, deletePackage } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
@@ -180,6 +189,7 @@ const packages = ref([])
 const currentPage = ref(1)
 const pageSize = ref(20)
 const totalPages = ref(0)
+const searchQuery = ref('')
 
 const showEditDrawer = ref(false)
 const isCreating = ref(false)
@@ -297,7 +307,8 @@ const fetchPackages = async () => {
   try {
     const params = {
       page: currentPage.value,
-      page_size: pageSize.value
+      page_size: pageSize.value,
+      search: searchQuery.value || undefined
     }
     const response = await listAdminPackages(params)
     packages.value = response.data.items || []
@@ -307,6 +318,11 @@ const fetchPackages = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSearch = () => {
+  currentPage.value = 1
+  fetchPackages()
 }
 
 const handlePageChange = (page) => {
@@ -420,10 +436,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.admin-packages-page {
-  padding: 20px;
-}
-
 .page-card {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);

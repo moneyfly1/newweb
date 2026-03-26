@@ -287,7 +287,7 @@
     <common-drawer v-model:show="showUpgradeModal" title="升级订阅" :width="480">
       <n-form label-placement="left" label-width="auto" :disabled="upgradeSubmitting" size="medium">
         <n-form-item label="增加设备数">
-          <n-input-number v-model:value="upgradeAddDevices" :min="5" :max="50" :step="5" style="width: 100%;" />
+          <n-input-number v-model:value="upgradeAddDevices" :min="1" :max="50" :step="1" style="width: 100%;" />
         </n-form-item>
         <n-form-item label="续期月数">
           <n-input-number v-model:value="upgradeExtendMonths" :min="0" :max="120" style="width: 100%;" />

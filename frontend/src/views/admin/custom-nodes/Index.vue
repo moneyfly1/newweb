@@ -1,63 +1,65 @@
 <template>
-  <div class="custom-nodes-container">
-    <div v-if="!appStore.isMobile" class="desktop-toolbar">
-      <div class="desktop-toolbar-search">
-        <n-input
-          v-model:value="searchKeyword"
-          clearable
-          placeholder="搜索邮箱、账号、域名/IP、端口、节点名称"
-          style="width: 320px"
-          @keyup.enter="handleSearch"
-        />
-        <n-button @click="handleSearch">搜索</n-button>
-        <n-button @click="handleResetSearch">重置</n-button>
+  <div class="custom-nodes-container admin-page-shell">
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">专线节点管理</h2>
+        <p class="page-subtitle">管理独享专线节点，支持按用户分配、批量导入、状态监控及过期自动管理</p>
       </div>
-      <n-space>
-        <n-button type="primary" @click="showImportDrawer = true">
-          <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
-          导入链接
-        </n-button>
-        <n-button type="info" :disabled="checkedRowKeys.length === 0" @click="handleBatchAssign">
-          <template #icon><n-icon><PeopleOutline /></n-icon></template>
-          批量分配 ({{ checkedRowKeys.length }})
-        </n-button>
-        <n-button type="error" :disabled="checkedRowKeys.length === 0" @click="handleBatchDelete">
-          批量删除 ({{ checkedRowKeys.length }})
-        </n-button>
-      </n-space>
+      <div class="header-right">
+        <n-space>
+          <n-input
+            v-model:value="searchKeyword"
+            clearable
+            placeholder="搜索邮箱/域名/节点名称"
+            style="width: 250px"
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix><n-icon :component="SearchOutline" /></template>
+          </n-input>
+          <n-dropdown
+            trigger="click"
+            :options="[
+              { label: '批量分配', key: 'assign', icon: () => h(NIcon, null, { default: () => h(PeopleOutline) }), disabled: checkedRowKeys.length === 0 },
+              { label: '批量删除', key: 'delete', icon: () => h(NIcon, null, { default: () => h(TrashOutline) }), disabled: checkedRowKeys.length === 0 }
+            ]"
+            @select="(key) => key === 'assign' ? handleBatchAssign() : handleBatchDelete()"
+          >
+            <n-button secondary :disabled="checkedRowKeys.length === 0">批量操作 ({{ checkedRowKeys.length }})</n-button>
+          </n-dropdown>
+          <n-button type="primary" @click="showImportDrawer = true">
+            <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
+            导入链接
+          </n-button>
+          <n-button @click="handleResetSearch" secondary>
+            <template #icon><n-icon><RefreshOutline /></n-icon></template>
+            刷新
+          </n-button>
+        </n-space>
+      </div>
     </div>
-    <n-card :title="appStore.isMobile ? undefined : '专线节点管理'">
+
+    <n-card :bordered="false" class="admin-main-card">
       <div v-if="appStore.isMobile" class="mobile-toolbar">
-        <div class="mobile-toolbar-title">专线节点管理</div>
         <div class="mobile-toolbar-search">
           <n-input
             v-model:value="searchKeyword"
             clearable
-            placeholder="搜索邮箱、账号、域名/IP、端口、节点名称"
+            placeholder="搜索节点名称/域名"
             @keyup.enter="handleSearch"
-          />
-          <div class="mobile-toolbar-search-actions">
-            <n-button size="small" @click="handleSearch">搜索</n-button>
-            <n-button size="small" @click="handleResetSearch">重置</n-button>
-          </div>
+          >
+            <template #prefix><n-icon :component="SearchOutline" /></template>
+          </n-input>
+          <n-button type="info" @click="handleSearch">搜索</n-button>
         </div>
         <div class="mobile-toolbar-row">
-          <n-button size="small" type="primary" @click="showImportDrawer = true">
-            <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
-            导入链接
-          </n-button>
-          <n-button size="small" type="info" :disabled="checkedRowKeys.length === 0" @click="handleBatchAssign">
-            <template #icon><n-icon><PeopleOutline /></n-icon></template>
-            批量分配
-          </n-button>
-          <n-button size="small" type="error" :disabled="checkedRowKeys.length === 0" @click="handleBatchDelete">
-            批量删除 ({{ checkedRowKeys.length }})
-          </n-button>
+          <n-button size="small" type="primary" @click="showImportDrawer = true">导入</n-button>
+          <n-button size="small" secondary @click="handleResetSearch">刷新</n-button>
         </div>
       </div>
 
       <template v-if="!appStore.isMobile">
         <n-data-table
+          class="unified-admin-table"
           remote
           :columns="columns"
           :data="tableData"
@@ -290,7 +292,9 @@ import {
   TrashOutline,
   PeopleOutline,
   CloudUploadOutline,
-  LinkOutline
+  LinkOutline,
+  SearchOutline,
+  RefreshOutline
 } from '@vicons/ionicons5'
 import {
   listCustomNodes,
@@ -739,10 +743,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.custom-nodes-container {
-  padding: 20px;
-}
-
 .desktop-toolbar {
   display: flex;
   align-items: center;

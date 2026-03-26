@@ -78,9 +78,20 @@
                     <n-collapse-item title="支付宝 (Alipay)" name="alipay">
                       <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
                         <n-form-item-gi label="启用状态"><n-switch v-model:value="form.pay_alipay_enabled" /></n-form-item-gi>
+                        <n-form-item-gi label="沙箱模式"><n-switch v-model:value="form.pay_alipay_sandbox" /></n-form-item-gi>
                         <n-form-item-gi label="应用 AppID"><n-input v-model:value="form.pay_alipay_app_id" /></n-form-item-gi>
+                        <n-form-item-gi label="支付公网域名"><n-input v-model:value="form.payment_public_base_url" placeholder="https://pay.example.com" /></n-form-item-gi>
                         <n-form-item-gi label="应用私钥" span="2"><n-input v-model:value="form.pay_alipay_private_key" type="textarea" :rows="3" /></n-form-item-gi>
                         <n-form-item-gi label="支付宝公钥" span="2"><n-input v-model:value="form.pay_alipay_public_key" type="textarea" :rows="3" /></n-form-item-gi>
+                        <n-form-item-gi label="异步通知地址" span="2"><n-input v-model:value="form.pay_alipay_notify_url" placeholder="留空则使用支付公网域名自动生成 /api/v1/payment/notify/alipay" /></n-form-item-gi>
+                        <n-form-item-gi label="同步返回地址" span="2"><n-input v-model:value="form.pay_alipay_return_url" placeholder="留空则使用支付公网域名自动生成 /api/v1/payment/success" /></n-form-item-gi>
+                      </n-grid>
+                    </n-collapse-item>
+                    <n-collapse-item title="易支付 (Epay)" name="epay">
+                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                        <n-form-item-gi label="网关地址" span="2"><n-input v-model:value="form.pay_epay_gateway" placeholder="https://epay.example.com" /></n-form-item-gi>
+                        <n-form-item-gi label="商户号"><n-input v-model:value="form.pay_epay_merchant_id" /></n-form-item-gi>
+                        <n-form-item-gi label="商户密钥"><n-input v-model:value="form.pay_epay_secret_key" type="password" show-password-on="click" /></n-form-item-gi>
                       </n-grid>
                     </n-collapse-item>
                     <n-collapse-item title="Stripe (信用卡)" name="stripe">
@@ -209,7 +220,9 @@ const form = ref<Record<string, any>>({
   default_subscribe_days: 0, default_device_limit: 3,
   telegram_login_enabled: false,
   smtp_host: '', smtp_port: 465, smtp_username: '', smtp_password: '', smtp_encryption: 'ssl', smtp_from_email: '',
-  pay_alipay_enabled: false, pay_alipay_app_id: '', pay_alipay_private_key: '', pay_alipay_public_key: '',
+  pay_alipay_enabled: false, pay_alipay_sandbox: false, pay_alipay_app_id: '', pay_alipay_private_key: '', pay_alipay_public_key: '',
+  payment_public_base_url: '', pay_alipay_notify_url: '', pay_alipay_return_url: '',
+  pay_epay_gateway: '', pay_epay_merchant_id: '', pay_epay_secret_key: '',
   pay_stripe_enabled: false, pay_stripe_secret_key: '', pay_stripe_webhook_secret: '', pay_stripe_exchange_rate: 7.2,
   pay_balance_enabled: true,
   notify_telegram_enabled: false, notify_telegram_bot_token: '', notify_telegram_chat_id: '',
@@ -219,7 +232,7 @@ const form = ref<Record<string, any>>({
 })
 
 const maskedFields = ref<Set<string>>(new Set())
-const sensitiveKeys = ['smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key', 'pay_stripe_secret_key', 'pay_stripe_webhook_secret', 'notify_telegram_bot_token']
+const sensitiveKeys = ['smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key', 'pay_epay_secret_key', 'pay_stripe_secret_key', 'pay_stripe_webhook_secret', 'notify_telegram_bot_token']
 
 const loadSettings = async () => {
   loading.value = true

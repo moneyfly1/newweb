@@ -75,8 +75,8 @@ func GetPaymentMethods(c *gin.Context) {
 		}
 	}
 
-	// Auto-create PaymentConfig for Alipay if enabled (epay gateway OR direct Alipay keys)
-	alipayDirectConfigured := cfgMap["pay_alipay_app_id"] != "" && cfgMap["pay_alipay_private_key"] != ""
+	// Auto-create PaymentConfig for Alipay if enabled (epay gateway OR direct Alipay configuration)
+	alipayDirectConfigured := services.IsDirectAlipayConfigured()
 	if isEnabled(cfgMap["pay_alipay_enabled"]) && (epayConfigured || alipayDirectConfigured) {
 		if !hasPayType("alipay") {
 			pc := models.PaymentConfig{PayType: "alipay", Status: 1, SortOrder: 101}
@@ -237,7 +237,9 @@ func CreatePayment(c *gin.Context) {
 						})
 						return
 					}
-					utils.LogError("[payment] 直接支付宝失败: %v, 尝试易支付", err)
+					utils.LogError("[payment] 直接支付宝失败: %v", err)
+					utils.BadRequest(c, "支付宝直连创建失败: "+err.Error())
+					return
 				}
 			}
 		}
@@ -308,7 +310,8 @@ func CreatePayment(c *gin.Context) {
 
 		siteURL := services.GetSiteURL()
 		if siteURL == "" {
-			siteURL = "http://localhost:8000"
+			utils.BadRequest(c, "站点域名未配置，请检查 site_url")
+			return
 		}
 		successURL := siteURL + "/payment/return?order_no=" + order.OrderNo
 		cancelURL := siteURL + "/order"
@@ -471,7 +474,9 @@ func CreateRechargePayment(c *gin.Context) {
 						})
 						return
 					}
-					utils.LogError("[payment] 充值直接支付宝失败: %v, 尝试易支付", err)
+					utils.LogError("[payment] 充值直接支付宝失败: %v", err)
+					utils.BadRequest(c, "支付宝直连创建失败: "+err.Error())
+					return
 				}
 			}
 		}
@@ -541,7 +546,8 @@ func CreateRechargePayment(c *gin.Context) {
 
 		siteURL := services.GetSiteURL()
 		if siteURL == "" {
-			siteURL = "http://localhost:8000"
+			utils.BadRequest(c, "站点域名未配置，请检查 site_url")
+			return
 		}
 		successURL := siteURL + "/payment/return?order_no=" + record.OrderNo
 		cancelURL := siteURL + "/recharge"
@@ -1644,7 +1650,9 @@ func PaymentReturn(c *gin.Context) {
 	// Get site URL for redirect
 	siteURL := services.GetSiteURL()
 	if siteURL == "" {
-		siteURL = "http://localhost:8000"
+		utils.LogError("[PaymentReturn] 站点域名未配置，无法跳转前端页面")
+		c.String(500, "site_url not configured")
+		return
 	}
 
 	// Redirect to frontend payment return page

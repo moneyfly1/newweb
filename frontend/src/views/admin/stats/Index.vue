@@ -4,26 +4,32 @@
       <n-space vertical :size="20">
         <!-- Filters -->
         <n-card :bordered="false">
-          <n-space align="center" :wrap="true">
-            <n-radio-group v-model:value="period" @update:value="loadFinancialReport">
-              <n-radio-button value="day">日</n-radio-button>
-              <n-radio-button value="week">周</n-radio-button>
-              <n-radio-button value="month">月</n-radio-button>
-            </n-radio-group>
-            <n-date-picker
-              v-model:value="dateRange"
-              type="daterange"
-              clearable
-              :shortcuts="dateShortcuts"
-              @update:value="onDateRangeChange"
-            />
-            <n-button @click="handleExport" :loading="exporting">导出 CSV</n-button>
+          <n-space align="center" :wrap="true" class="filters-toolbar">
+            <div class="filter-period">
+              <n-radio-group v-model:value="period" @update:value="loadFinancialReport">
+                <n-radio-button value="day">日</n-radio-button>
+                <n-radio-button value="week">周</n-radio-button>
+                <n-radio-button value="month">月</n-radio-button>
+              </n-radio-group>
+            </div>
+            <div class="filter-range">
+              <n-date-picker
+                v-model:value="dateRange"
+                type="daterange"
+                clearable
+                :shortcuts="dateShortcuts"
+                @update:value="onDateRangeChange"
+              />
+            </div>
+            <div class="filter-export">
+              <n-button @click="handleExport" :loading="exporting">导出 CSV</n-button>
+            </div>
           </n-space>
         </n-card>
 
         <!-- Summary Cards -->
-        <n-card title="财务概览" :bordered="false">
-          <n-grid :cols="appStore.isMobile ? 2 : 6" :x-gap="16" :y-gap="16">
+        <n-card title="财务概览" :bordered="false" class="summary-card">
+          <n-grid :cols="appStore.isMobile ? 2 : 6" :x-gap="16" :y-gap="16" class="summary-grid">
             <n-gi>
               <n-statistic label="总收入" :value="summary.total_revenue">
                 <template #prefix>¥</template>
@@ -54,7 +60,10 @@
         <n-card title="收入趋势" :bordered="false">
           <div v-if="revenueChart.length > 0">
             <div v-for="(item, index) in revenueChart" :key="index" class="chart-row">
-              <div class="chart-label">{{ item.date }}</div>
+              <div class="chart-meta">
+                <div class="chart-label">{{ item.date }}</div>
+                <div class="chart-orders">{{ item.orders }} 单</div>
+              </div>
               <div class="chart-bars">
                 <div class="bar-group">
                   <div class="bar revenue-bar" :style="{ width: barWidth(item.revenue, maxRevenue) + '%' }">
@@ -67,9 +76,8 @@
                   </div>
                 </div>
               </div>
-              <div class="chart-orders">{{ item.orders }} 单</div>
             </div>
-            <n-space style="margin-top: 12px" :size="16">
+            <n-space class="chart-legend" style="margin-top: 12px" :size="16">
               <span class="legend"><span class="legend-dot" style="background: #18a058"></span>收入</span>
               <span class="legend"><span class="legend-dot" style="background: #2080f0"></span>充值</span>
             </n-space>
@@ -103,8 +111,17 @@
           <!-- Package Stats -->
           <n-gi>
             <n-card title="套餐销售排行" :bordered="false">
+              <div v-if="packageStats.length > 0 && appStore.isMobile" class="mobile-stat-list">
+                <div v-for="(item, index) in packageStats" :key="index" class="mobile-stat-item">
+                  <div class="mobile-stat-main">{{ item.package_name }}</div>
+                  <div class="mobile-stat-meta">
+                    <span>销量 {{ item.count }}</span>
+                    <strong>¥{{ item.amount.toFixed(2) }}</strong>
+                  </div>
+                </div>
+              </div>
               <n-data-table
-                v-if="packageStats.length > 0"
+                v-else-if="packageStats.length > 0"
                 :columns="packageColumns"
                 :data="packageStats"
                 :bordered="false"
@@ -118,8 +135,18 @@
 
         <!-- Top Users -->
         <n-card title="消费排行 TOP 10" :bordered="false">
+          <div v-if="topUsers.length > 0 && appStore.isMobile" class="mobile-stat-list top-user-list">
+            <div v-for="(item, index) in topUsers" :key="index" class="mobile-stat-item top-user-item">
+              <div class="mobile-stat-main">#{{ index + 1 }} {{ item.username || '未知用户' }}</div>
+              <div class="mobile-stat-sub">用户ID：{{ item.user_id }}</div>
+              <div class="mobile-stat-meta">
+                <span>{{ item.order_count }} 单</span>
+                <strong>¥{{ item.total_spent.toFixed(2) }}</strong>
+              </div>
+            </div>
+          </div>
           <n-data-table
-            v-if="topUsers.length > 0"
+            v-else-if="topUsers.length > 0"
             :columns="topUserColumns"
             :data="topUsers"
             :bordered="false"
@@ -297,7 +324,14 @@ onMounted(() => { loadFinancialReport() })
 
 <style scoped>
 .stats-container { padding: 20px; }
+.filters-toolbar { width: 100%; }
+.filter-period,
+.filter-range,
+.filter-export { display: flex; }
+.filter-range { flex: 1; min-width: 280px; }
+.filter-range :deep(.n-date-picker) { width: 100%; }
 .chart-row { display: flex; align-items: center; margin-bottom: 8px; gap: 8px; }
+.chart-meta { display: flex; align-items: center; gap: 8px; width: 158px; flex-shrink: 0; }
 .chart-label { width: 90px; font-size: 13px; color: #666; text-align: right; flex-shrink: 0; }
 .chart-bars { flex: 1; min-width: 0; }
 .bar-group { margin-bottom: 2px; }
@@ -326,6 +360,31 @@ onMounted(() => { loadFinancialReport() })
 .region-count { color: #999; font-size: 13px; }
 @media (max-width: 767px) {
   .stats-container { padding: 8px; }
-  .chart-label { width: 70px; font-size: 12px; }
+  .filters-toolbar { flex-direction: column; align-items: stretch !important; gap: 12px; }
+  .filter-period,
+  .filter-range,
+  .filter-export { width: 100%; }
+  .filter-export .n-button { width: 100%; }
+  .summary-card :deep(.n-card-header),
+  .summary-card :deep(.n-card__content) { padding-left: 14px; padding-right: 14px; }
+  .summary-grid { gap: 10px !important; }
+  .summary-card :deep(.n-statistic .n-statistic-value) { font-size: 18px; }
+  .summary-card :deep(.n-statistic .n-statistic-label) { font-size: 12px; }
+  .chart-row { flex-direction: column; align-items: stretch; gap: 6px; }
+  .chart-meta { width: 100%; justify-content: space-between; }
+  .chart-label { width: auto; font-size: 12px; text-align: left; }
+  .chart-bars { width: 100%; }
+  .chart-orders { width: auto; font-size: 12px; text-align: right; }
+  .bar { height: 16px; }
+  .chart-legend { flex-wrap: wrap; }
+  .method-info,
+  .region-info { flex-wrap: wrap; align-items: flex-start; }
+  .method-info { flex-direction: column; gap: 2px; }
+  .method-detail { font-size: 12px; }
+  .mobile-stat-list { display: flex; flex-direction: column; gap: 10px; }
+  .mobile-stat-item { padding: 12px; border: 1px solid #e8e8e8; border-radius: 10px; background: #fff; }
+  .mobile-stat-main { font-size: 14px; font-weight: 600; color: #333; }
+  .mobile-stat-sub { margin-top: 4px; font-size: 12px; color: #999; }
+  .mobile-stat-meta { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #666; }
 }
 </style>

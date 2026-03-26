@@ -46,7 +46,7 @@
         <span class="mobile-tab-label">{{ tab.label }}</span>
       </div>
     </div>
-    <n-drawer v-model:show="showDrawer" placement="left" :width="260" closable>
+    <n-drawer v-model:show="showDrawer" placement="left" :width="appStore.isMobile ? 'calc(100vw - 24px)' : 260" :style="appStore.isMobile ? { margin: '12px 0 12px 12px', borderRadius: '18px', overflow: 'hidden' } : undefined" closable>
       <n-drawer-content title="导航菜单" :native-scrollbar="false">
         <n-menu :options="menuOptions" :value="activeKey" :default-expanded-keys="expandedKeys" @update:value="handleMobileMenuClick" />
       </n-drawer-content>
@@ -54,7 +54,7 @@
   </n-layout>
 
   <!-- Theme Picker Drawer -->
-  <n-drawer v-model:show="showThemeDrawer" placement="right" :width="280">
+  <n-drawer v-model:show="showThemeDrawer" placement="right" :width="appStore.isMobile ? 'calc(100vw - 24px)' : 280" :style="appStore.isMobile ? { margin: '12px 12px 12px 0', borderRadius: '18px', overflow: 'hidden' } : undefined">
     <n-drawer-content title="选择主题">
       <div class="theme-picker-grid">
         <div

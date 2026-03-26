@@ -101,7 +101,7 @@
       @confirm="handlePay"
       @cancel="showPaymentModal = false"
     >
-      <n-space vertical :size="16">
+      <n-space vertical :size="16" class="purchase-drawer-content">
         <n-descriptions :column="1" bordered>
           <n-descriptions-item label="套餐名称">{{ selectedPackage?.name }}</n-descriptions-item>
           <n-descriptions-item label="有效期">{{ selectedPackage?.duration_days }} 天</n-descriptions-item>
@@ -127,10 +127,10 @@
 
         <!-- Coupon Input -->
         <div class="modal-coupon">
-          <n-input-group>
+          <div class="coupon-group">
             <n-input v-model:value="couponCode" placeholder="输入优惠码（可选）" :disabled="verifying" size="small" />
-            <n-button type="primary" size="small" :loading="verifying" @click="handleVerifyCoupon" ghost>验证</n-button>
-          </n-input-group>
+            <n-button class="coupon-verify-btn" type="primary" size="small" :loading="verifying" @click="handleVerifyCoupon" ghost>验证</n-button>
+          </div>
           <n-alert v-if="couponInfo" type="success" :bordered="false" style="margin-top: 8px;" size="small">
             优惠码有效：{{ couponInfo.description }}
           </n-alert>
@@ -174,7 +174,7 @@
       @cancel="showQrModal = false"
       @after-leave="stopPolling"
     >
-      <div v-if="isMobile" style="text-align: center;">
+      <div v-if="isMobile" class="mobile-pay-panel">
         <p style="margin-bottom: 16px; color: #666;">请点击下方按钮完成支付</p>
         <n-button type="primary" size="large" block tag="a" :href="mobilePayUrl" target="_blank">
           打开支付App付款
@@ -182,7 +182,7 @@
         <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后请返回此页面</p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
-      <div v-else style="text-align: center;">
+      <div v-else class="desktop-pay-panel">
         <p style="margin-bottom: 16px; color: #666;">请使用支付宝扫描下方二维码完成支付</p>
         <canvas ref="qrCanvas" style="margin: 0 auto;"></canvas>
         <p style="margin-top: 16px; color: #999; font-size: 13px;">支付成功后系统会自动确认并跳转，若未更新请前往订单页手动刷新</p>
@@ -202,7 +202,7 @@
       @cancel="showCryptoModal = false"
       @after-leave="stopPolling"
     >
-      <div v-if="cryptoInfo" style="text-align: center;">
+      <div v-if="cryptoInfo" class="crypto-panel">
         <p style="margin-bottom: 16px; color: #666;">请转账以下金额到指定钱包地址</p>
         <n-descriptions :column="1" bordered size="small" style="text-align: left;">
           <n-descriptions-item label="网络">{{ cryptoInfo.network }}</n-descriptions-item>
@@ -426,6 +426,10 @@ const isQrCodeUrl = (url: string) => {
   return url.includes('qr.alipay.com') || (url.startsWith('https://qr.') && url.length < 200)
 }
 
+const goToPurchaseSuccess = (orderNo: string) => {
+  router.push({ name: 'PaymentReturn', query: { order_no: orderNo, source: 'purchase', redirect: 'dashboard' } })
+}
+
 const startPolling = (orderNo: string) => {
   stopPolling()
   pollAttempts = 0
@@ -438,8 +442,7 @@ const startPolling = (orderNo: string) => {
         stopPolling()
         showQrModal.value = false
         await fetchUserBalance()
-        message.success('支付成功，订单已确认，订阅已生效')
-        router.push('/orders')
+        goToPurchaseSuccess(orderNo)
         return
       }
       if (pollAttempts >= maxPollAttempts) {
@@ -473,9 +476,8 @@ const handlePay = async () => {
   try {
     if (paymentMethod.value === 'balance') {
       await payOrder(orderInfo.value.order_no, { payment_method: 'balance' })
-      message.success('支付成功')
       showPaymentModal.value = false
-      router.push('/orders')
+      goToPurchaseSuccess(orderInfo.value.order_no)
     } else if (paymentMethod.value.startsWith('pm_')) {
       const pmId = parseInt(paymentMethod.value.replace('pm_', ''))
       const paymentData: any = { order_id: orderInfo.value.id, payment_method_id: pmId, is_mobile: isMobile.value }
@@ -614,8 +616,14 @@ onMounted(() => {
 .custom-inline-price { display: flex; align-items: baseline; justify-content: center; margin-top: 12px; }
 
 .modal-coupon { padding: 8px 0; }
+.coupon-group { display: flex; gap: 8px; align-items: stretch; }
+.coupon-group .n-input { flex: 1; min-width: 0; }
+.coupon-verify-btn { flex-shrink: 0; }
 .payment-method { padding: 4px 0; }
 .pm-label { font-size: 14px; font-weight: 500; margin-bottom: 8px; color: var(--text-color, #333); }
+.mobile-pay-panel,
+.desktop-pay-panel,
+.crypto-panel { text-align: center; }
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
@@ -633,5 +641,10 @@ onMounted(() => {
   .feature-item { font-size: 13px; gap: 4px; }
   .badge { top: -10px; right: 12px; font-size: 11px; padding: 2px 10px; }
   .description { padding: 8px; font-size: 12px; }
+  .purchase-drawer-content { gap: 12px !important; }
+  .coupon-group { flex-direction: column; }
+  .coupon-verify-btn { width: 100%; }
+  .purchase-drawer-content :deep(.n-descriptions) { font-size: 13px; }
+  .purchase-drawer-content :deep(.n-radio) { align-items: flex-start; }
 }
 </style>

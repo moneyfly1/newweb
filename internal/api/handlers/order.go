@@ -257,13 +257,15 @@ func PayOrder(c *gin.Context) {
 			utils.InternalError(c, "读取用户余额失败")
 			return
 		}
-		if err := tx.Model(&freshUser).Where("id = ? AND balance >= ?", userID, payAmount).UpdateColumn("balance", gorm.Expr("balance - ?", payAmount)).Error; err != nil {
+		result := tx.Model(&freshUser).Where("id = ? AND balance >= ?", userID, payAmount).UpdateColumn("balance", gorm.Expr("balance - ?", payAmount))
+		if result.Error != nil {
 			tx.Rollback()
 			utils.BadRequest(c, "余额不足或扣减失败")
 			return
 		}
 		// 验证确实更新了行（防止 WHERE 条件不满足时静默成功）
-		if tx.RowsAffected == 0 {
+		if result.RowsAffected == 0 {
+			utils.LogError("[BalancePay] 扣款未生效: user_id=%d balance=%.2f pay_amount=%.2f", userID, freshUser.Balance, payAmount)
 			tx.Rollback()
 			utils.BadRequest(c, "余额不足")
 			return
@@ -405,6 +407,8 @@ func PayOrder(c *gin.Context) {
 		}
 		utils.LogOrder("余额支付成功: order_no=%s user_id=%d username=%s amount=%s ip=%s",
 			orderNo, userID, notifyUser.Username, payAmountStr, utils.GetRealClientIP(c))
+		utils.LogOrder("[BalancePay] 扣款成功: user_id=%d before=%.2f amount=%.2f after=%.2f order_no=%s",
+			userID, freshUser.Balance, payAmount, freshUser.Balance-payAmount, orderNo)
 		var subURL string
 		var userSub models.Subscription
 		if database.GetDB().Where("user_id = ?", userID).First(&userSub).Error == nil {

@@ -1,46 +1,44 @@
 <template>
-  <div class="abnormal-users-page">
-    <n-card :title="appStore.isMobile ? undefined : '异常用户检测'" :bordered="false" class="page-card">
-      <n-space vertical :size="16">
-        <!-- Desktop toolbar -->
-        <n-space v-if="!appStore.isMobile" justify="space-between" align="center" style="width: 100%">
-          <n-space>
-            <n-select
-              v-model:value="typeFilter"
-              placeholder="异常类型筛选"
-              clearable
-              style="width: 200px"
-              :options="typeOptions"
-              @update:value="handleSearch"
-            />
-            <n-button type="info" @click="handleSearch">
-              <template #icon><n-icon :component="SearchOutline" /></template>
-              搜索
-            </n-button>
-          </n-space>
-          <n-button @click="fetchAbnormalUsers">
+  <div class="abnormal-users-page admin-page-shell">
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">异常用户检测</h2>
+        <p class="page-subtitle">自动识别可疑行为，包括多设备共享、频繁重置订阅及异常登录尝试</p>
+      </div>
+      <div class="header-right">
+        <n-space>
+          <n-select
+            v-model:value="typeFilter"
+            placeholder="异常类型筛选"
+            clearable
+            style="width: 180px"
+            :options="typeOptions"
+            @update:value="handleSearch"
+          />
+          <n-button @click="fetchAbnormalUsers" secondary>
             <template #icon><n-icon :component="RefreshOutline" /></template>
             刷新
           </n-button>
         </n-space>
+      </div>
+    </div>
 
-        <!-- Mobile toolbar -->
-        <div v-if="appStore.isMobile" class="mobile-toolbar">
-          <div class="mobile-toolbar-title">异常用户检测</div>
-          <div class="mobile-toolbar-row">
-            <n-select v-model:value="typeFilter" placeholder="异常类型" clearable size="small" style="flex:1" :options="typeOptions" @update:value="handleSearch" />
-            <n-button size="small" type="info" @click="handleSearch">
-              <template #icon><n-icon :component="SearchOutline" /></template>
-            </n-button>
-            <n-button size="small" @click="fetchAbnormalUsers">
-              <template #icon><n-icon :component="RefreshOutline" /></template>
-            </n-button>
-          </div>
+    <n-card :bordered="false" class="page-card admin-main-card">
+
+      <!-- Mobile toolbar -->
+      <div v-if="appStore.isMobile" class="mobile-toolbar">
+        <div class="mobile-toolbar-row">
+          <n-select v-model:value="typeFilter" placeholder="异常类型" clearable size="small" style="flex:1" :options="typeOptions" @update:value="handleSearch" />
+          <n-button size="small" type="info" @click="handleSearch">检测</n-button>
         </div>
+      </div>
+
+      <n-space vertical :size="16">
 
         <!-- Data table -->
         <template v-if="!appStore.isMobile">
           <n-data-table
+            class="unified-admin-table"
             :columns="columns"
             :data="users"
             :loading="loading"
@@ -204,19 +202,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.abnormal-users-page {
-  padding: 20px;
-}
-
-.page-card {
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-:deep(.n-data-table) {
-  font-size: 14px;
-}
-
 :deep(.n-data-table .n-data-table-th) {
   font-weight: 600;
 }

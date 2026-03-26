@@ -1,200 +1,157 @@
 <template>
-  <div class="admin-orders-page">
-    <n-card :title="appStore.isMobile ? undefined : '订单管理'" :bordered="false" class="page-card">
-      <n-space vertical :size="16">
-        <!-- Desktop toolbar -->
-        <n-space v-if="!appStore.isMobile">
+  <div class="admin-orders-page admin-page-shell">
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">订单管理</h2>
+        <p class="page-subtitle">查看和处理全站订单，支持退款、状态调整及财务对账</p>
+      </div>
+      <div class="header-right">
+        <n-space>
           <n-input
             v-model:value="searchQuery"
-            placeholder="搜索订单号"
+            placeholder="订单号 / 用户ID / 邮箱"
             clearable
-            style="width: 300px"
+            style="width: 250px"
             @keyup.enter="handleSearch"
           >
-            <template #prefix>
-              <n-icon :component="SearchOutline" />
-            </template>
+            <template #prefix><n-icon :component="SearchOutline" /></template>
           </n-input>
           <n-select
             v-model:value="statusFilter"
-            placeholder="状态筛选"
+            placeholder="所有状态"
             clearable
-            style="width: 150px"
+            style="width: 120px"
             :options="statusOptions"
             @update:value="handleSearch"
           />
-          <n-button type="primary" @click="handleSearch">
-            <template #icon>
-              <n-icon :component="SearchOutline" />
-            </template>
-            搜索
+          <n-button secondary @click="fetchOrders">
+            <template #icon><n-icon><refresh-outline /></n-icon></template>
+            刷新
           </n-button>
         </n-space>
+      </div>
+    </div>
 
-        <!-- Mobile toolbar -->
-        <div v-if="appStore.isMobile" class="mobile-toolbar">
-          <div class="mobile-toolbar-title">订单管理</div>
-          <div class="mobile-toolbar-controls">
-            <n-input v-model:value="searchQuery" placeholder="搜索订单号" clearable size="small" @keyup.enter="handleSearch">
-              <template #prefix><n-icon :component="SearchOutline" /></template>
-            </n-input>
-            <div class="mobile-toolbar-row">
-              <n-select v-model:value="statusFilter" placeholder="状态筛选" clearable size="small" style="flex:1" :options="statusOptions" @update:value="handleSearch" />
-              <n-button size="small" type="primary" @click="handleSearch">
-                <template #icon><n-icon :component="SearchOutline" /></template>
-              </n-button>
-            </div>
-          </div>
+    <n-grid v-if="!appStore.isMobile" :cols="4" :x-gap="16" class="stats-summary">
+      <n-grid-item>
+        <div class="mini-stat-card">
+          <div class="stat-label">今日营收</div>
+          <div class="stat-value">¥{{ orderStats.today_revenue || '0.00' }}</div>
         </div>
+      </n-grid-item>
+      <n-grid-item>
+        <div class="mini-stat-card">
+          <div class="stat-label">本月营收</div>
+          <div class="stat-value">¥{{ orderStats.month_revenue || '0.00' }}</div>
+        </div>
+      </n-grid-item>
+      <n-grid-item>
+        <div class="mini-stat-card">
+          <div class="stat-label">待支付订单</div>
+          <div class="stat-value text-warning">{{ orderStats.pending_count || 0 }}</div>
+        </div>
+      </n-grid-item>
+      <n-grid-item>
+        <div class="mini-stat-card">
+          <div class="stat-label">退款订单</div>
+          <div class="stat-value text-error">{{ orderStats.refunded_count || 0 }}</div>
+        </div>
+      </n-grid-item>
+    </n-grid>
 
-        <template v-if="!appStore.isMobile">
-          <n-data-table
-            :columns="columns"
-            :data="orders"
-            :loading="loading"
-            :pagination="false"
-            :bordered="false"
-            :single-line="false"
-            :scroll-x="1400"
-          />
+    <n-card :bordered="false" class="main-card">
+      <n-space vertical :size="16">
 
-          <n-pagination
-            v-model:page="currentPage"
-            v-model:page-size="pageSize"
-            :page-count="totalPages"
-            :page-sizes="[10, 20, 50, 100]"
-            show-size-picker
-            @update:page="handlePageChange"
-            @update:page-size="handlePageSizeChange"
-          />
-        </template>
-
-        <template v-else>
-          <div v-if="loading" style="text-align: center; padding: 20px;">
-            <n-spin size="medium" />
-          </div>
-          <div v-else-if="orders.length === 0" style="text-align: center; padding: 20px; color: #999;">
-            暂无订单数据
-          </div>
-          <div v-else class="mobile-card-list">
-            <div v-for="row in orders" :key="row.id" class="mobile-card">
-              <div class="card-header">
-                <span class="card-title">{{ row.order_no }}</span>
-                <n-tag :type="getStatusType(row.status)" size="small">{{ getStatusText(row.status) }}</n-tag>
-              </div>
-              <div class="card-body">
-                <div class="card-row">
-                  <span class="card-label">用户ID</span>
-                  <span>{{ row.user_id }}</span>
-                </div>
-                <div class="card-row">
-                  <span class="card-label">订单金额</span>
-                  <span>¥{{ row.amount.toFixed(2) }}</span>
-                </div>
-                <div class="card-row">
-                  <span class="card-label">实付金额</span>
-                  <span style="color:#18a058;font-weight:600">¥{{ row.final_amount != null ? Number(row.final_amount).toFixed(2) : '0.00' }}</span>
-                </div>
-                <div class="card-row">
-                  <span class="card-label">支付方式</span>
-                  <span>{{ getPaymentMethodText(row.payment_method_name) }}</span>
-                </div>
-                <div class="card-row">
-                  <span class="card-label">创建时间</span>
-                  <span>{{ new Date(row.created_at).toLocaleString('zh-CN') }}</span>
-                </div>
-              </div>
-              <div class="card-actions">
-                <n-button size="small" @click="handleViewDetail(row)">详情</n-button>
-                <n-button v-if="row.status === 'paid'" size="small" type="success" @click="handleComplete(row)">完成</n-button>
-                <n-button v-if="row.status === 'paid' || row.status === 'completed'" size="small" type="warning" @click="handleRefund(row)">退款</n-button>
-                <n-button v-if="row.status === 'pending'" size="small" type="error" @click="handleCancel(row)">取消</n-button>
-                <n-button v-if="row.status === 'cancelled' || row.status === 'refunded'" size="small" type="error" @click="handleDelete(row)">删除</n-button>
-              </div>
-            </div>
-          </div>
-
-          <n-pagination
-            v-model:page="currentPage"
-            :page-count="totalPages"
-            :page-slot="5"
-            style="margin-top: 16px; justify-content: center;"
-            @update:page="handlePageChange"
-          />
-        </template>
+        <n-data-table
+          remote
+          :columns="columns"
+          :data="orders"
+          :loading="loading"
+          :pagination="pagination"
+          :bordered="false"
+          :single-line="false"
+          :row-key="(row: any) => row.id"
+          :scroll-x="appStore.isMobile ? 1100 : 1450"
+          class="unified-admin-table"
+          @update:page="(p: number) => { pagination.page = p; fetchOrders() }"
+          @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; fetchOrders() }"
+        />
       </n-space>
     </n-card>
 
-    <common-drawer
-      v-model:show="showDetailDrawer"
-      title="订单详情"
-      :width="600"
-      :show-footer="false"
-    >
-      <n-descriptions
-        v-if="currentOrder"
-        label-placement="left"
-        :column="1"
-        bordered
-      >
-        <n-descriptions-item label="订单号">
-          {{ currentOrder.order_no }}
-        </n-descriptions-item>
-        <n-descriptions-item label="用户ID">
-          {{ currentOrder.user_id }}
-        </n-descriptions-item>
-        <n-descriptions-item label="订单金额">
-          ¥{{ currentOrder.amount.toFixed(2) }}
-        </n-descriptions-item>
-        <n-descriptions-item label="优惠金额">
-          ¥{{ currentOrder.discount_amount != null ? Number(currentOrder.discount_amount).toFixed(2) : '0.00' }}
-        </n-descriptions-item>
-        <n-descriptions-item label="实付金额">
-          <span style="color: #18a058; font-weight: 600; font-size: 16px">
-            ¥{{ currentOrder.final_amount != null ? Number(currentOrder.final_amount).toFixed(2) : '0.00' }}
-          </span>
-        </n-descriptions-item>
-        <n-descriptions-item label="支付方式">
-          {{ getPaymentMethodText(currentOrder.payment_method_name) }}
-        </n-descriptions-item>
-        <n-descriptions-item label="订单状态">
-          <n-tag :type="getStatusType(currentOrder.status)" size="small">
-            {{ getStatusText(currentOrder.status) }}
-          </n-tag>
-        </n-descriptions-item>
-        <n-descriptions-item label="创建时间">
-          {{ new Date(currentOrder.created_at).toLocaleString('zh-CN') }}
-        </n-descriptions-item>
-      </n-descriptions>
+    <common-drawer v-model:show="showDetailDrawer" title="订单流水详情" :width="540">
+      <div v-if="currentOrder" class="detail-container">
+        <div class="detail-header">
+          <div class="amount-display">
+            <div class="label">实付金额</div>
+            <div class="value">¥{{ (currentOrder.final_amount || currentOrder.amount || 0).toFixed(2) }}</div>
+          </div>
+          <n-tag :type="getStatusType(currentOrder.status)" round>{{ getStatusText(currentOrder.status) }}</n-tag>
+        </div>
+
+        <n-descriptions label-placement="left" :column="1" bordered size="small" class="detail-desc">
+          <n-descriptions-item label="订单号">
+            <div class="copyable-row">
+              <code class="order-no-code">{{ currentOrder.order_no }}</code>
+              <n-button size="tiny" quaternary @click="copyToClipboard(currentOrder.order_no)">复制</n-button>
+            </div>
+          </n-descriptions-item>
+          <n-descriptions-item label="用户邮箱">{{ currentOrder.user_email || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="关联用户">ID: {{ currentOrder.user_id }}</n-descriptions-item>
+          <n-descriptions-item label="订单类型">{{ currentOrder.order_type_text || '套餐订单' }}</n-descriptions-item>
+          <n-descriptions-item label="订单内容">{{ currentOrder.order_summary || currentOrder.package_name || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="原始金额">¥{{ currentOrder.amount.toFixed(2) }}</n-descriptions-item>
+          <n-descriptions-item label="优惠抵扣" v-if="currentOrder.discount_amount > 0">
+            - ¥{{ currentOrder.discount_amount.toFixed(2) }}
+          </n-descriptions-item>
+          <n-descriptions-item label="支付网关">{{ getPaymentMethodText(currentOrder.payment_method_name) }}</n-descriptions-item>
+          <n-descriptions-item label="创建时间">{{ formatFullDate(currentOrder.created_at) }}</n-descriptions-item>
+          <n-descriptions-item label="支付时间" v-if="currentOrder.payment_time">
+            {{ formatFullDate(currentOrder.payment_time) }}
+          </n-descriptions-item>
+          <n-descriptions-item label="外部流水号" v-if="currentOrder.gateway_order_id">
+            <code class="gateway-no">{{ currentOrder.gateway_order_id }}</code>
+          </n-descriptions-item>
+        </n-descriptions>
+
+        <div class="detail-actions" v-if="['paid', 'completed', 'pending'].includes(currentOrder.status)">
+          <n-divider />
+          <n-space justify="end">
+            <n-button v-if="currentOrder.status === 'pending'" type="error" ghost @click="handleCancel(currentOrder)">取消订单</n-button>
+            <n-button v-if="currentOrder.status === 'paid'" type="success" @click="handleComplete(currentOrder)">标记完成</n-button>
+            <n-button v-if="['paid', 'completed'].includes(currentOrder.status)" type="warning" @click="handleRefund(currentOrder)">全额退款</n-button>
+          </n-space>
+        </div>
+      </div>
     </common-drawer>
   </div>
 </template>
 
-<script setup>
-import { ref, h, onMounted } from 'vue'
-import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naive-ui'
-import { SearchOutline } from '@vicons/ionicons5'
-import { listAdminOrders, refundOrder, cancelOrder, deleteOrder, completeOrder } from '@/api/admin'
+<script setup lang="ts">
+import { ref, reactive, h, onMounted, watch } from 'vue'
+import { NButton, NTag, NSpace, NIcon, NSelect, useMessage, useDialog, type DataTableColumns, type TagProps } from 'naive-ui'
+import { SearchOutline, RefreshOutline, ReceiptOutline, TimeOutline, MailOutline, LayersOutline } from '@vicons/ionicons5'
+import { listAdminOrders, refundOrder, cancelOrder, completeOrder, getAdminDashboard } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import { useRoute } from 'vue-router'
 
 const message = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
+const route = useRoute()
 
 const loading = ref(false)
-const orders = ref([])
-const searchQuery = ref('')
+const orders = ref<any[]>([])
+const orderStats = ref<any>({})
+const searchQuery = ref((route.query.order_no as string) || '')
 const statusFilter = ref(null)
-const currentPage = ref(1)
-const pageSize = ref(20)
-const totalPages = ref(0)
+const pagination = reactive({ page: 1, pageSize: 20, itemCount: 0, showSizePicker: true, pageSizes: [20, 50, 100] })
 
 const showDetailDrawer = ref(false)
-const currentOrder = ref(null)
+const currentOrder = ref<any>(null)
 
 const statusOptions = [
-  { label: '全部', value: null },
   { label: '待支付', value: 'pending' },
   { label: '已支付', value: 'paid' },
   { label: '已完成', value: 'completed' },
@@ -202,380 +159,225 @@ const statusOptions = [
   { label: '已退款', value: 'refunded' }
 ]
 
-const getStatusType = (status) => {
-  const typeMap = {
+const getStatusType = (s: string): TagProps['type'] => {
+  const typeMap: Record<string, NonNullable<TagProps['type']>> = {
     pending: 'warning',
     paid: 'success',
     completed: 'info',
     cancelled: 'default',
     refunded: 'error'
   }
-  return typeMap[status] || 'default'
+  return typeMap[s] || 'default'
 }
 
-const getStatusText = (status) => {
-  const textMap = {
-    pending: '待支付',
-    paid: '已支付',
-    completed: '已完成',
-    cancelled: '已取消',
-    refunded: '已退款'
-  }
-  return textMap[status] || status
+const getStatusText = (s: string) => ({ pending: '待支付', paid: '已支付', completed: '已完成', cancelled: '已取消', refunded: '已退款' }[s] || s)
+const getPaymentMethodText = (row: any) => {
+  const m = row.payment_method_name
+  const nameMap: Record<string, string> = { alipay: '支付宝', wechat: '微信支付', balance: '余额支付', stripe: 'Stripe', epay: '易支付' }
+  if (nameMap[m]) return nameMap[m]
+  if (m) return m
+  return row.status === 'pending' ? '待选择' : '未支付'
 }
+const getOrderTypeTag = (type: string): TagProps['type'] => ({ package: 'info', custom_package: 'warning', subscription_upgrade: 'success' }[type] as TagProps['type'] || 'default')
+const getOrderTypeText = (row: any) => row.order_type_text || '套餐订单'
+const getOrderSummary = (row: any) => row.order_summary || row.package_name || '-'
 
-const getPaymentMethodText = (method) => {
-  const methodMap = {
-    alipay: '支付宝',
-    wechat: '微信支付',
-    balance: '余额支付',
-    yipay: '易支付',
-    stripe: 'Stripe',
-    paypal: 'PayPal'
-  }
-  return methodMap[method] || method
-}
-
-const columns = [
-  { title: 'ID', key: 'id', width: 80, fixed: 'left', resizable: true, sorter: 'default' },
+const columns: DataTableColumns<any> = [
   {
-    title: '订单号',
+    title: '订单信息',
     key: 'order_no',
-    width: 200,
-    ellipsis: { tooltip: true },
-    fixed: 'left',
-    resizable: true
-  },
-  { title: '用户ID', key: 'user_id', width: 100, resizable: true },
-  {
-    title: '订单金额',
-    key: 'amount',
-    width: 120,
-    resizable: true,
-    sorter: (a, b) => a.amount - b.amount,
-    render: (row) => `¥${row.amount.toFixed(2)}`
+    minWidth: 240,
+    render: (row: any) => h('div', { class: 'cell-block order-block' }, [
+      h('div', { class: 'cell-title order-no' }, row.order_no),
+      h('div', { class: 'cell-sub' }, `UID: ${row.user_id}`)
+    ])
   },
   {
-    title: '优惠金额',
-    key: 'discount_amount',
+    title: '用户邮箱',
+    key: 'user_email',
+    minWidth: 220,
+    render: (row: any) => h('div', { class: 'cell-inline' }, [
+      h(NIcon, { component: MailOutline, size: 14, class: 'inline-icon' }),
+      h('span', { class: 'email-text' }, row.user_email || '-')
+    ])
+  },
+  {
+    title: '订单类型',
+    key: 'order_type',
     width: 120,
-    resizable: true,
-    render: (row) => row.discount_amount != null ? `¥${Number(row.discount_amount).toFixed(2)}` : '¥0.00'
+    render: (row: any) => h(NTag, { type: getOrderTypeTag(row.order_type), size: 'small', round: true, bordered: false }, { default: () => getOrderTypeText(row) })
+  },
+  {
+    title: '订单内容',
+    key: 'order_summary',
+    minWidth: 220,
+    render: (row: any) => h('div', { class: 'cell-inline' }, [
+      h(NIcon, { component: LayersOutline, size: 14, class: 'inline-icon' }),
+      h('span', { class: 'summary-text' }, getOrderSummary(row))
+    ])
   },
   {
     title: '实付金额',
     key: 'final_amount',
     width: 120,
-    resizable: true,
-    sorter: (a, b) => (Number(a.final_amount) || 0) - (Number(b.final_amount) || 0),
-    render: (row) => h(
-      'span',
-      { style: 'color: #18a058; font-weight: 600' },
-      row.final_amount != null ? `¥${Number(row.final_amount).toFixed(2)}` : '¥0.00'
-    )
+    render: (row: any) => h('span', { class: 'amount-text' }, `¥${(row.final_amount || row.amount || 0).toFixed(2)}`)
   },
   {
     title: '状态',
     key: 'status',
     width: 100,
-    resizable: true,
-    render: (row) => h(
-      NTag,
-      { type: getStatusType(row.status), size: 'small' },
-      { default: () => getStatusText(row.status) }
-    )
+    render: (row: any) => h(NTag, { type: getStatusType(row.status), size: 'small', round: true, ghost: true }, { default: () => getStatusText(row.status) })
   },
   {
     title: '支付方式',
     key: 'payment_method_name',
-    width: 120,
-    resizable: true,
-    render: (row) => getPaymentMethodText(row.payment_method_name)
+    width: 110,
+    render: (row: any) => h('span', { class: 'plain-text' }, getPaymentMethodText(row))
   },
   {
     title: '创建时间',
     key: 'created_at',
     width: 180,
-    resizable: true,
-    sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    render: (row) => new Date(row.created_at).toLocaleString('zh-CN')
+    render: (row: any) => h('div', { class: 'cell-inline time-text left-text' }, [
+      h(NIcon, { component: TimeOutline, size: 14, class: 'inline-icon' }),
+      h('span', formatDate(row.created_at))
+    ])
   },
   {
     title: '操作',
     key: 'actions',
-    width: 280,
+    width: 120,
     fixed: 'right',
-    render: (row) => {
-      const buttons = []
-
-      // 查看详情 - 所有状态都可以查看
-      buttons.push(h(
-        NButton,
-        {
-          size: 'small',
-          onClick: () => handleViewDetail(row)
-        },
-        { default: () => '详情' }
-      ))
-
-      // 完成订单 - 仅已支付状态
-      if (row.status === 'paid') {
-        buttons.push(h(
-          NButton,
-          {
-            size: 'small',
-            type: 'success',
-            onClick: () => handleComplete(row)
-          },
-          { default: () => '完成' }
-        ))
-      }
-
-      // 退款 - 已支付或已完成状态
-      if (row.status === 'paid' || row.status === 'completed') {
-        buttons.push(h(
-          NButton,
-          {
-            size: 'small',
-            type: 'warning',
-            onClick: () => handleRefund(row)
-          },
-          { default: () => '退款' }
-        ))
-      }
-
-      // 取消订单 - 仅待支付状态
-      if (row.status === 'pending') {
-        buttons.push(h(
-          NButton,
-          {
-            size: 'small',
-            type: 'error',
-            onClick: () => handleCancel(row)
-          },
-          { default: () => '取消' }
-        ))
-      }
-
-      // 删除订单 - 已取消或已退款状态
-      if (row.status === 'cancelled' || row.status === 'refunded') {
-        buttons.push(h(
-          NButton,
-          {
-            size: 'small',
-            type: 'error',
-            onClick: () => handleDelete(row)
-          },
-          { default: () => '删除' }
-        ))
-      }
-
-      return h(NSpace, { size: 4 }, { default: () => buttons })
-    }
+    render: (row: any) => h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => handleViewDetail(row) }, { default: () => '管理订单' })
   }
 ]
 
 const fetchOrders = async () => {
   loading.value = true
   try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize.value,
-      order_no: searchQuery.value || undefined,
-      status: statusFilter.value
+    const res = await listAdminOrders({ page: pagination.page, page_size: pagination.pageSize, order_no: searchQuery.value || undefined, status: statusFilter.value })
+    orders.value = res.data.items || []
+    pagination.itemCount = res.data.total || 0
+    if (pagination.page === 1) {
+      const dashRes = await getAdminDashboard()
+      orderStats.value = dashRes.data
     }
-    const response = await listAdminOrders(params)
-    orders.value = response.data.items || []
-    totalPages.value = Math.ceil((response.data.total || 0) / pageSize.value)
-  } catch (error) {
-    message.error('获取订单列表失败：' + (error.message || '未知错误'))
   } finally {
     loading.value = false
   }
 }
 
-const handleSearch = () => {
-  currentPage.value = 1
-  fetchOrders()
-}
+const handleSearch = () => { pagination.page = 1; fetchOrders() }
+const handleViewDetail = (row: any) => { currentOrder.value = row; showDetailDrawer.value = true }
 
-const handlePageChange = (page) => {
-  currentPage.value = page
-  fetchOrders()
-}
-
-const handlePageSizeChange = (size) => {
-  pageSize.value = size
-  currentPage.value = 1
-  fetchOrders()
-}
-
-const handleViewDetail = (row) => {
-  currentOrder.value = row
-  showDetailDrawer.value = true
-}
-
-const handleRefund = (row) => {
+const handleRefund = (row: any) => {
   dialog.warning({
-    title: '确认退款',
-    content: `确定要退款订单 ${row.order_no} 吗？退款金额为 ¥${row.final_amount != null ? Number(row.final_amount).toFixed(2) : '0.00'}`,
-    positiveText: '确定退款',
-    negativeText: '取消',
+    title: '确认全额退款',
+    content: `订单 ${row.order_no} 将退款 ¥${(row.final_amount || row.amount).toFixed(2)} 到用户余额。`,
+    positiveText: '确认退款',
     onPositiveClick: async () => {
-      try {
-        await refundOrder(row.id)
-        message.success('退款成功')
-        fetchOrders()
-      } catch (error) {
-        message.error('退款失败：' + (error.message || '未知错误'))
-      }
+      await refundOrder(row.id)
+      message.success('已退款')
+      showDetailDrawer.value = false
+      fetchOrders()
     }
   })
 }
 
-const handleCancel = (row) => {
+const handleCancel = (row: any) => {
   dialog.warning({
-    title: '确认取消',
-    content: `确定要取消订单 ${row.order_no} 吗？`,
-    positiveText: '确定取消',
-    negativeText: '返回',
-    onPositiveClick: async () => {
-      try {
-        await cancelOrder(row.id)
-        message.success('订单已取消')
-        fetchOrders()
-      } catch (error) {
-        message.error('取消订单失败：' + (error.message || '未知错误'))
-      }
-    }
-  })
-}
-
-const handleComplete = (row) => {
-  dialog.info({
-    title: '确认完成',
-    content: `确定要将订单 ${row.order_no} 标记为已完成吗？`,
+    title: '取消订单',
+    content: '确定要取消此待支付订单吗？',
     positiveText: '确定',
-    negativeText: '取消',
     onPositiveClick: async () => {
-      try {
-        await completeOrder(row.id)
-        message.success('订单已完成')
-        fetchOrders()
-      } catch (error) {
-        message.error('操作失败：' + (error.message || '未知错误'))
-      }
+      await cancelOrder(row.id)
+      message.success('已取消')
+      showDetailDrawer.value = false
+      fetchOrders()
     }
   })
 }
 
-const handleDelete = (row) => {
-  dialog.error({
-    title: '确认删除',
-    content: `确定要删除订单 ${row.order_no} 吗？此操作不可恢复！`,
-    positiveText: '删除',
-    negativeText: '取消',
+const handleComplete = (row: any) => {
+  dialog.info({
+    title: '手动标记完成',
+    content: '此操作将直接激活用户的订阅套餐。',
+    positiveText: '确定完成',
     onPositiveClick: async () => {
-      try {
-        await deleteOrder(row.id)
-        message.success('订单已删除')
-        fetchOrders()
-      } catch (error) {
-        message.error('删除订单失败：' + (error.message || '未知错误'))
-      }
+      await completeOrder(row.id)
+      message.success('已标记为完成')
+      showDetailDrawer.value = false
+      fetchOrders()
     }
   })
 }
 
-onMounted(() => {
-  fetchOrders()
+const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('zh-CN') + ' ' + new Date(d).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '-'
+const formatFullDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'
+
+const copyToClipboard = (text: string) => {
+  navigator.clipboard.writeText(text)
+  message.success('已复制到剪贴板')
+}
+
+watch(() => route.query.order_no, (orderNo) => {
+  if (typeof orderNo === 'string' && orderNo !== searchQuery.value) {
+    searchQuery.value = orderNo
+    handleSearch()
+  }
 })
+
+onMounted(() => fetchOrders())
 </script>
 
 <style scoped>
-.admin-orders-page {
-  padding: 20px;
-}
+.admin-page-shell { padding: 24px; max-width: 1400px; margin: 0 auto; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.page-title { margin: 0; font-size: 24px; font-weight: 700; color: var(--n-title-text-color); }
+.page-subtitle { margin: 4px 0 0; color: #888; font-size: 14px; }
 
-.page-card {
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-:deep(.n-data-table) {
-  font-size: 14px;
-}
-
-:deep(.n-data-table .n-data-table-th) {
-  font-weight: 600;
-}
-
-.mobile-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.mobile-card {
-  background: var(--bg-color, #fff);
+.stats-summary { margin-bottom: 24px; }
+.mini-stat-card {
+  padding: 16px;
   border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  overflow: hidden;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.mini-stat-card .stat-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+.mini-stat-card .stat-value { font-size: 20px; font-weight: 700; color: #333; }
+.text-warning { color: #f59e0b !important; }
+.text-error { color: #ef4444 !important; }
+
+.main-card { border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.05); }
+.unified-admin-table :deep(.n-data-table-th),
+.unified-admin-table :deep(.n-data-table-td) {
+  text-align: left;
+}
+.unified-admin-table :deep(.n-data-table-td__content) {
+  justify-content: flex-start;
+  text-align: left;
 }
 
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-color, #f0f0f0);
-}
+.cell-block { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
+.cell-title { font-weight: 600; color: #1f2937; }
+.cell-sub { font-size: 12px; color: #6b7280; }
+.cell-inline { display: flex; align-items: center; justify-content: flex-start; gap: 6px; text-align: left; }
+.inline-icon { color: #94a3b8; }
+.order-no { font-family: monospace; font-size: 13px; }
+.email-text, .summary-text, .plain-text { color: #334155; }
+.amount-text { font-weight: 700; color: #10b981; font-size: 14px; }
+.time-text { color: #64748b; font-size: 13px; }
+.left-text { justify-content: flex-start; }
 
-.card-title {
-  font-weight: 600;
-  font-size: 13px;
-  word-break: break-all;
-  min-width: 0;
-  flex: 1;
-  color: var(--text-color, #333);
-}
-
-.card-body {
-  padding: 10px 14px;
-}
-
-.card-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 0;
-  font-size: 13px;
-  gap: 8px;
-}
-
-.card-row > span:last-child {
-  word-break: break-all;
-  text-align: right;
-  min-width: 0;
-  color: var(--text-color, #333);
-}
-
-.card-label {
-  color: var(--text-color-secondary, #999);
-  flex-shrink: 0;
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border-color, #f0f0f0);
-}
+.detail-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; padding: 0 4px; }
+.amount-display .label { font-size: 12px; color: #888; margin-bottom: 4px; }
+.amount-display .value { font-size: 32px; font-weight: 800; color: #10b981; line-height: 1; }
+.copyable-row { display: flex; align-items: center; gap: 8px; }
+.order-no-code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+.gateway-no { font-size: 11px; color: #666; word-break: break-all; }
 
 @media (max-width: 767px) {
-  .admin-orders-page { padding: 8px; }
+  .admin-page-shell { padding: 12px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
 }
-.mobile-toolbar { margin-bottom: 12px; }
-.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
-.mobile-toolbar-controls { display: flex; flex-direction: column; gap: 8px; }
-.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

@@ -1,6 +1,6 @@
 <template>
-  <div class="logs-container">
-    <n-card title="系统日志" :bordered="false">
+  <div class="logs-container admin-page-shell">
+    <n-card title="系统日志" :bordered="false" class="admin-main-card">
       <n-tabs type="line" animated @update:value="handleTabChange">
         <n-tab-pane name="audit" tab="审计日志">
           <template v-if="!appStore.isMobile">

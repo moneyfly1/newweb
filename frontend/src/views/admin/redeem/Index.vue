@@ -1,6 +1,6 @@
 <template>
-  <div class="redeem-container">
-    <n-card :title="appStore.isMobile ? undefined : '兑换码管理'">
+  <div class="redeem-container admin-page-shell">
+    <n-card :title="appStore.isMobile ? undefined : '兑换码管理'" :bordered="false" class="admin-main-card">
       <template v-if="!appStore.isMobile" #header-extra>
         <n-button type="primary" @click="handleGenerate">
           批量生成
@@ -14,6 +14,7 @@
 
       <template v-if="!appStore.isMobile">
         <n-data-table
+          class="unified-admin-table"
           remote
           :columns="columns"
           :data="codes"
@@ -385,10 +386,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.redeem-container {
-  padding: 20px;
-}
-
 .code-item {
   display: flex;
   justify-content: space-between;

@@ -1,6 +1,6 @@
 <template>
-  <div class="admin-invites-page">
-    <n-card :title="appStore.isMobile ? undefined : '邀请码管理'" :bordered="false" class="page-card">
+  <div class="admin-invites-page admin-page-shell">
+    <n-card :title="appStore.isMobile ? undefined : '邀请码管理'" :bordered="false" class="page-card admin-main-card">
       <n-space vertical :size="16">
         <!-- Stats -->
         <div class="stats-row">
@@ -59,7 +59,7 @@
         <n-tabs type="line" animated>
           <n-tab-pane name="codes" tab="邀请码列表">
             <template v-if="!appStore.isMobile">
-              <n-data-table :columns="codeColumns" :data="codes" :loading="loadingCodes" :pagination="false" :bordered="false" :single-line="false" />
+              <n-data-table class="unified-admin-table" :columns="codeColumns" :data="codes" :loading="loadingCodes" :pagination="false" :bordered="false" :single-line="false" />
             </template>
             <template v-else>
               <n-spin :show="loadingCodes">
@@ -89,7 +89,7 @@
 
           <n-tab-pane name="relations" tab="邀请记录">
             <template v-if="!appStore.isMobile">
-              <n-data-table :columns="relColumns" :data="relations" :loading="loadingRels" :pagination="false" :bordered="false" :single-line="false" />
+              <n-data-table class="unified-admin-table" :columns="relColumns" :data="relations" :loading="loadingRels" :pagination="false" :bordered="false" :single-line="false" />
             </template>
             <template v-else>
               <n-spin :show="loadingRels">
@@ -231,8 +231,6 @@ onMounted(() => { fetchStats(); fetchCodes(); fetchRelations() })
 </script>
 
 <style scoped>
-.admin-invites-page { padding: 20px; }
-.page-card { border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
 .stats-row { display: flex; gap: 24px; flex-wrap: wrap; padding: 12px 0; }
 .stat-item { display: flex; flex-direction: column; align-items: center; min-width: 80px; }
 .stat-val { font-size: 22px; font-weight: 700; color: var(--text-color, #333); }

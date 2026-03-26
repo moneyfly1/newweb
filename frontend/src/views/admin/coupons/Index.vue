@@ -1,6 +1,6 @@
 <template>
-  <div class="coupons-container">
-    <n-card :title="appStore.isMobile ? undefined : '优惠券管理'">
+  <div class="coupons-container admin-page-shell">
+    <n-card :title="appStore.isMobile ? undefined : '优惠券管理'" :bordered="false" class="admin-main-card">
       <template v-if="!appStore.isMobile" #header-extra>
         <n-button type="primary" @click="handleAdd">
           <template #icon>
@@ -20,6 +20,7 @@
 
       <template v-if="!appStore.isMobile">
         <n-data-table
+          class="unified-admin-table"
           remote
           :columns="columns"
           :data="tableData"
@@ -514,68 +515,4 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.coupons-container {
-  padding: 20px;
-}
-
-.mobile-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.mobile-card {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  overflow: hidden;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.card-title {
-  font-weight: 600;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  margin-right: 8px;
-}
-
-.card-body {
-  padding: 10px 14px;
-}
-
-.card-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-  font-size: 13px;
-}
-
-.card-label {
-  color: #999;
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid #f0f0f0;
-  flex-wrap: wrap;
-}
-
-@media (max-width: 767px) {
-  .coupons-container { padding: 8px; }
-}
-.mobile-toolbar { margin-bottom: 12px; }
-.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
 </style>

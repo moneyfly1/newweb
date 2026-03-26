@@ -1,188 +1,137 @@
 <template>
   <div class="admin-dashboard">
+    <div class="welcome-section">
+      <div class="welcome-text">
+        <h2>工作控制台</h2>
+        <p>欢迎回来，管理员。以下是站点的最新运行状态和关键指标。</p>
+      </div>
+      <div class="welcome-action">
+        <n-button secondary type="primary" @click="loadDashboard">
+          <template #icon><n-icon><refresh-outline /></n-icon></template>
+          刷新数据
+        </n-button>
+      </div>
+    </div>
+
     <n-space vertical :size="24">
-      <!-- Stats Cards -->
-      <n-grid :cols="3" :x-gap="12" :y-gap="12" responsive="screen" :item-responsive="true">
-        <n-grid-item span="1 l:1">
-          <n-card class="stat-card stat-card-blue" :bordered="false">
-            <div class="stat-content">
-              <div class="stat-icon">
-                <n-icon :size="28">
-                  <PeopleOutline />
-                </n-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-label">总用户数</div>
-                <div class="stat-value">{{ stats.total_users || 0 }}</div>
-              </div>
-            </div>
-          </n-card>
+      <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="16" :y-gap="16">
+        <n-grid-item>
+          <div class="metric-card metric-primary">
+            <div class="metric-label">总用户</div>
+            <div class="metric-value">{{ stats.total_users || 0 }}</div>
+            <div class="metric-sub">今日新增: {{ stats.new_users_today || 0 }}</div>
+            <div class="metric-icon"><n-icon :size="48"><people-outline /></n-icon></div>
+          </div>
         </n-grid-item>
-
-        <n-grid-item span="1 l:1">
-          <n-card class="stat-card stat-card-green" :bordered="false">
-            <div class="stat-content">
-              <div class="stat-icon">
-                <n-icon :size="28">
-                  <CheckmarkCircleOutline />
-                </n-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-label">活跃订阅</div>
-                <div class="stat-value">{{ stats.active_subscriptions || 0 }}</div>
-              </div>
-            </div>
-          </n-card>
+        <n-grid-item>
+          <div class="metric-card metric-success">
+            <div class="metric-label">活跃订阅</div>
+            <div class="metric-value">{{ stats.active_subscriptions || 0 }}</div>
+            <div class="metric-sub">付费率: {{ calculateConversion() }}%</div>
+            <div class="metric-icon"><n-icon :size="48"><checkmark-circle-outline /></n-icon></div>
+          </div>
         </n-grid-item>
-
-        <n-grid-item span="1 l:1">
-          <n-card class="stat-card stat-card-orange" :bordered="false">
-            <div class="stat-content">
-              <div class="stat-icon">
-                <n-icon :size="28">
-                  <TrendingUpOutline />
-                </n-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-label">今日收入</div>
-                <div class="stat-value">¥{{ stats.today_revenue || 0 }}</div>
-              </div>
-            </div>
-          </n-card>
+        <n-grid-item>
+          <div class="metric-card metric-warning">
+            <div class="metric-label">今日营收</div>
+            <div class="metric-value">¥{{ stats.today_revenue || 0 }}</div>
+            <div class="metric-sub">待支付: {{ stats.pending_orders || 0 }}</div>
+            <div class="metric-icon"><n-icon :size="48"><trending-up-outline /></n-icon></div>
+          </div>
         </n-grid-item>
-
-        <n-grid-item span="1 l:1">
-          <n-card class="stat-card stat-card-purple" :bordered="false">
-            <div class="stat-content">
-              <div class="stat-icon">
-                <n-icon :size="28">
-                  <WalletOutline />
-                </n-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-label">本月收入</div>
-                <div class="stat-value">¥{{ stats.month_revenue || 0 }}</div>
-              </div>
-            </div>
-          </n-card>
-        </n-grid-item>
-
-        <n-grid-item span="1 l:1">
-          <n-card class="stat-card stat-card-red" :bordered="false">
-            <div class="stat-content">
-              <div class="stat-icon">
-                <n-icon :size="28">
-                  <CartOutline />
-                </n-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-label">待处理订单</div>
-                <div class="stat-value">{{ stats.pending_orders || 0 }}</div>
-              </div>
-            </div>
-          </n-card>
-        </n-grid-item>
-
-        <n-grid-item span="1 l:1">
-          <n-card class="stat-card stat-card-cyan" :bordered="false">
-            <div class="stat-content">
-              <div class="stat-icon">
-                <n-icon :size="28">
-                  <ChatbubbleEllipsesOutline />
-                </n-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-label">待处理工单</div>
-                <div class="stat-value">{{ stats.pending_tickets || 0 }}</div>
-              </div>
-            </div>
-          </n-card>
+        <n-grid-item>
+          <div class="metric-card metric-info">
+            <div class="metric-label">月度营收</div>
+            <div class="metric-value">¥{{ stats.month_revenue || 0 }}</div>
+            <div class="metric-sub">待处理工单: {{ stats.pending_tickets || 0 }}</div>
+            <div class="metric-icon"><n-icon :size="48"><wallet-outline /></n-icon></div>
+          </div>
         </n-grid-item>
       </n-grid>
 
-      <!-- Charts Row -->
-      <n-grid :cols="1" :x-gap="16" :y-gap="16" responsive="screen" :item-responsive="true">
-        <n-grid-item span="1 m:1 l:1">
-          <n-card title="收入趋势（近30天）" :bordered="false" class="chart-card">
-            <v-chart :option="revenueChartOption" autoresize style="height: 300px;" />
+      <n-grid :cols="appStore.isMobile ? 1 : 3" :x-gap="16" :y-gap="16">
+        <n-grid-item span="2">
+          <n-card title="收入趋势（近30天）" :bordered="false" class="glass-card shadow-sm">
+            <v-chart :option="revenueChartOption" autoresize style="height: 320px;" />
           </n-card>
         </n-grid-item>
-
-        <n-grid-item span="1 m:1 l:1">
-          <n-card title="用户增长（近30天）" :bordered="false" class="chart-card">
-            <v-chart :option="userGrowthChartOption" autoresize style="height: 300px;" />
-          </n-card>
-        </n-grid-item>
-      </n-grid>
-
-      <!-- Data Tables Row -->
-      <n-grid :cols="1" :x-gap="16" :y-gap="16" responsive="screen">
-        <n-grid-item span="1 m:2">
-          <n-card title="最近订单" :bordered="false" class="data-card">
-            <n-table :single-line="false" size="small">
-              <thead>
-                <tr>
-                  <th>订单号</th>
-                  <th>金额</th>
-                  <th>状态</th>
-                  <th>时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="!recentOrders.length">
-                  <td colspan="4" style="text-align: center; color: #999;">暂无数据</td>
-                </tr>
-                <tr v-for="order in recentOrders" :key="order.order_no">
-                  <td>{{ order.order_no }}</td>
-                  <td>¥{{ order.amount }}</td>
-                  <td>
-                    <n-tag
-                      :type="getOrderStatusType(order.status)"
-                      size="small"
-                      :bordered="false"
-                    >
-                      {{ getOrderStatusText(order.status) }}
-                    </n-tag>
-                  </td>
-                  <td>{{ formatTime(order.created_at) }}</td>
-                </tr>
-              </tbody>
-            </n-table>
-          </n-card>
-        </n-grid-item>
-
-        <n-grid-item span="1 m:2">
-          <n-card title="待处理工单" :bordered="false" class="data-card">
-            <n-list v-if="pendingTickets.length" hoverable clickable>
-              <n-list-item v-for="ticket in pendingTickets" :key="ticket.ticket_no">
-                <template #prefix>
-                  <n-icon :size="20">
-                    <DocumentTextOutline />
-                  </n-icon>
-                </template>
-                <n-thing>
-                  <template #header>
-                    <div class="ticket-header">
-                      <span>{{ ticket.title }}</span>
-                      <n-tag
-                        :type="getPriorityType(ticket.priority)"
-                        size="small"
-                        :bordered="false"
-                      >
-                        {{ getPriorityText(ticket.priority) }}
-                      </n-tag>
-                    </div>
-                  </template>
-                  <template #description>
-                    <div class="ticket-meta">
-                      <span>工单号: {{ ticket.ticket_no }}</span>
-                      <span>{{ formatTime(ticket.created_at) }}</span>
-                    </div>
-                  </template>
-                </n-thing>
+        <n-grid-item>
+          <n-card title="待办任务" :bordered="false" class="glass-card shadow-sm">
+            <n-list hoverable clickable>
+              <n-list-item @click="$router.push('/admin/orders?status=pending')">
+                <template #prefix><n-icon :size="20" color="#f0a020"><cart-outline /></n-icon></template>
+                <n-thing title="待支付订单" :description="`${stats.pending_orders || 0} 个订单正在等待用户支付`" />
+              </n-list-item>
+              <n-list-item @click="$router.push('/admin/tickets')">
+                <template #prefix><n-icon :size="20" color="#18a058"><chatbubble-ellipses-outline /></n-icon></template>
+                <n-thing title="待处理工单" :description="`${stats.pending_tickets || 0} 个工单需要管理员回复`" />
+              </n-list-item>
+              <n-list-item @click="$router.push('/admin/abnormal-users')">
+                <template #prefix><n-icon :size="20" color="#d03050"><alert-circle-outline /></n-icon></template>
+                <n-thing title="异常用户提醒" description="有用户存在频繁重置订阅的行为" />
               </n-list-item>
             </n-list>
-            <n-empty v-else description="暂无待处理工单" size="small" style="padding: 40px 0;" />
+          </n-card>
+        </n-grid-item>
+      </n-grid>
+
+      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="16" :y-gap="16">
+        <n-grid-item>
+          <n-card title="新注册用户" :bordered="false" class="glass-card shadow-sm">
+            <div v-if="recentUsers.length" class="activity-list">
+              <button
+                v-for="user in recentUsers"
+                :key="user.id"
+                type="button"
+                class="activity-item"
+                @click="goToUserSubscription(user)"
+              >
+                <div class="activity-main">
+                  <div class="activity-title">{{ user.email || user.username || `用户 #${user.id}` }}</div>
+                  <div class="activity-meta">账号：{{ user.username || '-' }}</div>
+                </div>
+                <div class="activity-side">
+                  <div class="activity-time">{{ formatFullTime(user.created_at) }}</div>
+                  <div class="activity-relative">{{ formatRelativeTime(user.created_at) }}</div>
+                </div>
+              </button>
+            </div>
+            <n-empty v-else description="暂无新注册用户" size="small" />
+            <template #footer>
+              <n-button quaternary block @click="$router.push('/admin/subscriptions')">查看订阅管理</n-button>
+            </template>
+          </n-card>
+        </n-grid-item>
+
+        <n-grid-item>
+          <n-card title="最近订单" :bordered="false" class="glass-card shadow-sm">
+            <div v-if="recentOrders.length" class="activity-list">
+              <button
+                v-for="order in recentOrders"
+                :key="order.id"
+                type="button"
+                class="activity-item"
+                @click="goToOrder(order)"
+              >
+                <div class="activity-main">
+                  <div class="activity-title">{{ order.user_email || `用户 #${order.user_id}` }}</div>
+                  <div class="activity-meta">
+                    <span class="amount">¥{{ (order.final_amount || order.amount || 0).toFixed(2) }}</span>
+                    <n-tag :type="getOrderStatusType(order.status)" size="small" round :bordered="false">
+                      {{ getOrderStatusText(order.status) }}
+                    </n-tag>
+                  </div>
+                </div>
+                <div class="activity-side">
+                  <div class="activity-time">{{ formatFullTime(order.created_at) }}</div>
+                  <div class="activity-relative">{{ formatRelativeTime(order.created_at) }}</div>
+                </div>
+              </button>
+            </div>
+            <n-empty v-else description="暂无订单" size="small" />
+            <template #footer>
+              <n-button quaternary block @click="$router.push('/admin/orders')">查看全部订单</n-button>
+            </template>
           </n-card>
         </n-grid-item>
       </n-grid>
@@ -192,326 +141,234 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useMessage } from 'naive-ui'
+import { useMessage, type TagProps } from 'naive-ui'
 import {
-  PeopleOutline,
-  CheckmarkCircleOutline,
-  TrendingUpOutline,
-  WalletOutline,
-  CartOutline,
-  ChatbubbleEllipsesOutline,
-  DocumentTextOutline
+  PeopleOutline, CheckmarkCircleOutline, TrendingUpOutline, WalletOutline,
+  CartOutline, ChatbubbleEllipsesOutline, RefreshOutline, AlertCircleOutline
 } from '@vicons/ionicons5'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import { BarChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent, VisualMapComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
+import { useRouter } from 'vue-router'
 import { getAdminDashboard } from '@/api/admin'
+import { useAppStore } from '@/stores/app'
 
-use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
+use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent, VisualMapComponent])
 
+const router = useRouter()
+const appStore = useAppStore()
 const message = useMessage()
 
-const stats = ref({
+const stats = ref<any>({
   total_users: 0,
   active_subscriptions: 0,
   today_revenue: 0,
   month_revenue: 0,
   pending_orders: 0,
-  pending_tickets: 0
+  pending_tickets: 0,
+  new_users_today: 0,
 })
 
+const recentUsers = ref<any[]>([])
 const recentOrders = ref<any[]>([])
-const pendingTickets = ref<any[]>([])
 const revenueTrend = ref<{ date: string; value: number }[]>([])
-const userGrowth = ref<{ date: string; value: number }[]>([])
+
+const calculateConversion = () => {
+  if (!stats.value.total_users) return 0
+  return ((stats.value.active_subscriptions / stats.value.total_users) * 100).toFixed(1)
+}
 
 const revenueChartOption = computed(() => ({
-  tooltip: { trigger: 'axis', formatter: (params: any) => `${params[0].axisValue}<br/>收入: ¥${params[0].value}` },
-  grid: { left: 50, right: 20, top: 20, bottom: 30 },
-  xAxis: { type: 'category', data: revenueTrend.value.map(d => d.date.slice(5)), axisLabel: { fontSize: 11 } },
-  yAxis: { type: 'value', axisLabel: { formatter: '¥{value}' } },
+  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+  grid: { left: '4%', right: '4%', top: '10%', bottom: '10%', containLabel: true },
+  xAxis: { type: 'category', data: revenueTrend.value.map(d => d.date.slice(5)), axisLine: { lineStyle: { color: '#eee' } }, axisLabel: { color: '#999' } },
+  yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#f5f5f5' } }, axisLabel: { color: '#999' } },
   series: [{
+    name: '收入',
     type: 'bar',
     data: revenueTrend.value.map(d => d.value),
-    itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#667eea' }, { offset: 1, color: '#764ba2' }] }, borderRadius: [4, 4, 0, 0] },
-    barMaxWidth: 20,
-  }],
+    itemStyle: {
+      color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#3b82f6' }, { offset: 1, color: '#60a5fa' }] },
+      borderRadius: [6, 6, 0, 0]
+    },
+    barMaxWidth: 16
+  }]
 }))
 
-const userGrowthChartOption = computed(() => ({
-  tooltip: { trigger: 'axis', formatter: (params: any) => `${params[0].axisValue}<br/>新增用户: ${params[0].value}` },
-  grid: { left: 50, right: 20, top: 20, bottom: 30 },
-  xAxis: { type: 'category', data: userGrowth.value.map(d => d.date.slice(5)), axisLabel: { fontSize: 11 } },
-  yAxis: { type: 'value', minInterval: 1 },
-  series: [{
-    type: 'line',
-    data: userGrowth.value.map(d => d.value),
-    smooth: true,
-    areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(17,153,142,0.3)' }, { offset: 1, color: 'rgba(56,239,125,0.05)' }] } },
-    lineStyle: { color: '#11998e', width: 2 },
-    itemStyle: { color: '#11998e' },
-  }],
-}))
 const loadDashboard = async () => {
   try {
     const res = await getAdminDashboard()
-    const data = res.data || res
-    stats.value = {
-      total_users: data.total_users || 0,
-      active_subscriptions: data.active_subscriptions || 0,
-      today_revenue: data.today_revenue || 0,
-      month_revenue: data.month_revenue || 0,
-      pending_orders: data.pending_orders || 0,
-      pending_tickets: data.pending_tickets || 0
-    }
+    const data = res.data
+    stats.value = data
+    recentUsers.value = data.recent_users || []
     recentOrders.value = data.recent_orders || []
-    pendingTickets.value = data.pending_ticket_list || []
     revenueTrend.value = data.revenue_trend || []
-    userGrowth.value = data.user_growth || []
   } catch (error: any) {
-    message.error(error.message || '加载仪表盘数据失败')
+    message.error('仪表盘加载失败')
   }
 }
 
-const getOrderStatusType = (status: string) => {
-  const map: Record<string, any> = {
+const getOrderStatusType = (s: string): TagProps['type'] => {
+  const typeMap: Record<string, NonNullable<TagProps['type']>> = {
     paid: 'success',
     pending: 'warning',
     cancelled: 'error',
-    refunded: 'info'
+    refunded: 'info',
+    completed: 'success'
   }
-  return map[status] || 'default'
+  return typeMap[s] || 'default'
 }
 
-const getOrderStatusText = (status: string) => {
-  const map: Record<string, string> = {
-    paid: '已支付',
-    pending: '待支付',
-    cancelled: '已取消',
-    refunded: '已退款'
-  }
-  return map[status] || status
-}
+const getOrderStatusText = (s: string) => ({ paid: '已支付', pending: '待支付', cancelled: '已取消', refunded: '已退款', completed: '已完成' }[s] || s)
 
-const getPriorityType = (priority: string) => {
-  const map: Record<string, any> = {
-    high: 'error',
-    medium: 'warning',
-    normal: 'info',
-    low: 'default'
-  }
-  return map[priority] || 'default'
-}
-
-const getPriorityText = (priority: string) => {
-  const map: Record<string, string> = {
-    high: '高',
-    medium: '中',
-    normal: '普通',
-    low: '低'
-  }
-  return map[priority] || priority
-}
-
-const formatTime = (time: string) => {
+const formatFullTime = (time: string) => {
   if (!time) return '-'
-  const date = new Date(time)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
-
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  if (hours < 24) return `${hours}小时前`
-  if (days < 7) return `${days}天前`
-  
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  return new Date(time).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-onMounted(() => {
-  loadDashboard()
-})
+const formatRelativeTime = (time: string) => {
+  if (!time) return '-'
+  const diff = Date.now() - new Date(time).getTime()
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+
+  if (diff < hour) {
+    const minutes = Math.max(1, Math.floor(diff / minute))
+    return `${minutes} 分钟前`
+  }
+  if (diff < day) {
+    return `${Math.floor(diff / hour)} 小时前`
+  }
+  return `${Math.floor(diff / day)} 天前`
+}
+
+const goToUserSubscription = (user: any) => {
+  router.push({ path: '/admin/subscriptions', query: { search: user.email || user.username || String(user.id) } })
+}
+
+const goToOrder = (order: any) => {
+  router.push({ path: '/admin/orders', query: { order_no: order.order_no } })
+}
+
+onMounted(() => loadDashboard())
 </script>
 
 <style scoped>
 .admin-dashboard {
-  padding: 20px;
+  padding: 24px;
 }
 
-.stat-card {
-  border-radius: 12px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  overflow: hidden;
-  position: relative;
-}
-
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  opacity: 0.1;
-  transition: opacity 0.3s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}
-
-.stat-card:hover::before {
-  opacity: 0.15;
-}
-
-.stat-card-blue::before {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.stat-card-green::before {
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-}
-
-.stat-card-orange::before {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.stat-card-purple::before {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
-
-.stat-card-red::before {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-}
-
-.stat-card-cyan::before {
-  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
-}
-
-.stat-content {
+.welcome-section {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  position: relative;
-  z-index: 1;
-}
-
-.stat-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  background: var(--bg-color, rgba(255, 255, 255, 0.9));
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.stat-card-blue .stat-icon { color: #667eea; }
-.stat-card-green .stat-icon { color: #11998e; }
-.stat-card-orange .stat-icon { color: #f5576c; }
-.stat-card-purple .stat-icon { color: #4facfe; }
-.stat-card-red .stat-icon { color: #fa709a; }
-.stat-card-cyan .stat-icon { color: #30cfd0; }
-
-.stat-info {
-  flex: 1;
-}
-
-.stat-label {
-  font-size: 14px;
-  color: var(--text-color-secondary, #666);
-  margin-bottom: 4px;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--text-color, #333);
-}
-
-.chart-card,
-.data-card {
-  border-radius: 12px;
-  transition: all 0.3s ease;
-}
-
-.chart-card:hover,
-.data-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-}
-
-.ticket-header {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  margin-bottom: 24px;
 }
 
-.ticket-meta {
+.welcome-text h2 { margin: 0; font-size: 24px; font-weight: 700; }
+.welcome-text p { margin: 4px 0 0; color: #666; }
+
+.metric-card {
+  padding: 20px;
+  border-radius: 16px;
+  color: white;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.metric-primary { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+.metric-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+.metric-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.metric-info { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); }
+
+.metric-label { font-size: 14px; opacity: 0.9; }
+.metric-value { font-size: 28px; font-weight: 700; margin: 4px 0; }
+.metric-sub { font-size: 12px; opacity: 0.8; }
+.metric-icon { position: absolute; right: -10px; bottom: -10px; opacity: 0.2; transform: rotate(-15deg); }
+
+.glass-card {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.activity-item {
+  width: 100%;
+  border: 0;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.activity-item:hover {
+  background: #eef4ff;
+  transform: translateY(-1px);
+}
+
+.activity-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.activity-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  word-break: break-all;
+}
+
+.activity-meta {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #6b7280;
   font-size: 12px;
-  color: var(--text-color-secondary, #999);
 }
 
-:deep(.n-card-header) {
+.activity-side {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.activity-time {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.activity-relative {
+  color: #111827;
+  font-size: 12px;
   font-weight: 600;
-  font-size: 16px;
+  margin-top: 4px;
 }
 
-:deep(.n-table) {
-  font-size: 13px;
-}
+.amount { font-weight: 600; color: #333; }
 
-:deep(.n-list-item) {
-  padding: 12px 0;
-}
-
-@media (max-width: 768px) {
-  .admin-dashboard {
-    padding: 12px;
-  }
-
-  .stat-value {
-    font-size: 16px;
-  }
-
-  .stat-label {
-    font-size: 11px;
-  }
-
-  .stat-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-  }
-
-  .stat-content {
-    flex-direction: column;
-    gap: 6px;
-    text-align: center;
-  }
-
-  .stat-info {
-    margin-bottom: 0;
-  }
-
-  :deep(.n-card__content) {
-    padding: 10px 6px !important;
-  }
+@media (max-width: 767px) {
+  .admin-dashboard { padding: 12px; }
+  .welcome-section { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .metric-value { font-size: 20px; }
+  .activity-item { align-items: flex-start; flex-direction: column; }
+  .activity-side { text-align: left; }
 }
 </style>

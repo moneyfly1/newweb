@@ -125,6 +125,39 @@ install_system_tools() {
     ok "系统依赖安装完成"
 }
 
+# ---- 安装 Redis ----
+install_redis() {
+    if command -v redis-server &>/dev/null; then
+        ok "Redis 已安装: $(redis-server --version | awk '{print $3}')"
+    else
+        info "安装 Redis..."
+        case $OS in
+            ubuntu|debian)
+                apt-get install -y -qq redis-server >/dev/null 2>&1
+                ;;
+            centos|rhel|almalinux|rocky)
+                yum install -y redis >/dev/null 2>&1 || dnf install -y redis >/dev/null 2>&1
+                ;;
+            *)
+                warn "无法自动安装 Redis，请手动安装"
+                return 0
+                ;;
+        esac
+        ok "Redis 安装完成"
+    fi
+
+    # 启动并设置开机自启
+    systemctl enable redis-server >/dev/null 2>&1 || systemctl enable redis >/dev/null 2>&1 || true
+    systemctl start redis-server >/dev/null 2>&1 || systemctl start redis >/dev/null 2>&1 || true
+
+    # 验证 Redis 是否运行
+    if redis-cli ping 2>/dev/null | grep -q PONG; then
+        ok "Redis 服务已启动"
+    else
+        warn "Redis 启动失败，系统将回退到内存缓存模式"
+    fi
+}
+
 # ---- 安装 Nginx ----
 install_nginx() {
     if command -v nginx &>/dev/null; then
@@ -363,6 +396,9 @@ SUBSCRIPTION_URL_PREFIX=$BASE_URL/sub
 # ---- 支付回调 ----
 ALIPAY_NOTIFY_URL=$BASE_URL/api/v1/payment/notify/alipay
 ALIPAY_RETURN_URL=$BASE_URL/payment/return
+
+# ---- Redis 缓存 ----
+REDIS_ADDR=127.0.0.1:6379
 EOF
 
     ok ".env 配置文件已生成"
@@ -471,7 +507,7 @@ create_service() {
     cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
 Description=CBoard v2 Server
-After=network.target
+After=network.target redis-server.service redis.service
 
 [Service]
 Type=simple
@@ -760,6 +796,7 @@ install_system() {
     fi
 
     install_system_tools
+    install_redis
     install_nginx
     install_go
     install_node
@@ -1628,6 +1665,120 @@ update_code() {
         fi
     fi
 
+    # 检测 Redis 是否安装并运行
+    echo ""
+    if command -v redis-server &>/dev/null && redis-cli ping 2>/dev/null | grep -q PONG; then
+        ok "Redis 已安装并正在运行"
+    else
+        warn "Redis 未安装或未运行，缓存功能将回退到内存模式"
+        read -rp "是否立即安装并启动 Redis? (y/n) [y]: " install_r
+        if [[ "${install_r:-y}" =~ ^[Yy]$ ]]; then
+            install_redis
+            # 将 REDIS_ADDR 写入 .env（如果还没有的话）
+            if [ -f "$work_dir/.env" ] && ! grep -q '^REDIS_ADDR=' "$work_dir/.env" 2>/dev/null; then
+                echo "" >> "$work_dir/.env"
+                echo "# ---- Redis 缓存 ----" >> "$work_dir/.env"
+                echo "REDIS_ADDR=127.0.0.1:6379" >> "$work_dir/.env"
+                ok "已将 REDIS_ADDR 写入 .env"
+            fi
+            # 重启服务以使用 Redis
+            systemctl restart ${SERVICE_NAME} 2>/dev/null || true
+            sleep 2
+            ok "服务已重启，Redis 缓存已启用"
+        fi
+    fi
+
+    echo ""
+    read -rp "按回车键继续..."
+}
+
+# ============================================================================
+# 菜单选项 15: 安装并管理 Redis
+# ============================================================================
+manage_redis() {
+    echo -e "${BLUE}========== Redis 缓存服务管理 ==========${NC}"
+    echo ""
+
+    local work_dir="$INSTALL_DIR"
+    if [ ! -d "$work_dir" ]; then work_dir="$PROJECT_PATH"; fi
+
+    # 检测当前状态
+    if command -v redis-server &>/dev/null; then
+        ok "Redis 已安装: $(redis-server --version | awk '{print $3}')"
+        if redis-cli ping 2>/dev/null | grep -q PONG; then
+            ok "Redis 服务状态: 运行中"
+            local redis_info
+            redis_info=$(redis-cli info memory 2>/dev/null | grep used_memory_human | cut -d: -f2 | tr -d '\r')
+            info "Redis 内存使用: $redis_info"
+        else
+            warn "Redis 服务状态: 未运行"
+        fi
+    else
+        warn "Redis 未安装"
+    fi
+
+    echo ""
+    echo "  1. 安装并启动 Redis"
+    echo "  2. 启动 Redis"
+    echo "  3. 停止 Redis"
+    echo "  4. 重启 Redis"
+    echo "  5. 查看 Redis 状态"
+    echo "  6. 清空 Redis 缓存"
+    echo "  0. 返回主菜单"
+    echo ""
+    read -rp "请选择 [0-6]: " redis_choice
+
+    case $redis_choice in
+        1)
+            detect_os 2>/dev/null || true
+            install_redis
+            # 写入 .env
+            if [ -f "$work_dir/.env" ] && ! grep -q '^REDIS_ADDR=' "$work_dir/.env" 2>/dev/null; then
+                echo "" >> "$work_dir/.env"
+                echo "# ---- Redis 缓存 ----" >> "$work_dir/.env"
+                echo "REDIS_ADDR=127.0.0.1:6379" >> "$work_dir/.env"
+                ok "已将 REDIS_ADDR 写入 .env"
+            fi
+            # 重启 CBoard 服务
+            if systemctl is-active --quiet ${SERVICE_NAME} 2>/dev/null; then
+                systemctl restart ${SERVICE_NAME}
+                sleep 2
+                ok "CBoard 服务已重启，Redis 缓存已启用"
+            fi
+            ;;
+        2)
+            systemctl start redis-server 2>/dev/null || systemctl start redis 2>/dev/null || true
+            redis-cli ping 2>/dev/null | grep -q PONG && ok "Redis 已启动" || err "Redis 启动失败"
+            ;;
+        3)
+            systemctl stop redis-server 2>/dev/null || systemctl stop redis 2>/dev/null || true
+            ok "Redis 已停止"
+            ;;
+        4)
+            systemctl restart redis-server 2>/dev/null || systemctl restart redis 2>/dev/null || true
+            redis-cli ping 2>/dev/null | grep -q PONG && ok "Redis 已重启" || err "Redis 重启失败"
+            ;;
+        5)
+            if redis-cli ping 2>/dev/null | grep -q PONG; then
+                echo ""
+                redis-cli info server 2>/dev/null | grep -E "(redis_version|uptime|connected_clients|tcp_port)"
+                echo ""
+                redis-cli info memory 2>/dev/null | grep -E "(used_memory_human|maxmemory_human)"
+            else
+                err "Redis 未运行"
+            fi
+            ;;
+        6)
+            if redis-cli ping 2>/dev/null | grep -q PONG; then
+                redis-cli FLUSHDB 2>/dev/null
+                ok "Redis 缓存已清空"
+            else
+                err "Redis 未运行，无法清空"
+            fi
+            ;;
+        0) return 0 ;;
+    esac
+
     echo ""
     read -rp "按回车键继续..."
 }
@@ -1888,9 +2039,10 @@ show_menu() {
     echo ""
     echo -e "  ${GREEN}13.${NC} 诊断 403 错误"
     echo -e "  ${GREEN}14.${NC} 更新代码 (Git)"
-    echo -e "  ${GREEN}15.${NC} 修复 Nginx SSL 验证"
-    echo -e "  ${GREEN}16.${NC} 诊断网站访问"
-    echo -e "  ${GREEN}17.${NC} 卸载 CBoard"
+    echo -e "  ${GREEN}15.${NC} Redis 缓存管理"
+    echo -e "  ${GREEN}16.${NC} 修复 Nginx SSL 验证"
+    echo -e "  ${GREEN}17.${NC} 诊断网站访问"
+    echo -e "  ${GREEN}18.${NC} 卸载 CBoard"
     echo ""
     echo -e "  ${GREEN} 0.${NC} 退出"
     echo ""
@@ -1925,7 +2077,7 @@ main() {
 
     while true; do
         show_menu
-        read -rp "请选择操作 [0-17]: " choice
+        read -rp "请选择操作 [0-18]: " choice
 
         case $choice in
             1)  install_system ;;
@@ -1942,9 +2094,10 @@ main() {
             12) reinstall_website ;;
             13) diagnose_403_error ;;
             14) update_code ;;
-            15) fix_nginx_for_ssl ;;
-            16) diagnose_website_access ;;
-            17) uninstall_cboard ;;
+            15) manage_redis ;;
+            16) fix_nginx_for_ssl ;;
+            17) diagnose_website_access ;;
+            18) uninstall_cboard ;;
             0)  echo -e "${GREEN}再见!${NC}"; exit 0 ;;
             *)  err "无效的选择"; sleep 2 ;;
         esac

@@ -224,7 +224,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	// ===== 管理员路由 =====
 	admin := api.Group("/admin")
-	admin.Use(middleware.AuthRequired(), middleware.AdminRequired(), middleware.IPWhitelist(), middleware.CSRFProtection())
+	admin.Use(middleware.AuthRequired(), middleware.AdminRequired(), middleware.IPWhitelist())
 	{
 		// 仪表盘
 		admin.GET("/dashboard", handlers.AdminDashboard)
@@ -232,6 +232,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 用户管理
 		adminUsers := admin.Group("/users")
+		adminUsers.Use(middleware.CSRFProtection())
 		{
 			adminUsers.GET("", handlers.AdminListUsers)
 			adminUsers.POST("", handlers.AdminCreateUser)
@@ -251,6 +252,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 订单管理
 		adminOrders := admin.Group("/orders")
+		adminOrders.Use(middleware.CSRFProtection())
 		{
 			adminOrders.GET("", handlers.AdminListOrders)
 			adminOrders.GET("/:id", handlers.AdminGetOrder)
@@ -262,6 +264,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 套餐管理
 		adminPkgs := admin.Group("/packages")
+		adminPkgs.Use(middleware.CSRFProtection())
 		{
 			adminPkgs.GET("", handlers.AdminListPackages)
 			adminPkgs.POST("", handlers.AdminCreatePackage)
@@ -271,6 +274,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 节点管理
 		adminNodes := admin.Group("/nodes")
+		adminNodes.Use(middleware.CSRFProtection())
 		{
 			adminNodes.GET("", handlers.AdminListNodes)
 			adminNodes.POST("", handlers.AdminCreateNode)
@@ -283,6 +287,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 专线节点
 		adminCustomNodes := admin.Group("/custom-nodes")
+		adminCustomNodes.Use(middleware.CSRFProtection())
 		{
 			adminCustomNodes.GET("", handlers.AdminListCustomNodes)
 			adminCustomNodes.POST("", handlers.AdminCreateCustomNode)
@@ -298,6 +303,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 节点自动更新
 		configUpdate := admin.Group("/config-update")
+		configUpdate.Use(middleware.CSRFProtection())
 		{
 			configUpdate.GET("/status", handlers.AdminConfigUpdateStatus)
 			configUpdate.GET("/config", handlers.AdminGetConfigUpdateConfig)
@@ -310,6 +316,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 订阅管理
 		adminSubs := admin.Group("/subscriptions")
+		adminSubs.Use(middleware.CSRFProtection())
 		{
 			adminSubs.GET("", handlers.AdminListSubscriptions)
 			adminSubs.GET("/:id", handlers.AdminGetSubscription)
@@ -321,10 +328,11 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		}
 
 		// 用户完全删除
-		admin.DELETE("/users/:id/full", handlers.AdminDeleteUserFull)
+		admin.DELETE("/users/:id/full", middleware.CSRFProtection(), handlers.AdminDeleteUserFull)
 
 		// 优惠券管理
 		adminCoupons := admin.Group("/coupons")
+		adminCoupons.Use(middleware.CSRFProtection())
 		{
 			adminCoupons.GET("", handlers.AdminListCoupons)
 			adminCoupons.POST("", handlers.AdminCreateCoupon)
@@ -334,6 +342,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 工单管理
 		adminTickets := admin.Group("/tickets")
+		adminTickets.Use(middleware.CSRFProtection())
 		{
 			adminTickets.GET("", handlers.AdminListTickets)
 			adminTickets.GET("/:id", handlers.AdminGetTicket)
@@ -343,6 +352,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 用户等级
 		adminLevels := admin.Group("/user-levels")
+		adminLevels.Use(middleware.CSRFProtection())
 		{
 			adminLevels.GET("", handlers.AdminListUserLevels)
 			adminLevels.POST("", handlers.AdminCreateUserLevel)
@@ -352,6 +362,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 卡密管理
 		adminRedeem := admin.Group("/redeem-codes")
+		adminRedeem.Use(middleware.CSRFProtection())
 		{
 			adminRedeem.GET("", handlers.AdminListRedeemCodes)
 			adminRedeem.POST("", handlers.AdminCreateRedeemCodes)
@@ -360,11 +371,12 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 邮件队列
 		admin.GET("/email-queue", handlers.AdminListEmailQueue)
-		admin.POST("/email-queue/:id/retry", handlers.AdminRetryEmail)
-		admin.DELETE("/email-queue/:id", handlers.AdminDeleteEmail)
+		admin.POST("/email-queue/:id/retry", middleware.CSRFProtection(), handlers.AdminRetryEmail)
+		admin.DELETE("/email-queue/:id", middleware.CSRFProtection(), handlers.AdminDeleteEmail)
 
 		// 系统设置
 		settings := admin.Group("/settings")
+		settings.Use(middleware.CSRFProtection())
 		{
 			settings.GET("", handlers.AdminGetSettings)
 			settings.PUT("", handlers.AdminUpdateSettings)
@@ -376,6 +388,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 公告
 		announcements := admin.Group("/announcements")
+		announcements.Use(middleware.CSRFProtection())
 		{
 			announcements.GET("", handlers.AdminListAnnouncements)
 			announcements.POST("", handlers.AdminCreateAnnouncement)
@@ -406,10 +419,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/monitoring", handlers.AdminMonitoring)
 
 		// 备份
-		admin.POST("/backup", handlers.AdminCreateBackup)
+		admin.POST("/backup", middleware.CSRFProtection(), handlers.AdminCreateBackup)
 		admin.GET("/backup", handlers.AdminListBackups)
 		admin.GET("/backup/upload-status/:taskId", handlers.AdminGetUploadStatus)
-		admin.POST("/backup/test-github", handlers.AdminTestGitHubConnection)
+		admin.POST("/backup/test-github", middleware.CSRFProtection(), handlers.AdminTestGitHubConnection)
 
 		// 签到管理
 		admin.GET("/checkin/stats", handlers.AdminGetCheckInStats)
@@ -418,10 +431,11 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/payment-gateways", handlers.AdminListPaymentGateways)
 		admin.GET("/payment-gateways/available", handlers.AdminGetAvailableGateways)
 		admin.GET("/payment-gateways/:type", handlers.AdminGetPaymentGateway)
-		admin.POST("/payment-gateways/:type/test", handlers.AdminTestPaymentGateway)
+		admin.POST("/payment-gateways/:type/test", middleware.CSRFProtection(), handlers.AdminTestPaymentGateway)
 
 		// 邀请码管理
 		adminInvites := admin.Group("/invites")
+		adminInvites.Use(middleware.CSRFProtection())
 		{
 			adminInvites.GET("", handlers.AdminListInviteCodes)
 			adminInvites.GET("/stats", handlers.AdminGetInviteStats)
@@ -432,6 +446,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 盲盒管理
 		adminMysteryBox := admin.Group("/mystery-box")
+		adminMysteryBox.Use(middleware.CSRFProtection())
 		{
 			adminMysteryBox.GET("/pools", handlers.AdminListMysteryBoxPools)
 			adminMysteryBox.POST("/pools", handlers.AdminCreateMysteryBoxPool)

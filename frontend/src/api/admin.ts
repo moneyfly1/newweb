@@ -39,6 +39,7 @@ export const listAdminNodes = (params?: any) => request.get('/admin/nodes', { pa
 export const createNode = (data: any) => request.post('/admin/nodes', data)
 export const updateNode = (id: number, data: any) => request.put(`/admin/nodes/${id}`, data)
 export const deleteNode = (id: number) => request.delete(`/admin/nodes/${id}`)
+export const batchNodeAction = (data: { ids: number[], action: string, data?: any }) => request.post('/admin/nodes/batch-action', data)
 
 // Subscriptions
 export const listAdminSubscriptions = (params?: any) => request.get('/admin/subscriptions', { params })

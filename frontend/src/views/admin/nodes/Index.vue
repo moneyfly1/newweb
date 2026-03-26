@@ -1,200 +1,105 @@
 <template>
-  <div class="nodes-container">
-    <n-card :title="appStore.isMobile ? undefined : '节点管理'">
-      <template v-if="!appStore.isMobile" #header-extra>
+  <div class="nodes-container admin-page-shell">
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">节点管理</h2>
+        <p class="page-subtitle">管理所有接入系统的节点，支持链接导入、批量测试及状态监控</p>
+      </div>
+      <div class="header-right">
         <n-space>
-          <n-button @click="handleRefresh" :loading="refreshing">
-            <template #icon>
-              <n-icon><RefreshOutline /></n-icon>
-            </template>
-            刷新列表
+          <n-input
+            v-model:value="searchQuery"
+            placeholder="搜索节点名称 / 地区 / 协议"
+            clearable
+            style="width: 250px"
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix><n-icon :component="SearchOutline" /></template>
+          </n-input>
+          <n-button secondary @click="handleRefresh" :loading="loading">
+            <template #icon><n-icon><refresh-outline /></n-icon></template>
+            刷新
           </n-button>
-          <n-button type="info" @click="showImportLinksDrawer = true">
-            <template #icon>
-              <n-icon><LinkOutline /></n-icon>
-            </template>
+          <n-button type="info" secondary @click="showImportLinksDrawer = true">
+            <template #icon><n-icon><link-outline /></n-icon></template>
             导入链接
           </n-button>
-          <n-button type="primary" @click="showImportSubDrawer = true">
-            <template #icon>
-              <n-icon><CloudDownloadOutline /></n-icon>
-            </template>
+          <n-button type="primary" secondary @click="showImportSubDrawer = true">
+            <template #icon><n-icon><cloud-download-outline /></n-icon></template>
             导入订阅
           </n-button>
-          <n-button
-            v-if="checkedRowKeys.length > 0"
-            type="error"
-            @click="handleBatchDelete"
-          >
-            <template #icon>
-              <n-icon><TrashOutline /></n-icon>
-            </template>
-            批量删除 ({{ checkedRowKeys.length }})
-          </n-button>
         </n-space>
-      </template>
-
-      <!-- Mobile toolbar -->
-      <div v-if="appStore.isMobile" class="mobile-toolbar">
-        <div class="mobile-toolbar-title">节点管理</div>
-        <div class="mobile-toolbar-controls">
-          <div class="mobile-toolbar-row">
-            <n-button size="small" @click="handleRefresh" :loading="refreshing">
-              <template #icon><n-icon><RefreshOutline /></n-icon></template>
-              刷新
-            </n-button>
-            <n-button size="small" type="info" @click="showImportLinksDrawer = true">
-              <template #icon><n-icon><LinkOutline /></n-icon></template>
-              导入链接
-            </n-button>
-            <n-button size="small" type="primary" @click="showImportSubDrawer = true">
-              <template #icon><n-icon><CloudDownloadOutline /></n-icon></template>
-              导入订阅
-            </n-button>
-          </div>
-          <n-button v-if="checkedRowKeys.length > 0" size="small" type="error" @click="handleBatchDelete">
-            批量删除 ({{ checkedRowKeys.length }})
-          </n-button>
-        </div>
       </div>
+    </div>
 
-      <template v-if="!appStore.isMobile">
-        <n-data-table
-          remote
-          :columns="columns"
-          :data="tableData"
-          :loading="loading"
-          :pagination="pagination"
-          :bordered="false"
-          :row-key="(row) => row.id"
-          @update:checked-row-keys="handleCheck"
-          @update:sorter="handleSorterChange"
-          @update:page="(p) => { pagination.page = p; fetchData() }"
-          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
-        />
-      </template>
+    <transition name="fade">
+      <div v-if="checkedRowKeys.length > 0" class="batch-bar">
+        <div class="batch-info">已选择 {{ checkedRowKeys.length }} 个节点</div>
+        <n-space>
+          <n-button size="small" type="success" secondary @click="handleBatchAction('enable')">批量启用</n-button>
+          <n-button size="small" type="warning" secondary @click="handleBatchAction('disable')">批量禁用</n-button>
+          <n-button size="small" type="info" secondary @click="handleBatchAction('online')">批量上线</n-button>
+          <n-button size="small" type="error" ghost @click="handleBatchDelete">批量删除</n-button>
+        </n-space>
+      </div>
+    </transition>
 
-      <template v-else>
-        <div class="mobile-node-list">
-          <div v-for="row in tableData" :key="row.id" class="mobile-node-item">
-            <n-checkbox :checked="checkedRowKeys.includes(row.id)" @update:checked="(v) => toggleNodeCheck(row.id, v)" />
-            <div class="node-name">{{ row.name }}</div>
-            <n-switch size="small" :value="row.is_active" @update:value="(v) => handleToggleActive(row, v)" />
-            <n-button size="tiny" type="primary" quaternary @click="handleEdit(row)">编辑</n-button>
-            <n-button size="tiny" type="error" quaternary @click="handleDelete(row)">删除</n-button>
-          </div>
-        </div>
-
-        <div style="margin-top: 16px; display: flex; justify-content: center;">
-          <n-pagination
-            v-model:page="pagination.page"
-            v-model:page-size="pagination.pageSize"
-            :item-count="pagination.itemCount"
-            :page-sizes="pagination.pageSizes"
-            show-size-picker
-            @update:page="fetchData"
-            @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
-          />
-        </div>
-      </template>
+    <n-card :bordered="false" class="main-card">
+      <n-data-table
+        remote
+        :columns="columns"
+        :data="tableData"
+        :loading="loading"
+        :pagination="pagination"
+        :bordered="false"
+        :single-line="false"
+        :row-key="(row: any) => row.id"
+        :scroll-x="appStore.isMobile ? 980 : 1200"
+        class="unified-admin-table"
+        @update:checked-row-keys="handleCheck"
+        @update:sorter="handleSorterChange"
+        @update:page="(p: number) => { pagination.page = p; fetchData() }"
+        @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+      />
     </n-card>
 
-    <!-- Import Subscription Drawer -->
-    <common-drawer
-      v-model:show="showImportSubDrawer"
-      title="导入订阅"
-      :width="600"
-      show-footer
-      :loading="importing"
-      @confirm="handleImportSubscription"
-      @cancel="showImportSubDrawer = false"
-    >
+    <common-drawer v-model:show="showImportSubDrawer" title="从订阅导入" :width="500" show-footer :loading="importing" @confirm="handleImportSubscription">
       <n-form label-placement="top">
-        <n-form-item label="订阅链接">
-          <n-input
-            v-model:value="subscriptionUrl"
-            placeholder="请输入订阅链接 (Clash/V2Ray)"
-            type="text"
-          />
+        <n-form-item label="订阅链接 (Clash/V2Ray/Trojan)">
+          <n-input v-model:value="subscriptionUrl" type="textarea" :rows="3" placeholder="https://example.com/sub?token=xxx" />
+        </n-form-item>
+        <n-alert type="info" :bordered="false">系统将自动解析订阅中的节点并同步到当前列表。</n-alert>
+      </n-form>
+    </common-drawer>
+
+    <common-drawer v-model:show="showImportLinksDrawer" title="批量导入节点链接" :width="600" show-footer :loading="importing" @confirm="handleImportLinks">
+      <n-form label-placement="top">
+        <n-form-item label="节点链接列表">
+          <n-input v-model:value="nodeLinks" type="textarea" :rows="12" placeholder="vmess://...&#10;vless://...&#10;trojan://..." />
         </n-form-item>
       </n-form>
     </common-drawer>
 
-    <!-- Import Links Drawer -->
-    <common-drawer
-      v-model:show="showImportLinksDrawer"
-      title="导入链接"
-      :width="600"
-      show-footer
-      :loading="importing"
-      @confirm="handleImportLinks"
-      @cancel="showImportLinksDrawer = false"
-    >
-      <n-form label-placement="top">
-        <n-form-item label="节点链接">
-          <n-input
-            v-model:value="nodeLinks"
-            placeholder="请输入节点链接，每行一个&#10;支持: vmess://, vless://, trojan://, ss://, 等"
-            type="textarea"
-            :rows="10"
-          />
-        </n-form-item>
-      </n-form>
-    </common-drawer>
-
-    <!-- Edit Drawer -->
-    <common-drawer
-      v-model:show="showEditDrawer"
-      title="编辑节点"
-      :width="600"
-      show-footer
-      :loading="submitting"
-      @confirm="handleSubmit"
-      @cancel="showEditDrawer = false"
-    >
-      <n-form
-        ref="formRef"
-        :model="formData"
-        :rules="rules"
-        label-placement="left"
-        label-width="100"
-      >
-        <n-form-item label="节点名称" path="name">
-          <n-input v-model:value="formData.name" placeholder="请输入节点名称" />
-        </n-form-item>
-        <n-form-item label="地区" path="region">
-          <n-input v-model:value="formData.region" placeholder="如: 香港, 美国, 日本" />
-        </n-form-item>
-        <n-form-item label="排序" path="order_index">
-          <n-input-number v-model:value="formData.order_index" :min="0" style="width: 100%" />
-        </n-form-item>
-        <n-form-item label="启用" path="is_active">
-          <n-switch v-model:value="formData.is_active" />
-        </n-form-item>
-        <n-form-item label="备注" path="description">
-          <n-input
-            v-model:value="formData.description"
-            type="textarea"
-            placeholder="请输入备注信息"
-            :rows="3"
-          />
-        </n-form-item>
+    <common-drawer v-model:show="showEditDrawer" title="节点属性编辑" :width="500" show-footer :loading="submitting" @confirm="handleSubmit">
+      <n-form ref="formRef" :model="formData" :rules="rules" label-placement="left" label-width="100">
+        <n-form-item label="名称" path="name"><n-input v-model:value="formData.name" /></n-form-item>
+        <n-form-item label="地区" path="region"><n-input v-model:value="formData.region" /></n-form-item>
+        <n-form-item label="排序权重" path="order_index"><n-input-number v-model:value="formData.order_index" :min="0" /></n-form-item>
+        <n-form-item label="服务状态" path="is_active"><n-switch v-model:value="formData.is_active" /></n-form-item>
+        <n-form-item label="备注"><n-input v-model:value="formData.description" type="textarea" :rows="3" /></n-form-item>
       </n-form>
     </common-drawer>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, h, onMounted } from 'vue'
-import { NButton, NTag, NSpace, NIcon, NSwitch, NCheckbox, NPagination, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage, useDialog, type DataTableColumns, type FormInst, type TagProps } from 'naive-ui'
 import {
-  CloudDownloadOutline,
-  LinkOutline,
-  RefreshOutline,
-  CreateOutline,
-  TrashOutline
+  CloudDownloadOutline, LinkOutline, RefreshOutline,
+  SpeedometerOutline, GlobeOutline, ShieldCheckmarkOutline, SearchOutline
 } from '@vicons/ionicons5'
-import { listAdminNodes, updateNode, deleteNode, importNodes } from '@/api/admin'
+import { listAdminNodes, updateNode, deleteNode, importNodes, batchNodeAction, testNode } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
@@ -205,148 +110,94 @@ const appStore = useAppStore()
 const loading = ref(false)
 const submitting = ref(false)
 const importing = ref(false)
-const refreshing = ref(false)
 const showImportSubDrawer = ref(false)
 const showImportLinksDrawer = ref(false)
 const showEditDrawer = ref(false)
-const tableData = ref([])
-const formRef = ref(null)
-const editId = ref(null)
-const checkedRowKeys = ref([])
-
-const sortState = ref({ sort: 'id', order: 'desc' })
+const tableData = ref<any[]>([])
+const formRef = ref<FormInst | null>(null)
+const editId = ref<number | null>(null)
+const checkedRowKeys = ref<number[]>([])
 const subscriptionUrl = ref('')
 const nodeLinks = ref('')
+const searchQuery = ref('')
 
-const formData = reactive({
-  name: '',
-  region: '',
-  is_active: true,
-  order_index: 0,
-  description: ''
-})
+const sortState = ref({ sort: 'order_index', order: 'asc' })
+const pagination = reactive({ page: 1, pageSize: 20, itemCount: 0, showSizePicker: true, pageSizes: [20, 50, 100] })
 
-const rules = {
-  name: { required: true, message: '请输入节点名称', trigger: 'blur' }
-}
+const formData = reactive({ name: '', region: '', is_active: true, order_index: 0, description: '' })
+const rules = { name: { required: true, message: '请输入节点名称' } }
 
-const pagination = reactive({
-  page: 1,
-  pageSize: 20,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100]
-})
+const protocolColorMap: Record<string, NonNullable<TagProps['type']>> = { vmess: 'info', vless: 'success', trojan: 'warning', hysteria2: 'error' }
+const statusColorMap: Record<string, NonNullable<TagProps['type']>> = { online: 'success', offline: 'error' }
 
-const protocolColorMap = {
-  vmess: 'info',
-  vless: 'success',
-  trojan: 'warning',
-  ss: 'default',
-  ssr: 'default',
-  hysteria2: 'error',
-  hysteria: 'error'
-}
-
-const columns = [
+const columns: DataTableColumns<any> = [
+  { type: 'selection' },
+  { title: 'ID', key: 'id', width: 70, sorter: 'default' },
   {
-    type: 'selection'
+    title: '节点名称',
+    key: 'name',
+    minWidth: 220,
+    render: (row: any) => h('div', { class: 'cell-block' }, [
+      h('div', { class: 'cell-inline' }, [
+        h(NIcon, { component: ShieldCheckmarkOutline, class: 'node-icon', style: { color: row.is_active ? '#18a058' : '#d03050' } }),
+        h('span', { class: 'cell-title' }, row.name)
+      ]),
+      h('div', { class: 'cell-sub' }, row.description || '暂无备注')
+    ])
   },
-  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
-  { title: '节点名称', key: 'name', ellipsis: { tooltip: true }, minWidth: 200 },
   {
     title: '协议',
     key: 'type',
-    width: 120,
-    resizable: true,
-    render: (row) => {
-      const type = protocolColorMap[row.type] || 'default'
-      return h(NTag, { type }, { default: () => (row.type || '').toUpperCase() })
-    }
+    width: 100,
+    render: (row: any) => h(NTag, { type: protocolColorMap[row.type] || 'default', size: 'small', round: true, bordered: false }, { default: () => row.type?.toUpperCase() || '-' })
   },
-  { title: '地区', key: 'region', width: 120, resizable: true },
+  {
+    title: '地区',
+    key: 'region',
+    width: 130,
+    render: (row: any) => h('div', { class: 'cell-inline left-text' }, [
+      h(NIcon, { component: GlobeOutline, size: 14, class: 'inline-icon' }),
+      h('span', row.region || '-')
+    ])
+  },
   {
     title: '状态',
     key: 'status',
+    width: 90,
+    render: (row: any) => h(NTag, { type: statusColorMap[row.status] || 'default', size: 'small', ghost: true }, { default: () => row.status === 'online' ? '在线' : '离线' })
+  },
+  {
+    title: '延迟',
+    key: 'latency',
     width: 100,
-    resizable: true,
-    render: (row) => {
-      const statusMap = {
-        online: { type: 'success', text: '在线' },
-        offline: { type: 'error', text: '离线' },
-      }
-      const status = statusMap[row.status] || { type: 'default', text: row.status || '未知' }
-      return h(NTag, { type: status.type, size: 'small' }, { default: () => status.text })
-    }
-  },
-  {
-    title: '来源',
-    key: 'is_manual',
-    width: 80,
-    resizable: true,
-    render: (row) => h(NTag, { type: row.is_manual ? 'info' : 'default', size: 'small' }, { default: () => row.is_manual ? '手动' : '订阅' })
-  },
-  {
-    title: '订阅#',
-    key: 'source_index',
-    width: 70,
-    resizable: true,
-    render: (row) => row.is_manual ? '-' : (row.source_index || '-')
+    render: (row: any) => h('div', { class: row.latency > 0 ? 'latency-value left-text' : 'latency-offline left-text' }, [
+      h(NIcon, { component: SpeedometerOutline, size: 14 }),
+      h('span', row.latency > 0 ? `${row.latency}ms` : '-')
+    ])
   },
   {
     title: '启用',
     key: 'is_active',
-    width: 100,
-    resizable: true,
-    render: (row) => {
-      return h(NSwitch, {
-        value: row.is_active,
-        onUpdateValue: (value) => handleToggleActive(row, value)
-      })
-    }
+    width: 80,
+    render: (row: any) => h('div', { class: 'left-text' }, [
+      h(NSwitch, { size: 'small', value: row.is_active, onUpdateValue: (v) => handleToggleActive(row, v) })
+    ])
   },
-  { title: '排序', key: 'order_index', width: 80, resizable: true },
+  { title: '排序', key: 'order_index', width: 80, sorter: 'default' },
   {
     title: '操作',
     key: 'actions',
-    width: 150,
+    width: 170,
     fixed: 'right',
-    render: (row) => {
-      return h(NSpace, {}, {
-        default: () => [
-          h(NButton, {
-            size: 'small',
-            type: 'primary',
-            text: true,
-            onClick: () => handleEdit(row)
-          }, { default: () => '编辑', icon: () => h(NIcon, {}, { default: () => h(CreateOutline) }) }),
-          h(NButton, {
-            size: 'small',
-            type: 'error',
-            text: true,
-            onClick: () => handleDelete(row)
-          }, { default: () => '删除', icon: () => h(NIcon, {}, { default: () => h(TrashOutline) }) })
-        ]
-      })
-    }
+    render: (row: any) => h(NSpace, { justify: 'start' }, {
+      default: () => [
+        h(NButton, { size: 'tiny', quaternary: true, onClick: () => handleTest(row) }, { default: () => '测试' }),
+        h(NButton, { size: 'tiny', type: 'primary', quaternary: true, onClick: () => handleEdit(row) }, { default: () => '编辑' }),
+        h(NButton, { size: 'tiny', type: 'error', quaternary: true, onClick: () => handleDelete(row) }, { default: () => '删除' })
+      ]
+    })
   }
 ]
-
-const getStatusType = (status) => {
-  const statusMap = {
-    online: 'success',
-    offline: 'error',
-  }
-  return statusMap[status] || 'default'
-}
-
-const getStatusText = (status) => {
-  const statusMap = {
-    online: '在线',
-    offline: '离线',
-  }
-  return statusMap[status] || status || '未知'
-}
 
 const fetchData = async () => {
   loading.value = true
@@ -356,286 +207,162 @@ const fetchData = async () => {
       page_size: pagination.pageSize,
       sort: sortState.value.sort,
       order: sortState.value.order,
+      search: searchQuery.value || undefined
     })
     tableData.value = res.data.items || []
     pagination.itemCount = res.data.total || 0
-  } catch (error) {
-    message.error(error.message || '获取节点列表失败')
   } finally {
     loading.value = false
   }
 }
 
-const handleSorterChange = (sorter) => {
-  if (sorter && sorter.columnKey && sorter.order) {
-    sortState.value.sort = sorter.columnKey
-    sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
-  } else {
-    sortState.value.sort = 'id'
-    sortState.value.order = 'desc'
-  }
+const handleSearch = () => {
   pagination.page = 1
   fetchData()
 }
 
-const handleCheck = (keys) => {
-  checkedRowKeys.value = keys
+const handleSorterChange = (sorter: any) => {
+  sortState.value.sort = sorter.columnKey || 'order_index'
+  sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
+  fetchData()
 }
 
-const toggleNodeCheck = (id, checked) => {
-  if (checked) {
-    checkedRowKeys.value = [...checkedRowKeys.value, id]
-  } else {
-    checkedRowKeys.value = checkedRowKeys.value.filter(k => k !== id)
-  }
-}
+const handleCheck = (keys: number[]) => { checkedRowKeys.value = keys }
 
-const handleImportSubscription = async () => {
-  if (!subscriptionUrl.value.trim()) {
-    message.warning('请输入订阅链接')
-    return
-  }
-
-  importing.value = true
+const handleToggleActive = async (row: any, v: boolean) => {
   try {
-    const res = await importNodes({
-      type: 'subscription',
-      url: subscriptionUrl.value.trim()
-    })
-    message.success(`导入完成: 成功 ${res.data.success}/${res.data.total} 个`)
-    showImportSubDrawer.value = false
-    subscriptionUrl.value = ''
-    fetchData()
-  } catch (error) {
-    message.error(error.message || '导入失败')
-  } finally {
-    importing.value = false
-  }
+    await updateNode(row.id, { is_active: v })
+    message.success(`${v ? '启用' : '禁用'}成功`)
+    row.is_active = v
+  } catch {}
 }
 
-const handleImportLinks = async () => {
-  if (!nodeLinks.value.trim()) {
-    message.warning('请输入节点链接')
-    return
-  }
-
-  importing.value = true
+const handleTest = async (row: any) => {
+  message.info(`正在测试节点 ${row.name}...`)
   try {
-    const res = await importNodes({
-      type: 'links',
-      links: nodeLinks.value.trim()
-    })
-    message.success(`导入完成: 成功 ${res.data.success}/${res.data.total} 个`)
-    showImportLinksDrawer.value = false
-    nodeLinks.value = ''
+    const res = await testNode(row.id)
+    row.latency = res.data.latency
+    row.status = res.data.status
+    message.success(`${row.name} 延迟: ${row.latency}ms`)
+  } catch {}
+}
+
+const handleBatchAction = async (action: string) => {
+  try {
+    const res = await batchNodeAction({ ids: checkedRowKeys.value, action })
+    message.success(`批量处理完成, 影响 ${res.data.affected} 个节点`)
+    checkedRowKeys.value = []
     fetchData()
-  } catch (error) {
-    message.error(error.message || '导入失败')
-  } finally {
-    importing.value = false
-  }
+  } catch {}
 }
 
-const handleRefresh = async () => {
-  refreshing.value = true
-  await fetchData()
-  refreshing.value = false
-  message.success('刷新完成')
-}
-
-const resetForm = () => {
-  Object.assign(formData, {
-    name: '',
-    region: '',
-    is_active: true,
-    order_index: 0,
-    description: ''
+const handleBatchDelete = () => {
+  dialog.error({
+    title: '危险操作',
+    content: `确认彻底删除这 ${checkedRowKeys.value.length} 个节点吗？`,
+    positiveText: '确认删除',
+    onPositiveClick: () => handleBatchAction('delete')
   })
-  formRef.value?.restoreValidation()
 }
 
-const handleEdit = (row) => {
+const handleEdit = (row: any) => {
   editId.value = row.id
-  Object.assign(formData, {
-    name: row.name,
-    region: row.region,
-    is_active: row.is_active,
-    order_index: row.order_index,
-    description: row.description || ''
-  })
+  Object.assign(formData, { name: row.name, region: row.region, is_active: row.is_active, order_index: row.order_index, description: row.description || '' })
   showEditDrawer.value = true
 }
 
 const handleSubmit = async () => {
-  submitting.value = true
   try {
     await formRef.value?.validate()
-
-    await updateNode(editId.value, formData)
-    message.success('更新节点成功')
-
+    await updateNode(editId.value as number, formData)
+    message.success('节点信息已更新')
     showEditDrawer.value = false
     fetchData()
-  } catch (error) {
-    if (error.message) {
-      message.error(error.message || '操作失败')
-    }
-  } finally {
-    submitting.value = false
-  }
+  } catch {}
 }
 
-const handleToggleActive = async (row, value) => {
-  try {
-    await updateNode(row.id, { is_active: value })
-    message.success('更新成功')
-    fetchData()
-  } catch (error) {
-    message.error(error.message || '更新失败')
-  }
-}
-
-const handleDelete = (row) => {
+const handleDelete = (row: any) => {
   dialog.warning({
     title: '确认删除',
-    content: `确定要删除节点 "${row.name}" 吗？此操作不可恢复。`,
+    content: `节点 "${row.name}" 删除后不可恢复。`,
     positiveText: '确定',
-    negativeText: '取消',
     onPositiveClick: async () => {
-      try {
-        await deleteNode(row.id)
-        message.success('删除节点成功')
-        fetchData()
-      } catch (error) {
-        message.error(error.message || '删除节点失败')
-      }
-    }
-  })
-}
-
-const handleBatchDelete = () => {
-  dialog.warning({
-    title: '确认批量删除',
-    content: `确定要删除选中的 ${checkedRowKeys.value.length} 个节点吗？此操作不可恢复。`,
-    positiveText: '确定',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      const results = await Promise.allSettled(
-        checkedRowKeys.value.map(id => deleteNode(id))
-      )
-
-      const successCount = results.filter(r => r.status === 'fulfilled').length
-      const failedCount = results.filter(r => r.status === 'rejected').length
-
-      if (failedCount === 0) {
-        message.success(`批量删除成功，共删除 ${successCount} 个节点`)
-      } else if (successCount === 0) {
-        message.error(`批量删除失败，${failedCount} 个节点删除失败`)
-      } else {
-        message.warning(`部分删除成功：${successCount} 个成功，${failedCount} 个失败`)
-      }
-
-      checkedRowKeys.value = []
+      await deleteNode(row.id)
+      message.success('已删除')
       fetchData()
     }
   })
 }
 
-onMounted(() => {
-  fetchData()
-})
+const handleImportSubscription = async () => {
+  if (!subscriptionUrl.value) return message.warning('请输入链接')
+  importing.value = true
+  try {
+    await importNodes({ type: 'subscription', url: subscriptionUrl.value })
+    message.success('导入任务已提交')
+    showImportSubDrawer.value = false
+    fetchData()
+  } finally { importing.value = false }
+}
+
+const handleImportLinks = async () => {
+  if (!nodeLinks.value) return message.warning('请输入链接内容')
+  importing.value = true
+  try {
+    await importNodes({ type: 'links', links: nodeLinks.value })
+    message.success('批量导入成功')
+    showImportLinksDrawer.value = false
+    fetchData()
+  } finally { importing.value = false }
+}
+
+const handleRefresh = () => fetchData()
+
+onMounted(() => fetchData())
 </script>
 
 <style scoped>
-.nodes-container {
-  padding: 20px;
+.admin-page-shell { padding: 24px; max-width: 1400px; margin: 0 auto; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.page-title { margin: 0; font-size: 24px; font-weight: 700; color: var(--n-title-text-color); }
+.page-subtitle { margin: 4px 0 0; color: #888; font-size: 14px; }
+.main-card { border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.05); }
+
+.unified-admin-table :deep(.n-data-table-th),
+.unified-admin-table :deep(.n-data-table-td) {
+  text-align: left;
+}
+.unified-admin-table :deep(.n-data-table-td__content) {
+  justify-content: flex-start;
+  text-align: left;
 }
 
-.mobile-node-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.batch-bar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 20px; margin-bottom: 16px;
+  background: #3b82f6; color: white; border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
 }
+.batch-info { font-weight: 600; }
 
-.mobile-node-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--bg-color, #fff);
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-}
+.cell-block { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
+.cell-inline { display: flex; align-items: center; gap: 6px; justify-content: flex-start; text-align: left; }
+.cell-title { font-weight: 600; color: #1f2937; }
+.cell-sub { font-size: 12px; color: #64748b; }
+.inline-icon { color: #94a3b8; }
+.node-icon { opacity: 0.85; }
+.left-text { display: flex; justify-content: flex-start; align-items: center; }
 
-.node-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-color, #333);
-}
-
-.mobile-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.mobile-card {
-  background: var(--bg-color, #fff);
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  overflow: hidden;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-color, #f0f0f0);
-}
-
-.card-title {
-  font-weight: 600;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-color, #333);
-}
-
-.card-body {
-  padding: 10px 14px;
-}
-
-.card-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-  font-size: 13px;
-}
-
-.card-label {
-  color: var(--text-color-secondary, #999);
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border-color, #f0f0f0);
-}
+.latency-value { color: #18a058; font-weight: 600; font-family: monospace; }
+.latency-offline { color: #d03050; gap: 4px; opacity: 0.65; }
 
 @media (max-width: 767px) {
-  .nodes-container { padding: 8px; }
+  .admin-page-shell { padding: 12px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .batch-bar { flex-direction: column; gap: 12px; }
 }
-.mobile-toolbar { margin-bottom: 12px; }
-.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
-.mobile-toolbar-controls { display: flex; flex-direction: column; gap: 8px; }
-.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
+
+.fade-enter-active, .fade-leave-active { transition: all 0.3s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-20px); }
 </style>

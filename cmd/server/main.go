@@ -49,6 +49,11 @@ func main() {
 		log.Fatalf("初始化数据库失败: %v", err)
 	}
 
+	// 初始化 Redis 缓存
+	if err := database.InitRedis(cfg); err != nil {
+		log.Printf("初始化 Redis 失败: %v", err)
+	}
+
 	// 自动迁移
 	if err := database.AutoMigrate(); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
@@ -117,6 +122,7 @@ func main() {
 
 	// 关闭数据库连接
 	database.Close()
+	database.CloseRedis()
 
 	log.Println("服务已安全退出")
 }

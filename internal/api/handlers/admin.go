@@ -3,6 +3,7 @@ package handlers
 import (
 	"archive/zip"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"cboard/v2/internal/services"
 	"cboard/v2/internal/services/git"
 	"cboard/v2/internal/utils"
+	"cboard/v2/internal/cache"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -29,6 +31,12 @@ import (
 // ==================== Dashboard ====================
 
 func AdminDashboard(c *gin.Context) {
+	var cachedData map[string]interface{}
+	if cache.GetDashboardCache("admin_dashboard_stats", &cachedData) {
+		utils.Success(c, cachedData)
+		return
+	}
+
 	db := database.GetDB()
 
 	now := time.Now()
@@ -38,9 +46,13 @@ func AdminDashboard(c *gin.Context) {
 	thirtyDaysAgo := todayStart.AddDate(0, 0, -29)
 
 	var userCount, orderCount, subCount int64
+	var pendingOrders, pendingTickets, newUsersToday int64
 	var revenueToday, revenueMonth float64
-	var pendingOrders, pendingTickets int64
-	var recentOrders []models.Order
+	var recentUsers []models.User
+	var recentOrders []struct {
+		models.Order
+		UserEmail string `json:"user_email"`
+	}
 	var ticketList []models.Ticket
 
 	type DayStat struct {
@@ -48,17 +60,16 @@ func AdminDashboard(c *gin.Context) {
 		Value float64 `json:"value"`
 	}
 	var revenueTrend []DayStat
-	var userGrowth []DayStat
 
 	var wg sync.WaitGroup
-	errCh := make(chan error, 11)
+	errCh := make(chan error, 12)
 	runQuery := func(query func() error) {
 		defer wg.Done()
 		if err := query(); err != nil {
 			errCh <- err
 		}
 	}
-	wg.Add(11)
+	wg.Add(12)
 
 	go func() { runQuery(func() error { return db.Model(&models.User{}).Count(&userCount).Error }) }()
 	go func() { runQuery(func() error { return db.Model(&models.Order{}).Count(&orderCount).Error }) }()
@@ -93,7 +104,22 @@ func AdminDashboard(c *gin.Context) {
 	}()
 	go func() {
 		runQuery(func() error {
-			return db.Order("created_at DESC").Limit(5).Find(&recentOrders).Error
+			return db.Model(&models.User{}).Where("created_at >= ? AND created_at < ?", todayStart, tomorrowStart).Count(&newUsersToday).Error
+		})
+	}()
+	go func() {
+		runQuery(func() error {
+			return db.Order("created_at DESC").Limit(5).Find(&recentUsers).Error
+		})
+	}()
+	go func() {
+		runQuery(func() error {
+			return db.Table("orders").
+				Select("orders.*, users.email as user_email").
+				Joins("LEFT JOIN users ON users.id = orders.user_id").
+				Order("orders.created_at DESC").
+				Limit(5).
+				Scan(&recentOrders).Error
 		})
 	}()
 	go func() {
@@ -111,16 +137,6 @@ func AdminDashboard(c *gin.Context) {
 				Scan(&revenueTrend).Error
 		})
 	}()
-	go func() {
-		runQuery(func() error {
-			return db.Model(&models.User{}).
-				Where("created_at >= ?", thirtyDaysAgo).
-				Select("DATE(created_at) as date, COUNT(*) as value").
-				Group("DATE(created_at)").
-				Order("date ASC").
-				Scan(&userGrowth).Error
-		})
-	}()
 
 	wg.Wait()
 	close(errCh)
@@ -131,41 +147,71 @@ func AdminDashboard(c *gin.Context) {
 		}
 	}
 
-	utils.Success(c, gin.H{
+	resultData := gin.H{
 		"total_users":          userCount,
 		"active_subscriptions": subCount,
 		"today_revenue":        revenueToday,
 		"month_revenue":        revenueMonth,
 		"pending_orders":       pendingOrders,
 		"pending_tickets":      pendingTickets,
+		"new_users_today":      newUsersToday,
+		"recent_users":         recentUsers,
 		"recent_orders":        recentOrders,
 		"pending_ticket_list":  ticketList,
 		"revenue_trend":        revenueTrend,
-		"user_growth":          userGrowth,
-	})
+	}
+
+	cache.SetDashboardCache("admin_dashboard_stats", resultData, 60*time.Second)
+	utils.Success(c, resultData)
 }
 
 func AdminStats(c *gin.Context) {
+	var cachedData map[string]interface{}
+	if cache.GetDashboardCache("admin_stats_overview", &cachedData) {
+		utils.Success(c, cachedData)
+		return
+	}
+
 	db := database.GetDB()
 
-	var userCount, activeUserCount, orderCount, paidOrderCount, subCount, activeSubCount, nodeCount int64
-	db.Model(&models.User{}).Count(&userCount)
-	db.Model(&models.User{}).Where("is_active = ?", true).Count(&activeUserCount)
-	db.Model(&models.Order{}).Count(&orderCount)
-	db.Model(&models.Order{}).Where("status = ?", "paid").Count(&paidOrderCount)
-	db.Model(&models.Subscription{}).Count(&subCount)
-	db.Model(&models.Subscription{}).Where("is_active = ? AND expire_time > ?", true, time.Now()).Count(&activeSubCount)
-	db.Model(&models.Node{}).Where("is_active = ?", true).Count(&nodeCount)
-
+	var userCount, activeUserCount, orderCount, paidOrderCount int64
+	var subCount, activeSubCount, nodeCount, newUsersToday int64
 	var totalRevenue float64
-	db.Model(&models.Order{}).Where("status = ?", "paid").Select("COALESCE(SUM(amount), 0)").Scan(&totalRevenue)
 
-	// New users today
 	today := time.Now().Format("2006-01-02")
-	var newUsersToday int64
-	db.Model(&models.User{}).Where("DATE(created_at) = ?", today).Count(&newUsersToday)
+	now := time.Now()
 
-	utils.Success(c, gin.H{
+	var wg sync.WaitGroup
+	errCh := make(chan error, 9)
+	runQuery := func(query func() error) {
+		defer wg.Done()
+		if err := query(); err != nil {
+			errCh <- err
+		}
+	}
+	wg.Add(9)
+
+	go func() { runQuery(func() error { return db.Model(&models.User{}).Count(&userCount).Error }) }()
+	go func() { runQuery(func() error { return db.Model(&models.User{}).Where("is_active = ?", true).Count(&activeUserCount).Error }) }()
+	go func() { runQuery(func() error { return db.Model(&models.Order{}).Count(&orderCount).Error }) }()
+	go func() { runQuery(func() error { return db.Model(&models.Order{}).Where("status = ?", "paid").Count(&paidOrderCount).Error }) }()
+	go func() { runQuery(func() error { return db.Model(&models.Subscription{}).Count(&subCount).Error }) }()
+	go func() { runQuery(func() error { return db.Model(&models.Subscription{}).Where("is_active = ? AND expire_time > ?", true, now).Count(&activeSubCount).Error }) }()
+	go func() { runQuery(func() error { return db.Model(&models.Node{}).Where("is_active = ?", true).Count(&nodeCount).Error }) }()
+	go func() { runQuery(func() error { return db.Model(&models.Order{}).Where("status = ?", "paid").Select("COALESCE(SUM(amount), 0)").Scan(&totalRevenue).Error }) }()
+	go func() { runQuery(func() error { return db.Model(&models.User{}).Where("DATE(created_at) = ?", today).Count(&newUsersToday).Error }) }()
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			utils.InternalError(c, "获取统计数据失败")
+			return
+		}
+	}
+
+	resultData := gin.H{
 		"user_count":         userCount,
 		"active_user_count":  activeUserCount,
 		"new_users_today":    newUsersToday,
@@ -175,7 +221,10 @@ func AdminStats(c *gin.Context) {
 		"active_sub_count":   activeSubCount,
 		"node_count":         nodeCount,
 		"total_revenue":      totalRevenue,
-	})
+	}
+
+	cache.SetDashboardCache("admin_stats_overview", resultData, 60*time.Second)
+	utils.Success(c, resultData)
 }
 
 // ==================== User Management ====================
@@ -775,24 +824,109 @@ func AdminListOrders(c *gin.Context) {
 	db := database.GetDB()
 	p := utils.GetPagination(c)
 
-	query := db.Model(&models.Order{})
+	type AdminOrderItem struct {
+		models.Order
+		UserEmail     string  `json:"user_email"`
+		OrderType     string  `json:"order_type"`
+		OrderTypeText string  `json:"order_type_text"`
+		OrderSummary  string  `json:"order_summary"`
+		PackageName   string  `json:"package_name"`
+		Devices       *int    `json:"devices,omitempty"`
+		Months        *int    `json:"months,omitempty"`
+		AddDevices    *int    `json:"add_devices,omitempty"`
+		ExtendMonths  *int    `json:"extend_months,omitempty"`
+		BalanceAmount *float64 `json:"balance_amount,omitempty"`
+	}
+
+	query := db.Table("orders").
+		Select("orders.*, users.email as user_email").
+		Joins("LEFT JOIN users ON users.id = orders.user_id")
 	if status := c.Query("status"); status != "" {
-		query = query.Where("status = ?", status)
+		query = query.Where("orders.status = ?", status)
 	}
 	if userID := c.Query("user_id"); userID != "" {
-		query = query.Where("user_id = ?", userID)
+		query = query.Where("orders.user_id = ?", userID)
 	}
 	if orderNo := c.Query("order_no"); orderNo != "" {
-		query = query.Where("order_no LIKE ?", "%"+orderNo+"%")
+		query = query.Where("orders.order_no LIKE ?", "%"+orderNo+"%")
 	}
 
 	var total int64
 	query.Count(&total)
 
-	var orders []models.Order
-	query.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&orders)
+	var items []AdminOrderItem
+	query.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Scan(&items)
 
-	utils.SuccessPage(c, orders, total, p.Page, p.PageSize)
+	packageIDs := make([]uint, 0, len(items))
+	for _, item := range items {
+		if item.PackageID > 0 {
+			packageIDs = append(packageIDs, item.PackageID)
+		}
+	}
+
+	pkgNameCache := make(map[uint]string)
+	if len(packageIDs) > 0 {
+		var packages []models.Package
+		db.Select("id, name").Where("id IN ?", packageIDs).Find(&packages)
+		for _, pkg := range packages {
+			pkgNameCache[pkg.ID] = pkg.Name
+		}
+	}
+
+	for i := range items {
+		item := &items[i]
+		item.OrderType = "package"
+		item.OrderTypeText = "套餐订单"
+		item.OrderSummary = "标准套餐"
+		if name, ok := pkgNameCache[item.PackageID]; ok {
+			item.PackageName = name
+			item.OrderSummary = name
+		}
+
+		if item.PackageID == 0 && item.ExtraData != nil {
+			var extra map[string]interface{}
+			if json.Unmarshal([]byte(*item.ExtraData), &extra) == nil {
+				switch extra["type"] {
+				case "custom_package":
+					item.OrderType = "custom_package"
+					item.OrderTypeText = "充值信息"
+					if devices, ok := extra["devices"].(float64); ok {
+						v := int(devices)
+						item.Devices = &v
+					}
+					if months, ok := extra["months"].(float64); ok {
+						v := int(months)
+						item.Months = &v
+					}
+					if item.Devices != nil && item.Months != nil {
+						item.OrderSummary = fmt.Sprintf("%d设备 / %d个月", *item.Devices, *item.Months)
+						item.PackageName = fmt.Sprintf("自定义套餐（%d设备/%d个月）", *item.Devices, *item.Months)
+					}
+				case "subscription_upgrade":
+					item.OrderType = "subscription_upgrade"
+					item.OrderTypeText = "设备升级"
+					if addDevices, ok := extra["add_devices"].(float64); ok {
+						v := int(addDevices)
+						item.AddDevices = &v
+					}
+					if extendMonths, ok := extra["extend_months"].(float64); ok {
+						v := int(extendMonths)
+						item.ExtendMonths = &v
+					}
+					if item.AddDevices != nil {
+						item.OrderSummary = fmt.Sprintf("+%d设备", *item.AddDevices)
+						item.PackageName = item.OrderSummary
+					}
+					if item.AddDevices != nil && item.ExtendMonths != nil && *item.ExtendMonths > 0 {
+						item.OrderSummary = fmt.Sprintf("+%d设备 / 续期%d个月", *item.AddDevices, *item.ExtendMonths)
+						item.PackageName = item.OrderSummary
+					}
+				}
+			}
+		}
+	}
+
+	utils.SuccessPage(c, items, total, p.Page, p.PageSize)
 }
 
 func AdminGetOrder(c *gin.Context) {
@@ -1013,11 +1147,17 @@ func AdminListPackages(c *gin.Context) {
 	db := database.GetDB()
 	p := utils.GetPagination(c)
 
+	query := db.Model(&models.Package{})
+	if search := c.Query("search"); search != "" {
+		like := "%" + search + "%"
+		query = query.Where("name LIKE ? OR description LIKE ?", like, like)
+	}
+
 	var total int64
-	db.Model(&models.Package{}).Count(&total)
+	query.Count(&total)
 
 	var packages []models.Package
-	db.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&packages)
+	query.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&packages)
 
 	utils.SuccessPage(c, packages, total, p.Page, p.PageSize)
 }
@@ -1103,6 +1243,10 @@ func AdminListNodes(c *gin.Context) {
 	if region := c.Query("region"); region != "" {
 		query = query.Where("region = ?", region)
 	}
+	if search := c.Query("search"); search != "" {
+		like := "%" + search + "%"
+		query = query.Where("name LIKE ? OR region LIKE ? OR type LIKE ? OR description LIKE ?", like, like, like, like)
+	}
 
 	var total int64
 	query.Count(&total)
@@ -1138,6 +1282,7 @@ func AdminCreateNode(c *gin.Context) {
 		return
 	}
 	utils.CreateAuditLog(c, "create_node", "node", node.ID, fmt.Sprintf("创建节点: %s", node.Name))
+	cache.ClearAllSubscriptionCache()
 	utils.Success(c, node)
 }
 
@@ -1178,6 +1323,7 @@ func AdminUpdateNode(c *gin.Context) {
 		return
 	}
 	utils.CreateAuditLog(c, "update_node", "node", uint(id), fmt.Sprintf("更新节点: %s", node.Name))
+	cache.ClearAllSubscriptionCache()
 	utils.Success(c, node)
 }
 
@@ -1192,6 +1338,7 @@ func AdminDeleteNode(c *gin.Context) {
 		return
 	}
 	utils.CreateAuditLog(c, "delete_node", "node", uint(id), "删除节点")
+	cache.ClearAllSubscriptionCache()
 	utils.SuccessMessage(c, "节点已删除")
 }
 
@@ -1251,6 +1398,7 @@ func AdminImportNodes(c *gin.Context) {
 		}
 	}
 
+	cache.ClearAllSubscriptionCache()
 	utils.Success(c, gin.H{
 		"total":   len(nodes),
 		"success": successCount,
@@ -1359,6 +1507,7 @@ func AdminCreateCustomNode(c *gin.Context) {
 		utils.InternalError(c, "创建专线节点失败")
 		return
 	}
+	cache.ClearAllSubscriptionCache()
 	utils.Success(c, node)
 }
 
@@ -1398,6 +1547,7 @@ func AdminUpdateCustomNode(c *gin.Context) {
 		utils.InternalError(c, "更新专线节点失败")
 		return
 	}
+	cache.ClearAllSubscriptionCache()
 	utils.Success(c, node)
 }
 
@@ -1417,6 +1567,7 @@ func AdminDeleteCustomNode(c *gin.Context) {
 		utils.InternalError(c, "删除专线节点失败")
 		return
 	}
+	cache.ClearAllSubscriptionCache()
 	utils.SuccessMessage(c, "专线节点已删除")
 }
 
@@ -1442,6 +1593,7 @@ func AdminAssignCustomNode(c *gin.Context) {
 		return
 	}
 	utils.CreateAuditLog(c, "assign_custom_node", "custom_node", uint(id), fmt.Sprintf("分配专线节点给 %d 个用户", len(req.UserIDs)))
+	cache.ClearAllSubscriptionCache()
 	utils.SuccessMessage(c, "分配成功")
 }
 
@@ -1480,6 +1632,7 @@ func AdminBatchAssignCustomNodes(c *gin.Context) {
 	}
 
 	utils.CreateAuditLog(c, "batch_assign_custom_node", "custom_node", 0, fmt.Sprintf("批量分配 %d 个专线节点给 %d 个用户", len(uniqueNodeIDs), len(uniqueUserIDs)))
+	cache.ClearAllSubscriptionCache()
 	utils.Success(c, gin.H{
 		"success": successCount,
 		"total":   len(uniqueNodeIDs),
@@ -1570,6 +1723,7 @@ func AdminImportCustomNodeLinks(c *gin.Context) {
 		}
 	}
 
+	cache.ClearAllSubscriptionCache()
 	utils.Success(c, gin.H{
 		"total":   len(nodes),
 		"success": successCount,
@@ -1596,6 +1750,7 @@ func AdminBatchDeleteCustomNodes(c *gin.Context) {
 		return
 	}
 	result := db.Where("id IN ?", req.IDs).Delete(&models.CustomNode{})
+	cache.ClearAllSubscriptionCache()
 	utils.Success(c, gin.H{
 		"deleted": result.RowsAffected,
 		"message": "批量删除完成",
@@ -2404,10 +2559,17 @@ func AdminUpdateSettings(c *gin.Context) {
 	db := database.GetDB()
 	for k, v := range req {
 		strVal := fmt.Sprintf("%v", v)
+		// 如果是敏感字段且前端传回掩码或为空，则跳过不更新
 		if sensitiveSettingKeys[k] && (strVal == "" || strings.Contains(strVal, "****")) {
 			continue
 		}
-		db.Where("`key` = ?", k).Assign(models.SystemConfig{Key: k, Value: strVal}).FirstOrCreate(&models.SystemConfig{})
+		// 使用 Updates(map) 以避免触发全字段覆盖，仅更新 value 字段
+		// 这样可以保留原有的 category, display_name 等信息
+		result := db.Model(&models.SystemConfig{}).Where("`key` = ?", k).Updates(map[string]interface{}{"value": strVal})
+		if result.Error == nil && result.RowsAffected == 0 {
+			// 如果记录不存在，则创建新记录，默认 category 为空
+			db.Create(&models.SystemConfig{Key: k, Value: strVal, Category: ""})
+		}
 	}
 	utils.CreateAuditLog(c, "update_settings", "settings", 0, "更新系统设置")
 	utils.InvalidateSettingsCache()
@@ -4198,6 +4360,7 @@ func AdminBatchNodeAction(c *gin.Context) {
 	}
 
 	utils.CreateAuditLog(c, "batch_node_action", "node", 0, fmt.Sprintf("批量操作节点: %s, 影响 %d 个节点", req.Action, affected))
+	cache.ClearAllSubscriptionCache()
 	utils.Success(c, gin.H{"affected": affected, "action": req.Action})
 }
 

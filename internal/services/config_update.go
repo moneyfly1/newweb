@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"cboard/v2/internal/cache"
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 )
@@ -303,6 +304,10 @@ func (s *ConfigUpdateService) runUpdate() {
 	}
 
 	s.addLog("success", fmt.Sprintf("更新完成: 共 %d 个节点，成功导入 %d 个", len(allNodes), successCount))
+
+	// 清除所有订阅缓存，确保客户端立即获取最新节点
+	cache.ClearAllSubscriptionCache()
+	s.addLog("info", "已清除订阅缓存")
 }
 
 func (s *ConfigUpdateService) shouldStopRun() bool {

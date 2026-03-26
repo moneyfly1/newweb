@@ -178,6 +178,14 @@ func extractHostPort(config string) (string, error) {
 	return "", fmt.Errorf("unsupported protocol")
 }
 
+func extractNodeAddressForTest(config string) string {
+	addr, err := extractHostPort(config)
+	if err != nil {
+		return ""
+	}
+	return addr
+}
+
 // testNodeConnectivity performs a TCP dial to the node and returns latency.
 func testNodeConnectivity(config string) (latencyMs int, reachable bool) {
 	addr, err := extractHostPort(config)

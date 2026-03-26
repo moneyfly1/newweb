@@ -8,7 +8,7 @@
     :mask-closable="maskClosable"
     @update:show="(val: boolean) => emit('update:show', val)"
   >
-    <n-drawer-content :title="title" :closable="closable">
+    <n-drawer-content :title="title" :closable="closable" :body-content-style="bodyContentStyle" :footer-style="footerStyle" class="common-drawer-content">
       <template v-if="$slots.header" #header>
         <slot name="header" />
       </template>
@@ -71,8 +71,38 @@ const appStore = useAppStore()
 
 // 响应式宽度：移动端全屏，桌面端固定宽度
 const drawerWidth = computed(() => {
-  if (props.width) return props.width
-  return appStore.isMobile ? '100%' : 640
+  if (!appStore.isMobile) {
+    return props.width ?? 640
+  }
+  if (props.placement === 'left' || props.placement === 'right') {
+    return 'calc(100vw - 24px)'
+  }
+  return '100%'
+})
+
+const bodyContentStyle = computed(() => {
+  if (!appStore.isMobile) {
+    return {
+      padding: '20px 24px',
+      overflow: 'auto'
+    }
+  }
+  return {
+    padding: '16px 14px',
+    overflow: 'auto'
+  }
+})
+
+const footerStyle = computed(() => {
+  if (!appStore.isMobile) {
+    return {
+      padding: '16px 24px'
+    }
+  }
+  return {
+    padding: '12px 14px 16px',
+    justifyContent: 'stretch'
+  }
 })
 
 const handleConfirm = () => {
@@ -84,3 +114,51 @@ const handleCancel = () => {
   emit('update:show', false)
 }
 </script>
+
+<style scoped>
+.common-drawer-content :deep(.n-drawer-body-content-wrapper) {
+  overflow: auto;
+}
+
+@media (max-width: 767px) {
+  :deep(.n-drawer) {
+    max-width: calc(100vw - 24px);
+  }
+
+  :deep(.n-drawer--right-placement),
+  :deep(.n-drawer--left-placement) {
+    top: 12px;
+    bottom: 12px;
+    height: auto !important;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .common-drawer-content :deep(.n-drawer-header) {
+    padding: 14px 14px 10px;
+  }
+
+  .common-drawer-content :deep(.n-drawer-header__main) {
+    font-size: 18px;
+    line-height: 1.4;
+  }
+
+  .common-drawer-content :deep(.n-drawer-footer) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .common-drawer-content :deep(.n-drawer-footer .n-space) {
+    width: 100%;
+    flex-wrap: wrap !important;
+    justify-content: stretch !important;
+  }
+
+  .common-drawer-content :deep(.n-drawer-footer .n-space > .n-button),
+  .common-drawer-content :deep(.n-drawer-footer .n-space .n-button) {
+    flex: 1 1 calc(50% - 5px);
+    min-width: 0;
+  }
+}
+</style>

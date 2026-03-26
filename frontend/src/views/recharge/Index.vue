@@ -147,6 +147,27 @@
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
     </common-drawer>
+    <!-- 充值成功提示 -->
+    <common-drawer
+      v-model:show="showRechargeSuccess"
+      title="充值成功"
+      :width="420"
+      show-footer
+      :show-confirm="false"
+      cancel-text="我知道了"
+      @cancel="showRechargeSuccess = false"
+    >
+      <n-space vertical :size="14">
+        <n-alert type="success" :bordered="false">
+          您已成功充值 <strong>¥{{ rechargeSuccessInfo?.amount.toFixed(2) || '0.00' }}</strong>。
+        </n-alert>
+        <n-descriptions :column="1" bordered>
+          <n-descriptions-item label="充值金额">¥{{ rechargeSuccessInfo?.amount.toFixed(2) || '0.00' }}</n-descriptions-item>
+          <n-descriptions-item label="当前余额">¥{{ rechargeSuccessInfo?.balance || '0.00' }}</n-descriptions-item>
+          <n-descriptions-item label="余额用途">可用于购买套餐和升级设备数量</n-descriptions-item>
+        </n-descriptions>
+      </n-space>
+    </common-drawer>
   </div>
 </template>
 
@@ -168,6 +189,8 @@ const appStore = useAppStore()
 
 const loading = ref(false)
 const submitting = ref(false)
+const showRechargeSuccess = ref(false)
+const rechargeSuccessInfo = ref<{ amount: number; balance: string } | null>(null)
 const balance = ref('0.00')
 const amount = ref<number | null>(null)
 const paymentMethodId = ref<number | null>(null)
@@ -241,7 +264,13 @@ const startPolling = (recordId: number) => {
         showQrModal.value = false
         showMobilePayModal.value = false
         await loadData()
-        message.success('充值成功，系统已确认到账，余额已刷新')
+        const matched = pendingRecords.value.find((item: any) => item.id === recordId)
+        rechargeSuccessInfo.value = {
+          amount: Number(matched?.amount || amount.value || pendingTarget.value?.amount || 0),
+          balance: balance.value,
+        }
+        showRechargeSuccess.value = true
+        message.success('充值成功，余额已到账')
         return
       }
       if (pollAttempts >= maxPollAttempts) {

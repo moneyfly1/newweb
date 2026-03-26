@@ -250,37 +250,45 @@ const loadData = async () => {
 
 const isQrCodeUrl = (url: string) => url.includes('qr.alipay.com') || (url.startsWith('https://qr.') && url.length < 200)
 
+const checkRechargeStatus = async (recordId: number) => {
+  const res = await getRechargeStatus(recordId)
+  if (res.data?.status === 'paid') {
+    stopPolling()
+    showQrModal.value = false
+    showMobilePayModal.value = false
+    await loadData()
+    rechargeSuccessInfo.value = {
+      amount: Number(res.data?.amount || amount.value || pendingTarget.value?.amount || 0),
+      balance: balance.value,
+    }
+    showRechargeSuccess.value = true
+    message.success('充值成功，余额已到账')
+    return true
+  }
+  return false
+}
+
 const startPolling = (recordId: number) => {
   stopPolling()
   pollingRecordId = recordId
   pollAttempts = 0
   pollingStatus.value = true
+  checkRechargeStatus(recordId).catch(() => {})
   pollTimer = setInterval(async () => {
     try {
       pollAttempts += 1
-      const res = await getRechargeStatus(recordId)
-      if (res.data?.status === 'paid') {
-        stopPolling()
-        showQrModal.value = false
-        showMobilePayModal.value = false
-        await loadData()
-        const matched = pendingRecords.value.find((item: any) => item.id === recordId)
-        rechargeSuccessInfo.value = {
-          amount: Number(matched?.amount || amount.value || pendingTarget.value?.amount || 0),
-          balance: balance.value,
-        }
-        showRechargeSuccess.value = true
-        message.success('充值成功，余额已到账')
+      const handled = await checkRechargeStatus(recordId)
+      if (handled) {
         return
       }
       if (pollAttempts >= maxPollAttempts) {
         stopPolling()
-        message.warning('充值结果确认超时，请在充值记录中手动刷新状态')
+        message.warning('充值结果确认较慢，支付已提交，请稍后刷新充值页面查看状态')
       }
     } catch {
       if (pollAttempts >= maxPollAttempts) {
         stopPolling()
-        message.warning('充值结果确认超时，请在充值记录中手动刷新状态')
+        message.warning('充值结果确认较慢，支付已提交，请稍后刷新充值页面查看状态')
       }
     }
   }, 3000)

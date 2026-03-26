@@ -15,18 +15,22 @@ import (
 
 // AlipayConfig holds direct Alipay API configuration
 type AlipayConfig struct {
-	AppID        string
-	PrivateKey   string
-	PublicKey    string
-	NotifyURL    string
-	ReturnURL    string
-	IsProduction bool
+	AppID         string
+	PrivateKey    string
+	PublicKey     string
+	NotifyURL     string
+	ReturnURL     string
+	SiteURL       string
+	DomainName    string
+	IsProduction  bool
+	SandboxRaw    string
+	PublicKeyHint string
 }
 
 // GetAlipayConfig reads direct Alipay settings from system_configs.
 func GetAlipayConfig() (*AlipayConfig, error) {
 	m := utils.GetSettings("pay_alipay_app_id", "pay_alipay_private_key", "pay_alipay_public_key",
-		"pay_alipay_notify_url", "pay_alipay_return_url", "pay_alipay_sandbox")
+		"pay_alipay_notify_url", "pay_alipay_return_url", "pay_alipay_sandbox", "site_url", "domain_name")
 
 	appID := strings.TrimSpace(m["pay_alipay_app_id"])
 	if appID == "" {
@@ -36,14 +40,30 @@ func GetAlipayConfig() (*AlipayConfig, error) {
 	if privateKey == "" {
 		return nil, fmt.Errorf("支付宝应用私钥未配置")
 	}
+	publicKey := strings.TrimSpace(m["pay_alipay_public_key"])
+	sandboxRaw := strings.TrimSpace(m["pay_alipay_sandbox"])
+
+	publicKeyHint := "missing"
+	if publicKey != "" {
+		clean := strings.NewReplacer("\n", "", "\r", "", " ", "", "\t", "").Replace(publicKey)
+		if len(clean) > 16 {
+			publicKeyHint = clean[:8] + "..." + clean[len(clean)-8:]
+		} else {
+			publicKeyHint = clean
+		}
+	}
 
 	return &AlipayConfig{
-		AppID:        appID,
-		PrivateKey:   privateKey,
-		PublicKey:    strings.TrimSpace(m["pay_alipay_public_key"]),
-		NotifyURL:    strings.TrimSpace(m["pay_alipay_notify_url"]),
-		ReturnURL:    strings.TrimSpace(m["pay_alipay_return_url"]),
-		IsProduction: m["pay_alipay_sandbox"] != "true" && m["pay_alipay_sandbox"] != "1",
+		AppID:         appID,
+		PrivateKey:    privateKey,
+		PublicKey:     publicKey,
+		NotifyURL:     strings.TrimSpace(m["pay_alipay_notify_url"]),
+		ReturnURL:     strings.TrimSpace(m["pay_alipay_return_url"]),
+		SiteURL:       strings.TrimSpace(m["site_url"]),
+		DomainName:    strings.TrimSpace(m["domain_name"]),
+		IsProduction:  sandboxRaw != "true" && sandboxRaw != "1",
+		SandboxRaw:    sandboxRaw,
+		PublicKeyHint: publicKeyHint,
 	}, nil
 }
 
@@ -155,8 +175,46 @@ func AlipayVerifyCallback(cfg *AlipayConfig, req *http.Request) (*AlipayNotifica
 	}, nil
 }
 
+func AlipayQueryTrade(cfg *AlipayConfig, outTradeNo string) (*AlipayTradeQueryResult, error) {
+	client, err := newAlipayClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx := context.Background()
+	query := alipay.TradeQuery{}
+	query.OutTradeNo = outTradeNo
+
+	rsp, err := client.TradeQuery(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("查询支付宝订单失败: %v", err)
+	}
+	if rsp == nil {
+		return nil, fmt.Errorf("支付宝查询返回为空")
+	}
+	if rsp.IsFailure() {
+		return nil, fmt.Errorf("支付宝查询失败: %s - %s", rsp.Msg, rsp.SubMsg)
+	}
+
+	return &AlipayTradeQueryResult{
+		TradeNo:     rsp.TradeNo,
+		OutTradeNo:  rsp.OutTradeNo,
+		TradeStatus: string(rsp.TradeStatus),
+		TotalAmount: rsp.TotalAmount,
+		BuyerID:     rsp.BuyerLogonId,
+	}, nil
+}
+
 // AlipayNotification holds parsed Alipay callback data
 type AlipayNotification struct {
+	TradeNo     string
+	OutTradeNo  string
+	TradeStatus string
+	TotalAmount string
+	BuyerID     string
+}
+
+type AlipayTradeQueryResult struct {
 	TradeNo     string
 	OutTradeNo  string
 	TradeStatus string
@@ -234,9 +292,14 @@ func formatPEM(body, keyType string) string {
 // GetSiteURL reads site_url from system_configs.
 func GetSiteURL() string {
 	settings := utils.GetSettings("site_url", "domain_name")
-	siteURL := settings["site_url"]
+	siteURL := strings.TrimSpace(settings["site_url"])
+	domainName := strings.TrimSpace(settings["domain_name"])
+
+	if siteURL != "" && strings.Contains(siteURL, "localhost") && domainName != "" {
+		siteURL = domainName
+	}
 	if siteURL == "" {
-		siteURL = settings["domain_name"]
+		siteURL = domainName
 	}
 	if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
 		siteURL = "https://" + siteURL
@@ -283,39 +346,44 @@ func AlipayCreateWapOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notify
 // BuildPaymentURLs builds notify and return URLs for payment callbacks
 func BuildPaymentURLs(payType, orderNo string) (notifyURL, returnURL string) {
 	// Try to get configured URLs first (for Alipay)
+	var cfg *AlipayConfig
 	if payType == "alipay" {
-		cfg, err := GetAlipayConfig()
-		if err == nil {
+		cfg, _ = GetAlipayConfig()
+		if cfg != nil {
 			if cfg.NotifyURL != "" {
 				notifyURL = cfg.NotifyURL
 			}
 			if cfg.ReturnURL != "" {
 				returnURL = cfg.ReturnURL
 				if orderNo != "" {
-					returnURL += "?order_no=" + url.QueryEscape(orderNo)
+					separator := "?"
+					if strings.Contains(returnURL, "?") {
+						separator = "&"
+					}
+					returnURL += separator + "order_no=" + url.QueryEscape(orderNo)
 				}
 			}
 		}
 	}
 
+	baseURL := GetSiteURL()
+	if baseURL == "" {
+		baseURL = "http://localhost:8000"
+	}
+
 	// Fall back to auto-generated URLs
 	if notifyURL == "" {
-		siteURL := GetSiteURL()
-		apiBase := siteURL
-		if apiBase == "" {
-			apiBase = "http://localhost:8000"
-		}
-		notifyURL = apiBase + "/api/v1/payment/notify/" + payType
+		notifyURL = baseURL + "/api/v1/payment/notify/" + payType
 	}
 
 	if returnURL == "" {
-		siteURL := GetSiteURL()
-		apiBase := siteURL
-		if apiBase == "" {
-			apiBase = "http://localhost:8000"
-		}
 		// 使用 API 路由作为同步回调，后端会重定向到前端页面
-		returnURL = apiBase + "/api/v1/payment/success?order_no=" + url.QueryEscape(orderNo)
+		returnURL = baseURL + "/api/v1/payment/success?order_no=" + url.QueryEscape(orderNo)
+	}
+
+	if payType == "alipay" && cfg != nil {
+		log.Printf("[alipay] 回调URL配置: production=%v sandbox_raw=%q app_id=%s notify=%s return=%s site_url=%s domain_name=%s public_key=%s",
+			cfg.IsProduction, cfg.SandboxRaw, cfg.AppID, notifyURL, returnURL, cfg.SiteURL, cfg.DomainName, cfg.PublicKeyHint)
 	}
 
 	return

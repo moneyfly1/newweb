@@ -306,7 +306,7 @@ func CreatePayment(c *gin.Context) {
 			amountCents = 50 // Stripe minimum is $0.50
 		}
 
-		siteURL := utils.GetSetting("site_url")
+		siteURL := services.GetSiteURL()
 		if siteURL == "" {
 			siteURL = "http://localhost:8000"
 		}
@@ -539,7 +539,7 @@ func CreateRechargePayment(c *gin.Context) {
 			amountCents = 50
 		}
 
-		siteURL := utils.GetSetting("site_url")
+		siteURL := services.GetSiteURL()
 		if siteURL == "" {
 			siteURL = "http://localhost:8000"
 		}
@@ -1642,10 +1642,7 @@ func PaymentReturn(c *gin.Context) {
 	}
 
 	// Get site URL for redirect
-	siteURL := services.GetPaymentPublicBaseURL()
-	if siteURL == "" {
-		siteURL = services.GetSiteURL()
-	}
+	siteURL := services.GetSiteURL()
 	if siteURL == "" {
 		siteURL = "http://localhost:8000"
 	}

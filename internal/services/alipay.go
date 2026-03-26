@@ -333,9 +333,14 @@ func GetPaymentPublicBaseURL() string {
 	return cfg.SiteURL
 }
 
-// GetSiteURL reads site_url from system_configs.
 func GetSiteURL() string {
-	return GetPaymentPublicBaseURL()
+	settings := utils.GetSettings("site_url", "domain_name")
+	siteURL := normalizePublicBaseURL(strings.TrimSpace(settings["site_url"]))
+	domainName := normalizePublicBaseURL(strings.TrimSpace(settings["domain_name"]))
+	if siteURL != "" {
+		return siteURL
+	}
+	return domainName
 }
 
 // AlipayCreateWapOrder creates a WAP payment for mobile browsers.

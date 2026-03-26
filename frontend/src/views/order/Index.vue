@@ -264,7 +264,7 @@ import { useMessage, useDialog, NButton, NSpace, NTag } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import QRCode from 'qrcode'
 import { listOrders, payOrder, cancelOrder, createPayment, getOrderStatus } from '@/api/order'
-import { listRechargeRecords, cancelRecharge, getPaymentMethods, createRechargePayment } from '@/api/common'
+import { listRechargeRecords, cancelRecharge, getPaymentMethods, getRechargeStatus, createRechargePayment } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 import { safeRedirect } from '@/utils/security'
 import { getErrorMessage } from '@/utils/error'
@@ -309,6 +309,8 @@ const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const mobilePayUrl = ref('')
 const pollingStatus = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let pollAttempts = 0
+const maxPollAttempts = 20
 // 记录当前轮询的对象，用于支付成功后刷新正确的列表
 type PollTarget = { type: 'order'; orderNo: string } | { type: 'recharge' }
 let pollTarget: PollTarget | null = null
@@ -457,31 +459,44 @@ const isQrCodeUrl = (url: string) => url.includes('qr.alipay.com') || (url.start
 const startPolling = (target: PollTarget) => {
   stopPolling()
   pollTarget = target
+  pollAttempts = 0
   pollingStatus.value = true
   pollTimer = setInterval(async () => {
     try {
+      pollAttempts += 1
       if (target.type === 'order') {
         const res = await getOrderStatus(target.orderNo)
         if (res.data?.status === 'paid') {
           stopPolling()
           showQrDrawer.value = false
           showMobilePayDrawer.value = false
-          message.success('支付成功！订阅已开通')
+          message.success('支付成功，订阅已开通')
           loadOrders()
+          return
         }
       } else {
-        // 充值：轮询列表，检测 pending → paid
-        const res = await listRechargeRecords({ page: 1, page_size: 10, status: 'pending' })
-        const stillPending = (res.data?.items || []).some((r: any) => r.id === currentRecharge.value?.id)
-        if (!stillPending) {
+        const rechargeId = currentRecharge.value?.id
+        if (!rechargeId) return
+        const res = await getRechargeStatus(rechargeId)
+        if (res.data?.status === 'paid') {
           stopPolling()
           showQrDrawer.value = false
           showMobilePayDrawer.value = false
-          message.success('充值成功！余额已到账')
+          message.success('充值成功，余额已到账')
           loadRechargeRecords()
+          return
         }
       }
-    } catch { /* ignore */ }
+      if (pollAttempts >= maxPollAttempts) {
+        stopPolling()
+        message.warning(target.type === 'order' ? '支付结果确认超时，请到订单列表手动刷新查看' : '充值结果确认超时，请到充值记录手动刷新查看')
+      }
+    } catch {
+      if (pollAttempts >= maxPollAttempts) {
+        stopPolling()
+        message.warning(target.type === 'order' ? '支付结果确认超时，请到订单列表手动刷新查看' : '充值结果确认超时，请到充值记录手动刷新查看')
+      }
+    }
   }, 3000)
 }
 

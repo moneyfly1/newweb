@@ -20,6 +20,17 @@ import (
 	"gorm.io/gorm"
 )
 
+func amountsMatch(expected float64, callbackAmount string) bool {
+	if callbackAmount == "" {
+		return false
+	}
+	actual, err := strconv.ParseFloat(strings.TrimSpace(callbackAmount), 64)
+	if err != nil {
+		return false
+	}
+	return math.Abs(actual-expected) < 0.005
+}
+
 func GetPaymentMethods(c *gin.Context) {
 	db := database.GetDB()
 	var configs []models.PaymentConfig
@@ -836,10 +847,11 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 				return err // Already processed or not found
 			}
 
-			// 金额校验（必须严格匹配）
+			// 金额校验（数值比较，兼容 10 / 10.0 / 10.00）
 			if callbackMoney != "" {
-				expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
-				if callbackMoney != expectedAmount {
+				utils.LogCallback("[Epay] 金额校验: expected=%.2f actual=%s out_trade_no=%s", txn.Amount, callbackMoney, outTradeNo)
+				if !amountsMatch(txn.Amount, callbackMoney) {
+					expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
 					utils.SysError("payment", fmt.Sprintf("易支付金额不匹配: 订单 %s, 期望 %s, 实际 %s", outTradeNo, expectedAmount, callbackMoney))
 					return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, callbackMoney)
 				}
@@ -865,12 +877,17 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
 				return err
 			}
+			utils.LogCallback("[Epay] 支付事务已标记为 paid: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
 
 			// Determine if this is a recharge or order payment by transaction ID prefix
 			if strings.HasPrefix(outTradeNo, "RCH") {
-				handleEpayRechargeCallback(tx, &txn, outTradeNo)
+				if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
+					return err
+				}
 			} else {
-				handleEpayOrderCallback(tx, &txn)
+				if err := handleEpayOrderCallback(tx, &txn); err != nil {
+					return err
+				}
 			}
 
 			return nil
@@ -894,6 +911,8 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 			callback.ProcessingResult = &result
 			utils.LogCallback("[Epay] ✅✅✅ 易支付回调处理成功: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
 		}
+	} else {
+		utils.LogCallback("[Epay] 幂等命中，支付事务已是 %s: out_trade_no=%s", transaction.Status, outTradeNo)
 	}
 
 	if err := db.Create(&callback).Error; err != nil {
@@ -902,7 +921,7 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 	c.String(200, "success")
 }
 
-func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) {
+func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) error {
 	// Use a transaction to atomically check status + update balance (prevents double-spend)
 	var notifyUser *models.User
 	var notifyRecord *models.RechargeRecord
@@ -939,7 +958,7 @@ func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransact
 
 	if err != nil {
 		utils.SysError("payment", fmt.Sprintf("易支付充值回调处理失败: txID=%s, err=%v", txID, err))
-		return // Already processed or not found
+		return err
 	}
 
 	// Send notifications outside the transaction
@@ -954,9 +973,10 @@ func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransact
 			"username": notifyUser.Username, "order_no": notifyRecord.OrderNo, "amount": amountStr,
 		})
 	}
+	return nil
 }
 
-func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
+func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) error {
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
 		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
@@ -981,7 +1001,9 @@ func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction
 	})
 	if err != nil {
 		utils.SysError("payment", fmt.Sprintf("易支付订单回调处理失败: %v", err))
+		return err
 	}
+	return nil
 }
 
 func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
@@ -1099,10 +1121,11 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 				return err // Already processed or not found
 			}
 
-			// 金额校验（必须严格匹配）
+			// 金额校验（数值比较，兼容 10 / 10.0 / 10.00）
 			if notification.TotalAmount != "" {
-				expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
-				if notification.TotalAmount != expectedAmount {
+				utils.LogCallback("[Alipay] 金额校验: expected=%.2f actual=%s out_trade_no=%s", txn.Amount, notification.TotalAmount, outTradeNo)
+				if !amountsMatch(txn.Amount, notification.TotalAmount) {
+					expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
 					utils.SysError("payment", fmt.Sprintf("支付宝金额不匹配: 订单 %s, 期望 %s, 实际 %s", outTradeNo, expectedAmount, notification.TotalAmount))
 					return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, notification.TotalAmount)
 				}
@@ -1131,10 +1154,14 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 			// Determine if this is a recharge or order payment
 			if strings.HasPrefix(outTradeNo, "RCH") {
 				fmt.Printf("[alipay] 处理充值回调: %s\n", outTradeNo)
-				handleEpayRechargeCallback(tx, &txn, outTradeNo)
+				if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
+					return err
+				}
 			} else {
 				fmt.Printf("[alipay] 处理订单回调: %s, order_id=%d\n", outTradeNo, txn.OrderID)
-				handleAlipayOrderCallback(tx, &txn)
+				if err := handleAlipayOrderCallback(tx, &txn); err != nil {
+					return err
+				}
 			}
 
 			return nil
@@ -1162,18 +1189,17 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	c.String(200, "success")
 }
 
-func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
+func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) error {
 	utils.LogCallback("[Alipay] 📦 开始处理订单回调 - transaction_id=%d, order_id=%d", transaction.ID, transaction.OrderID)
 
 	// 检查是否为充值订单（order_id = 0）
 	if transaction.OrderID == 0 {
 		utils.LogCallback("[Alipay] 💰 这是充值订单，调用充值处理逻辑")
 		if transaction.TransactionID != nil {
-			handleEpayRechargeCallback(db, transaction, *transaction.TransactionID)
-		} else {
-			utils.LogError("[Alipay] ❌ 充值订单缺少 transaction_id")
+			return handleEpayRechargeCallback(db, transaction, *transaction.TransactionID)
 		}
-		return
+		utils.LogError("[Alipay] ❌ 充值订单缺少 transaction_id")
+		return fmt.Errorf("充值订单缺少 transaction_id")
 	}
 
 	err := db.Transaction(func(tx *gorm.DB) error {
@@ -1212,9 +1238,10 @@ func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 	if err != nil {
 		utils.SysError("payment", fmt.Sprintf("支付宝订单回调处理失败: %v", err))
 		utils.LogError("[Alipay] ❌ 订单回调处理失败: %v", err)
-	} else {
-		utils.LogCallback("[Alipay] ✅✅✅ 订单回调处理完成")
+		return err
 	}
+	utils.LogCallback("[Alipay] ✅✅✅ 订单回调处理完成")
+	return nil
 }
 
 func handleStripeWebhook(c *gin.Context, db *gorm.DB) {

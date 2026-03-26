@@ -115,8 +115,7 @@
 /* ========== 管理后台列表统一样式 ========== */
 .admin-page-shell {
   padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .admin-page-header,

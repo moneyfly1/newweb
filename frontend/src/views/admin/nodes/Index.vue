@@ -322,7 +322,6 @@ onMounted(() => fetchData())
 </script>
 
 <style scoped>
-.admin-page-shell { padding: 24px; max-width: 1400px; margin: 0 auto; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-title { margin: 0; font-size: 24px; font-weight: 700; color: var(--n-title-text-color); }
 .page-subtitle { margin: 4px 0 0; color: #888; font-size: 14px; }

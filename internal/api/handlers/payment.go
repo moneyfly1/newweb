@@ -203,6 +203,10 @@ func CreatePayment(c *gin.Context) {
 				alipayCfg, err := services.GetAlipayConfig()
 				if err == nil {
 					notifyURL, returnURL := services.BuildPaymentURLs("alipay", order.OrderNo)
+					if alipayCfg.IsProduction && (notifyURL == "" || returnURL == "") {
+						utils.BadRequest(c, "支付宝生产环境支付地址配置无效，请检查支付公网域名配置")
+						return
+					}
 					var paymentURL string
 					// 关键修复：使用 transaction.TransactionID (txID) 作为 out_trade_no
 					// 这样回调时可以通过 out_trade_no 直接找到 payment_transaction
@@ -432,6 +436,10 @@ func CreateRechargePayment(c *gin.Context) {
 				alipayCfg, err := services.GetAlipayConfig()
 				if err == nil {
 					notifyURL, returnURL := services.BuildPaymentURLs("alipay", record.OrderNo)
+					if alipayCfg.IsProduction && (notifyURL == "" || returnURL == "") {
+						utils.BadRequest(c, "支付宝生产环境支付地址配置无效，请检查支付公网域名配置")
+						return
+					}
 					var paymentURL string
 					// 使用 txID 作为 out_trade_no，这样回调时可以通过 out_trade_no 找到 payment_transaction
 					outTradeNo := txID
@@ -680,14 +688,17 @@ func finalizeAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, 
 			return err
 		}
 
-		if strings.HasPrefix(outTradeNo, "RCH") {
+		switch getPaymentBusinessKind(&txn) {
+		case "recharge":
 			if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
 				return err
 			}
-		} else {
+		case "order":
 			if err := handleAlipayOrderCallback(tx, &txn); err != nil {
 				return err
 			}
+		default:
+			return fmt.Errorf("无法识别支付业务类型")
 		}
 		finalStatus = "paid"
 		return nil
@@ -1018,15 +1029,18 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 			}
 			utils.LogCallback("[Epay] 支付事务已标记为 paid: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
 
-			// Determine if this is a recharge or order payment by transaction ID prefix
-			if strings.HasPrefix(outTradeNo, "RCH") {
+			// Determine if this is a recharge or order payment
+			switch getPaymentBusinessKind(&txn) {
+			case "recharge":
 				if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
 					return err
 				}
-			} else {
+			case "order":
 				if err := handleEpayOrderCallback(tx, &txn); err != nil {
 					return err
 				}
+			default:
+				return fmt.Errorf("无法识别支付业务类型")
 			}
 
 			return nil
@@ -1058,6 +1072,27 @@ func handleEpayNotify(c *gin.Context, db *gorm.DB) {
 		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
 	}
 	c.String(200, "success")
+}
+
+func getPaymentBusinessKind(transaction *models.PaymentTransaction) string {
+	if transaction == nil {
+		return ""
+	}
+	if transaction.OrderID > 0 {
+		return "order"
+	}
+	if transaction.PaymentData != nil && *transaction.PaymentData != "" {
+		var payload map[string]interface{}
+		if err := json.Unmarshal([]byte(*transaction.PaymentData), &payload); err == nil {
+			if _, ok := payload["recharge_id"]; ok {
+				return "recharge"
+			}
+		}
+	}
+	if transaction.TransactionID != nil && strings.HasPrefix(*transaction.TransactionID, "RCH") {
+		return "recharge"
+	}
+	return ""
 }
 
 func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) error {
@@ -1155,7 +1190,7 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	alipayCfg, err := services.GetAlipayConfig()
 	if err != nil {
 		utils.LogError("[Alipay] ❌ 获取配置失败: %v", err)
-		c.String(400, "fail")
+		c.String(200, "success")
 		return
 	}
 
@@ -1165,7 +1200,7 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 		utils.LogError("[Alipay] 验签上下文: app_id=%s production=%v sandbox_raw=%q notify=%s return=%s public_key=%s",
 			alipayCfg.AppID, alipayCfg.IsProduction, alipayCfg.SandboxRaw, alipayCfg.NotifyURL, alipayCfg.ReturnURL, alipayCfg.PublicKeyHint)
 		utils.SysError("payment", fmt.Sprintf("支付宝回调验证失败: %v", err))
-		c.String(400, "verify fail")
+		c.String(200, "success")
 		return
 	}
 
@@ -1174,6 +1209,12 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	utils.LogCallback("  - trade_no: %s", notification.TradeNo)
 	utils.LogCallback("  - trade_status: %s", notification.TradeStatus)
 	utils.LogCallback("  - total_amount: %s", notification.TotalAmount)
+	utils.LogCallback("  - app_id: %s", notification.AppID)
+	if notification.AppID != "" && notification.AppID != alipayCfg.AppID {
+		utils.LogError("[Alipay] ❌ app_id 不匹配: expected=%s actual=%s", alipayCfg.AppID, notification.AppID)
+		c.String(200, "success")
+		return
+	}
 
 	// Only process successful trades
 	if notification.TradeStatus != "TRADE_SUCCESS" && notification.TradeStatus != "TRADE_FINISHED" {
@@ -1601,7 +1642,10 @@ func PaymentReturn(c *gin.Context) {
 	}
 
 	// Get site URL for redirect
-	siteURL := services.GetSiteURL()
+	siteURL := services.GetPaymentPublicBaseURL()
+	if siteURL == "" {
+		siteURL = services.GetSiteURL()
+	}
 	if siteURL == "" {
 		siteURL = "http://localhost:8000"
 	}

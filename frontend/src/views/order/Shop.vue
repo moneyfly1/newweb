@@ -185,7 +185,7 @@
       <div v-else style="text-align: center;">
         <p style="margin-bottom: 16px; color: #666;">请使用支付宝扫描下方二维码完成支付</p>
         <canvas ref="qrCanvas" style="margin: 0 auto;"></canvas>
-        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后将自动跳转...</p>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付成功后系统会自动确认并跳转，若未更新请前往订单页手动刷新</p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
     </common-drawer>
@@ -266,6 +266,8 @@ const useBalanceDeduct = ref(false)
 const isMobile = ref(window.innerWidth <= 767)
 const mobilePayUrl = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let pollAttempts = 0
+const maxPollAttempts = 20
 
 // Custom package
 const customEnabled = ref(false)
@@ -426,18 +428,29 @@ const isQrCodeUrl = (url: string) => {
 
 const startPolling = (orderNo: string) => {
   stopPolling()
+  pollAttempts = 0
   pollingStatus.value = true
   pollTimer = setInterval(async () => {
     try {
+      pollAttempts += 1
       const res = await getOrderStatus(orderNo)
       if (res.data?.status === 'paid') {
         stopPolling()
         showQrModal.value = false
-        message.success('支付成功')
+        await fetchUserBalance()
+        message.success('支付成功，订单已确认，订阅已生效')
         router.push('/orders')
+        return
+      }
+      if (pollAttempts >= maxPollAttempts) {
+        stopPolling()
+        message.warning('支付结果确认超时，请前往订单页手动刷新查看')
       }
     } catch {
-      // 轮询失败静默忽略
+      if (pollAttempts >= maxPollAttempts) {
+        stopPolling()
+        message.warning('支付结果确认超时，请前往订单页手动刷新查看')
+      }
     }
   }, 3000)
 }

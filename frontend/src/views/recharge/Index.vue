@@ -121,7 +121,7 @@
       <div style="text-align: center;">
         <p style="margin-bottom: 16px; color: #666;">请使用支付宝扫描下方二维码完成支付</p>
         <canvas ref="qrCanvas" style="margin: 0 auto; display: block;"></canvas>
-        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后将自动更新余额...</p>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付后通常 1–5 秒到账，如未更新可继续刷新状态</p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
     </common-drawer>
@@ -155,7 +155,7 @@ import { ref, onMounted, nextTick, onUnmounted } from 'vue'
 import { useMessage, useDialog } from 'naive-ui'
 import { TimeOutline } from '@vicons/ionicons5'
 import QRCode from 'qrcode'
-import { getPaymentMethods, createRecharge, listRechargeRecords, cancelRecharge, createRechargePayment } from '@/api/common'
+import { getPaymentMethods, createRecharge, listRechargeRecords, getRechargeStatus, cancelRecharge, createRechargePayment } from '@/api/common'
 import { getDashboardInfo } from '@/api/user'
 import { useAppStore } from '@/stores/app'
 import { safeRedirect } from '@/utils/security'
@@ -189,6 +189,8 @@ const mobilePayUrl = ref('')
 const pollingStatus = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollingRecordId = 0
+let pollAttempts = 0
+const maxPollAttempts = 20
 
 const getPaymentLabel = (payType: string) => {
   const labels: Record<string, string> = { epay: '在线支付', alipay: '支付宝', wxpay: '微信支付', qqpay: 'QQ支付', stripe: 'Stripe' }
@@ -228,21 +230,30 @@ const isQrCodeUrl = (url: string) => url.includes('qr.alipay.com') || (url.start
 const startPolling = (recordId: number) => {
   stopPolling()
   pollingRecordId = recordId
+  pollAttempts = 0
   pollingStatus.value = true
-  const initialBalance = balance.value
   pollTimer = setInterval(async () => {
     try {
-      const res = await getDashboardInfo()
-      const newBal = (res.data?.balance ?? 0).toFixed(2)
-      if (newBal !== initialBalance) {
+      pollAttempts += 1
+      const res = await getRechargeStatus(recordId)
+      if (res.data?.status === 'paid') {
         stopPolling()
         showQrModal.value = false
         showMobilePayModal.value = false
-        balance.value = newBal
-        message.success('充值成功！余额已到账')
-        loadData()
+        await loadData()
+        message.success('充值成功，系统已确认到账，余额已刷新')
+        return
       }
-    } catch {}
+      if (pollAttempts >= maxPollAttempts) {
+        stopPolling()
+        message.warning('充值结果确认超时，请在充值记录中手动刷新状态')
+      }
+    } catch {
+      if (pollAttempts >= maxPollAttempts) {
+        stopPolling()
+        message.warning('充值结果确认超时，请在充值记录中手动刷新状态')
+      }
+    }
   }, 3000)
 }
 

@@ -158,6 +158,27 @@ func CreateRecharge(c *gin.Context) {
 	utils.Success(c, record)
 }
 
+func GetRechargeStatus(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	id := c.Param("id")
+	db := database.GetDB()
+	var record models.RechargeRecord
+	if err := db.Where("id = ? AND user_id = ?", id, userID).First(&record).Error; err != nil {
+		utils.NotFound(c, "充值记录不存在")
+		return
+	}
+	result := gin.H{
+		"id":       record.ID,
+		"order_no": record.OrderNo,
+		"amount":   record.Amount,
+		"status":   record.Status,
+	}
+	if record.PaidAt != nil {
+		result["paid_at"] = record.PaidAt.Format("2006-01-02 15:04:05")
+	}
+	utils.Success(c, result)
+}
+
 func CancelRecharge(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	id := c.Param("id")

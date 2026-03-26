@@ -72,13 +72,25 @@ func GetAlipayConfig() (*AlipayConfig, error) {
 	}, nil
 }
 
-// IsDirectAlipayConfigured checks if direct Alipay keys are configured (not epay gateway).
+// IsDirectAlipayConfigured checks if direct Alipay is sufficiently configured for use.
 func IsDirectAlipayConfigured() bool {
 	cfg, err := GetAlipayConfig()
 	if err != nil {
 		return false
 	}
-	return cfg.AppID != "" && cfg.PrivateKey != ""
+	if cfg.AppID == "" || cfg.PrivateKey == "" {
+		return false
+	}
+	if cfg.PublicKey == "" {
+		return false
+	}
+	if cfg.IsProduction {
+		baseURL := GetPaymentPublicBaseURL()
+		if baseURL == "" || isLocalhostURL(baseURL) {
+			return false
+		}
+	}
+	return true
 }
 
 // newAlipayClient creates and configures an Alipay client from config.
@@ -381,6 +393,12 @@ func AlipayCreateWapOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notify
 
 // BuildPaymentURLs builds notify and return URLs for payment callbacks
 func BuildPaymentURLs(payType, orderNo string) (notifyURL, returnURL string) {
+	// Payment callback entry must always use the payment public domain.
+	paymentBaseURL := GetPaymentPublicBaseURL()
+
+	// Site domain is only for the final frontend redirect after backend success handling.
+	siteURL := GetSiteURL()
+
 	// Try to get configured URLs first (for Alipay)
 	var cfg *AlipayConfig
 	if payType == "alipay" {
@@ -391,39 +409,39 @@ func BuildPaymentURLs(payType, orderNo string) (notifyURL, returnURL string) {
 			}
 			if cfg.ReturnURL != "" {
 				returnURL = cfg.ReturnURL
-				if orderNo != "" {
-					separator := "?"
-					if strings.Contains(returnURL, "?") {
-						separator = "&"
-					}
-					returnURL += separator + "order_no=" + url.QueryEscape(orderNo)
-				}
 			}
+		}
+		if cfg != nil && cfg.IsProduction && (paymentBaseURL == "" || isLocalhostURL(paymentBaseURL)) {
+			log.Printf("[alipay] 生产模式支付基址无效，拒绝生成回调地址: base=%s", paymentBaseURL)
+			return
 		}
 	}
 
-	baseURL := GetPaymentPublicBaseURL()
-	if payType == "alipay" && cfg != nil && cfg.IsProduction && isLocalhostURL(baseURL) {
-		log.Printf("[alipay] 生产模式检测到本地支付基址，拒绝自动生成回调地址: base=%s", baseURL)
-		return
-	}
-	if baseURL == "" {
-		baseURL = "http://localhost:8000"
-	}
-
-	// Fall back to auto-generated URLs
 	if notifyURL == "" {
-		notifyURL = baseURL + "/api/v1/payment/notify/" + payType
+		if paymentBaseURL == "" {
+			return
+		}
+		notifyURL = paymentBaseURL + "/api/v1/payment/notify/" + payType
 	}
 
 	if returnURL == "" {
-		// 使用 API 路由作为同步回调，后端会重定向到前端页面
-		returnURL = baseURL + "/api/v1/payment/success?order_no=" + url.QueryEscape(orderNo)
+		if paymentBaseURL == "" {
+			return
+		}
+		returnURL = paymentBaseURL + "/api/v1/payment/success"
+	}
+
+	if orderNo != "" {
+		separator := "?"
+		if strings.Contains(returnURL, "?") {
+			separator = "&"
+		}
+		returnURL += separator + "order_no=" + url.QueryEscape(orderNo)
 	}
 
 	if payType == "alipay" && cfg != nil {
-		log.Printf("[alipay] 回调URL配置: production=%v sandbox_raw=%q app_id=%s notify=%s return=%s payment_public_base=%s site_url=%s domain_name=%s public_key=%s",
-			cfg.IsProduction, cfg.SandboxRaw, cfg.AppID, notifyURL, returnURL, cfg.PaymentPublicBase, cfg.SiteURL, cfg.DomainName, cfg.PublicKeyHint)
+		log.Printf("[alipay] 回调URL配置: production=%v sandbox_raw=%q app_id=%s notify=%s return=%s payment_public_base=%s site_url=%s domain_name=%s frontend_site=%s public_key=%s",
+			cfg.IsProduction, cfg.SandboxRaw, cfg.AppID, notifyURL, returnURL, cfg.PaymentPublicBase, cfg.SiteURL, cfg.DomainName, siteURL, cfg.PublicKeyHint)
 	}
 
 	return

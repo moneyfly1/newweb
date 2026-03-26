@@ -38,6 +38,7 @@
         <n-space>
           <n-button size="small" type="success" secondary @click="handleBatchAction('enable')">批量启用</n-button>
           <n-button size="small" type="warning" secondary @click="handleBatchAction('disable')">批量禁用</n-button>
+          <n-button size="small" type="info" secondary @click="handleBatchTest">批量测速</n-button>
           <n-button size="small" type="info" secondary @click="handleBatchAction('online')">批量上线</n-button>
           <n-button size="small" type="error" ghost @click="handleBatchDelete">批量删除</n-button>
         </n-space>
@@ -243,8 +244,24 @@ const handleTest = async (row: any) => {
     const res = await testNode(row.id)
     row.latency = res.data.latency
     row.status = res.data.status
-    message.success(`${row.name} 延迟: ${row.latency}ms`)
+    if (res.data.status === 'online') {
+      message.success(`${row.name} 在线，TCP 延迟 ${row.latency}ms`)
+    } else {
+      message.warning(`${row.name} 离线：当前测速仅检测服务器到节点 ${res.data.address || ''} 的 TCP 连通性`)
+    }
   } catch {}
+}
+
+const handleBatchTest = async () => {
+  if (checkedRowKeys.value.length === 0) return
+  loading.value = true
+  try {
+    const targets = tableData.value.filter((row: any) => checkedRowKeys.value.includes(row.id))
+    await Promise.all(targets.map((row: any) => handleTest(row)))
+    message.success(`已完成 ${targets.length} 个节点测速`)
+  } finally {
+    loading.value = false
+  }
 }
 
 const handleBatchAction = async (action: string) => {

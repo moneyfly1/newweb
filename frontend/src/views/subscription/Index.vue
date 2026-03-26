@@ -100,19 +100,21 @@
                 <n-tag size="small" type="info">Universal / V2Ray / Shadowrocket</n-tag>
               </div>
               <div class="url-actions">
-                <n-input :value="showSubUrls ? subscriptionUrl : maskUrl(subscriptionUrl)" readonly size="small" />
-                <n-button size="small" @click="showSubUrls = !showSubUrls">
-                  <template #icon><n-icon :component="showSubUrls ? EyeOffOutline : EyeOutline" /></template>
-                  {{ showSubUrls ? '隐藏' : '显示' }}
-                </n-button>
-                <n-button type="primary" size="small" @click="copyToClipboard(subscriptionUrl, '通用订阅地址')">
-                  <template #icon><n-icon :component="CopyOutline" /></template>
-                  复制
-                </n-button>
-                <n-button size="small" @click="showQrCode(subscriptionUrl, '通用订阅')">
-                  <template #icon><n-icon :component="QrCodeOutline" /></template>
-                  二维码
-                </n-button>
+                <n-input class="url-input" :value="showSubUrls ? subscriptionUrl : maskUrl(subscriptionUrl)" readonly size="small" />
+                <div class="url-buttons">
+                  <n-button size="small" @click="showSubUrls = !showSubUrls">
+                    <template #icon><n-icon :component="showSubUrls ? EyeOffOutline : EyeOutline" /></template>
+                    {{ showSubUrls ? '隐藏' : '显示' }}
+                  </n-button>
+                  <n-button type="primary" size="small" @click="copyToClipboard(subscriptionUrl, '通用订阅地址')">
+                    <template #icon><n-icon :component="CopyOutline" /></template>
+                    复制
+                  </n-button>
+                  <n-button size="small" @click="showQrCode(subscriptionUrl, '通用订阅')">
+                    <template #icon><n-icon :component="QrCodeOutline" /></template>
+                    二维码
+                  </n-button>
+                </div>
               </div>
             </div>
 
@@ -122,15 +124,17 @@
                 <n-tag size="small" type="success">Clash / Meta / ClashX</n-tag>
               </div>
               <div class="url-actions">
-                <n-input :value="showSubUrls ? clashUrl : maskUrl(clashUrl)" readonly size="small" />
-                <n-button type="primary" size="small" @click="copyToClipboard(clashUrl, 'Clash 订阅地址')">
-                  <template #icon><n-icon :component="CopyOutline" /></template>
-                  复制
-                </n-button>
-                <n-button size="small" @click="showQrCode(clashUrl, 'Clash 订阅')">
-                  <template #icon><n-icon :component="QrCodeOutline" /></template>
-                  二维码
-                </n-button>
+                <n-input class="url-input" :value="showSubUrls ? clashUrl : maskUrl(clashUrl)" readonly size="small" />
+                <div class="url-buttons">
+                  <n-button type="primary" size="small" @click="copyToClipboard(clashUrl, 'Clash 订阅地址')">
+                    <template #icon><n-icon :component="CopyOutline" /></template>
+                    复制
+                  </n-button>
+                  <n-button size="small" @click="showQrCode(clashUrl, 'Clash 订阅')">
+                    <template #icon><n-icon :component="QrCodeOutline" /></template>
+                    二维码
+                  </n-button>
+                </div>
               </div>
             </div>
           </div>
@@ -194,7 +198,7 @@
       title="确认支付 - 升级订阅"
       :width="520"
     >
-      <n-space vertical :size="16">
+      <n-space vertical :size="16" class="drawer-section upgrade-pay-section">
         <n-descriptions :column="1" bordered>
           <n-descriptions-item label="升级内容">
             增加 {{ upgradeAddDevices }} 台设备<span v-if="upgradeExtendMonths > 0">，续期 {{ upgradeExtendMonths }} 月</span>
@@ -232,7 +236,7 @@
         </div>
       </n-space>
       <template #footer>
-        <n-space justify="end">
+        <n-space justify="end" class="drawer-footer-actions">
           <n-button @click="showUpgradePayModal = false">取消</n-button>
           <n-button type="primary" :loading="paying" @click="handleUpgradePay">确认支付</n-button>
         </n-space>
@@ -241,12 +245,12 @@
 
     <!-- Pay QR Drawer -->
     <common-drawer v-model:show="showPayQrModal" title="扫码支付" :width="400" :mask-closable="false" @after-leave="stopPayPolling">
-      <div v-if="isMobile" style="text-align: center;">
+      <div v-if="isMobile" class="mobile-pay-panel">
         <p style="margin-bottom: 16px; color: #666;">请点击下方按钮完成支付</p>
         <n-button type="primary" size="large" block tag="a" :href="mobilePayUrl" target="_blank">打开支付App付款</n-button>
         <n-spin v-if="payPollingStatus" size="small" style="margin-top: 8px;" />
       </div>
-      <div v-else style="text-align: center;">
+      <div v-else class="desktop-pay-panel">
         <p style="margin-bottom: 16px; color: #666;">请使用支付宝扫描下方二维码完成支付</p>
         <canvas ref="payQrCanvas" style="margin: 0 auto;"></canvas>
         <n-spin v-if="payPollingStatus" size="small" style="margin-top: 8px;" />
@@ -258,7 +262,7 @@
 
     <!-- Crypto Pay Drawer -->
     <common-drawer v-model:show="showCryptoModal" title="加密货币支付" :width="480" :mask-closable="false" @after-leave="stopPayPolling">
-      <div v-if="cryptoInfo" style="text-align: center;">
+      <div v-if="cryptoInfo" class="crypto-panel">
         <n-descriptions :column="1" bordered size="small" style="text-align: left;">
           <n-descriptions-item label="网络">{{ cryptoInfo.network }}</n-descriptions-item>
           <n-descriptions-item label="币种">{{ cryptoInfo.currency }}</n-descriptions-item>
@@ -285,7 +289,7 @@
 
     <!-- Upgrade Drawer -->
     <common-drawer v-model:show="showUpgradeModal" title="升级订阅" :width="480">
-      <n-form label-placement="left" label-width="auto" :disabled="upgradeSubmitting" size="medium">
+      <n-form class="drawer-section upgrade-form" label-placement="left" label-width="auto" :disabled="upgradeSubmitting" size="medium">
         <n-form-item label="增加设备数">
           <n-input-number v-model:value="upgradeAddDevices" :min="1" :max="50" :step="1" style="width: 100%;" />
         </n-form-item>
@@ -303,12 +307,27 @@
         </div>
       </n-form>
       <template #footer>
-        <n-space justify="end">
+        <n-space justify="end" class="drawer-footer-actions">
           <n-button @click="showUpgradeModal = false">取消</n-button>
           <n-button type="primary" :loading="upgradeCalcLoading" @click="handleCalcUpgrade">计算金额</n-button>
           <n-button v-if="upgradeResult && upgradeResult.total > 0" type="success" :loading="upgradeSubmitting" @click="handleOpenUpgradePay">去支付</n-button>
         </n-space>
       </template>
+    </common-drawer>
+    <!-- Upgrade Success Drawer -->
+    <common-drawer v-model:show="showUpgradeSuccess" title="升级成功" :width="440" show-footer :show-confirm="false" cancel-text="我知道了" @cancel="showUpgradeSuccess = false">
+      <n-space vertical :size="14">
+        <n-alert type="success" :bordered="false">
+          您的订阅升级已生效。
+        </n-alert>
+        <n-descriptions v-if="upgradeSuccessInfo" :column="1" bordered>
+          <n-descriptions-item label="增加设备数">+{{ upgradeSuccessInfo.addDevices }} 台</n-descriptions-item>
+          <n-descriptions-item label="续期时长">{{ upgradeSuccessInfo.extendMonths > 0 ? `${upgradeSuccessInfo.extendMonths} 个月` : '未续期' }}</n-descriptions-item>
+          <n-descriptions-item label="升级后设备上限">{{ upgradeSuccessInfo.deviceLimit }} 台</n-descriptions-item>
+          <n-descriptions-item label="升级后到期时间">{{ formatDate(upgradeSuccessInfo.expireTime) }}</n-descriptions-item>
+          <n-descriptions-item label="本次支付金额">¥{{ upgradeSuccessInfo.amount.toFixed(2) }}</n-descriptions-item>
+        </n-descriptions>
+      </n-space>
     </common-drawer>
   </div>
 </template>
@@ -353,6 +372,8 @@ const sendingEmail = ref(false)
 const selectedFormat = ref('clash')
 const showUpgradeModal = ref(false)
 
+const showUpgradeSuccess = ref(false)
+const upgradeSuccessInfo = ref<{ addDevices: number; extendMonths: number; deviceLimit: number; expireTime: string; amount: number } | null>(null)
 const showQrModal = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const qrTitle = ref('')
@@ -570,6 +591,17 @@ const loadPaymentMethods = async () => {
     if (!balanceEnabled.value && paymentMethods.value.length > 0) paymentMethod.value = 'pm_' + paymentMethods.value[0].id
   } catch {}
 }
+const buildUpgradeSuccessInfo = () => {
+  upgradeSuccessInfo.value = {
+    addDevices: upgradeAddDevices.value,
+    extendMonths: upgradeExtendMonths.value,
+    deviceLimit: subscription.value?.device_limit || 0,
+    expireTime: subscription.value?.expire_time || '',
+    amount: upgradeResult.value?.total || upgradeOrderInfo.value?.final_amount || upgradeOrderInfo.value?.amount || 0,
+  }
+  showUpgradeSuccess.value = true
+}
+
 const startPayPolling = (orderNo: string) => {
   stopPayPolling()
   let pollAttempts = 0
@@ -581,7 +613,9 @@ const startPayPolling = (orderNo: string) => {
       const res = await getOrderStatus(orderNo)
       if (res.data?.status === 'paid') {
         stopPayPolling(); showPayQrModal.value = false; showCryptoModal.value = false
-        message.success('支付成功，订阅已更新（设备数和到期时间已刷新）'); await loadData()
+        await loadData()
+        buildUpgradeSuccessInfo()
+        message.success('支付成功，订阅已更新（设备数和到期时间已刷新）')
         return
       }
       if (pollAttempts >= maxPollAttempts) {
@@ -686,7 +720,10 @@ const handleUpgradePay = async () => {
   try {
     if (paymentMethod.value === 'balance') {
       await payOrder(upgradeOrderInfo.value.order_no, { payment_method: 'balance' })
-      message.success('支付成功，订阅已更新'); showUpgradePayModal.value = false; await loadData()
+      showUpgradePayModal.value = false
+      await loadData()
+      buildUpgradeSuccessInfo()
+      message.success('支付成功，订阅已更新')
     } else if (paymentMethod.value.startsWith('pm_')) {
       const pmId = parseInt(paymentMethod.value.replace('pm_', ''))
       const paymentData: any = { order_id: upgradeOrderInfo.value.id, payment_method_id: pmId, is_mobile: isMobile.value }
@@ -807,6 +844,11 @@ onUnmounted(() => { stopPayPolling() })
 
 /* URL Section (legacy) */
 .url-list { display: flex; flex-direction: column; gap: 10px; }
+.url-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.url-type { font-size: 14px; font-weight: 600; color: #333; }
+.url-actions { display: flex; align-items: center; gap: 8px; }
+.url-input { flex: 1; min-width: 0; }
+.url-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .url-row { display: flex; align-items: center; gap: 8px; }
 .url-label { font-size: 13px; font-weight: 500; color: #666; white-space: nowrap; min-width: 70px; }
 .url-input-wrapper { display: flex; align-items: center; gap: 6px; flex: 1; }
@@ -858,5 +900,18 @@ onUnmounted(() => { stopPayPolling() })
   .stat-value { font-size: 16px; }
   .url-card, .format-card-container { padding: 16px; }
   .format-grid { grid-template-columns: repeat(2, 1fr); }
+  .url-header { align-items: flex-start; }
+  .url-actions { flex-direction: column; align-items: stretch; }
+  .url-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; }
+  .url-buttons .n-button { width: 100%; }
+  .drawer-section { gap: 12px !important; }
+  .drawer-footer-actions { width: 100%; }
+  .drawer-footer-actions :deep(.n-button) { flex: 1 1 calc(50% - 6px); min-width: 0; }
+  .mobile-pay-panel,
+  .desktop-pay-panel,
+  .crypto-panel { text-align: center; }
+  .upgrade-pay-section :deep(.n-descriptions),
+  .upgrade-form :deep(.n-descriptions),
+  .crypto-panel :deep(.n-descriptions) { font-size: 13px; }
 }
 </style>

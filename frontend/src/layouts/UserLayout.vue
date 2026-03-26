@@ -63,7 +63,7 @@
         <span class="mobile-tab-label">{{ tab.label }}</span>
       </div>
     </div>
-    <n-drawer v-model:show="showMobileMore" placement="bottom" :height="420" closable>
+    <n-drawer v-model:show="showMobileMore" placement="bottom" :height="400" :style="appStore.isMobile ? { margin: '0 12px 12px', borderRadius: '18px', overflow: 'hidden' } : undefined" closable>
       <n-drawer-content title="更多">
         <div class="mobile-more-grid">
           <div v-for="item in moreMenuItems" :key="item.key" class="mobile-more-item" @click="handleMoreClick(item.key)">
@@ -91,7 +91,7 @@
   </n-layout>
 
   <!-- Theme Picker Drawer (shared) -->
-  <n-drawer v-model:show="showThemeDrawer" placement="right" :width="280">
+  <n-drawer v-model:show="showThemeDrawer" placement="right" :width="appStore.isMobile ? 'calc(100vw - 24px)' : 280" :style="appStore.isMobile ? { margin: '12px 12px 12px 0', borderRadius: '18px', overflow: 'hidden' } : undefined">
     <n-drawer-content title="选择主题">
       <div class="theme-picker-grid">
         <div

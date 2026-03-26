@@ -1442,6 +1442,7 @@ func AdminTestNode(c *gin.Context) {
 		"status":    status,
 		"latency":   latency,
 		"reachable": reachable,
+		"address":   extractNodeAddressForTest(*node.Config),
 	})
 }
 

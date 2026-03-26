@@ -15,22 +15,23 @@ import (
 
 // AlipayConfig holds direct Alipay API configuration
 type AlipayConfig struct {
-	AppID         string
-	PrivateKey    string
-	PublicKey     string
-	NotifyURL     string
-	ReturnURL     string
-	SiteURL       string
-	DomainName    string
-	IsProduction  bool
-	SandboxRaw    string
-	PublicKeyHint string
+	AppID              string
+	PrivateKey         string
+	PublicKey          string
+	NotifyURL          string
+	ReturnURL          string
+	PaymentPublicBase  string
+	SiteURL            string
+	DomainName         string
+	IsProduction       bool
+	SandboxRaw         string
+	PublicKeyHint      string
 }
 
 // GetAlipayConfig reads direct Alipay settings from system_configs.
 func GetAlipayConfig() (*AlipayConfig, error) {
 	m := utils.GetSettings("pay_alipay_app_id", "pay_alipay_private_key", "pay_alipay_public_key",
-		"pay_alipay_notify_url", "pay_alipay_return_url", "pay_alipay_sandbox", "site_url", "domain_name")
+		"pay_alipay_notify_url", "pay_alipay_return_url", "pay_alipay_sandbox", "site_url", "domain_name", "payment_public_base_url")
 
 	appID := strings.TrimSpace(m["pay_alipay_app_id"])
 	if appID == "" {
@@ -42,6 +43,9 @@ func GetAlipayConfig() (*AlipayConfig, error) {
 	}
 	publicKey := strings.TrimSpace(m["pay_alipay_public_key"])
 	sandboxRaw := strings.TrimSpace(m["pay_alipay_sandbox"])
+	paymentPublicBase := normalizePublicBaseURL(strings.TrimSpace(m["payment_public_base_url"]))
+	siteURL := normalizePublicBaseURL(strings.TrimSpace(m["site_url"]))
+	domainName := normalizePublicBaseURL(strings.TrimSpace(m["domain_name"]))
 
 	publicKeyHint := "missing"
 	if publicKey != "" {
@@ -54,16 +58,17 @@ func GetAlipayConfig() (*AlipayConfig, error) {
 	}
 
 	return &AlipayConfig{
-		AppID:         appID,
-		PrivateKey:    privateKey,
-		PublicKey:     publicKey,
-		NotifyURL:     strings.TrimSpace(m["pay_alipay_notify_url"]),
-		ReturnURL:     strings.TrimSpace(m["pay_alipay_return_url"]),
-		SiteURL:       strings.TrimSpace(m["site_url"]),
-		DomainName:    strings.TrimSpace(m["domain_name"]),
-		IsProduction:  sandboxRaw != "true" && sandboxRaw != "1",
-		SandboxRaw:    sandboxRaw,
-		PublicKeyHint: publicKeyHint,
+		AppID:             appID,
+		PrivateKey:        privateKey,
+		PublicKey:         publicKey,
+		NotifyURL:         strings.TrimSpace(m["pay_alipay_notify_url"]),
+		ReturnURL:         strings.TrimSpace(m["pay_alipay_return_url"]),
+		PaymentPublicBase: paymentPublicBase,
+		SiteURL:           siteURL,
+		DomainName:        domainName,
+		IsProduction:      sandboxRaw != "true" && sandboxRaw != "1",
+		SandboxRaw:        sandboxRaw,
+		PublicKeyHint:     publicKeyHint,
 	}, nil
 }
 
@@ -172,6 +177,7 @@ func AlipayVerifyCallback(cfg *AlipayConfig, req *http.Request) (*AlipayNotifica
 		TradeStatus: string(notification.TradeStatus),
 		TotalAmount: notification.TotalAmount,
 		BuyerID:     notification.BuyerId,
+		AppID:       notification.AppId,
 	}, nil
 }
 
@@ -212,6 +218,7 @@ type AlipayNotification struct {
 	TradeStatus string
 	TotalAmount string
 	BuyerID     string
+	AppID       string
 }
 
 type AlipayTradeQueryResult struct {
@@ -289,22 +296,46 @@ func formatPEM(body, keyType string) string {
 	return b.String()
 }
 
+func normalizePublicBaseURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if !strings.HasPrefix(raw, "http") {
+		raw = "https://" + raw
+	}
+	return strings.TrimRight(raw, "/")
+}
+
+func isLocalhostURL(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return strings.Contains(strings.ToLower(raw), "localhost") || strings.Contains(raw, "127.0.0.1")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+}
+
+func GetPaymentPublicBaseURL() string {
+	cfg, err := GetAlipayConfig()
+	if err != nil {
+		return ""
+	}
+	if cfg.PaymentPublicBase != "" {
+		return cfg.PaymentPublicBase
+	}
+	if cfg.DomainName != "" {
+		return cfg.DomainName
+	}
+	return cfg.SiteURL
+}
+
 // GetSiteURL reads site_url from system_configs.
 func GetSiteURL() string {
-	settings := utils.GetSettings("site_url", "domain_name")
-	siteURL := strings.TrimSpace(settings["site_url"])
-	domainName := strings.TrimSpace(settings["domain_name"])
-
-	if siteURL != "" && strings.Contains(siteURL, "localhost") && domainName != "" {
-		siteURL = domainName
-	}
-	if siteURL == "" {
-		siteURL = domainName
-	}
-	if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
-		siteURL = "https://" + siteURL
-	}
-	return strings.TrimRight(siteURL, "/")
+	return GetPaymentPublicBaseURL()
 }
 
 // AlipayCreateWapOrder creates a WAP payment for mobile browsers.
@@ -366,7 +397,11 @@ func BuildPaymentURLs(payType, orderNo string) (notifyURL, returnURL string) {
 		}
 	}
 
-	baseURL := GetSiteURL()
+	baseURL := GetPaymentPublicBaseURL()
+	if payType == "alipay" && cfg != nil && cfg.IsProduction && isLocalhostURL(baseURL) {
+		log.Printf("[alipay] 生产模式检测到本地支付基址，拒绝自动生成回调地址: base=%s", baseURL)
+		return
+	}
 	if baseURL == "" {
 		baseURL = "http://localhost:8000"
 	}
@@ -382,8 +417,8 @@ func BuildPaymentURLs(payType, orderNo string) (notifyURL, returnURL string) {
 	}
 
 	if payType == "alipay" && cfg != nil {
-		log.Printf("[alipay] 回调URL配置: production=%v sandbox_raw=%q app_id=%s notify=%s return=%s site_url=%s domain_name=%s public_key=%s",
-			cfg.IsProduction, cfg.SandboxRaw, cfg.AppID, notifyURL, returnURL, cfg.SiteURL, cfg.DomainName, cfg.PublicKeyHint)
+		log.Printf("[alipay] 回调URL配置: production=%v sandbox_raw=%q app_id=%s notify=%s return=%s payment_public_base=%s site_url=%s domain_name=%s public_key=%s",
+			cfg.IsProduction, cfg.SandboxRaw, cfg.AppID, notifyURL, returnURL, cfg.PaymentPublicBase, cfg.SiteURL, cfg.DomainName, cfg.PublicKeyHint)
 	}
 
 	return

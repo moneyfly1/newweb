@@ -216,8 +216,8 @@ func CreatePayment(c *gin.Context) {
 						paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
 					}
 					if err == nil {
-						// 更新订单的 payment_transaction_id，关联支付事务
-						ptxID := fmt.Sprintf("%d", transaction.ID)
+						// 更新订单的 payment_transaction_id，统一保存交易号字符串
+						ptxID := outTradeNo
 						if err := db.Model(&order).Update("payment_transaction_id", &ptxID).Error; err != nil {
 							utils.InternalError(c, "更新订单支付信息失败")
 							return
@@ -604,12 +604,151 @@ func CreateRechargePayment(c *gin.Context) {
 func GetPaymentStatus(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	id := c.Param("id")
+	db := database.GetDB()
 	var tx models.PaymentTransaction
-	if err := database.GetDB().Where("id = ? AND user_id = ?", id, userID).First(&tx).Error; err != nil {
+	if err := db.Where("id = ? AND user_id = ?", id, userID).First(&tx).Error; err != nil {
 		utils.NotFound(c, "支付记录不存在")
 		return
 	}
+	if tx.Status == "pending" {
+		if status, _, err := tryCompensateAlipayPayment(db, &tx, "status_poll"); err != nil {
+			utils.LogError("[Alipay] 状态轮询补偿失败: tx_id=%s error=%v", safeTransactionID(tx.TransactionID), err)
+		} else {
+			tx.Status = status
+		}
+	}
 	utils.Success(c, gin.H{"status": tx.Status})
+}
+
+func safeTransactionID(txID *string) string {
+	if txID == nil {
+		return ""
+	}
+	return *txID
+}
+
+func buildAlipayCallbackPayload(result *services.AlipayTradeQueryResult) string {
+	return fmt.Sprintf(`{"out_trade_no":"%s","trade_no":"%s","trade_status":"%s","total_amount":"%s"}`,
+		result.OutTradeNo, result.TradeNo, result.TradeStatus, result.TotalAmount)
+}
+
+func finalizeAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, tradeNo, totalAmount, source string) (string, bool, error) {
+	if transaction == nil || transaction.TransactionID == nil || *transaction.TransactionID == "" {
+		return "pending", false, fmt.Errorf("支付事务缺少 transaction_id")
+	}
+	outTradeNo := *transaction.TransactionID
+
+	if models.IsNonceProcessed(db, outTradeNo, "alipay") {
+		utils.LogCallback("[Alipay] 幂等命中，已处理: source=%s out_trade_no=%s", source, outTradeNo)
+		var latest models.PaymentTransaction
+		if err := db.Where("id = ?", transaction.ID).First(&latest).Error; err == nil {
+			return latest.Status, false, nil
+		}
+		return transaction.Status, false, nil
+	}
+
+	var finalStatus string
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var txn models.PaymentTransaction
+		if err := tx.Where("id = ?", transaction.ID).First(&txn).Error; err != nil {
+			return err
+		}
+		finalStatus = txn.Status
+		if txn.Status != "pending" {
+			return nil
+		}
+		if !amountsMatch(txn.Amount, totalAmount) {
+			expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
+			return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, totalAmount)
+		}
+		if err := models.RecordNonce(tx, outTradeNo, "alipay", tradeNo); err != nil {
+			if !strings.Contains(strings.ToLower(err.Error()), "unique") {
+				return fmt.Errorf("记录 nonce 失败: %w", err)
+			}
+		}
+
+		callbackJSON := fmt.Sprintf(`{"out_trade_no":"%s","trade_no":"%s","trade_status":"TRADE_SUCCESS","total_amount":"%s","source":"%s"}`,
+			outTradeNo, tradeNo, totalAmount, source)
+		updates := map[string]interface{}{
+			"status":        "paid",
+			"callback_data": &callbackJSON,
+		}
+		if tradeNo != "" {
+			updates["external_transaction_id"] = &tradeNo
+		}
+		if err := tx.Model(&txn).Updates(updates).Error; err != nil {
+			return err
+		}
+
+		if strings.HasPrefix(outTradeNo, "RCH") {
+			if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
+				return err
+			}
+		} else {
+			if err := handleAlipayOrderCallback(tx, &txn); err != nil {
+				return err
+			}
+		}
+		finalStatus = "paid"
+		return nil
+	})
+	if err != nil {
+		return "pending", false, err
+	}
+	return finalStatus, finalStatus == "paid", nil
+}
+
+func tryCompensateAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, source string) (string, bool, error) {
+	if transaction == nil || transaction.Status != "pending" || transaction.TransactionID == nil || *transaction.TransactionID == "" {
+		if transaction == nil {
+			return "pending", false, nil
+		}
+		return transaction.Status, false, nil
+	}
+	if strings.HasPrefix(*transaction.TransactionID, "RCH") == false && transaction.OrderID == 0 {
+		return transaction.Status, false, nil
+	}
+
+	cfg, err := services.GetAlipayConfig()
+	if err != nil {
+		return transaction.Status, false, err
+	}
+
+	outTradeNo := *transaction.TransactionID
+	utils.LogCallback("[Alipay] 主动查单补偿: source=%s out_trade_no=%s", source, outTradeNo)
+	result, err := services.AlipayQueryTrade(cfg, outTradeNo)
+	if err != nil {
+		return transaction.Status, false, err
+	}
+	if result.OutTradeNo != "" && result.OutTradeNo != outTradeNo {
+		return transaction.Status, false, fmt.Errorf("查单返回的 out_trade_no 不匹配: expected=%s actual=%s", outTradeNo, result.OutTradeNo)
+	}
+	if result.TradeStatus != "TRADE_SUCCESS" && result.TradeStatus != "TRADE_FINISHED" {
+		utils.LogCallback("[Alipay] 主动查单未确认支付成功: source=%s out_trade_no=%s status=%s", source, outTradeNo, result.TradeStatus)
+		return transaction.Status, false, nil
+	}
+
+	status, compensated, err := finalizeAlipayPayment(db, transaction, result.TradeNo, result.TotalAmount, source)
+	if err != nil {
+		return transaction.Status, false, err
+	}
+
+	callbackJSON := buildAlipayCallbackPayload(result)
+	callback := models.PaymentCallback{
+		PaymentTransactionID: transaction.ID,
+		CallbackType:         "alipay_query_" + source,
+		CallbackData:         callbackJSON,
+		RawRequest:           &callbackJSON,
+		Processed:            compensated || status == "paid",
+	}
+	resultText := status
+	callback.ProcessingResult = &resultText
+	if err := db.Create(&callback).Error; err != nil {
+		utils.SysError("payment", fmt.Sprintf("保存支付宝补偿查询日志失败: %v", err))
+	}
+
+	transaction.Status = status
+	return status, compensated, nil
 }
 
 func PaymentNotify(c *gin.Context) {
@@ -1023,6 +1162,8 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	notification, err := services.AlipayVerifyCallback(alipayCfg, c.Request)
 	if err != nil {
 		utils.LogError("[Alipay] ❌ 回调验证失败: %v", err)
+		utils.LogError("[Alipay] 验签上下文: app_id=%s production=%v sandbox_raw=%q notify=%s return=%s public_key=%s",
+			alipayCfg.AppID, alipayCfg.IsProduction, alipayCfg.SandboxRaw, alipayCfg.NotifyURL, alipayCfg.ReturnURL, alipayCfg.PublicKeyHint)
 		utils.SysError("payment", fmt.Sprintf("支付宝回调验证失败: %v", err))
 		c.String(400, "verify fail")
 		return
@@ -1114,70 +1255,26 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	}
 
 	if transaction.Status == "pending" {
-		err := db.Transaction(func(tx *gorm.DB) error {
-			// Re-fetch with status check inside transaction to prevent double-spend
-			var txn models.PaymentTransaction
-			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
-				return err // Already processed or not found
-			}
-
-			// 金额校验（数值比较，兼容 10 / 10.0 / 10.00）
-			if notification.TotalAmount != "" {
-				utils.LogCallback("[Alipay] 金额校验: expected=%.2f actual=%s out_trade_no=%s", txn.Amount, notification.TotalAmount, outTradeNo)
-				if !amountsMatch(txn.Amount, notification.TotalAmount) {
-					expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
-					utils.SysError("payment", fmt.Sprintf("支付宝金额不匹配: 订单 %s, 期望 %s, 实际 %s", outTradeNo, expectedAmount, notification.TotalAmount))
-					return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, notification.TotalAmount)
-				}
-			} else {
-				utils.SysError("payment", fmt.Sprintf("支付宝回调缺少金额字段: %s", outTradeNo))
-				return fmt.Errorf("回调数据缺少金额字段")
-			}
-
-			// 记录 nonce 防止重放
-			if err := models.RecordNonce(tx, outTradeNo, "alipay", tradeNo); err != nil {
-				return fmt.Errorf("记录 nonce 失败: %w", err)
-			}
-
-			callbackJSON := rawStr
-			updates := map[string]interface{}{
-				"status":        "paid",
-				"callback_data": &callbackJSON,
-			}
-			if tradeNo != "" {
-				updates["external_transaction_id"] = &tradeNo
-			}
-			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
-				return err
-			}
-
-			// Determine if this is a recharge or order payment
-			if strings.HasPrefix(outTradeNo, "RCH") {
-				fmt.Printf("[alipay] 处理充值回调: %s\n", outTradeNo)
-				if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
-					return err
-				}
-			} else {
-				fmt.Printf("[alipay] 处理订单回调: %s, order_id=%d\n", outTradeNo, txn.OrderID)
-				if err := handleAlipayOrderCallback(tx, &txn); err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
-		if err != nil {
-			if strings.Contains(err.Error(), "金额不匹配") {
-				s := err.Error()
+		status, _, finalizeErr := finalizeAlipayPayment(db, &transaction, tradeNo, notification.TotalAmount, "notify")
+		if finalizeErr != nil {
+			if strings.Contains(finalizeErr.Error(), "金额不匹配") {
+				s := finalizeErr.Error()
 				callback.ProcessingResult = &s
 				callback.Processed = false
+				callback.ErrorMessage = &s
 				if err := db.Create(&callback).Error; err != nil {
 					utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
 				}
 				c.String(200, "success")
 				return
 			}
+			errMsg := finalizeErr.Error()
+			callback.Processed = false
+			callback.ErrorMessage = &errMsg
+			callback.ProcessingResult = &errMsg
+			utils.LogError("[Alipay] ❌ 回调处理失败: out_trade_no=%s trade_no=%s error=%v", outTradeNo, tradeNo, finalizeErr)
 		} else {
+			transaction.Status = status
 			result := "success"
 			callback.ProcessingResult = &result
 		}
@@ -1214,7 +1311,10 @@ func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 
 		now := time.Now()
 		pmName := "alipay"
-		txIDStr := fmt.Sprintf("%d", transaction.ID)
+		txIDStr := ""
+		if transaction.TransactionID != nil {
+			txIDStr = *transaction.TransactionID
+		}
 		if err := tx.Model(&order).Updates(map[string]interface{}{
 			"status":                 "paid",
 			"payment_method_name":    &pmName,
@@ -1477,6 +1577,11 @@ func PaymentReturn(c *gin.Context) {
 		// 先尝试通过 transaction_id 查找
 		var transaction models.PaymentTransaction
 		if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err == nil {
+			if transaction.Status == "pending" {
+				if _, _, err := tryCompensateAlipayPayment(db, &transaction, "sync_return"); err != nil {
+					utils.LogError("[Alipay] 同步返回补偿失败: out_trade_no=%s error=%v", outTradeNo, err)
+				}
+			}
 			// 找到支付事务，获取订单号
 			if transaction.OrderID > 0 {
 				var order models.Order
@@ -1496,7 +1601,7 @@ func PaymentReturn(c *gin.Context) {
 	}
 
 	// Get site URL for redirect
-	siteURL := utils.GetSetting("site_url")
+	siteURL := services.GetSiteURL()
 	if siteURL == "" {
 		siteURL = "http://localhost:8000"
 	}

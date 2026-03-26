@@ -76,6 +76,13 @@ const rules = {
   password: { required: true, message: '请输入密码', trigger: 'blur' },
 }
 
+// 挂载时清空表单，防止浏览器自动填充
+import { onMounted } from 'vue'
+onMounted(() => {
+  form.value.email = ''
+  form.value.password = ''
+})
+
 async function handleLogin() {
   await formRef.value?.validate()
   loading.value = true

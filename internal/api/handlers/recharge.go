@@ -167,6 +167,19 @@ func GetRechargeStatus(c *gin.Context) {
 		utils.NotFound(c, "充值记录不存在")
 		return
 	}
+
+	if record.Status == "pending" && record.PaymentTransactionID != nil && *record.PaymentTransactionID != "" {
+		var transaction models.PaymentTransaction
+		if err := db.Where("transaction_id = ? AND user_id = ?", *record.PaymentTransactionID, userID).First(&transaction).Error; err == nil {
+			if transaction.Status == "pending" {
+				if _, _, err := tryCompensateAlipayPayment(db, &transaction, "recharge_status_poll"); err != nil {
+					utils.LogError("[Recharge] 状态轮询补偿失败: tx_id=%s error=%v", *record.PaymentTransactionID, err)
+				}
+				_ = db.Where("id = ? AND user_id = ?", id, userID).First(&record).Error
+			}
+		}
+	}
+
 	result := gin.H{
 		"id":       record.ID,
 		"order_no": record.OrderNo,

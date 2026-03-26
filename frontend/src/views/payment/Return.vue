@@ -52,6 +52,7 @@ let pollCount = 0
 
 const source = computed(() => route.query.source || 'purchase')
 const shouldAutoRedirect = computed(() => route.query.redirect === 'dashboard')
+const redirectTarget = computed(() => ({ name: 'Dashboard' as const }))
 
 const resultStatus = computed(() => {
   if (status.value === 'success') return 'success'
@@ -89,7 +90,7 @@ const startRedirectCountdown = () => {
     countdown.value -= 1
     if (countdown.value <= 0) {
       stopRedirectCountdown()
-      router.push('/dashboard')
+      router.push(redirectTarget.value)
     }
   }, 1000)
 }

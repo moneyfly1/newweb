@@ -534,9 +534,9 @@ const handleOrderPay = async () => {
   try {
     if (orderPayMethod.value === 'balance') {
       await payOrder(currentOrder.value.order_no, { payment_method: 'balance' })
-      message.success('支付成功！')
       showOrderPayDrawer.value = false
-      loadOrders()
+      await loadOrders()
+      message.success('余额支付成功，订单已生效')
     } else if (orderPayMethod.value.startsWith('pm_')) {
       const pmId = parseInt(orderPayMethod.value.replace('pm_', ''))
       const res = await createPayment({

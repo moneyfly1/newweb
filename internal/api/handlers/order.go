@@ -235,14 +235,9 @@ func PayOrder(c *gin.Context) {
 			utils.BadRequest(c, "余额支付已关闭")
 			return
 		}
-		user := c.MustGet("user").(*models.User)
 		payAmount := order.Amount
 		if order.FinalAmount != nil {
 			payAmount = *order.FinalAmount
-		}
-		if user.Balance < payAmount {
-			utils.BadRequest(c, "余额不足")
-			return
 		}
 		tx := db.Begin()
 		if tx.Error != nil {
@@ -256,7 +251,13 @@ func PayOrder(c *gin.Context) {
 			utils.BadRequest(c, "订单已支付或已取消")
 			return
 		}
-		if err := tx.Model(user).Where("balance >= ?", payAmount).UpdateColumn("balance", gorm.Expr("balance - ?", payAmount)).Error; err != nil {
+		var freshUser models.User
+		if err := tx.Where("id = ?", userID).First(&freshUser).Error; err != nil {
+			tx.Rollback()
+			utils.InternalError(c, "读取用户余额失败")
+			return
+		}
+		if err := tx.Model(&freshUser).Where("id = ? AND balance >= ?", userID, payAmount).UpdateColumn("balance", gorm.Expr("balance - ?", payAmount)).Error; err != nil {
 			tx.Rollback()
 			utils.BadRequest(c, "余额不足或扣减失败")
 			return
@@ -269,7 +270,7 @@ func PayOrder(c *gin.Context) {
 		}
 		// 记录余额消费日志
 		orderID := order.ID
-		utils.CreateBalanceLogEntry(userID, "consume", -payAmount, user.Balance, user.Balance-payAmount, &orderID, fmt.Sprintf("余额支付订单: %s", orderNo), c)
+		utils.CreateBalanceLogEntry(userID, "consume", -payAmount, freshUser.Balance, freshUser.Balance-payAmount, &orderID, fmt.Sprintf("余额支付订单: %s", orderNo), c)
 		now := time.Now()
 		balanceStr := "balance"
 		if err := tx.Model(&order).Updates(map[string]interface{}{
@@ -398,11 +399,15 @@ func PayOrder(c *gin.Context) {
 		}
 		// 发送支付成功邮件 + 通知管理员
 		payAmountStr := fmt.Sprintf("%.2f", payAmount)
+		var notifyUser models.User
+		if err := database.GetDB().Select("username", "email").Where("id = ?", userID).First(&notifyUser).Error; err != nil {
+			notifyUser = models.User{Username: "", Email: ""}
+		}
 		utils.LogOrder("余额支付成功: order_no=%s user_id=%d username=%s amount=%s ip=%s",
-			orderNo, userID, user.Username, payAmountStr, utils.GetRealClientIP(c))
+			orderNo, userID, notifyUser.Username, payAmountStr, utils.GetRealClientIP(c))
 		var subURL string
 		var userSub models.Subscription
-		if database.GetDB().Where("user_id = ?", user.ID).First(&userSub).Error == nil {
+		if database.GetDB().Where("user_id = ?", userID).First(&userSub).Error == nil {
 			settings := utils.GetSettings("site_url", "domain_name")
 			siteURL := settings["site_url"]
 			if siteURL == "" {
@@ -417,9 +422,9 @@ func PayOrder(c *gin.Context) {
 		emailSubject, emailBody := services.RenderEmail("payment_success", map[string]string{
 			"order_no": orderNo, "amount": payAmountStr, "package_name": pkgName, "subscription_url": subURL,
 		})
-		go services.QueueEmail(user.Email, emailSubject, emailBody, "payment_success")
+		go services.QueueEmail(notifyUser.Email, emailSubject, emailBody, "payment_success")
 		go services.NotifyAdmin("payment_success", map[string]string{
-			"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": payAmountStr,
+			"username": notifyUser.Username, "order_no": orderNo, "package_name": pkgName, "amount": payAmountStr,
 		})
 		utils.Success(c, gin.H{"message": "支付成功", "order_no": orderNo})
 		return

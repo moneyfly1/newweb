@@ -1,746 +1,225 @@
 <template>
-  <div class="settings-container">
-    <n-card title="系统设置" :bordered="false">
-      <n-spin :show="loading">
-        <n-tabs type="line" animated>
-          <!-- Tab 1: 基本设置 -->
-          <n-tab-pane name="basic" tab="基本设置">
-            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
-              <n-form-item label="站点名称">
-                <n-input v-model:value="form.site_name" placeholder="请输入站点名称" />
-              </n-form-item>
-              <n-form-item label="站点描述">
-                <n-input v-model:value="form.site_description" type="textarea" placeholder="请输入站点描述" :rows="3" />
-              </n-form-item>
-              <n-form-item label="站点地址">
-                <n-input v-model:value="form.site_url" placeholder="https://example.com" />
-              </n-form-item>
-              <n-form-item label="客服邮箱">
-                <n-input v-model:value="form.support_email" placeholder="support@example.com" />
-              </n-form-item>
-              <n-form-item label="客服 QQ">
-                <n-input v-model:value="form.support_qq" placeholder="请输入客服 QQ" />
-              </n-form-item>
-              <n-form-item label="客服 Telegram">
-                <n-input v-model:value="form.support_telegram" placeholder="请输入 Telegram 用户名" />
-              </n-form-item>
-              <n-space justify="center" style="margin-top: 24px">
-                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
-              </n-space>
-            </n-form>
-          </n-tab-pane>
+  <div class="settings-page">
+    <!-- 统一的页面头部 -->
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">系统设置</h2>
+        <p class="page-subtitle">配置站点的核心运行参数、支付接口及安全策略</p>
+      </div>
+      <div class="header-right">
+        <n-button type="primary" :loading="saving" @click="handleSave">
+          <template #icon><n-icon><save-outline /></n-icon></template>
+          保存所有更改
+        </n-button>
+      </div>
+    </div>
 
-          <!-- Tab 2: 注册设置 -->
-          <n-tab-pane name="register" tab="注册设置">
-            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '200'" :model="form">
-              <n-form-item label="开放注册">
-                <n-switch v-model:value="form.register_enabled" />
-              </n-form-item>
-              <n-form-item label="注册邮箱验证">
-                <n-switch v-model:value="form.register_email_verify" />
-              </n-form-item>
-              <n-form-item label="注册需要邀请码">
-                <n-switch v-model:value="form.register_invite_required" />
-              </n-form-item>
-              <n-form-item label="默认邀请人奖励">
-                <n-input-number v-model:value="form.invite_default_inviter_reward" :min="0" :precision="2" style="width: 200px">
-                  <template #suffix>元</template>
-                </n-input-number>
-              </n-form-item>
-              <n-form-item label="默认受邀人奖励">
-                <n-input-number v-model:value="form.invite_default_invitee_reward" :min="0" :precision="2" style="width: 200px">
-                  <template #suffix>元</template>
-                </n-input-number>
-              </n-form-item>
-              <n-form-item label="新用户默认设备数限制">
-                <n-input-number v-model:value="form.default_device_limit" :min="1" :max="100" />
-              </n-form-item>
-              <n-form-item label="新用户默认订阅天数">
-                <n-input-number v-model:value="form.default_subscribe_days" :min="0" :max="3650" />
-              </n-form-item>
-              <n-form-item label="最小密码长度">
-                <n-input-number v-model:value="form.min_password_length" :min="6" :max="32" />
-              </n-form-item>
-              <n-divider />
-              <n-form-item label="启用 Telegram 登录">
-                <n-switch v-model:value="form.telegram_login_enabled" />
-              </n-form-item>
-              <n-form-item label="Telegram Bot Username">
-                <n-input v-model:value="form.telegram_bot_username" placeholder="不含 @ 的 Bot 用户名" />
-                <template #feedback>
-                  <span style="font-size: 12px; color: #999">用于 Telegram Login Widget，需与通知设置中的 Bot Token 对应</span>
-                </template>
-              </n-form-item>
-              <n-space justify="center" style="margin-top: 24px">
-                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
-              </n-space>
-            </n-form>
-          </n-tab-pane>
+    <!-- 设置容器：仿应用级布局 -->
+    <n-card :bordered="false" content-style="padding: 0;" class="settings-card">
+      <div class="settings-layout">
+        <!-- 左侧导航区 -->
+        <div class="settings-sidebar">
+          <div 
+            v-for="item in menuOptions" 
+            :key="item.key"
+            :class="['sidebar-item', activeTab === item.key ? 'active' : '']"
+            @click="activeTab = item.key"
+          >
+            <n-icon :component="item.icon" size="20" />
+            <span class="item-label">{{ item.label }}</span>
+          </div>
+        </div>
 
-          <!-- Tab 3: 邮件设置 -->
-          <n-tab-pane name="email" tab="邮件设置">
-            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
-              <n-form-item label="SMTP 主机">
-                <n-input v-model:value="form.smtp_host" placeholder="smtp.example.com" />
-              </n-form-item>
-              <n-form-item label="SMTP 端口">
-                <n-input-number v-model:value="form.smtp_port" :min="1" :max="65535" />
-              </n-form-item>
-              <n-form-item label="SMTP 用户名">
-                <n-input v-model:value="form.smtp_username" placeholder="请输入 SMTP 用户名" />
-              </n-form-item>
-              <n-form-item label="SMTP 密码">
-                <n-input v-model:value="form.smtp_password" type="password" show-password-on="click" placeholder="请输入 SMTP 密码" />
-              </n-form-item>
-              <n-form-item label="加密方式">
-                <n-select v-model:value="form.smtp_encryption" :options="encryptionOptions" placeholder="请选择加密方式" />
-              </n-form-item>
-              <n-form-item label="发件人邮箱">
-                <n-input v-model:value="form.smtp_from_email" placeholder="noreply@example.com" />
-              </n-form-item>
-              <n-form-item label="发件人名称">
-                <n-input v-model:value="form.smtp_from_name" placeholder="请输入发件人名称" />
-              </n-form-item>
-              <n-divider />
-              <n-form-item label="测试邮件">
-                <n-space :vertical="appStore.isMobile">
-                  <n-input v-model:value="testEmail" placeholder="输入测试邮箱地址" :style="{ width: appStore.isMobile ? '100%' : '280px' }" />
-                  <n-button type="info" :loading="sendingTest" @click="handleSendTestEmail" :block="appStore.isMobile">发送测试邮件</n-button>
-                </n-space>
-              </n-form-item>
-              <n-space justify="center" style="margin-top: 24px">
-                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
-              </n-space>
-            </n-form>
-          </n-tab-pane>
+        <!-- 右侧内容区 -->
+        <div class="settings-content">
+          <n-spin :show="loading">
+            <div class="content-inner">
+              <transition name="fade-slide" mode="out-in">
+                <!-- 基础设置 -->
+                <div v-if="activeTab === 'basic'" key="basic">
+                  <n-h3 prefix="bar">站点信息</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="站点名称"><n-input v-model:value="form.site_name" placeholder="网站显示的名称" /></n-form-item-gi>
+                    <n-form-item-gi label="站点地址"><n-input v-model:value="form.site_url" placeholder="https://your-domain.com" /></n-form-item-gi>
+                    <n-form-item-gi label="站点描述" span="2"><n-input v-model:value="form.site_description" type="textarea" :rows="2" /></n-form-item-gi>
+                  </n-grid>
+                  <n-divider />
+                  <n-h3 prefix="bar">注册与访问</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32" :y-gap="16">
+                    <n-form-item-gi label="开放用户注册"><n-switch v-model:value="form.register_enabled" /></n-form-item-gi>
+                    <n-form-item-gi label="强制邀请码注册"><n-switch v-model:value="form.register_invite_required" /></n-form-item-gi>
+                    <n-form-item-gi label="开启邮箱验证 (OTP)"><n-switch v-model:value="form.register_email_verify" /></n-form-item-gi>
+                    <n-form-item-gi label="Telegram 快捷登录"><n-switch v-model:value="form.telegram_login_enabled" /></n-form-item-gi>
+                  </n-grid>
+                </div>
 
-          <!-- Tab 4: 支付设置 -->
-          <n-tab-pane name="payment" tab="支付设置">
-            <n-space vertical :size="16">
-              <n-card title="余额支付" size="small" :bordered="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
-                  <n-form-item label="启用余额支付">
-                    <n-switch v-model:value="form.pay_balance_enabled" />
-                  </n-form-item>
-                </n-form>
-              </n-card>
+                <!-- 运营设置 -->
+                <div v-else-if="activeTab === 'operation'" key="operation">
+                  <n-h3 prefix="bar">新用户激励</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="初始订阅天数"><n-input-number v-model:value="form.default_subscribe_days" style="width:100%" /></n-form-item-gi>
+                    <n-form-item-gi label="默认设备限制"><n-input-number v-model:value="form.default_device_limit" style="width:100%" /></n-form-item-gi>
+                    <n-form-item-gi label="邀请人奖励 (元)"><n-input-number v-model:value="form.invite_default_inviter_reward" :precision="2" style="width:100%" /></n-form-item-gi>
+                    <n-form-item-gi label="受邀人奖励 (元)"><n-input-number v-model:value="form.invite_default_invitee_reward" :precision="2" style="width:100%" /></n-form-item-gi>
+                  </n-grid>
+                  <n-divider />
+                  <n-h3 prefix="bar">每日签到</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 3" :x-gap="24">
+                    <n-form-item-gi label="启用签到"><n-switch v-model:value="form.checkin_enabled" /></n-form-item-gi>
+                    <n-form-item-gi label="最小奖励 (分)"><n-input-number v-model:value="form.checkin_min_reward" style="width:100%" /></n-form-item-gi>
+                    <n-form-item-gi label="最大奖励 (分)"><n-input-number v-model:value="form.checkin_max_reward" style="width:100%" /></n-form-item-gi>
+                  </n-grid>
+                </div>
 
-              <n-card title="支付宝" size="small" :bordered="true" :collapsible="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
-                  <n-form-item label="启用支付宝">
-                    <n-switch v-model:value="form.pay_alipay_enabled" />
-                  </n-form-item>
-                  <n-form-item label="App ID">
-                    <n-input v-model:value="form.pay_alipay_app_id" placeholder="请输入支付宝 App ID" />
-                  </n-form-item>
-                  <n-form-item label="商户私钥">
-                    <n-input v-model:value="form.pay_alipay_private_key" type="textarea" placeholder="请输入商户应用私钥（PKCS1 或 PKCS8 格式）" :rows="3" />
-                  </n-form-item>
-                  <n-form-item label="支付宝公钥">
-                    <n-input v-model:value="form.pay_alipay_public_key" type="textarea" placeholder="请输入支付宝公钥（用于验证回调签名）" :rows="3" />
-                  </n-form-item>
-                  <n-form-item label="异步回调地址">
-                    <n-input v-model:value="form.pay_alipay_notify_url" placeholder="留空则自动生成" />
-                    <template #feedback>
-                      <span style="font-size: 12px; color: #999">支付宝服务器通知地址，留空则自动使用: 站点地址/api/v1/payment/notify/alipay</span>
-                    </template>
-                  </n-form-item>
-                  <n-form-item label="同步回调地址">
-                    <n-input v-model:value="form.pay_alipay_return_url" placeholder="留空则自动生成" />
-                    <template #feedback>
-                      <span style="font-size: 12px; color: #999">支付完成后跳转地址，留空则自动使用: 站点地址/api/v1/payment/success</span>
-                    </template>
-                  </n-form-item>
-                  <n-form-item label="沙箱模式">
-                    <n-switch v-model:value="form.pay_alipay_sandbox" />
-                    <span style="margin-left: 8px; font-size: 12px; color: #999">开启后使用支付宝沙箱环境测试</span>
-                  </n-form-item>
-                </n-form>
-              </n-card>
+                <!-- 支付设置 -->
+                <div v-else-if="activeTab === 'payment'" key="payment">
+                  <n-alert type="warning" style="margin-bottom: 24px;">敏感密钥在保存时若未修改（显示为 ****）将不会被覆盖。</n-alert>
+                  <n-collapse arrow-placement="right" :default-expanded-names="['alipay', 'stripe']">
+                    <n-collapse-item title="支付宝 (Alipay)" name="alipay">
+                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                        <n-form-item-gi label="启用状态"><n-switch v-model:value="form.pay_alipay_enabled" /></n-form-item-gi>
+                        <n-form-item-gi label="应用 AppID"><n-input v-model:value="form.pay_alipay_app_id" /></n-form-item-gi>
+                        <n-form-item-gi label="应用私钥" span="2"><n-input v-model:value="form.pay_alipay_private_key" type="textarea" :rows="3" /></n-form-item-gi>
+                        <n-form-item-gi label="支付宝公钥" span="2"><n-input v-model:value="form.pay_alipay_public_key" type="textarea" :rows="3" /></n-form-item-gi>
+                      </n-grid>
+                    </n-collapse-item>
+                    <n-collapse-item title="Stripe (信用卡)" name="stripe">
+                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                        <n-form-item-gi label="启用状态"><n-switch v-model:value="form.pay_stripe_enabled" /></n-form-item-gi>
+                        <n-form-item-gi label="汇率 (1 USD = ? CNY)"><n-input-number v-model:value="form.pay_stripe_exchange_rate" :precision="2" style="width:100%" /></n-form-item-gi>
+                        <n-form-item-gi label="Secret Key" span="2"><n-input v-model:value="form.pay_stripe_secret_key" type="password" show-password-on="click" /></n-form-item-gi>
+                        <n-form-item-gi label="Webhook Secret" span="2"><n-input v-model:value="form.pay_stripe_webhook_secret" type="password" show-password-on="click" /></n-form-item-gi>
+                      </n-grid>
+                    </n-collapse-item>
+                    <n-collapse-item title="内部余额支付" name="balance">
+                      <n-form-item label="允许使用余额购买套餐"><n-switch v-model:value="form.pay_balance_enabled" /></n-form-item>
+                    </n-collapse-item>
+                  </n-collapse>
+                </div>
 
-              <n-card title="微信支付" size="small" :bordered="true" :collapsible="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
-                  <n-form-item label="启用微信支付">
-                    <n-switch v-model:value="form.pay_wechat_enabled" />
-                  </n-form-item>
-                  <n-form-item label="App ID">
-                    <n-input v-model:value="form.pay_wechat_app_id" placeholder="请输入微信 App ID" />
-                  </n-form-item>
-                  <n-form-item label="MCH ID">
-                    <n-input v-model:value="form.pay_wechat_mch_id" placeholder="请输入商户号" />
-                  </n-form-item>
-                  <n-form-item label="API Key">
-                    <n-input v-model:value="form.pay_wechat_api_key" type="password" show-password-on="click" placeholder="请输入 API 密钥" />
-                  </n-form-item>
-                </n-form>
-              </n-card>
+                <!-- 邮件设置 -->
+                <div v-else-if="activeTab === 'email'" key="email">
+                  <n-h3 prefix="bar">SMTP 发信服务器</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="SMTP 主机"><n-input v-model:value="form.smtp_host" /></n-form-item-gi>
+                    <n-form-item-gi label="端口"><n-input-number v-model:value="form.smtp_port" style="width:100%" /></n-form-item-gi>
+                    <n-form-item-gi label="用户名"><n-input v-model:value="form.smtp_username" /></n-form-item-gi>
+                    <n-form-item-gi label="密码"><n-input v-model:value="form.smtp_password" type="password" show-password-on="click" /></n-form-item-gi>
+                    <n-form-item-gi label="加密方式"><n-select v-model:value="form.smtp_encryption" :options="encryptionOptions" /></n-form-item-gi>
+                    <n-form-item-gi label="发件人地址"><n-input v-model:value="form.smtp_from_email" /></n-form-item-gi>
+                  </n-grid>
+                  <n-divider />
+                  <n-h3 prefix="bar">连接测试</n-h3>
+                  <n-input-group style="max-width: 400px;">
+                    <n-input v-model:value="testEmail" placeholder="接收测试邮件的邮箱" />
+                    <n-button type="info" :loading="sendingTest" @click="handleSendTestEmail">发送测试</n-button>
+                  </n-input-group>
+                </div>
 
-              <n-card title="易支付" size="small" :bordered="true" :collapsible="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '140'" :model="form">
-                  <n-form-item label="启用易支付">
-                    <n-switch v-model:value="form.pay_epay_enabled" />
-                  </n-form-item>
-                  <n-form-item label="网关地址">
-                    <n-input v-model:value="form.pay_epay_gateway" placeholder="https://pay.example.com" />
-                  </n-form-item>
-                  <n-form-item label="商户 ID">
-                    <n-input v-model:value="form.pay_epay_merchant_id" placeholder="请输入商户 ID" />
-                  </n-form-item>
-                  <n-form-item label="商户密钥">
-                    <n-input v-model:value="form.pay_epay_secret_key" type="password" show-password-on="click" placeholder="请输入商户密钥" />
-                  </n-form-item>
-                </n-form>
-              </n-card>
+                <!-- 通知设置 -->
+                <div v-else-if="activeTab === 'notify'" key="notify">
+                  <n-h3 prefix="bar">Telegram 机器人通知</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="启用通知"><n-switch v-model:value="form.notify_telegram_enabled" /></n-form-item-gi>
+                    <n-form-item-gi label="管理员 ChatID"><n-input v-model:value="form.notify_telegram_chat_id" /></n-form-item-gi>
+                    <n-form-item-gi label="Bot Token" span="2"><n-input v-model:value="form.notify_telegram_bot_token" type="password" show-password-on="click" /></n-form-item-gi>
+                  </n-grid>
+                  <n-divider />
+                  <n-h3 prefix="bar">管理员订阅事件</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="24" :y-gap="12">
+                    <n-form-item-gi label="新用户注册"><n-switch v-model:value="form.notify_new_user" /></n-form-item-gi>
+                    <n-form-item-gi label="新订单创建"><n-switch v-model:value="form.notify_new_order" /></n-form-item-gi>
+                    <n-form-item-gi label="支付成功"><n-switch v-model:value="form.notify_payment_success" /></n-form-item-gi>
+                    <n-form-item-gi label="新工单提醒"><n-switch v-model:value="form.notify_new_ticket" /></n-form-item-gi>
+                  </n-grid>
+                </div>
 
-              <n-card title="Stripe" size="small" :bordered="true" :collapsible="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '160'" :model="form">
-                  <n-form-item label="启用 Stripe">
-                    <n-switch v-model:value="form.pay_stripe_enabled" />
-                  </n-form-item>
-                  <n-form-item label="Secret Key">
-                    <n-input v-model:value="form.pay_stripe_secret_key" type="password" show-password-on="click" placeholder="sk_live_..." />
-                  </n-form-item>
-                  <n-form-item label="Publishable Key">
-                    <n-input v-model:value="form.pay_stripe_publishable_key" placeholder="pk_live_..." />
-                  </n-form-item>
-                  <n-form-item label="Webhook Secret">
-                    <n-input v-model:value="form.pay_stripe_webhook_secret" type="password" show-password-on="click" placeholder="whsec_..." />
-                  </n-form-item>
-                  <n-form-item label="汇率 (CNY→USD)">
-                    <n-input-number v-model:value="form.pay_stripe_exchange_rate" :min="0.01" :max="100" :precision="2" placeholder="7.2" />
-                    <template #feedback>
-                      <span style="font-size: 12px; color: #999">人民币兑美元汇率，用于自动换算支付金额</span>
-                    </template>
-                  </n-form-item>
-                  <n-form-item label="Webhook 地址">
-                    <n-input value="站点地址/api/v1/payment/notify/stripe" readonly />
-                    <template #feedback>
-                      <span style="font-size: 12px; color: #999">请在 Stripe Dashboard 中配置此 Webhook 地址（使用您的实际站点地址）</span>
-                    </template>
-                  </n-form-item>
-                </n-form>
-              </n-card>
-
-              <n-card title="加密货币 (USDT)" size="small" :bordered="true" :collapsible="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '160'" :model="form">
-                  <n-form-item label="启用加密货币">
-                    <n-switch v-model:value="form.pay_crypto_enabled" />
-                  </n-form-item>
-                  <n-form-item label="钱包地址">
-                    <n-input v-model:value="form.pay_crypto_wallet_address" placeholder="请输入收款钱包地址" />
-                  </n-form-item>
-                  <n-form-item label="网络">
-                    <n-select v-model:value="form.pay_crypto_network" :options="cryptoNetworkOptions" placeholder="请选择网络" />
-                  </n-form-item>
-                  <n-form-item label="币种">
-                    <n-select v-model:value="form.pay_crypto_currency" :options="cryptoCurrencyOptions" placeholder="请选择币种" />
-                  </n-form-item>
-                  <n-form-item label="汇率 (CNY→USDT)">
-                    <n-input-number v-model:value="form.pay_crypto_exchange_rate" :min="0.01" :max="100" :precision="2" placeholder="7.2" />
-                    <template #feedback>
-                      <span style="font-size: 12px; color: #999">人民币兑 USDT 汇率，用于自动换算支付金额</span>
-                    </template>
-                  </n-form-item>
-                </n-form>
-              </n-card>
-
-              <n-space justify="center" style="margin-top: 24px">
-                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
-              </n-space>
-            </n-space>
-          </n-tab-pane>
-
-          <!-- Tab 5: 通知设置 -->
-          <n-tab-pane name="notification" tab="通知设置">
-            <n-space vertical :size="16">
-              <!-- 通知渠道配置 -->
-              <n-card title="通知渠道" size="small" :bordered="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
-                  <n-h4 prefix="bar">邮件通知</n-h4>
-                  <n-form-item label="启用邮件通知">
-                    <n-switch v-model:value="form.notify_email_enabled" />
-                  </n-form-item>
-                  <n-form-item label="管理员通知邮箱">
-                    <n-input v-model:value="form.notify_admin_email" placeholder="admin@example.com" />
-                  </n-form-item>
-                  <n-divider style="margin: 12px 0" />
-                  <n-h4 prefix="bar">Telegram 通知</n-h4>
-                  <n-form-item label="启用 Telegram">
-                    <n-switch v-model:value="form.notify_telegram_enabled" />
-                  </n-form-item>
-                  <n-form-item label="Bot Token">
-                    <n-input v-model:value="form.notify_telegram_bot_token" placeholder="请输入 Bot Token" type="password" show-password-on="click" />
-                  </n-form-item>
-                  <n-form-item label="Chat ID">
-                    <n-input v-model:value="form.notify_telegram_chat_id" placeholder="请输入 Chat ID" />
-                  </n-form-item>
-                  <n-form-item label="测试">
-                    <n-button type="info" :loading="testingTelegram" @click="handleTestTelegram" :disabled="!form.notify_telegram_enabled">发送测试消息</n-button>
-                  </n-form-item>
-                  <n-divider style="margin: 12px 0" />
-                  <n-h4 prefix="bar">Bark 通知</n-h4>
-                  <n-form-item label="启用 Bark">
-                    <n-switch v-model:value="form.notify_bark_enabled" />
-                  </n-form-item>
-                  <n-form-item label="服务器地址">
-                    <n-input v-model:value="form.notify_bark_server" placeholder="https://api.day.app" />
-                  </n-form-item>
-                  <n-form-item label="Device Key">
-                    <n-input v-model:value="form.notify_bark_device_key" placeholder="请输入 Device Key" type="password" show-password-on="click" />
-                  </n-form-item>
-                </n-form>
-              </n-card>
-
-              <!-- 管理员事件通知开关 -->
-              <n-card title="管理员事件通知" size="small" :bordered="true">
-                <template #header-extra><n-text depth="3" style="font-size: 12px">触发时通知管理员</n-text></template>
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
-                  <n-form-item label="新用户注册"><n-switch v-model:value="form.notify_new_user" /></n-form-item>
-                  <n-form-item label="新订单创建"><n-switch v-model:value="form.notify_new_order" /></n-form-item>
-                  <n-form-item label="支付成功"><n-switch v-model:value="form.notify_payment_success" /></n-form-item>
-                  <n-form-item label="充值成功"><n-switch v-model:value="form.notify_recharge_success" /></n-form-item>
-                  <n-form-item label="新工单"><n-switch v-model:value="form.notify_new_ticket" /></n-form-item>
-                  <n-form-item label="订阅到期提醒"><n-switch v-model:value="form.notify_expiry_reminder" /></n-form-item>
-                  <n-form-item label="订阅重置"><n-switch v-model:value="form.notify_subscription_reset" /></n-form-item>
-                  <n-form-item label="异常登录"><n-switch v-model:value="form.notify_abnormal_login" /></n-form-item>
-                  <n-form-item label="未支付订单提醒"><n-switch v-model:value="form.notify_unpaid_order" /></n-form-item>
-                </n-form>
-              </n-card>
-
-              <!-- 用户邮件通知开关 -->
-              <n-card title="用户邮件通知" size="small" :bordered="true">
-                <template #header-extra><n-text depth="3" style="font-size: 12px">系统级控制发给用户的邮件</n-text></template>
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
-                  <n-form-item label="注册欢迎邮件"><n-switch v-model:value="form.user_notify_welcome" /></n-form-item>
-                  <n-form-item label="支付成功通知"><n-switch v-model:value="form.user_notify_payment" /></n-form-item>
-                  <n-form-item label="订阅到期提醒"><n-switch v-model:value="form.user_notify_expiry" /></n-form-item>
-                  <n-form-item label="订阅过期通知"><n-switch v-model:value="form.user_notify_expired" /></n-form-item>
-                  <n-form-item label="订阅重置通知"><n-switch v-model:value="form.user_notify_reset" /></n-form-item>
-                  <n-form-item label="账户状态变更"><n-switch v-model:value="form.user_notify_account_status" /></n-form-item>
-                  <n-form-item label="未支付订单提醒"><n-switch v-model:value="form.user_notify_unpaid_order" /></n-form-item>
-                </n-form>
-              </n-card>
-
-              <n-space justify="center" style="margin-top: 24px">
-                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
-              </n-space>
-            </n-space>
-          </n-tab-pane>
-
-          <!-- Tab 6: 安全设置 -->
-          <n-tab-pane name="security" tab="安全设置">
-            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '200'" :model="form">
-              <n-form-item label="最大登录尝试次数">
-                <n-input-number v-model:value="form.max_login_attempts" :min="1" :max="100" />
-              </n-form-item>
-              <n-form-item label="登录锁定时长 (分钟)">
-                <n-input-number v-model:value="form.login_lockout_minutes" :min="1" :max="1440" />
-              </n-form-item>
-              <n-form-item label="会话超时 (分钟)">
-                <n-input-number v-model:value="form.session_timeout_minutes" :min="5" :max="10080" />
-              </n-form-item>
-              <n-form-item label="异常登录提醒">
-                <n-switch v-model:value="form.abnormal_login_alert" />
-              </n-form-item>
-              <n-form-item label="IP 白名单">
-                <n-input v-model:value="form.ip_whitelist" type="textarea" placeholder="每行一个 IP 地址" :rows="5" />
-              </n-form-item>
-              <n-space justify="center" style="margin-top: 24px">
-                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
-              </n-space>
-            </n-form>
-          </n-tab-pane>
-          <!-- Tab 7: 签到设置 -->
-          <n-tab-pane name="checkin" tab="签到设置">
-            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '200'" :model="form">
-              <n-form-item label="启用签到功能">
-                <n-switch v-model:value="form.checkin_enabled" />
-              </n-form-item>
-              <n-form-item label="最小奖励金额 (分)">
-                <n-input-number v-model:value="form.checkin_min_reward" :min="1" :max="10000" />
-                <template #feedback>
-                  <span style="font-size: 12px; color: #999">签到随机奖励的最小值，单位为分（如 10 = 0.10 元）</span>
-                </template>
-              </n-form-item>
-              <n-form-item label="最大奖励金额 (分)">
-                <n-input-number v-model:value="form.checkin_max_reward" :min="1" :max="10000" />
-                <template #feedback>
-                  <span style="font-size: 12px; color: #999">签到随机奖励的最大值，单位为分（如 50 = 0.50 元）</span>
-                </template>
-              </n-form-item>
-              <n-space justify="center" style="margin-top: 24px">
-                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
-              </n-space>
-            </n-form>
-          </n-tab-pane>
-          <!-- Tab: 自定义套餐 -->
-          <n-tab-pane name="custom_package" tab="自定义套餐">
-            <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '200'" :model="form">
-              <n-form-item label="启用自定义套餐">
-                <n-switch v-model:value="form.custom_package_enabled" />
-              </n-form-item>
-              <n-form-item label="每设备每年价格 (元)">
-                <n-input-number v-model:value="form.custom_package_price_per_device_year" :min="1" :precision="2" style="width:100%" />
-                <template #feedback>
-                  <span style="font-size: 12px; color: #999">例如 40 表示每台设备每年 40 元</span>
-                </template>
-              </n-form-item>
-              <n-form-item label="最少设备数">
-                <n-input-number v-model:value="form.custom_package_min_devices" :min="1" :max="100" style="width:100%" />
-              </n-form-item>
-              <n-form-item label="最多设备数">
-                <n-input-number v-model:value="form.custom_package_max_devices" :min="1" :max="100" style="width:100%" />
-              </n-form-item>
-              <n-form-item label="最少购买月数">
-                <n-input-number v-model:value="form.custom_package_min_months" :min="1" :max="120" style="width:100%" />
-              </n-form-item>
-              <n-form-item label="时长折扣配置">
-                <n-dynamic-input v-model:value="durationDiscounts" :on-create="() => ({ months: 12, discount: 0 })">
-                  <template #default="{ value: item }">
-                    <div style="display:flex;align-items:center;gap:8px;width:100%">
-                      <n-input-number v-model:value="item.months" :min="1" placeholder="月数" size="small" style="flex:1" />
-                      <span style="color:#999;font-size:13px">个月</span>
-                      <n-input-number v-model:value="item.discount" :min="0" :max="99" :precision="1" placeholder="折扣%" size="small" style="flex:1" />
-                      <span style="color:#999;font-size:13px">% 优惠</span>
-                    </div>
-                  </template>
-                </n-dynamic-input>
-                <template #feedback>
-                  <span style="font-size: 12px; color: #999">购买时长 ≥ 对应月数时享受折扣。例如：12个月 10% 表示买12个月打9折</span>
-                </template>
-              </n-form-item>
-              <n-space justify="center" style="margin-top: 24px">
-                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
-              </n-space>
-            </n-form>
-          </n-tab-pane>
-          <!-- Tab 8: 软件下载配置 -->
-          <n-tab-pane name="client" tab="软件下载">
-            <n-space vertical :size="16">
-              <n-card title="Windows 客户端" size="small" :bordered="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
-                  <n-form-item label="Clash for Windows"><n-input v-model:value="form.client_clash_windows_url" placeholder="下载链接" /></n-form-item>
-                  <n-form-item label="V2rayN"><n-input v-model:value="form.client_v2rayn_url" placeholder="下载链接" /></n-form-item>
-                  <n-form-item label="Clash Party"><n-input v-model:value="form.client_clashparty_windows_url" placeholder="下载链接" /></n-form-item>
-                  <n-form-item label="Hiddify"><n-input v-model:value="form.client_hiddify_windows_url" placeholder="下载链接" /></n-form-item>
-                  <n-form-item label="FlClash"><n-input v-model:value="form.client_flclash_windows_url" placeholder="下载链接" /></n-form-item>
-                </n-form>
-              </n-card>
-              <n-card title="Android 客户端" size="small" :bordered="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
-                  <n-form-item label="Clash Meta"><n-input v-model:value="form.client_clash_android_url" placeholder="下载链接" /></n-form-item>
-                  <n-form-item label="V2rayNG"><n-input v-model:value="form.client_v2rayng_url" placeholder="下载链接" /></n-form-item>
-                  <n-form-item label="Hiddify"><n-input v-model:value="form.client_hiddify_android_url" placeholder="下载链接" /></n-form-item>
-                </n-form>
-              </n-card>
-              <n-card title="macOS 客户端" size="small" :bordered="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
-                  <n-form-item label="FlClash"><n-input v-model:value="form.client_flclash_macos_url" placeholder="下载链接" /></n-form-item>
-                  <n-form-item label="Clash Party"><n-input v-model:value="form.client_clashparty_macos_url" placeholder="下载链接" /></n-form-item>
-                </n-form>
-              </n-card>
-              <n-card title="iOS 客户端" size="small" :bordered="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
-                  <n-form-item label="Shadowrocket"><n-input v-model:value="form.client_shadowrocket_url" placeholder="App Store 链接" /></n-form-item>
-                  <n-form-item label="Stash"><n-input v-model:value="form.client_stash_url" placeholder="App Store 链接" /></n-form-item>
-                </n-form>
-              </n-card>
-              <n-card title="通用客户端" size="small" :bordered="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '180'" :model="form">
-                  <n-form-item label="Sing-box"><n-input v-model:value="form.client_singbox_url" placeholder="下载链接" /></n-form-item>
-                  <n-form-item label="Clash (Linux)"><n-input v-model:value="form.client_clash_linux_url" placeholder="下载链接" /></n-form-item>
-                </n-form>
-              </n-card>
-              <n-space justify="center" style="margin-top: 24px">
-                <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
-              </n-space>
-            </n-space>
-          </n-tab-pane>
-
-          <!-- Tab 8: 备份与恢复 -->
-          <n-tab-pane name="backup" tab="备份与恢复">
-            <n-space vertical :size="16">
-              <n-card title="数据库备份" size="small" :bordered="true">
-                <n-space vertical :size="12">
-                  <n-text>创建当前数据库的完整备份。备份文件将保存在服务器上。</n-text>
+                <!-- 安全设置 -->
+                <div v-else-if="activeTab === 'security'" key="security">
+                  <n-h3 prefix="bar">后台安全控制</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="最大登录失败次数"><n-input-number v-model:value="form.max_login_attempts" style="width:100%" /></n-form-item-gi>
+                    <n-form-item-gi label="锁定时长 (分钟)"><n-input-number v-model:value="form.login_lockout_minutes" style="width:100%" /></n-form-item-gi>
+                    <n-form-item-gi label="管理后台 IP 白名单" span="2">
+                      <n-input v-model:value="form.ip_whitelist" type="textarea" :rows="3" placeholder="每行一个 IP 地址，留空则不限制" />
+                    </n-form-item-gi>
+                  </n-grid>
+                  <n-divider />
+                  <n-h3 prefix="bar">数据维护</n-h3>
                   <n-space>
-                    <n-button type="primary" :loading="backupCreating" @click="handleCreateBackup">创建备份</n-button>
-                    <n-button @click="loadBackups" :loading="backupLoading">刷新列表</n-button>
+                    <n-button type="primary" :loading="backupCreating" @click="handleCreateBackup">创建数据库备份</n-button>
+                    <n-button secondary @click="handleUpdateGeoIP">更新 GeoIP 数据库</n-button>
                   </n-space>
-                  <div v-if="uploadStatus" style="margin-top: 4px;">
-                    <n-alert :type="uploadStatus.status === 'success' ? 'success' : uploadStatus.status === 'failed' ? 'error' : 'info'" :bordered="false" size="small">
-                      <template #header>
-                        GitHub 上传{{ uploadStatus.status === 'success' ? '完成' : uploadStatus.status === 'failed' ? '失败' : '中' }}
-                      </template>
-                      {{ uploadStatus.message }}
-                    </n-alert>
-                    <n-progress v-if="uploadStatus.status === 'uploading'" :percentage="uploadStatus.progress || 0" :indicator-placement="'inside'" style="margin-top: 8px;" />
-                  </div>
-                </n-space>
-              </n-card>
-
-              <n-card title="GitHub 备份设置" size="small" :bordered="true">
-                <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '160'" :model="form">
-                  <n-form-item label="GeoIP 本地数据">
-                    <n-space>
-                      <n-button :loading="updatingGeoIP" @click="handleUpdateGeoIP">手动更新 GeoIP / MMDB</n-button>
-                      <n-button :loading="backfillingLocations" @click="handleBackfillLocations">回填历史地区数据</n-button>
-                    </n-space>
-                  </n-form-item>
-                  <n-form-item label="启用 GitHub 备份">
-                    <n-switch v-model:value="form.backup_github_enabled" />
-                  </n-form-item>
-                  <n-form-item label="GitHub Token">
-                    <n-input v-model:value="form.backup_github_token" type="password" show-password-on="click" placeholder="ghp_xxxxxxxxxxxx" />
-                  </n-form-item>
-                  <n-form-item label="仓库地址">
-                    <n-input v-model:value="form.backup_github_repo" placeholder="username/repo-name" />
-                  </n-form-item>
-                  <n-form-item label="自动备份间隔 (小时)">
-                    <n-input-number v-model:value="form.backup_interval_hours" :min="0" :max="720" />
-                  </n-form-item>
-                  <n-space justify="center" style="margin-top: 16px">
-                    <n-button type="primary" :loading="saving" @click="handleSave">保存设置</n-button>
-                    <n-button :loading="testingGitHub" @click="handleTestGitHub" :disabled="!form.backup_github_token || !form.backup_github_repo">测试连接</n-button>
-                  </n-space>
-                </n-form>
-              </n-card>
-
-              <n-card title="备份记录" size="small" :bordered="true">
-                <template v-if="!appStore.isMobile">
-                  <n-data-table
-                    :columns="backupColumns"
-                    :data="backups"
-                    :loading="backupLoading"
-                    :bordered="false"
-                    size="small"
-                  />
-                </template>
-                <template v-else>
-                  <div class="mobile-card-list">
-                    <div v-for="item in backups" :key="item.filename" class="mobile-card">
-                      <div class="card-header">
-                        <span class="card-title">{{ item.filename }}</span>
-                      </div>
-                      <div class="card-body">
-                        <div class="card-row"><span class="card-label">大小:</span><span>{{ item.size }}</span></div>
-                        <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at }}</span></div>
-                      </div>
-                    </div>
-                  </div>
-                </template>
-                <n-empty v-if="!backupLoading && backups.length === 0" description="暂无备份记录" style="padding: 40px 0" />
-              </n-card>
-            </n-space>
-          </n-tab-pane>
-        </n-tabs>
-      </n-spin>
+                </div>
+              </transition>
+            </div>
+          </n-spin>
+        </div>
+      </div>
     </n-card>
+
+    <!-- 移动端悬浮保存按钮 -->
+    <div class="mobile-fab" v-if="appStore.isMobile">
+      <n-button circle type="primary" size="large" :loading="saving" @click="handleSave">
+        <template #icon><n-icon><save-outline /></n-icon></template>
+      </n-button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useMessage, NH4 } from 'naive-ui'
-import { getSettings, updateSettings, sendTestEmail, testTelegram, createBackup, listBackups, getUploadStatus, testGitHubConnection, updateGeoIPFiles, backfillLocations } from '@/api/admin'
+import { ref, reactive, onMounted } from 'vue'
+import { useMessage } from 'naive-ui'
+import { 
+  SaveOutline, SettingsOutline, RocketOutline, CardOutline, 
+  MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline 
+} from '@vicons/ionicons5'
+import { getSettings, updateSettings, sendTestEmail, testTelegram, createBackup, listBackups, updateGeoIPFiles } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
-
 const message = useMessage()
+
+const activeTab = ref('basic')
 const loading = ref(false)
 const saving = ref(false)
 const sendingTest = ref(false)
-const testEmail = ref('')
-const backupLoading = ref(false)
 const backupCreating = ref(false)
-const testingTelegram = ref(false)
-const backups = ref<any[]>([])
-const uploadTaskId = ref('')
-const uploadStatus = ref<any>(null)
-const testingGitHub = ref(false)
-const updatingGeoIP = ref(false)
-const backfillingLocations = ref(false)
-let uploadPollTimer: ReturnType<typeof setInterval> | null = null
+const testEmail = ref('')
 
-// Computed URL hints based on site_url
-const siteBase = computed(() => {
-  const url = form.value.site_url || ''
-  if (!url) return window.location.origin
-  return url.startsWith('http') ? url.replace(/\/+$/, '') : 'https://' + url.replace(/\/+$/, '')
-})
-const alipayNotifyUrlHint = computed(() => siteBase.value + '/api/v1/payment/notify/alipay')
-const alipayReturnUrlHint = computed(() => siteBase.value + '/api/v1/payment/success')
-const stripeWebhookUrlHint = computed(() => siteBase.value + '/api/v1/payment/notify/stripe')
+const menuOptions = [
+  { label: '基础设置', key: 'basic', icon: SettingsOutline },
+  { label: '运营参数', key: 'operation', icon: RocketOutline },
+  { label: '支付网关', key: 'payment', icon: CardOutline },
+  { label: '邮件服务', key: 'email', icon: MailOutline },
+  { label: '通知监控', key: 'notify', icon: NotificationsOutline },
+  { label: '安全维护', key: 'security', icon: ShieldCheckmarkOutline },
+]
 
 const encryptionOptions = [
-  { label: '无', value: 'none' },
-  { label: 'TLS', value: 'tls' },
-  { label: 'SSL', value: 'ssl' }
-]
-
-const cryptoNetworkOptions = [
-  { label: 'TRC20 (Tron)', value: 'TRC20' },
-  { label: 'ERC20 (Ethereum)', value: 'ERC20' }
-]
-
-const cryptoCurrencyOptions = [
-  { label: 'USDT', value: 'USDT' },
-  { label: 'USDC', value: 'USDC' }
-]
-
-// Boolean keys that should be stored as switches
-const booleanKeys = [
-  'register_enabled', 'register_email_verify', 'register_invite_required',
-  'pay_balance_enabled', 'pay_alipay_enabled', 'pay_alipay_sandbox', 'pay_wechat_enabled', 'pay_epay_enabled',
-  'pay_stripe_enabled', 'pay_crypto_enabled',
-  'notify_email_enabled', 'notify_telegram_enabled', 'notify_bark_enabled',
-  'notify_new_order', 'notify_new_ticket', 'notify_new_user', 'notify_expiry_reminder',
-  'notify_payment_success', 'notify_recharge_success', 'notify_subscription_reset',
-  'notify_abnormal_login', 'notify_unpaid_order',
-  'user_notify_welcome', 'user_notify_payment', 'user_notify_expiry', 'user_notify_expired',
-  'user_notify_reset', 'user_notify_account_status', 'user_notify_unpaid_order',
-  'abnormal_login_alert', 'backup_github_enabled',
-  'checkin_enabled', 'telegram_login_enabled',
-  'custom_package_enabled'
-]
-
-// Number keys that should be stored as numbers
-const numberKeys = [
-  'default_device_limit', 'default_subscribe_days', 'min_password_length',
-  'smtp_port', 'max_login_attempts', 'login_lockout_minutes', 'session_timeout_minutes',
-  'backup_interval_hours', 'pay_stripe_exchange_rate', 'pay_crypto_exchange_rate',
-  'checkin_min_reward', 'checkin_max_reward',
-  'custom_package_price_per_device_year', 'custom_package_min_devices',
-  'custom_package_max_devices', 'custom_package_min_months',
-  'invite_default_inviter_reward', 'invite_default_invitee_reward'
+  { label: '无 (Plain)', value: 'none' },
+  { label: 'STARTTLS (587)', value: 'tls' },
+  { label: 'SSL/TLS (465)', value: 'ssl' }
 ]
 
 const form = ref<Record<string, any>>({
-  // Basic
-  site_name: '',
-  site_description: '',
-  site_url: '',
-  support_email: '',
-  support_qq: '',
-  support_telegram: '',
-  // Registration
-  register_enabled: true,
-  register_email_verify: false,
-  register_invite_required: false,
-  invite_default_inviter_reward: 5,
-  invite_default_invitee_reward: 5,
-  default_device_limit: 3,
-  default_subscribe_days: 0,
-  min_password_length: 8,
+  site_name: '', site_description: '', site_url: '',
+  register_enabled: true, register_email_verify: false, register_invite_required: false,
+  invite_default_inviter_reward: 0, invite_default_invitee_reward: 0,
+  default_subscribe_days: 0, default_device_limit: 3,
   telegram_login_enabled: false,
-  telegram_bot_username: '',
-  // Email
-  smtp_host: '',
-  smtp_port: 465,
-  smtp_username: '',
-  smtp_password: '',
-  smtp_encryption: 'ssl',
-  smtp_from_email: '',
-  smtp_from_name: '',
-  // Payment
+  smtp_host: '', smtp_port: 465, smtp_username: '', smtp_password: '', smtp_encryption: 'ssl', smtp_from_email: '',
+  pay_alipay_enabled: false, pay_alipay_app_id: '', pay_alipay_private_key: '', pay_alipay_public_key: '',
+  pay_stripe_enabled: false, pay_stripe_secret_key: '', pay_stripe_webhook_secret: '', pay_stripe_exchange_rate: 7.2,
   pay_balance_enabled: true,
-  pay_alipay_enabled: false,
-  pay_alipay_app_id: '',
-  pay_alipay_private_key: '',
-  pay_alipay_public_key: '',
-  pay_alipay_notify_url: '',
-  pay_alipay_return_url: '',
-  pay_alipay_sandbox: false,
-  pay_wechat_enabled: false,
-  pay_wechat_app_id: '',
-  pay_wechat_mch_id: '',
-  pay_wechat_api_key: '',
-  pay_epay_enabled: false,
-  pay_epay_gateway: '',
-  pay_epay_merchant_id: '',
-  pay_epay_secret_key: '',
-  // Stripe
-  pay_stripe_enabled: false,
-  pay_stripe_secret_key: '',
-  pay_stripe_publishable_key: '',
-  pay_stripe_webhook_secret: '',
-  pay_stripe_exchange_rate: 7.2,
-  // Crypto
-  pay_crypto_enabled: false,
-  pay_crypto_wallet_address: '',
-  pay_crypto_network: 'TRC20',
-  pay_crypto_currency: 'USDT',
-  pay_crypto_exchange_rate: 7.2,
-  // Notification - channels
-  notify_email_enabled: true,
-  notify_admin_email: '',
-  notify_telegram_enabled: false,
-  notify_telegram_bot_token: '',
-  notify_telegram_chat_id: '',
-  notify_bark_enabled: false,
-  notify_bark_server: '',
-  notify_bark_device_key: '',
-  // Notification - admin events
-  notify_new_order: false,
-  notify_new_ticket: false,
-  notify_new_user: false,
-  notify_expiry_reminder: false,
-  notify_payment_success: false,
-  notify_recharge_success: false,
-  notify_subscription_reset: false,
-  notify_abnormal_login: false,
-  notify_unpaid_order: false,
-  // Notification - user email
-  user_notify_welcome: true,
-  user_notify_payment: true,
-  user_notify_expiry: true,
-  user_notify_expired: true,
-  user_notify_reset: true,
-  user_notify_account_status: true,
-  user_notify_unpaid_order: true,
-  // Security
-  max_login_attempts: 5,
-  login_lockout_minutes: 30,
-  session_timeout_minutes: 120,
-  abnormal_login_alert: true,
-  ip_whitelist: '',
-  // Backup
-  backup_github_enabled: false,
-  backup_github_token: '',
-  backup_github_repo: '',
-  backup_interval_hours: 24,
-  // Client download URLs
-  client_clash_windows_url: '',
-  client_v2rayn_url: '',
-  client_clashparty_windows_url: '',
-  client_hiddify_windows_url: '',
-  client_flclash_windows_url: '',
-  client_clash_android_url: '',
-  client_v2rayng_url: '',
-  client_hiddify_android_url: '',
-  client_flclash_macos_url: '',
-  client_clashparty_macos_url: '',
-  client_shadowrocket_url: '',
-  client_stash_url: '',
-  client_singbox_url: '',
-  client_clash_linux_url: '',
-  // Check-in
-  checkin_enabled: true,
-  checkin_min_reward: 10,
-  checkin_max_reward: 50,
-  // Custom package
-  custom_package_enabled: false,
-  custom_package_price_per_device_year: 40,
-  custom_package_min_devices: 1,
-  custom_package_max_devices: 20,
-  custom_package_min_months: 6,
-  custom_package_duration_discounts: '',
+  notify_telegram_enabled: false, notify_telegram_bot_token: '', notify_telegram_chat_id: '',
+  notify_new_user: false, notify_new_order: false, notify_payment_success: false, notify_new_ticket: false,
+  max_login_attempts: 5, login_lockout_minutes: 30, ip_whitelist: '',
+  checkin_enabled: true, checkin_min_reward: 10, checkin_max_reward: 50
 })
 
-const durationDiscounts = ref<{ months: number; discount: number }[]>([
-  { months: 6, discount: 0 }, { months: 12, discount: 10 }, { months: 24, discount: 20 }
-])
+const maskedFields = ref<Set<string>>(new Set())
+const sensitiveKeys = ['smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key', 'pay_stripe_secret_key', 'pay_stripe_webhook_secret', 'notify_telegram_bot_token']
 
 const loadSettings = async () => {
   loading.value = true
@@ -748,242 +227,204 @@ const loadSettings = async () => {
     const res = await getSettings()
     if (res.code === 0 && res.data) {
       const data = res.data as Record<string, any>
-      maskedFields.value.clear() // 清空之前的记录
+      maskedFields.value.clear()
       for (const key of Object.keys(form.value)) {
         if (key in data) {
-          if (booleanKeys.includes(key)) {
+          if (typeof form.value[key] === 'boolean') {
             form.value[key] = data[key] === true || data[key] === 'true' || data[key] === '1'
-          } else if (numberKeys.includes(key)) {
-            form.value[key] = Number(data[key]) || form.value[key]
+          } else if (typeof form.value[key] === 'number') {
+            form.value[key] = Number(data[key]) || 0
           } else {
             form.value[key] = data[key]
-            // 记录哪些敏感字段是掩码
-            if (sensitiveKeys.includes(key) && data[key] === '****') {
-              maskedFields.value.add(key)
-            }
+            if (sensitiveKeys.includes(key) && data[key] === '****') maskedFields.value.add(key)
           }
         }
       }
-      // Parse duration discounts JSON
-      if (data.custom_package_duration_discounts) {
-        try { durationDiscounts.value = JSON.parse(data.custom_package_duration_discounts) } catch {}
-      }
-    } else {
-      message.error(res.message || '加载设置失败')
     }
-  } catch (error: any) {
-    message.error(error.message || '加载设置失败')
   } finally {
     loading.value = false
   }
 }
 
-const sensitiveKeys = [
-  'smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key',
-  'pay_wechat_api_key', 'pay_epay_secret_key', 'pay_stripe_secret_key',
-  'pay_stripe_webhook_secret', 'backup_github_token', 'notify_telegram_bot_token'
-]
-
-// 记录初始加载时的掩码字段
-const maskedFields = ref<Set<string>>(new Set())
-
 const handleSave = async () => {
   saving.value = true
   try {
-    form.value.custom_package_duration_discounts = JSON.stringify(durationDiscounts.value)
     const dataToSave: Record<string, any> = {}
     for (const key of Object.keys(form.value)) {
       const val = form.value[key]
-      // 只有当字段是初始加载时的掩码且值未改变时才跳过
-      if (sensitiveKeys.includes(key) && maskedFields.value.has(key) && (typeof val === 'string' && val === '****')) {
-        continue
-      }
+      if (sensitiveKeys.includes(key) && maskedFields.value.has(key) && val === '****') continue
       dataToSave[key] = val
     }
     const res = await updateSettings(dataToSave)
     if (res.code === 0) {
-      message.success('保存成功')
+      message.success('系统配置已持久化保存')
       await loadSettings()
-    } else {
-      message.error(res.message || '保存失败')
     }
-  } catch (error: any) {
-    message.error(error.message || '保存失败')
   } finally {
     saving.value = false
   }
 }
 
 const handleSendTestEmail = async () => {
-  if (!testEmail.value) {
-    message.warning('请输入测试邮箱地址')
-    return
-  }
+  if (!testEmail.value) return message.warning('请输入测试邮箱')
   sendingTest.value = true
   try {
-    const res = await sendTestEmail({ email: testEmail.value })
-    if (res.code === 0) {
-      message.success('测试邮件已发送')
-    } else {
-      message.error(res.message || '发送失败')
-    }
-  } catch (error: any) {
-    message.error(error.message || '发送失败')
-  } finally {
-    sendingTest.value = false
-  }
-}
-
-const handleTestTelegram = async () => {
-  testingTelegram.value = true
-  try {
-    const res = await testTelegram()
-    if (res.code === 0) {
-      message.success('Telegram 测试消息已发送')
-    } else {
-      message.error(res.message || '发送失败')
-    }
-  } catch (error: any) {
-    message.error(error.message || '发送失败')
-  } finally {
-    testingTelegram.value = false
-  }
-}
-
-const backupColumns = [
-  { title: '文件名', key: 'filename', ellipsis: { tooltip: true } },
-  { title: '大小', key: 'size' },
-  { title: '创建时间', key: 'created_at', width: 180 },
-]
-
-const loadBackups = async () => {
-  backupLoading.value = true
-  try {
-    const res = await listBackups()
-    backups.value = res.data || []
-  } catch (error: any) {
-    message.error(error.message || '加载备份列表失败')
-  } finally {
-    backupLoading.value = false
-  }
+    await sendTestEmail({ email: testEmail.value })
+    message.success('测试邮件已发出')
+  } finally { sendingTest.value = false }
 }
 
 const handleCreateBackup = async () => {
   backupCreating.value = true
-  uploadStatus.value = null
-  uploadTaskId.value = ''
   try {
-    const res = await createBackup()
-    message.success(res.message || '备份已创建')
-    loadBackups()
-    // Check if GitHub upload was started
-    const taskId = res.data?.task_id
-    if (taskId) {
-      uploadTaskId.value = taskId
-      uploadStatus.value = { status: 'uploading', progress: 0, message: '正在上传到 GitHub...' }
-      startUploadPolling(taskId)
-    }
-  } catch (error: any) {
-    message.error(error.message || '创建备份失败')
-  } finally {
-    backupCreating.value = false
-  }
-}
-
-const startUploadPolling = (taskId: string) => {
-  stopUploadPolling()
-  uploadPollTimer = setInterval(async () => {
-    try {
-      const res = await getUploadStatus(taskId)
-      uploadStatus.value = res.data
-      if (res.data?.status === 'success' || res.data?.status === 'failed') {
-        stopUploadPolling()
-        if (res.data.status === 'success') {
-          message.success('GitHub 备份上传成功')
-        } else {
-          message.error('GitHub 上传失败: ' + (res.data.error || '未知错误'))
-        }
-      }
-    } catch {
-      stopUploadPolling()
-    }
-  }, 2000)
-}
-
-const stopUploadPolling = () => {
-  if (uploadPollTimer) {
-    clearInterval(uploadPollTimer)
-    uploadPollTimer = null
-  }
-}
-
-const handleTestGitHub = async () => {
-  testingGitHub.value = true
-  try {
-    const repo = String(form.value.backup_github_repo || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/^\/+|\/+$/g, '')
-    await testGitHubConnection({ token: form.value.backup_github_token, repo })
-    form.value.backup_github_repo = repo
-    message.success('GitHub 连接测试成功')
-  } catch (error: any) {
-    message.error(error.message || 'GitHub 连接测试失败')
-  } finally {
-    testingGitHub.value = false
-  }
+    await createBackup()
+    message.success('数据库备份已生成在服务器 backups 目录')
+  } finally { backupCreating.value = false }
 }
 
 const handleUpdateGeoIP = async () => {
-  updatingGeoIP.value = true
   try {
-    const res = await updateGeoIPFiles()
-    message.success(res.message || 'GeoIP 数据更新成功')
-  } catch (error: any) {
-    message.error(error.message || 'GeoIP 数据更新失败')
-  } finally {
-    updatingGeoIP.value = false
-  }
+    await updateGeoIPFiles()
+    message.success('GeoIP 库更新任务已启动')
+  } catch {}
 }
 
-const handleBackfillLocations = async () => {
-  backfillingLocations.value = true
-  try {
-    const res = await backfillLocations()
-    message.success(res.message || '历史地区数据回填完成')
-  } catch (error: any) {
-    message.error(error.message || '历史地区数据回填失败')
-  } finally {
-    backfillingLocations.value = false
-  }
-}
-
-onMounted(() => {
-  loadSettings()
-})
+onMounted(() => loadSettings())
 </script>
 
 <style scoped>
-.settings-container {
-  padding: 20px;
+.settings-page {
+  padding: 24px;
 }
 
-:deep(.n-tabs-pane-wrapper) {
-  padding-top: 20px;
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
 }
 
-:deep(.n-card.n-card--bordered) {
-  margin-bottom: 0;
+.page-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--n-title-text-color);
 }
 
-.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.mobile-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
-.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
-.card-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-body { padding: 10px 14px; }
-.card-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
-.card-label { color: #999; }
+.page-subtitle {
+  margin: 4px 0 0 0;
+  color: #888;
+  font-size: 14px;
+}
+
+.settings-card {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+  min-height: 700px;
+}
+
+.settings-layout {
+  display: flex;
+  min-height: 700px;
+}
+
+/* 侧边导航区 */
+.settings-sidebar {
+  width: 240px;
+  background: #f9fafb;
+  border-right: 1px solid #efeff5;
+  padding: 16px 0;
+  flex-shrink: 0;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #666;
+}
+
+.sidebar-item:hover {
+  background: #f3f4f6;
+  color: var(--n-primary-color);
+}
+
+.sidebar-item.active {
+  background: white;
+  color: var(--n-primary-color);
+  font-weight: 600;
+  border-right: 3px solid var(--n-primary-color);
+  margin-right: -1px;
+}
+
+.item-label {
+  font-size: 14px;
+}
+
+/* 内容展示区 */
+.settings-content {
+  flex: 1;
+  background: white;
+  padding: 32px 48px;
+  overflow-y: auto;
+}
+
+.content-inner {
+  max-width: 900px;
+}
+
+.mobile-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 80px;
+  z-index: 100;
+}
+
+@media (max-width: 992px) {
+  .settings-sidebar { width: 180px; }
+  .settings-content { padding: 24px 32px; }
+}
 
 @media (max-width: 767px) {
-  .settings-container { padding: 8px; }
-  :deep(.n-tabs-pane-wrapper) { padding-top: 12px; }
-  :deep(.n-form-item .n-form-item-label) { min-width: 80px; }
+  .settings-page { padding: 12px; }
+  .settings-layout { flex-direction: column; }
+  .settings-sidebar {
+    width: 100%;
+    display: flex;
+    overflow-x: auto;
+    padding: 8px;
+    border-right: none;
+    border-bottom: 1px solid #efeff5;
+  }
+  .sidebar-item {
+    padding: 8px 16px;
+    flex-shrink: 0;
+    border-right: none !important;
+    border-bottom: 2px solid transparent;
+  }
+  .sidebar-item.active {
+    border-bottom: 2px solid var(--n-primary-color);
+  }
+  .settings-content { padding: 20px 16px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .header-right { width: 100%; }
+  .header-right .n-button { width: 100%; }
+}
+
+/* 切换动画 */
+.fade-slide-enter-active, .fade-slide-leave-active {
+  transition: all 0.25s ease;
+}
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateX(10px);
+}
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-10px);
 }
 </style>

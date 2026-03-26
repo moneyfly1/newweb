@@ -1,15 +1,19 @@
 package middleware
 
 import (
+	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"cboard/v2/internal/database"
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
-type rateLimiter struct {
+// memRateLimiter is a fallback in-memory rate limiter based on fixed window counter
+type memRateLimiter struct {
 	mu       sync.Mutex
 	visitors map[string]*visitor
 	rate     int
@@ -23,17 +27,16 @@ type visitor struct {
 
 const maxVisitors = 10000
 
-func newRateLimiter(rate int, window time.Duration) *rateLimiter {
-	rl := &rateLimiter{visitors: make(map[string]*visitor), rate: rate, window: window}
+func newMemRateLimiter(rate int, window time.Duration) *memRateLimiter {
+	rl := &memRateLimiter{visitors: make(map[string]*visitor), rate: rate, window: window}
 	go rl.cleanup()
 	return rl
 }
 
-func (rl *rateLimiter) allow(key string) bool {
+func (rl *memRateLimiter) allow(key string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	// Evict oldest entries if map is too large (prevent memory exhaustion from IP rotation attacks)
 	if len(rl.visitors) >= maxVisitors {
 		now := time.Now()
 		for k, v := range rl.visitors {
@@ -41,7 +44,6 @@ func (rl *rateLimiter) allow(key string) bool {
 				delete(rl.visitors, k)
 			}
 		}
-		// If still over limit after cleanup, reject (under attack)
 		if len(rl.visitors) >= maxVisitors {
 			return false
 		}
@@ -60,7 +62,7 @@ func (rl *rateLimiter) allow(key string) bool {
 	return true
 }
 
-func (rl *rateLimiter) cleanup() {
+func (rl *memRateLimiter) cleanup() {
 	for {
 		time.Sleep(rl.window)
 		rl.mu.Lock()
@@ -74,11 +76,40 @@ func (rl *rateLimiter) cleanup() {
 	}
 }
 
-// RateLimit 频率限制中间件
+// RateLimit 频率限制中间件 (优先使用 Redis，回退到内存)
 func RateLimit(rate int, window time.Duration) gin.HandlerFunc {
-	limiter := newRateLimiter(rate, window)
+	memFallback := newMemRateLimiter(rate, window)
+	
 	return func(c *gin.Context) {
-		if !limiter.allow(utils.GetRealClientIP(c)) {
+		clientIP := utils.GetRealClientIP(c)
+		r := database.GetRedis()
+		
+		allowed := true
+		
+		if r != nil {
+			// Redis sliding window / fixed window logic
+			ctx := context.Background()
+			key := fmt.Sprintf("ratelimit:%s:%s", c.FullPath(), clientIP)
+			
+			// increment counter
+			cnt, err := r.Incr(ctx, key).Result()
+			if err == nil {
+				if cnt == 1 {
+					// First request, set expiration
+					r.Expire(ctx, key, window)
+				}
+				if int(cnt) > rate {
+					allowed = false
+				}
+			} else {
+				// Redis error (e.g. timeout), fallback
+				allowed = memFallback.allow(clientIP)
+			}
+		} else {
+			allowed = memFallback.allow(clientIP)
+		}
+
+		if !allowed {
 			utils.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return

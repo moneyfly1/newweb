@@ -1,26 +1,35 @@
 <template>
-  <div class="subscriptions-container">
-    <n-card :title="appStore.isMobile ? undefined : '订阅管理'">
-      <template v-if="!appStore.isMobile" #header-extra>
+  <div class="subscriptions-container admin-page-shell">
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">订阅管理</h2>
+        <p class="page-subtitle">管理用户订阅状态，包括设备限制、过期时间、流量重置及订阅地址管理</p>
+      </div>
+      <div class="header-right">
         <n-space>
-          <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注/订阅地址" clearable style="width: 200px" @keyup.enter="handleSearch">
+          <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注/订阅地址" clearable style="width: 250px" @keyup.enter="handleSearch">
             <template #prefix><n-icon><SearchOutline /></n-icon></template>
           </n-input>
           <n-select v-model:value="statusFilter" :options="statusOptions" style="width: 120px" @update:value="handleSearch" />
-          <n-button @click="handleRefresh"><template #icon><n-icon><RefreshOutline /></n-icon></template></n-button>
+          <n-button @click="handleRefresh" secondary>
+            <template #icon><n-icon><RefreshOutline /></n-icon></template>
+            刷新
+          </n-button>
         </n-space>
-      </template>
+      </div>
+    </div>
 
-      <!-- Mobile: title + search stacked -->
+    <n-card :bordered="false" class="admin-main-card">
+
+      <!-- Mobile: search stacked -->
       <div v-if="appStore.isMobile" class="mobile-toolbar">
-        <div class="mobile-toolbar-title">订阅管理</div>
         <div class="mobile-toolbar-controls">
           <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注/订阅地址" clearable size="small" @keyup.enter="handleSearch">
             <template #prefix><n-icon><SearchOutline /></n-icon></template>
           </n-input>
           <div class="mobile-toolbar-row">
             <n-select v-model:value="statusFilter" :options="statusOptions" size="small" style="flex:1" @update:value="handleSearch" />
-            <n-button size="small" @click="handleRefresh"><template #icon><n-icon><RefreshOutline /></n-icon></template></n-button>
+            <n-button size="small" type="info" @click="handleSearch">搜索</n-button>
           </div>
         </div>
       </div>
@@ -34,7 +43,7 @@
           <n-button size="small" type="info" @click="handleBatchEmail">批量发送</n-button>
           <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
         </n-space>
-        <n-data-table remote :columns="columns" :data="tableData" :loading="loading" :pagination="pagination" :bordered="false" :scroll-x="1500"
+        <n-data-table remote class="unified-admin-table" :columns="columns" :data="tableData" :loading="loading" :pagination="pagination" :bordered="false" :single-line="false" :scroll-x="1500"
           :row-key="(row) => row.id"
           :checked-row-keys="checkedRowKeys"
           @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
@@ -80,11 +89,11 @@
                 </div>
                 <div class="sub-btn-row sub-btn-row-6">
                   <n-button size="tiny" type="error" @click="handleClearDevices(row)">清理</n-button>
-                  <n-button size="tiny" @click="inlineSetDevice(row, 2)">2</n-button>
-                  <n-button size="tiny" @click="inlineSetDevice(row, 5)">5</n-button>
-                  <n-button size="tiny" @click="inlineSetDevice(row, 10)">10</n-button>
-                  <n-button size="tiny" @click="inlineSetDevice(row, 20)">20</n-button>
-                  <n-button size="tiny" @click="inlineSetDevice(row, 30)">30</n-button>
+                  <n-button size="tiny" @click="inlineAddDevice(row, 2)">+2</n-button>
+                  <n-button size="tiny" @click="inlineAddDevice(row, 5)">+5</n-button>
+                  <n-button size="tiny" @click="inlineAddDevice(row, 10)">+10</n-button>
+                  <n-button size="tiny" @click="inlineAddDevice(row, 20)">+20</n-button>
+                  <n-button size="tiny" @click="inlineAddDevice(row, 30)">+30</n-button>
                 </div>
               </div>
               <div class="sub-section">
@@ -623,7 +632,6 @@ const handleBatchDelete = () => {
 onMounted(() => fetchData())
 </script>
 <style scoped>
-.subscriptions-container { padding: 20px; }
 /* Desktop inline cells */
 :deep(.inline-cell) { padding: 6px; border-radius: 6px; }
 :deep(.cell-expired) { background: #fef0f0; border: 1px solid #f56c6c; }

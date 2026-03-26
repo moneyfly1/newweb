@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -141,6 +142,24 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		return ctx
 	}
 
+	// 防剥离滥用/防合并出售检测 (按天统计独立 IP 数)
+	r := database.GetRedis()
+	if r != nil && !clientInfo.IsBrowser {
+		today := time.Now().Format("2006-01-02")
+		ipSetKey := fmt.Sprintf("sub_ips:%d:%s", sub.ID, today)
+		r.SAdd(context.Background(), ipSetKey, clientIP)
+		r.Expire(context.Background(), ipSetKey, 48*time.Hour)
+		ipCount := r.SCard(context.Background(), ipSetKey).Val()
+		
+		// 如果单日超过 15 个不同的 IP，可能存在订阅泄露/合租贩卖
+		if ipCount > 15 {
+			utils.SysError("security_alert", fmt.Sprintf("【防滥用警报】订阅 ID: %d 疑似泄露！今日已被 %d 个不同IP拉取。", sub.ID, ipCount))
+			// 若需做到极度严格，可在此处拦截: 
+			// ctx.Status = subStatusDeviceOverLimit
+			// return ctx
+		}
+	}
+
 	// Browser requests: allow access but don't count as device
 	if clientInfo.IsBrowser {
 		var nodes []models.Node
@@ -257,24 +276,27 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 			}
 		})
 	} else {
-		if err := db.Model(&device).Updates(map[string]interface{}{
-			"last_access":  time.Now(),
-			"access_count": device.AccessCount + 1,
-			"ip_address":   ip,
-		}).Error; err != nil {
-			utils.SysError("subscription", fmt.Sprintf("更新设备访问记录失败: device=%d err=%v", device.ID, err))
-		}
-
-		// 使用 worker 池异步更新 IP 位置
+		// 使用 worker 池异步更新设备访问记录，消除高并发下的 DB 行锁瓶颈
 		deviceID := device.ID
+		currentCount := device.AccessCount
 		ipAddr := ip
 		oldIP := device.IPAddress
+
 		pool := worker.GetDefaultPool()
 		pool.Submit(func() {
+			asyncDB := database.GetDB()
+			if err := asyncDB.Model(&models.Device{}).Where("id = ?", deviceID).Updates(map[string]interface{}{
+				"last_access":  time.Now(),
+				"access_count": currentCount + 1,
+				"ip_address":   ipAddr,
+			}).Error; err != nil {
+				utils.SysError("subscription", fmt.Sprintf("异步更新设备记录失败: device=%d err=%v", deviceID, err))
+			}
+
 			if oldIP == nil || *oldIP != ipAddr {
 				region := utils.GetIPLocation(ipAddr)
 				if region != "" {
-					if err := database.GetDB().Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region).Error; err != nil {
+					if err := asyncDB.Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region).Error; err != nil {
 						utils.SysError("subscription", fmt.Sprintf("更新设备地区失败: device=%d err=%v", deviceID, err))
 					}
 				}
@@ -484,6 +506,37 @@ func GetSubscription(c *gin.Context) {
 	useLoon := subType == "loon"
 	useSingBox := subType == "singbox" || subType == "sing-box"
 
+	// 尝试从 Redis 缓存获取下发内容 (仅当订阅状态正常时缓存)
+	var cacheKey string
+	r := database.GetRedis()
+	if ctx.Status == subStatusOK && ctx.Sub != nil && r != nil {
+		cacheKey = fmt.Sprintf("sub_payload:%d:%s", ctx.Sub.ID, subType)
+		if cachedBody, err := r.Get(c.Request.Context(), cacheKey).Result(); err == nil && cachedBody != "" {
+			subscriptionName := generateSubscriptionName(ctx)
+			encodedName := url.QueryEscape(subscriptionName)
+
+			if useStash || useClash {
+				c.Header("Content-Type", "text/yaml; charset=utf-8")
+				c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.yaml", encodedName))
+			} else if useSurge || useQuantumultX || useLoon {
+				c.Header("Content-Type", "text/plain; charset=utf-8")
+				c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.conf", encodedName))
+			} else if useSingBox {
+				c.Header("Content-Type", "application/json; charset=utf-8")
+				c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.json", encodedName))
+			} else {
+				c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", encodedName))
+				c.Header("Content-Type", "text/plain; charset=utf-8")
+			}
+
+			c.Header("Subscription-Title", subscriptionName)
+			c.Header("Profile-Title", subscriptionName)
+			setSubscriptionHeaders(c, ctx)
+			c.String(http.StatusOK, cachedBody)
+			return
+		}
+	}
+
 	var nodes []models.Node
 	if ctx.Status != subStatusOK {
 		nodes = getErrorNodes(ctx)
@@ -494,77 +547,58 @@ func GetSubscription(c *gin.Context) {
 
 	subscriptionName := generateSubscriptionName(ctx)
 
+	var responseData string
+	var contentType string
+	var fileNameSuffix string
+
 	if useStash {
-		yamlContent := services.GenerateStashYAMLWithDomain(nodes, ctx.SiteURL, subscriptionName)
-		fileName := subscriptionName
-		if strings.HasPrefix(subscriptionName, "到期: ") {
-			fileName = "到期时间" + strings.TrimPrefix(subscriptionName, "到期: ")
-		}
-		encodedName := url.QueryEscape(fileName)
-		c.Header("Content-Type", "text/yaml; charset=utf-8")
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.yaml", encodedName))
-		c.Header("Subscription-Title", subscriptionName)
-		c.Header("Profile-Title", subscriptionName)
-		setSubscriptionHeaders(c, ctx)
-		c.Data(http.StatusOK, "text/yaml; charset=utf-8", []byte(yamlContent))
+		responseData = services.GenerateStashYAMLWithDomain(nodes, ctx.SiteURL, subscriptionName)
+		fileNameSuffix = ".yaml"
+		contentType = "text/yaml; charset=utf-8"
 	} else if useClash {
-		yamlContent := services.GenerateClashYAMLWithDomain(nodes, ctx.SiteURL, subscriptionName)
-		fileName := subscriptionName
-		if strings.HasPrefix(subscriptionName, "到期: ") {
-			fileName = "到期时间" + strings.TrimPrefix(subscriptionName, "到期: ")
-		}
-		encodedName := url.QueryEscape(fileName)
-		c.Header("Content-Type", "text/yaml; charset=utf-8")
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.yaml", encodedName))
-		c.Header("Subscription-Title", subscriptionName)
-		c.Header("Profile-Title", subscriptionName)
-		setSubscriptionHeaders(c, ctx)
-		c.Data(http.StatusOK, "text/yaml; charset=utf-8", []byte(yamlContent))
+		responseData = services.GenerateClashYAMLWithDomain(nodes, ctx.SiteURL, subscriptionName)
+		fileNameSuffix = ".yaml"
+		contentType = "text/yaml; charset=utf-8"
 	} else if useSurge {
-		surgeContent := services.GenerateSurgeConfig(nodes, ctx.SiteURL)
-		encodedName := url.QueryEscape(subscriptionName)
-		c.Header("Content-Type", "text/plain; charset=utf-8")
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.conf", encodedName))
-		c.Header("Subscription-Title", subscriptionName)
-		c.Header("Profile-Title", subscriptionName)
-		setSubscriptionHeaders(c, ctx)
-		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(surgeContent))
+		responseData = services.GenerateSurgeConfig(nodes, ctx.SiteURL)
+		fileNameSuffix = ".conf"
+		contentType = "text/plain; charset=utf-8"
 	} else if useQuantumultX {
-		qxContent := services.GenerateQuantumultXConfig(nodes)
-		encodedName := url.QueryEscape(subscriptionName)
-		c.Header("Content-Type", "text/plain; charset=utf-8")
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.conf", encodedName))
-		c.Header("Subscription-Title", subscriptionName)
-		c.Header("Profile-Title", subscriptionName)
-		setSubscriptionHeaders(c, ctx)
-		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(qxContent))
+		responseData = services.GenerateQuantumultXConfig(nodes)
+		fileNameSuffix = ".conf"
+		contentType = "text/plain; charset=utf-8"
 	} else if useLoon {
-		loonContent := services.GenerateLoonConfig(nodes, ctx.SiteURL)
-		encodedName := url.QueryEscape(subscriptionName)
-		c.Header("Content-Type", "text/plain; charset=utf-8")
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.conf", encodedName))
-		c.Header("Subscription-Title", subscriptionName)
-		c.Header("Profile-Title", subscriptionName)
-		setSubscriptionHeaders(c, ctx)
-		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(loonContent))
+		responseData = services.GenerateLoonConfig(nodes, ctx.SiteURL)
+		fileNameSuffix = ".conf"
+		contentType = "text/plain; charset=utf-8"
 	} else if useSingBox {
-		singboxContent := services.GenerateSingBoxConfig(nodes)
-		encodedName := url.QueryEscape(subscriptionName)
-		c.Header("Content-Type", "application/json; charset=utf-8")
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.json", encodedName))
-		c.Header("Subscription-Title", subscriptionName)
-		c.Header("Profile-Title", subscriptionName)
-		setSubscriptionHeaders(c, ctx)
-		c.Data(http.StatusOK, "application/json; charset=utf-8", []byte(singboxContent))
+		responseData = services.GenerateSingBoxConfig(nodes)
+		fileNameSuffix = ".json"
+		contentType = "application/json; charset=utf-8"
 	} else {
-		encoded := services.GenerateUniversalBase64(nodes)
-		encodedName := url.QueryEscape(subscriptionName)
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", encodedName))
-		c.Header("Subscription-Title", subscriptionName)
-		c.Header("Profile-Title", subscriptionName)
-		setSubscriptionHeaders(c, ctx)
-		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(encoded))
+		responseData = services.GenerateUniversalBase64(nodes)
+		fileNameSuffix = ""
+		contentType = "text/plain; charset=utf-8"
 	}
+
+	fileName := subscriptionName
+	if strings.HasPrefix(subscriptionName, "到期: ") {
+		fileName = "到期时间" + strings.TrimPrefix(subscriptionName, "到期: ")
+	}
+	encodedName := url.QueryEscape(fileName)
+
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s%s", encodedName, fileNameSuffix))
+	c.Header("Subscription-Title", subscriptionName)
+	c.Header("Profile-Title", subscriptionName)
+	setSubscriptionHeaders(c, ctx)
+
+	// 设置缓存 (TTL 5 分钟)，只缓存正常状态的内容
+	if cacheKey != "" && ctx.Status == subStatusOK && r != nil {
+		r.Set(context.Background(), cacheKey, responseData, 5*time.Minute)
+	}
+
+	c.String(http.StatusOK, responseData)
 }
 
 // setSubscriptionHeaders sets common subscription response headers（Sparkle 等客户端用 Profile-Title / Profile-Update-Interval 显示名称与自动更新间隔）

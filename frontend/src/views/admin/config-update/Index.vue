@@ -1,17 +1,28 @@
 <template>
   <div class="config-update-container">
-    <n-card :title="appStore.isMobile ? undefined : '节点自动更新'">
-      <template v-if="!appStore.isMobile" #header-extra>
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">节点自动更新</h2>
+        <p class="page-subtitle">配置节点爬虫与采集任务，支持定时采集、规则过滤及实时日志监控</p>
+      </div>
+      <div class="header-right">
         <n-space>
-          <n-button @click="fetchStatus">
+          <n-button @click="fetchStatus" secondary>
             <template #icon><n-icon><RefreshOutline /></n-icon></template>
             刷新状态
           </n-button>
+        </n-space>
+      </div>
+    </div>
+
+    <n-card :bordered="false" class="admin-main-card">
+      <template v-if="!appStore.isMobile" #header-extra>
+        <n-space>
           <n-button type="primary" :loading="starting" :disabled="status.running" @click="handleStart">
             <template #icon><n-icon><PlayOutline /></n-icon></template>
-            立即更新
+            立即执行采集
           </n-button>
-          <n-button type="warning" :disabled="!status.running" @click="handleStop">
+          <n-button type="warning" secondary :disabled="!status.running" @click="handleStop">
             <template #icon><n-icon><StopOutline /></n-icon></template>
             停止
           </n-button>
@@ -19,18 +30,11 @@
       </template>
 
       <div v-if="appStore.isMobile" class="mobile-toolbar">
-        <div class="mobile-toolbar-title">节点自动更新</div>
         <div class="mobile-toolbar-row">
-          <n-button size="small" @click="fetchStatus">
-            <template #icon><n-icon><RefreshOutline /></n-icon></template>
-            刷新
-          </n-button>
           <n-button size="small" type="primary" :loading="starting" :disabled="status.running" @click="handleStart">
-            <template #icon><n-icon><PlayOutline /></n-icon></template>
-            更新
+            立即采集
           </n-button>
-          <n-button size="small" type="warning" :disabled="!status.running" @click="handleStop">
-            <template #icon><n-icon><StopOutline /></n-icon></template>
+          <n-button size="small" type="warning" secondary :disabled="!status.running" @click="handleStop">
             停止
           </n-button>
         </div>

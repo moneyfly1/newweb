@@ -32,6 +32,11 @@ type Config struct {
 	PostgresPass   string `mapstructure:"POSTGRES_PASS"`
 	PostgresDB     string `mapstructure:"POSTGRES_DB"`
 
+	// Redis 配置
+	RedisAddr     string `mapstructure:"REDIS_ADDR"`
+	RedisPassword string `mapstructure:"REDIS_PASSWORD"`
+	RedisDB       int    `mapstructure:"REDIS_DB"`
+
 	// JWT / 安全配置
 	SecretKey                string `mapstructure:"SECRET_KEY"`
 	JWTAlgorithm             string `mapstructure:"JWT_ALGORITHM"`
@@ -93,6 +98,11 @@ func setDefaults() {
 	// 数据库默认使用 SQLite
 	viper.SetDefault("DATABASE_URL", "sqlite:///./cboard.db")
 	viper.SetDefault("MYSQL_PORT", 3306)
+
+	// Redis 默认配置
+	viper.SetDefault("REDIS_ADDR", "")
+	viper.SetDefault("REDIS_PASSWORD", "")
+	viper.SetDefault("REDIS_DB", 0)
 
 	// JWT 默认值
 	viper.SetDefault("JWT_ALGORITHM", "HS256")

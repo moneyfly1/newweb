@@ -1,56 +1,45 @@
 <template>
-  <div class="admin-users-page">
-    <n-card :title="appStore.isMobile ? undefined : '用户管理'" :bordered="false" class="page-card">
+  <div class="admin-users-page admin-page-shell">
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">用户管理</h2>
+        <p class="page-subtitle">管理系统所有用户，支持高级搜索、余额调整、等级设置及批量操作</p>
+      </div>
+      <div class="header-right">
+        <n-space>
+          <n-input
+            v-model:value="searchQuery"
+            placeholder="搜索邮箱/用户名/订阅地址"
+            clearable
+            style="width: 250px"
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix>
+              <n-icon :component="SearchOutline" />
+            </template>
+          </n-input>
+          <n-select
+            v-model:value="statusFilter"
+            placeholder="状态"
+            clearable
+            style="width: 120px"
+            :options="statusOptions"
+            @update:value="handleSearch"
+          />
+          <n-button type="primary" @click="openCreateModal">
+            <template #icon><n-icon :component="AddOutline" /></template>
+            新增用户
+          </n-button>
+          <n-button @click="fetchUsers" secondary>
+            <template #icon><n-icon :component="RefreshOutline" /></template>
+            刷新
+          </n-button>
+        </n-space>
+      </div>
+    </div>
+
+    <n-card :bordered="false" class="page-card admin-main-card">
       <n-space vertical :size="16">
-        <!-- Desktop Header -->
-        <template v-if="!appStore.isMobile">
-          <n-space justify="space-between" align="center" style="width: 100%">
-            <n-space>
-              <n-input
-                v-model:value="searchQuery"
-                placeholder="搜索邮箱/用户名/订阅地址"
-                clearable
-                style="width: 260px"
-                @keyup.enter="handleSearch"
-              >
-                <template #prefix>
-                  <n-icon :component="SearchOutline" />
-                </template>
-              </n-input>
-              <n-select
-                v-model:value="statusFilter"
-                placeholder="状态筛选"
-                clearable
-                style="width: 140px"
-                :options="statusOptions"
-                @update:value="handleSearch"
-              />
-              <n-button type="info" @click="handleSearch">
-                <template #icon><n-icon :component="SearchOutline" /></template>
-                搜索
-              </n-button>
-            </n-space>
-            <n-space>
-              <n-button type="primary" @click="openCreateModal">
-                <template #icon><n-icon :component="AddOutline" /></template>
-                新增用户
-              </n-button>
-              <n-button @click="handleExportCSV">
-                <template #icon><n-icon :component="DownloadOutline" /></template>
-                导出CSV
-              </n-button>
-              <n-button @click="triggerImportCSV">
-                <template #icon><n-icon :component="CloudUploadOutline" /></template>
-                导入CSV
-              </n-button>
-              <input ref="importFileInput" type="file" accept=".csv" style="display:none" @change="handleImportCSV" />
-              <n-button @click="fetchUsers">
-                <template #icon><n-icon :component="RefreshOutline" /></template>
-                刷新
-              </n-button>
-            </n-space>
-          </n-space>
-        </template>
 
         <!-- Mobile Header -->
         <div v-if="appStore.isMobile" class="mobile-toolbar">
@@ -119,6 +108,7 @@
         <!-- Data table (Desktop) -->
         <template v-if="!appStore.isMobile">
           <n-data-table
+            class="unified-admin-table"
             :columns="columns"
             :data="users"
             :loading="loading"
@@ -245,13 +235,21 @@
           />
         </n-form-item>
         <n-form-item label="设备数量" path="device_limit">
-          <n-input-number
-            v-model:value="editForm.device_limit"
-            :min="1"
-            :max="100"
-            style="width: 100%"
-            placeholder="设备数量限制"
-          />
+          <n-space vertical style="width: 100%">
+            <n-input-number
+              v-model:value="editForm.device_limit"
+              :min="1"
+              :max="1000"
+              style="width: 100%"
+              placeholder="设备数量限制"
+            />
+            <n-space :size="8">
+              <n-button size="tiny" secondary type="info" @click="editForm.device_limit = (editForm.device_limit || 0) + 1">+1</n-button>
+              <n-button size="tiny" secondary type="info" @click="editForm.device_limit = (editForm.device_limit || 0) + 2">+2</n-button>
+              <n-button size="tiny" secondary type="info" @click="editForm.device_limit = (editForm.device_limit || 0) + 5">+5</n-button>
+              <n-button size="tiny" secondary type="info" @click="editForm.device_limit = (editForm.device_limit || 0) + 10">+10</n-button>
+            </n-space>
+          </n-space>
         </n-form-item>
         <n-form-item label="备注" path="notes">
           <n-input v-model:value="editForm.notes" type="textarea" placeholder="备注信息" :rows="3" />
@@ -997,49 +995,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.admin-users-page {
-  padding: 20px;
-}
-
-.page-card {
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-:deep(.n-data-table) {
-  font-size: 14px;
-}
-
-:deep(.n-data-table .n-data-table-th) {
-  font-weight: 600;
-}
-
-@media (max-width: 767px) {
-  .admin-users-page { padding: 8px; }
-}
-
-.mobile-toolbar {
-  margin-bottom: 12px;
-}
-
-.mobile-toolbar-title {
-  font-size: 17px;
-  font-weight: 600;
-  margin-bottom: 10px;
-  color: var(--text-color, #333);
-}
-
-.mobile-toolbar-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.mobile-toolbar-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
+.url-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .url-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .url-label { font-size: 12px; color: var(--text-color-secondary, #666); min-width: 40px; }
 .url-text { font-size: 12px; word-break: break-all; color: var(--text-color, #333); background: rgba(0,0,0,0.03); padding: 2px 6px; border-radius: 3px; }

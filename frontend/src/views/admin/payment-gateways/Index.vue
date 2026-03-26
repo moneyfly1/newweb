@@ -1,6 +1,6 @@
 <template>
-  <div class="payment-gateways-container">
-    <n-card title="支付方式管理">
+  <div class="payment-gateways-container admin-page-shell">
+    <n-card title="支付方式管理" :bordered="false" class="admin-main-card">
       <n-spin :show="loading">
         <n-space vertical :size="16">
           <n-alert type="info" title="提示">
@@ -8,6 +8,7 @@
           </n-alert>
 
           <n-data-table
+            class="unified-admin-table"
             :columns="columns"
             :data="gateways"
             :bordered="false"
@@ -122,7 +123,4 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.payment-gateways-container {
-  padding: 20px;
-}
 </style>

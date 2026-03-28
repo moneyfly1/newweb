@@ -15,6 +15,15 @@ const instance = axios.create({
   timeout: 15000,
 })
 
+// 重试配置
+const MAX_RETRIES = 2
+const RETRY_DELAY = 1000
+
+instance.interceptors.request.use((config: any) => {
+  config.retryCount = config.retryCount || 0
+  return config
+})
+
 const requestCache = new Map<string, { data: any; timestamp: number }>()
 const CACHE_DURATION = 3 * 60 * 1000 // 3分钟
 
@@ -203,6 +212,13 @@ instance.interceptors.response.use(
     if (serverMsg) {
       return Promise.reject(new Error(serverMsg))
     }
+    // 网络错误重试
+    if (!error.response && originalRequest && originalRequest.retryCount < MAX_RETRIES) {
+      originalRequest.retryCount++
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+      return instance(originalRequest)
+    }
+
     if (!error.response) {
       return Promise.reject(new Error('网络连接失败，请检查网络'))
     }

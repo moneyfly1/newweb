@@ -18,6 +18,18 @@ const instance = axios.create({
 const requestCache = new Map<string, { data: any; timestamp: number }>()
 const CACHE_DURATION = 3 * 60 * 1000 // 3分钟
 
+// 只缓存这些列表接口
+const CACHEABLE_URLS = [
+  '/admin/packages',
+  '/admin/coupons',
+  '/admin/levels',
+  '/admin/announcements',
+]
+
+function shouldCache(url: string): boolean {
+  return CACHEABLE_URLS.some(cacheable => url.includes(cacheable))
+}
+
 function getCacheKey(url: string, params?: any): string {
   return `${url}?${JSON.stringify(params || {})}`
 }
@@ -200,15 +212,20 @@ instance.interceptors.response.use(
 
 const request = {
   get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    const cacheKey = getCacheKey(url, config?.params)
-    const cached = getCache(cacheKey)
-    if (cached) {
-      return Promise.resolve(cached)
+    // 只对特定列表接口使用缓存
+    if (shouldCache(url)) {
+      const cacheKey = getCacheKey(url, config?.params)
+      const cached = getCache(cacheKey)
+      if (cached) {
+        return Promise.resolve(cached)
+      }
+      return instance.get(url, config).then((res: any) => {
+        setCache(cacheKey, res)
+        return res
+      }) as any
     }
-    return instance.get(url, config).then((res: any) => {
-      setCache(cacheKey, res)
-      return res
-    }) as any
+    // 其他接口不使用缓存
+    return instance.get(url, config) as any
   },
   post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return instance.post(url, data, config) as any

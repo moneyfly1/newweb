@@ -42,6 +42,22 @@
                     <n-form-item-gi label="站点名称"><n-input v-model:value="form.site_name" placeholder="网站显示的名称" /></n-form-item-gi>
                     <n-form-item-gi label="站点地址"><n-input v-model:value="form.site_url" placeholder="https://your-domain.com" /></n-form-item-gi>
                     <n-form-item-gi label="站点描述" span="2"><n-input v-model:value="form.site_description" type="textarea" :rows="2" /></n-form-item-gi>
+                    <n-form-item-gi label="站点图标" span="2">
+                      <n-upload
+                        :max="1"
+                        accept="image/png,image/jpeg,image/svg+xml,image/x-icon"
+                        :default-upload="false"
+                        @change="handleIconUpload"
+                      >
+                        <n-button>上传图标</n-button>
+                      </n-upload>
+                      <n-text depth="3" style="margin-left: 12px; font-size: 12px">
+                        支持 PNG、JPG、SVG、ICO 格式，建议尺寸 32x32 或 64x64
+                      </n-text>
+                      <div v-if="form.site_icon" style="margin-top: 8px">
+                        <img :src="form.site_icon" style="width: 32px; height: 32px" alt="站点图标" />
+                      </div>
+                    </n-form-item-gi>
                   </n-grid>
                   <n-divider />
                   <n-h3 prefix="bar">注册与访问</n-h3>
@@ -221,7 +237,7 @@ const encryptionOptions = [
 ]
 
 const form = ref<Record<string, any>>({
-  site_name: '', site_description: '', site_url: '',
+  site_name: '', site_description: '', site_url: '', site_icon: '',
   register_enabled: true, register_email_verify: false, register_invite_required: false,
   invite_default_inviter_reward: 0, invite_default_invitee_reward: 0,
   default_subscribe_days: 0, default_device_limit: 3,
@@ -280,10 +296,28 @@ const handleSave = async () => {
     if (res.code === 0) {
       message.success('系统配置已持久化保存')
       await loadSettings()
+      // 更新页面标题和图标
+      if (form.value.site_name) document.title = form.value.site_name
+      if (form.value.site_icon) {
+        const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement
+        if (link) link.href = form.value.site_icon
+      }
     }
   } finally {
     saving.value = false
   }
+}
+
+const handleIconUpload = async (options: any) => {
+  const file = options.file.file
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    form.value.site_icon = e.target?.result as string
+    message.success('图标已上传，请点击保存按钮')
+  }
+  reader.readAsDataURL(file)
 }
 
 const handleSendTestEmail = async () => {

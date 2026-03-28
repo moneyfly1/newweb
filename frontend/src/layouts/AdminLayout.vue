@@ -94,7 +94,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, ref, h } from 'vue'
+import { computed, ref, h, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NIcon, useMessage, type FormInst } from 'naive-ui'
 import {
@@ -107,6 +107,8 @@ import {
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { changePassword } from '@/api/user'
+import { initNotification } from '@/utils/notification'
+import { startNotificationPolling, stopNotificationPolling } from '@/utils/polling'
 
 const router = useRouter()
 const route = useRoute()
@@ -114,6 +116,16 @@ const appStore = useAppStore()
 const userStore = useUserStore()
 const message = useMessage()
 const showDrawer = ref(false)
+
+// 初始化通知并启动轮询
+onMounted(() => {
+  initNotification()
+  startNotificationPolling()
+})
+
+onUnmounted(() => {
+  stopNotificationPolling()
+})
 
 // Mobile bottom tabs
 const mobileTabs = [

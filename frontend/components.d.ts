@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AdvancedSearch: typeof import('./src/components/AdvancedSearch.vue')['default']
     CommonDrawer: typeof import('./src/components/CommonDrawer.vue')['default']
     LoadingScreen: typeof import('./src/components/LoadingScreen.vue')['default']
     NAlert: typeof import('naive-ui')['NAlert']
@@ -73,8 +74,11 @@ declare module 'vue' {
     NTag: typeof import('naive-ui')['NTag']
     NText: typeof import('naive-ui')['NText']
     NThing: typeof import('naive-ui')['NThing']
+    NUpload: typeof import('naive-ui')['NUpload']
+    PullRefresh: typeof import('./src/components/PullRefresh.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    TableSkeleton: typeof import('./src/components/TableSkeleton.vue')['default']
     UnifiedCardList: typeof import('./src/components/UnifiedCardList.vue')['default']
     UnifiedTable: typeof import('./src/components/UnifiedTable.vue')['default']
   }

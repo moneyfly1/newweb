@@ -162,6 +162,17 @@ const columns: DataTableColumns<any> = [
     ])
   },
   {
+    title: '来源',
+    key: 'source_index',
+    width: 120,
+    render: (row: any) => {
+      if (row.source_index && row.source_index > 0) {
+        return h(NTag, { type: 'info', size: 'small' }, { default: () => `订阅 #${row.source_index}` })
+      }
+      return h(NTag, { type: 'default', size: 'small' }, { default: () => '手动添加' })
+    }
+  },
+  {
     title: '状态',
     key: 'status',
     width: 90,

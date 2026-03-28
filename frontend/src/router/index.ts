@@ -86,6 +86,9 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior() {
+    return { top: 0 }
+  },
 })
 
 router.beforeEach(async (to, _from, next) => {
@@ -95,7 +98,6 @@ router.beforeEach(async (to, _from, next) => {
     try {
       await userStore.fetchUser()
     } catch {
-      // Token invalid/expired — clear local state only, skip logout API call
       userStore.logout(true)
       return next('/login')
     }

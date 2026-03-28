@@ -312,11 +312,42 @@ const handleIconUpload = async (options: any) => {
   const file = options.file.file
   if (!file) return
 
+  // 压缩图片
+  const img = new Image()
   const reader = new FileReader()
+
   reader.onload = (e) => {
-    form.value.site_icon = e.target?.result as string
+    img.src = e.target?.result as string
+  }
+
+  img.onload = () => {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+
+    // 限制最大尺寸
+    const maxSize = 64
+    let width = img.width
+    let height = img.height
+
+    if (width > maxSize || height > maxSize) {
+      if (width > height) {
+        height = (height / width) * maxSize
+        width = maxSize
+      } else {
+        width = (width / height) * maxSize
+        height = maxSize
+      }
+    }
+
+    canvas.width = width
+    canvas.height = height
+    ctx?.drawImage(img, 0, 0, width, height)
+
+    // 转换为 base64，质量 0.8
+    form.value.site_icon = canvas.toDataURL('image/png', 0.8)
     message.success('图标已上传，请点击保存按钮')
   }
+
   reader.readAsDataURL(file)
 }
 

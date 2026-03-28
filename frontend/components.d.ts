@@ -11,7 +11,6 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AdvancedSearch: typeof import('./src/components/AdvancedSearch.vue')['default']
     CommonDrawer: typeof import('./src/components/CommonDrawer.vue')['default']
     LoadingScreen: typeof import('./src/components/LoadingScreen.vue')['default']
     NAlert: typeof import('naive-ui')['NAlert']

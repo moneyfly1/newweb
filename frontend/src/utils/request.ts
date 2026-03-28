@@ -15,6 +15,30 @@ const instance = axios.create({
   timeout: 15000,
 })
 
+const requestCache = new Map<string, { data: any; timestamp: number }>()
+const CACHE_DURATION = 3 * 60 * 1000 // 3分钟
+
+function getCacheKey(url: string, params?: any): string {
+  return `${url}?${JSON.stringify(params || {})}`
+}
+
+function getCache(key: string) {
+  const cached = requestCache.get(key)
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.data
+  }
+  requestCache.delete(key)
+  return null
+}
+
+function setCache(key: string, data: any) {
+  requestCache.set(key, { data, timestamp: Date.now() })
+  if (requestCache.size > 100) {
+    const firstKey = requestCache.keys().next().value
+    if (firstKey) requestCache.delete(firstKey)
+  }
+}
+
 let isRefreshing = false
 let csrfTokenCache = ''
 let csrfTokenPromise: Promise<string> | null = null
@@ -37,6 +61,7 @@ function processQueue(error: any, newToken: string | null) {
 export function clearRequestSessionCache() {
   csrfTokenCache = ''
   csrfTokenPromise = null
+  requestCache.clear()
 }
 
 async function ensureCSRFToken(): Promise<string> {
@@ -109,18 +134,7 @@ instance.interceptors.response.use(
       const userStore = useUserStore()
       const storedRefresh = userStore.refreshTokenVal
 
-      if (storedRefresh) {
-        if (isRefreshing) {
-          // Queue this request until refresh completes
-          return new Promise((resolve, reject) => {
-            pendingRequests.push({ resolve, reject })
-          }).then(() => {
-            originalRequest.headers = originalRequest.headers || {}
-            originalRequest.headers.Authorization = `Bearer ${userStore.token}`
-            return instance(originalRequest)
-          })
-        }
-
+      if (storedRefresh && !isRefreshing) {
         isRefreshing = true
         originalRequest._retry = true
 
@@ -134,29 +148,24 @@ instance.interceptors.response.use(
             csrfTokenCache = ''
             localStorage.setItem('token', newToken)
             if (newRefresh) localStorage.setItem('refresh_token', newRefresh)
-            processQueue(null, newToken)
             originalRequest.headers.Authorization = `Bearer ${newToken}`
+            isRefreshing = false
             return instance(originalRequest)
           }
-        } catch {
-          processQueue(error, null)
-        } finally {
+        } catch (refreshError) {
           isRefreshing = false
         }
       }
 
-      // Refresh failed or no refresh token — logout
-      if (!isLoggingOut) {
-        isLoggingOut = true
-        csrfTokenCache = ''
-        userStore.logout(true)
-        router.push('/login').finally(() => { isLoggingOut = false })
-      }
+      // Refresh failed — logout
+      csrfTokenCache = ''
+      userStore.logout(true)
+      router.push('/login')
+      return Promise.reject(new Error('登录已过期，请重新登录'))
     }
 
-    // CSRF token may be expired after server restart/token rotation; refresh once and retry.
-    const csrfMsg = error.response?.data?.message || ''
-    if (error.response?.status === 403 && originalRequest && !originalRequest._csrfRetry && String(csrfMsg).toLowerCase().includes('csrf')) {
+    // CSRF token may be expired; refresh once and retry.
+    if (error.response?.status === 403 && originalRequest && !originalRequest._csrfRetry) {
       originalRequest._csrfRetry = true
       csrfTokenCache = ''
       const csrfToken = await ensureCSRFToken()
@@ -191,7 +200,15 @@ instance.interceptors.response.use(
 
 const request = {
   get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    return instance.get(url, config) as any
+    const cacheKey = getCacheKey(url, config?.params)
+    const cached = getCache(cacheKey)
+    if (cached) {
+      return Promise.resolve(cached)
+    }
+    return instance.get(url, config).then((res: any) => {
+      setCache(cacheKey, res)
+      return res
+    }) as any
   },
   post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return instance.post(url, data, config) as any

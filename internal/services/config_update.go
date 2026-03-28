@@ -118,9 +118,11 @@ func (s *ConfigUpdateService) Stop() {
 	if s.runStopCh != nil {
 		select {
 		case <-s.runStopCh:
+			// Already closed
 		default:
 			close(s.runStopCh)
 		}
+		s.runStopCh = nil
 	}
 	s.running = false
 	s.addLogUnlocked("info", "手动停止更新任务")

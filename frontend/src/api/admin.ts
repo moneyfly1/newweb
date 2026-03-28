@@ -133,7 +133,7 @@ export const getConfigUpdateConfig = () => request.get('/admin/config-update/con
 export const saveConfigUpdateConfig = (data: any) => request.put('/admin/config-update/config', data)
 export const startConfigUpdate = () => request.post('/admin/config-update/start')
 export const stopConfigUpdate = () => request.post('/admin/config-update/stop')
-export const getConfigUpdateLogs = () => request.get('/admin/config-update/logs')
+export const getConfigUpdateLogs = () => request.get('/admin/config-update/logs', { params: { _t: Date.now() } })
 export const clearConfigUpdateLogs = () => request.post('/admin/config-update/logs/clear')
 
 // Backup

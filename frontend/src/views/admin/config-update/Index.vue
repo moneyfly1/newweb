@@ -7,6 +7,14 @@
       </div>
       <div class="header-right">
         <n-space>
+          <n-button type="primary" :loading="starting" @click="handleStart">
+            <template #icon><n-icon><PlayOutline /></n-icon></template>
+            立即执行采集
+          </n-button>
+          <n-button type="warning" secondary :disabled="!status.running" @click="handleStop">
+            <template #icon><n-icon><StopOutline /></n-icon></template>
+            停止
+          </n-button>
           <n-button @click="fetchStatus" secondary>
             <template #icon><n-icon><RefreshOutline /></n-icon></template>
             刷新状态
@@ -15,30 +23,7 @@
       </div>
     </div>
 
-    <n-card :bordered="false" class="admin-main-card">
-      <template v-if="!appStore.isMobile" #header-extra>
-        <n-space>
-          <n-button type="primary" :loading="starting" :disabled="status.running" @click="handleStart">
-            <template #icon><n-icon><PlayOutline /></n-icon></template>
-            立即执行采集
-          </n-button>
-          <n-button type="warning" secondary :disabled="!status.running" @click="handleStop">
-            <template #icon><n-icon><StopOutline /></n-icon></template>
-            停止
-          </n-button>
-        </n-space>
-      </template>
-
-      <div v-if="appStore.isMobile" class="mobile-toolbar">
-        <div class="mobile-toolbar-row">
-          <n-button size="small" type="primary" :loading="starting" :disabled="status.running" @click="handleStart">
-            立即采集
-          </n-button>
-          <n-button size="small" type="warning" secondary :disabled="!status.running" @click="handleStop">
-            停止
-          </n-button>
-        </div>
-      </div>
+    <n-card title="运行状态" :bordered="false" class="admin-main-card">
       <n-space>
         <n-tag :type="status.running ? 'success' : 'default'">
           {{ status.running ? '运行中' : '已停止' }}
@@ -83,7 +68,13 @@
 
     <n-card title="更新日志" style="margin-top: 16px">
       <template #header-extra>
-        <n-button size="small" @click="handleClearLogs">清空日志</n-button>
+        <n-space>
+          <n-button size="small" @click="fetchLogs">
+            <template #icon><n-icon><RefreshOutline /></n-icon></template>
+            刷新日志
+          </n-button>
+          <n-button size="small" @click="handleClearLogs">清空日志</n-button>
+        </n-space>
       </template>
       <div class="log-viewer" ref="logViewerRef">
         <div v-if="logs.length === 0" class="log-empty">暂无日志</div>
@@ -165,11 +156,27 @@ const handleSaveConfig = async () => {
 const handleStart = async () => {
   starting.value = true
   try {
-    await startConfigUpdate()
-    message.success('更新任务已启动')
-    fetchStatus()
-    startPolling()
+    console.log('开始执行采集...')
+    const res = await startConfigUpdate()
+    console.log('采集启动响应:', res)
+    message.success('更新任务已启动，正在采集中...')
+
+    // 立即获取一次日志
+    await fetchLogs()
+
+    // 启动快速轮询（每秒一次，持续10秒）
+    let fastPollCount = 0
+    const fastPollInterval = setInterval(async () => {
+      await fetchLogs()
+      await fetchStatus()
+      fastPollCount++
+      if (fastPollCount >= 10) {
+        clearInterval(fastPollInterval)
+      }
+    }, 1000)
+
   } catch (error) {
+    console.error('启动失败:', error)
     message.error(error.message || '启动失败')
   } finally {
     starting.value = false

@@ -156,6 +156,13 @@
                     </n-form-item-gi>
                   </n-grid>
                   <n-divider />
+                  <n-h3 prefix="bar">GitHub 自动备份</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="启用 GitHub 备份"><n-switch v-model:value="form.backup_github_enabled" /></n-form-item-gi>
+                    <n-form-item-gi label="仓库地址"><n-input v-model:value="form.backup_github_repo" placeholder="owner/repo" /></n-form-item-gi>
+                    <n-form-item-gi label="GitHub Token" span="2"><n-input v-model:value="form.backup_github_token" type="password" show-password-on="click" placeholder="ghp_xxxxxxxxxxxx" /></n-form-item-gi>
+                  </n-grid>
+                  <n-divider />
                   <n-h3 prefix="bar">数据维护</n-h3>
                   <n-space>
                     <n-button type="primary" :loading="backupCreating" @click="handleCreateBackup">创建数据库备份</n-button>
@@ -228,11 +235,12 @@ const form = ref<Record<string, any>>({
   notify_telegram_enabled: false, notify_telegram_bot_token: '', notify_telegram_chat_id: '',
   notify_new_user: false, notify_new_order: false, notify_payment_success: false, notify_new_ticket: false,
   max_login_attempts: 5, login_lockout_minutes: 30, ip_whitelist: '',
+  backup_github_enabled: false, backup_github_token: '', backup_github_repo: '',
   checkin_enabled: true, checkin_min_reward: 10, checkin_max_reward: 50
 })
 
 const maskedFields = ref<Set<string>>(new Set())
-const sensitiveKeys = ['smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key', 'pay_epay_secret_key', 'pay_stripe_secret_key', 'pay_stripe_webhook_secret', 'notify_telegram_bot_token']
+const sensitiveKeys = ['smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key', 'pay_epay_secret_key', 'pay_stripe_secret_key', 'pay_stripe_webhook_secret', 'notify_telegram_bot_token', 'backup_github_token']
 
 const loadSettings = async () => {
   loading.value = true

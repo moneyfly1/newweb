@@ -27,8 +27,10 @@ import { testPaymentGateway, listPaymentGateways } from '@/api/admin'
 const message = useMessage()
 const loading = ref(false)
 const gateways = ref<any[]>([])
+const checkedRowKeys = ref<any[]>([])
 
 const columns = [
+  { type: 'selection' },
   {
     title: '支付方式',
     key: 'display_name',

@@ -12,12 +12,19 @@
         <n-button size="small" type="primary" @click="handleAdd">添加等级</n-button>
       </div>
 
+      <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
+        <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+        <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
+      </n-space>
       <template v-if="!appStore.isMobile">
         <n-data-table
           :columns="columns"
           :data="levels"
           :loading="loading"
           :bordered="false"
+          :row-key="(row: any) => row.id"
+          :checked-row-keys="checkedRowKeys"
+          @update:checked-row-keys="(keys: any) => { checkedRowKeys = keys }"
         />
       </template>
 
@@ -136,6 +143,7 @@ const appStore = useAppStore()
 const loading = ref(false)
 const submitting = ref(false)
 const levels = ref<any[]>([])
+const checkedRowKeys = ref<any[]>([])
 const showDrawer = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
@@ -157,6 +165,7 @@ const rules = {
 }
 
 const columns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 60, resizable: true, sorter: 'default' },
   { title: '等级名称', key: 'level_name', width: 120, resizable: true },
   { title: '等级数值', key: 'level_order', width: 100, resizable: true },
@@ -291,6 +300,22 @@ const handleDelete = (id: number) => {
       } catch (error: any) {
         message.error(error.message || '删除失败')
       }
+    }
+  })
+}
+
+const handleBatchDelete = () => {
+  dialog.warning({
+    title: '批量删除',
+    content: `确定要删除选中的 ${checkedRowKeys.value.length} 个等级吗？`,
+    positiveText: '确定',
+    onPositiveClick: async () => {
+      try {
+        await Promise.all(checkedRowKeys.value.map(id => deleteUserLevel(id)))
+        message.success('批量删除成功')
+        checkedRowKeys.value = []
+        loadLevels()
+      } catch { message.error('批量删除失败') }
     }
   })
 }

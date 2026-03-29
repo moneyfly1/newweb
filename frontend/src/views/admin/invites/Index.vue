@@ -58,8 +58,12 @@
         <!-- Tabs -->
         <n-tabs type="line" animated>
           <n-tab-pane name="codes" tab="邀请码列表">
+            <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
+              <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+              <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
+            </n-space>
             <template v-if="!appStore.isMobile">
-              <n-data-table class="unified-admin-table" :columns="codeColumns" :data="codes" :loading="loadingCodes" :pagination="false" :bordered="false" :single-line="false" />
+              <n-data-table class="unified-admin-table" :columns="codeColumns" :data="codes" :loading="loadingCodes" :pagination="false" :bordered="false" :single-line="false" :row-key="(row) => row.id" :checked-row-keys="checkedRowKeys" @update:checked-row-keys="(keys) => { checkedRowKeys = keys }" />
             </template>
             <template v-else>
               <n-spin :show="loadingCodes">
@@ -138,6 +142,7 @@ const relPage = ref(1)
 const codeTotalPages = ref(0)
 const relTotalPages = ref(0)
 const pageSize = 20
+const checkedRowKeys = ref([])
 
 const fmtDate = (d) => d ? new Date(d).toLocaleString('zh-CN') : '-'
 const statusType = (s) => ({ active: 'success', expired: 'warning', exhausted: 'default', disabled: 'error' }[s] || 'default')
@@ -198,7 +203,25 @@ const handleDelete = (code) => {
   })
 }
 
+const handleBatchDelete = () => {
+  dialog.warning({
+    title: '批量删除',
+    content: `确定要删除选中的 ${checkedRowKeys.value.length} 个邀请码吗？`,
+    positiveText: '确定',
+    onPositiveClick: async () => {
+      try {
+        await Promise.all(checkedRowKeys.value.map(id => deleteAdminInviteCode(id)))
+        message.success('批量删除成功')
+        checkedRowKeys.value = []
+        fetchCodes()
+        fetchStats()
+      } catch { message.error('批量删除失败') }
+    }
+  })
+}
+
 const codeColumns = [
+  { type: 'selection' },
   { title: '邀请码', key: 'code', width: 120, render: (r) => h('span', { style: 'font-family:monospace;font-weight:600' }, r.code) },
   { title: '创建者', key: 'username', width: 120 },
   { title: '使用/上限', key: 'usage', width: 100, render: (r) => `${r.used_count} / ${r.max_uses || '∞'}` },

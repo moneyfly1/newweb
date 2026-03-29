@@ -30,7 +30,7 @@
           :bordered="false"
           :row-key="(row: any) => row.id"
           :checked-row-keys="checkedRowKeys"
-          @update:checked-row-keys="(keys: number[]) => { checkedRowKeys = keys }"
+          @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
           @update:page="(p) => { pagination.page = p; fetchData() }"
           @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
           @update:sorter="handleSorterChange"
@@ -139,6 +139,7 @@ import {
   NPopconfirm,
   NSpin,
   useMessage,
+  useDialog,
   type DataTableColumns,
 } from 'naive-ui'
 import { listAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/admin'
@@ -148,6 +149,7 @@ import CommonDrawer from '@/components/CommonDrawer.vue'
 const appStore = useAppStore()
 
 const message = useMessage()
+const dialog = useDialog()
 const formRef = ref()
 const loading = ref(false)
 const submitting = ref(false)
@@ -156,7 +158,7 @@ const modalTitle = ref('发布公告')
 const tableData = ref<any[]>([])
 const isEdit = ref(false)
 const sortState = ref({ sort: 'id', order: 'desc' })
-const checkedRowKeys = ref<number[]>([])
+const checkedRowKeys = ref<any[]>([])
 
 const pagination = reactive({
   page: 1,

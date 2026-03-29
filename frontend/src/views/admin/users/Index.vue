@@ -400,8 +400,6 @@ import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useRoute } from 'vue-router'
 import { translateLoginStatus, translateBalanceChangeType, parseDeviceInfo, formatLocation } from '@/utils/i18n'
-import { handleApiCall } from '@/utils/apiHandler'
-import type { User } from '@/types/admin'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import '@/styles/admin-common.css'
 

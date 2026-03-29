@@ -252,8 +252,6 @@ import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatLocation } from '@/utils/i18n'
-import { handleApiCall } from '@/utils/apiHandler'
-import type { Subscription } from '@/types/admin'
 import {
   listAdminSubscriptions, getAdminSubscription, resetAdminSubscription,
   extendSubscription, updateSubscriptionDeviceLimit, sendSubscriptionEmail,

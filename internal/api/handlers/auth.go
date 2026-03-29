@@ -460,6 +460,11 @@ func Login(c *gin.Context) {
 				"last_ip": *lastLogin.IPAddress,
 				"time":    time.Now().Format("2006-01-02 15:04:05"), "user_agent": loginUA,
 			})
+			go services.NotifyAdmin("abnormal_login", map[string]string{
+				"username": user.Username,
+				"ip":       loginIP,
+				"location": loginLocation,
+			})
 		}
 	}
 

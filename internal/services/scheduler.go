@@ -130,6 +130,7 @@ func sendExpiryRemindersTask() {
 
 	type subUser struct {
 		Email      string
+		Username   string
 		ExpireTime time.Time
 	}
 
@@ -137,7 +138,7 @@ func sendExpiryRemindersTask() {
 	now := time.Now()
 	var remind3 []subUser
 	db.Model(&models.Subscription{}).
-		Select("users.email, subscriptions.expire_time").
+		Select("users.email, users.username, subscriptions.expire_time").
 		Joins("JOIN users ON users.id = subscriptions.user_id").
 		Where("subscriptions.is_active = ? AND subscriptions.expire_time BETWEEN ? AND ? AND users.email_notifications = ?",
 			true, now.Add(72*time.Hour), now.Add(73*time.Hour), true).
@@ -147,12 +148,16 @@ func sendExpiryRemindersTask() {
 			"days": "3", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
 		})
 		QueueEmail(r.Email, subject, body, "expiry_reminder")
+		go NotifyAdmin("expiry_reminder", map[string]string{
+			"username":    r.Username,
+			"expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+		})
 	}
 
 	// 1-day reminder
 	var remind1 []subUser
 	db.Model(&models.Subscription{}).
-		Select("users.email, subscriptions.expire_time").
+		Select("users.email, users.username, subscriptions.expire_time").
 		Joins("JOIN users ON users.id = subscriptions.user_id").
 		Where("subscriptions.is_active = ? AND subscriptions.expire_time BETWEEN ? AND ? AND users.email_notifications = ?",
 			true, now.Add(24*time.Hour), now.Add(25*time.Hour), true).
@@ -162,6 +167,10 @@ func sendExpiryRemindersTask() {
 			"days": "1", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
 		})
 		QueueEmail(r.Email, subject, body, "expiry_reminder")
+		go NotifyAdmin("expiry_reminder", map[string]string{
+			"username":    r.Username,
+			"expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+		})
 	}
 
 	// Expired notice (within last hour)
@@ -231,6 +240,7 @@ func sendUnpaidOrderRemindersTask() {
 	type orderUser struct {
 		OrderNo     string
 		UserID      uint
+		Username    string
 		Email       string
 		Amount      float64
 		FinalAmount *float64
@@ -239,7 +249,7 @@ func sendUnpaidOrderRemindersTask() {
 
 	var orders []orderUser
 	db.Model(&models.Order{}).
-		Select("orders.order_no, orders.user_id, users.email, orders.amount, orders.final_amount, orders.package_id").
+		Select("orders.order_no, orders.user_id, users.username, users.email, orders.amount, orders.final_amount, orders.package_id").
 		Joins("JOIN users ON users.id = orders.user_id").
 		Where("orders.status = ? AND orders.created_at BETWEEN ? AND ? AND users.email_notifications = ?",
 			"pending", now.Add(-20*time.Minute), now.Add(-15*time.Minute), true).
@@ -260,6 +270,11 @@ func sendUnpaidOrderRemindersTask() {
 			"amount": fmt.Sprintf("%.2f", amount),
 		})
 		QueueEmail(o.Email, subject, body, "unpaid_order")
+		go NotifyAdmin("unpaid_order", map[string]string{
+			"order_no": o.OrderNo,
+			"username": o.Username,
+			"amount":   fmt.Sprintf("%.2f", amount),
+		})
 	}
 
 	if len(orders) > 0 {

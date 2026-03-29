@@ -2039,7 +2039,16 @@ func AdminResetSubscription(c *gin.Context) {
 	// 通知用户订阅已重置
 	go services.NotifyUser(sub.UserID, "subscription_reset", map[string]string{"reset_by": "管理员"})
 
+	// 通知管理员
+	var user models.User
+	db.First(&user, sub.UserID)
 	adminID := c.GetUint("user_id")
+	var admin models.User
+	db.First(&admin, adminID)
+	go services.NotifyAdmin("subscription_reset", map[string]string{
+		"username": user.Username,
+		"reset_by": admin.Username,
+	})
 	utils.CreateSubscriptionLog(sub.ID, sub.UserID, "reset", "admin", &adminID, "管理员重置订阅", nil, nil)
 	utils.CreateAuditLog(c, "reset_subscription", "subscription", uint(id), fmt.Sprintf("重置订阅 (用户ID: %d)", sub.UserID))
 	utils.Success(c, gin.H{"new_subscription_url": newURL})
@@ -3271,6 +3280,14 @@ func AdminTestTelegram(c *gin.Context) {
 		return
 	}
 	utils.SuccessMessage(c, "Telegram 测试消息已发送")
+}
+
+func AdminTestBark(c *gin.Context) {
+	if err := services.SendTestBark(); err != nil {
+		utils.InternalError(c, "发送失败: "+err.Error())
+		return
+	}
+	utils.SuccessMessage(c, "Bark 测试消息已发送")
 }
 
 // ==================== Update Subscription ====================

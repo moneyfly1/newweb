@@ -2544,10 +2544,6 @@ func AdminUpdateSettings(c *gin.Context) {
 	db := database.GetDB()
 	for k, v := range req {
 		strVal := fmt.Sprintf("%v", v)
-		// 如果是敏感字段且前端传回掩码或为空，则跳过不更新
-		if sensitiveSettingKeys[k] && (strVal == "" || strings.Contains(strVal, "****")) {
-			continue
-		}
 		// 使用 Updates(map) 以避免触发全字段覆盖，仅更新 value 字段
 		// 这样可以保留原有的 category, display_name 等信息
 		result := db.Model(&models.SystemConfig{}).Where("`key` = ?", k).Updates(map[string]interface{}{"value": strVal})

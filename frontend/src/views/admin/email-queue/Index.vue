@@ -79,6 +79,10 @@
         </n-tabs>
 
         <!-- Data Table -->
+        <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
+          <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+          <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
+        </n-space>
         <template v-if="!appStore.isMobile">
           <n-data-table
             class="unified-admin-table"
@@ -89,6 +93,9 @@
             :bordered="false"
             :single-line="false"
             :scroll-x="1200"
+            :row-key="(row) => row.id"
+            :checked-row-keys="checkedRowKeys"
+            @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
           />
         </template>
 
@@ -203,6 +210,7 @@ const dialog = useDialog()
 // State
 const loading = ref(false)
 const emails = ref([])
+const checkedRowKeys = ref([])
 const statusFilter = ref('all')
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -264,6 +272,7 @@ const getStatusText = (status) => {
 
 // Table columns
 const columns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 80, fixed: 'left', resizable: true, sorter: 'default' },
   {
     title: '收件人',
@@ -435,6 +444,22 @@ const handleDelete = (row) => {
       } catch (error) {
         message.error('删除失败：' + (error.message || '未知错误'))
       }
+    }
+  })
+}
+
+const handleBatchDelete = () => {
+  dialog.warning({
+    title: '批量删除',
+    content: `确定要删除选中的 ${checkedRowKeys.value.length} 封邮件记录吗？`,
+    positiveText: '确定',
+    onPositiveClick: async () => {
+      try {
+        await Promise.all(checkedRowKeys.value.map(id => deleteEmail(id)))
+        message.success('批量删除成功')
+        checkedRowKeys.value = []
+        fetchEmails()
+      } catch { message.error('批量删除失败') }
     }
   })
 }

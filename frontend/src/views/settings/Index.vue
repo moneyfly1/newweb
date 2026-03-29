@@ -59,6 +59,9 @@
               <n-text depth="3" style="margin-left: 12px; font-size: 12px">关闭后不接收任何邮件（验证码除外）</n-text>
             </n-form-item>
             <n-divider style="margin: 8px 0" />
+            <n-text depth="3" style="display: block; margin-bottom: 12px; font-size: 13px;">
+              📧 邮件通知类型（需开启邮件通知总开关）
+            </n-text>
             <n-form-item label="订单相关通知">
               <n-switch v-model:value="notifForm.notify_order" :disabled="!notifForm.email_notifications" @update:value="saveNotif" />
               <n-text depth="3" style="margin-left: 12px; font-size: 12px">新订单、支付成功</n-text>
@@ -71,11 +74,17 @@
               <n-switch v-model:value="notifForm.notify_subscription" :disabled="!notifForm.email_notifications" @update:value="saveNotif" />
               <n-text depth="3" style="margin-left: 12px; font-size: 12px">订阅重置、账户状态变更</n-text>
             </n-form-item>
+            <n-divider style="margin: 8px 0" />
+            <n-text depth="3" style="display: block; margin-bottom: 12px; font-size: 13px;">
+              🔔 其他通知设置
+            </n-text>
             <n-form-item label="异常登录提醒">
               <n-switch v-model:value="notifForm.abnormal_login_alert_enabled" @update:value="saveNotif" />
+              <n-text depth="3" style="margin-left: 12px; font-size: 12px">检测到新IP登录时提醒</n-text>
             </n-form-item>
             <n-form-item label="推送通知">
               <n-switch v-model:value="notifForm.push_notifications" @update:value="saveNotif" />
+              <n-text depth="3" style="margin-left: 12px; font-size: 12px">浏览器推送通知</n-text>
             </n-form-item>
           </n-form>
         </n-card>

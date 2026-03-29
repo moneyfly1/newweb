@@ -934,6 +934,114 @@ func (b *EmailTemplateBuilder) GetAdminNotificationTemplate(notificationType, ti
                 <p><strong>💡 提示：</strong>订阅已创建并激活，用户可立即使用服务。</p>
             </div>`, username, email, packageName, createTime)
 
+	case "new_order":
+		orderNo := getStringFromData(data, "order_no", "N/A")
+		username := getStringFromData(data, "username", "N/A")
+		packageName := getStringFromData(data, "package_name", "未知套餐")
+		amount := getFloatFromData(data, "amount", 0)
+		content = fmt.Sprintf(`<h2>📦 新订单创建</h2>
+            <p>系统检测到新订单创建，等待用户支付：</p>
+            <div class="info-box">
+                <h3>📋 订单信息</h3>
+                <table class="info-table">
+                    <tr><th>订单号</th><td><strong style="font-family: 'Courier New', monospace;">%s</strong></td></tr>
+                    <tr><th>用户账号</th><td>%s</td></tr>
+                    <tr><th>套餐名称</th><td><strong>%s</strong></td></tr>
+                    <tr><th>订单金额</th><td style="color: #3498db; font-weight: bold; font-size: 18px;">¥%.2f</td></tr>
+                </table>
+            </div>
+            <div class="info-box">
+                <p><strong>💡 提示：</strong>订单已创建，等待用户完成支付。</p>
+            </div>`, orderNo, username, packageName, amount)
+
+	case "recharge_success":
+		orderNo := getStringFromData(data, "order_no", "N/A")
+		username := getStringFromData(data, "username", "N/A")
+		amount := getFloatFromData(data, "amount", 0)
+		content = fmt.Sprintf(`<h2>💰 充值成功</h2>
+            <p>系统检测到用户余额充值成功：</p>
+            <div class="success-box">
+                <h3>📋 充值信息</h3>
+                <table class="info-table">
+                    <tr><th>充值单号</th><td><strong style="font-family: 'Courier New', monospace;">%s</strong></td></tr>
+                    <tr><th>用户账号</th><td>%s</td></tr>
+                    <tr><th>充值金额</th><td style="color: #27ae60; font-weight: bold; font-size: 18px;">¥%.2f</td></tr>
+                </table>
+            </div>
+            <div class="info-box">
+                <p><strong>💡 提示：</strong>余额已到账，用户可使用余额购买套餐。</p>
+            </div>`, orderNo, username, amount)
+
+	case "new_ticket":
+		ticketNo := getStringFromData(data, "ticket_no", "N/A")
+		username := getStringFromData(data, "username", "N/A")
+		title := getStringFromData(data, "title", "无标题")
+		content = fmt.Sprintf(`<h2>🎫 新工单提醒</h2>
+            <p>系统检测到用户提交新工单：</p>
+            <div class="info-box">
+                <h3>📋 工单信息</h3>
+                <table class="info-table">
+                    <tr><th>工单号</th><td><strong style="font-family: 'Courier New', monospace;">%s</strong></td></tr>
+                    <tr><th>用户账号</th><td>%s</td></tr>
+                    <tr><th>工单标题</th><td><strong>%s</strong></td></tr>
+                </table>
+            </div>
+            <div class="info-box">
+                <p><strong>💡 提示：</strong>请及时查看并回复用户工单。</p>
+            </div>`, ticketNo, username, title)
+
+	case "abnormal_login":
+		username := getStringFromData(data, "username", "N/A")
+		ip := getStringFromData(data, "ip", "N/A")
+		location := getStringFromData(data, "location", "未知")
+		content = fmt.Sprintf(`<h2>⚠️ 异常登录提醒</h2>
+            <p>系统检测到用户异常登录行为：</p>
+            <div class="warning-box">
+                <h3>📋 登录信息</h3>
+                <table class="info-table">
+                    <tr><th>用户账号</th><td><strong>%s</strong></td></tr>
+                    <tr><th>登录IP</th><td style="font-family: 'Courier New', monospace;">%s</td></tr>
+                    <tr><th>登录位置</th><td>%s</td></tr>
+                </table>
+            </div>
+            <div class="warning-box">
+                <p><strong>⚠️ 提示：</strong>检测到用户从新IP登录，请关注账户安全。</p>
+            </div>`, username, ip, location)
+
+	case "unpaid_order":
+		orderNo := getStringFromData(data, "order_no", "N/A")
+		username := getStringFromData(data, "username", "N/A")
+		amount := getFloatFromData(data, "amount", 0)
+		content = fmt.Sprintf(`<h2>⏳ 未支付订单提醒</h2>
+            <p>系统检测到用户订单超时未支付：</p>
+            <div class="warning-box">
+                <h3>📋 订单信息</h3>
+                <table class="info-table">
+                    <tr><th>订单号</th><td><strong style="font-family: 'Courier New', monospace;">%s</strong></td></tr>
+                    <tr><th>用户账号</th><td>%s</td></tr>
+                    <tr><th>订单金额</th><td style="color: #e67e22; font-weight: bold; font-size: 18px;">¥%.2f</td></tr>
+                </table>
+            </div>
+            <div class="info-box">
+                <p><strong>💡 提示：</strong>订单已超过15分钟未支付，可能需要引导用户完成支付。</p>
+            </div>`, orderNo, username, amount)
+
+	case "expiry_reminder":
+		username := getStringFromData(data, "username", "N/A")
+		expireTime := getStringFromData(data, "expire_time", "N/A")
+		content = fmt.Sprintf(`<h2>⏰ 订阅到期提醒</h2>
+            <p>系统检测到用户订阅即将到期：</p>
+            <div class="warning-box">
+                <h3>📋 到期信息</h3>
+                <table class="info-table">
+                    <tr><th>用户账号</th><td><strong>%s</strong></td></tr>
+                    <tr><th>到期时间</th><td style="color: #e74c3c; font-weight: bold;">%s</td></tr>
+                </table>
+            </div>
+            <div class="info-box">
+                <p><strong>💡 提示：</strong>用户订阅即将到期，建议引导用户续费。</p>
+            </div>`, username, expireTime)
+
 	default:
 		content = fmt.Sprintf(`<div class="content">
                 <h2>%s</h2>

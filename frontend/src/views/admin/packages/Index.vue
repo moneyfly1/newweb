@@ -26,6 +26,13 @@
 
     <n-card :bordered="false" class="page-card admin-main-card">
 
+      <!-- Batch operations -->
+      <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
+        <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+        <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
+        <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
+      </n-space>
+
       <n-space vertical :size="16">
         <template v-if="!appStore.isMobile">
           <n-data-table
@@ -36,6 +43,9 @@
             :pagination="false"
             :bordered="false"
             :single-line="false"
+            :row-key="(row) => row.id"
+            :checked-row-keys="checkedRowKeys"
+            @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
           />
         </template>
 
@@ -190,6 +200,7 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const totalPages = ref(0)
 const searchQuery = ref('')
+const checkedRowKeys = ref([])
 
 const showEditDrawer = ref(false)
 const isCreating = ref(false)
@@ -227,6 +238,7 @@ const formRules = {
 }
 
 const columns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '套餐名称', key: 'name', ellipsis: { tooltip: true } },
   {
@@ -428,6 +440,30 @@ const handleDelete = (row) => {
       }
     }
   })
+}
+
+const handleBatchEnable = async () => {
+  try {
+    await Promise.all(checkedRowKeys.value.map(id => {
+      const pkg = packages.value.find(p => p.id === id)
+      return updatePackage(id, { ...pkg, is_active: true })
+    }))
+    message.success('批量启用成功')
+    checkedRowKeys.value = []
+    fetchPackages()
+  } catch { message.error('批量启用失败') }
+}
+
+const handleBatchDisable = async () => {
+  try {
+    await Promise.all(checkedRowKeys.value.map(id => {
+      const pkg = packages.value.find(p => p.id === id)
+      return updatePackage(id, { ...pkg, is_active: false })
+    }))
+    message.success('批量禁用成功')
+    checkedRowKeys.value = []
+    fetchPackages()
+  } catch { message.error('批量禁用失败') }
 }
 
 onMounted(() => {

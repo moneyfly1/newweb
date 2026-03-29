@@ -11,7 +11,7 @@
             v-model:value="searchQuery"
             placeholder="订单号 / 用户ID / 邮箱"
             clearable
-            style="width: 250px"
+            class="search-input"
             @keyup.enter="handleSearch"
           >
             <template #prefix><n-icon :component="SearchOutline" /></template>
@@ -20,7 +20,7 @@
             v-model:value="statusFilter"
             placeholder="所有状态"
             clearable
-            style="width: 120px"
+            class="status-select"
             :options="statusOptions"
             @update:value="handleSearch"
           />
@@ -62,6 +62,13 @@
     <n-card :bordered="false" class="main-card">
       <n-space vertical :size="16">
 
+        <!-- Batch operations -->
+        <n-space v-if="checkedRowKeys.length > 0" align="center" class="batch-operations">
+          <span class="batch-selected-text">已选择 {{ checkedRowKeys.length }} 项</span>
+          <n-button size="small" type="warning" @click="handleBatchCancel">批量取消</n-button>
+          <n-button size="small" type="error" @click="handleBatchRefund">批量退款</n-button>
+        </n-space>
+
         <n-data-table
           remote
           :columns="columns"
@@ -71,8 +78,10 @@
           :bordered="false"
           :single-line="false"
           :row-key="(row: any) => row.id"
+          :checked-row-keys="checkedRowKeys"
           :scroll-x="appStore.isMobile ? 1100 : 1450"
           class="unified-admin-table"
+          @update:checked-row-keys="(keys: number[]) => { checkedRowKeys = keys }"
           @update:page="(p: number) => { pagination.page = p; fetchOrders() }"
           @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; fetchOrders() }"
         />
@@ -133,8 +142,11 @@ import { NButton, NTag, NSpace, NIcon, NSelect, useMessage, useDialog, type Data
 import { SearchOutline, RefreshOutline, ReceiptOutline, TimeOutline, MailOutline, LayersOutline } from '@vicons/ionicons5'
 import { listAdminOrders, refundOrder, cancelOrder, completeOrder, getAdminDashboard } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { handleApiCall } from '@/utils/apiHandler'
+import type { Order } from '@/types/admin'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import { useRoute } from 'vue-router'
+import '@/styles/admin-common.css'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -147,6 +159,7 @@ const orderStats = ref<any>({})
 const searchQuery = ref((route.query.order_no as string) || '')
 const statusFilter = ref(null)
 const pagination = reactive({ page: 1, pageSize: 20, itemCount: 0, showSizePicker: true, pageSizes: [20, 50, 100] })
+const checkedRowKeys = ref<number[]>([])
 
 const showDetailDrawer = ref(false)
 const currentOrder = ref<any>(null)
@@ -183,6 +196,7 @@ const getOrderTypeText = (row: any) => row.order_type_text || '套餐订单'
 const getOrderSummary = (row: any) => row.order_summary || row.package_name || '-'
 
 const columns: DataTableColumns<any> = [
+  { type: 'selection' },
   {
     title: '订单信息',
     key: 'order_no',
@@ -308,6 +322,50 @@ const handleComplete = (row: any) => {
       message.success('已标记为完成')
       showDetailDrawer.value = false
       fetchOrders()
+    }
+  })
+}
+
+const handleBatchCancel = () => {
+  const selected = orders.value.filter(o => checkedRowKeys.value.includes(o.id))
+  const pending = selected.filter(o => o.status === 'pending')
+  if (pending.length === 0) {
+    message.warning('没有可取消的待支付订单')
+    return
+  }
+  dialog.warning({
+    title: '批量取消订单',
+    content: `确定要取消选中的 ${pending.length} 个待支付订单吗？`,
+    positiveText: '确定',
+    onPositiveClick: async () => {
+      try {
+        await Promise.all(pending.map(o => cancelOrder(o.id)))
+        message.success('批量取消完成')
+        checkedRowKeys.value = []
+        fetchOrders()
+      } catch { message.error('批量取消失败') }
+    }
+  })
+}
+
+const handleBatchRefund = () => {
+  const selected = orders.value.filter(o => checkedRowKeys.value.includes(o.id))
+  const refundable = selected.filter(o => ['paid', 'completed'].includes(o.status))
+  if (refundable.length === 0) {
+    message.warning('没有可退款的订单')
+    return
+  }
+  dialog.warning({
+    title: '批量退款',
+    content: `确定要退款选中的 ${refundable.length} 个订单吗？`,
+    positiveText: '确定退款',
+    onPositiveClick: async () => {
+      try {
+        await Promise.all(refundable.map(o => refundOrder(o.id)))
+        message.success('批量退款完成')
+        checkedRowKeys.value = []
+        fetchOrders()
+      } catch { message.error('批量退款失败') }
     }
   })
 }

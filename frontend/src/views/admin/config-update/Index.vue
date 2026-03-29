@@ -156,9 +156,7 @@ const handleSaveConfig = async () => {
 const handleStart = async () => {
   starting.value = true
   try {
-    console.log('开始执行采集...')
     const res = await startConfigUpdate()
-    console.log('采集启动响应:', res)
     message.success('更新任务已启动，正在采集中...')
 
     // 立即获取一次日志
@@ -176,7 +174,6 @@ const handleStart = async () => {
     }, 1000)
 
   } catch (error) {
-    console.error('启动失败:', error)
     message.error(error.message || '启动失败')
   } finally {
     starting.value = false

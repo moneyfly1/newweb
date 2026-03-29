@@ -264,7 +264,6 @@ const loadSettings = async () => {
     const res = await getSettings()
     if (res.code === 0 && res.data) {
       const data = res.data as Record<string, any>
-      maskedFields.value.clear()
       for (const key of Object.keys(form.value)) {
         if (key in data) {
           if (typeof form.value[key] === 'boolean') {
@@ -273,7 +272,6 @@ const loadSettings = async () => {
             form.value[key] = Number(data[key]) || 0
           } else {
             form.value[key] = data[key]
-            if (sensitiveKeys.includes(key) && data[key] === '****') maskedFields.value.add(key)
           }
         }
       }
@@ -286,13 +284,7 @@ const loadSettings = async () => {
 const handleSave = async () => {
   saving.value = true
   try {
-    const dataToSave: Record<string, any> = {}
-    for (const key of Object.keys(form.value)) {
-      const val = form.value[key]
-      if (sensitiveKeys.includes(key) && maskedFields.value.has(key) && val === '****') continue
-      dataToSave[key] = val
-    }
-    const res = await updateSettings(dataToSave)
+    const res = await updateSettings(form.value)
     if (res.code === 0) {
       message.success('系统配置已持久化保存')
       await loadSettings()

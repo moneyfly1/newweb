@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     CommonDrawer: typeof import('./src/components/CommonDrawer.vue')['default']
+    ErrorBoundary: typeof import('./src/components/ErrorBoundary.vue')['default']
     LoadingScreen: typeof import('./src/components/LoadingScreen.vue')['default']
     NAlert: typeof import('naive-ui')['NAlert']
     NBadge: typeof import('naive-ui')['NBadge']

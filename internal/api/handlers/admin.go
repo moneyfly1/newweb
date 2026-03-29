@@ -2530,25 +2530,9 @@ func AdminGetSettings(c *gin.Context) {
 	database.GetDB().Where("category = ? OR category IS NULL", "").Find(&settings)
 	result := make(map[string]string)
 	for _, s := range settings {
-		if sensitiveSettingKeys[s.Key] && s.Value != "" {
-			result[s.Key] = "****"
-		} else {
-			result[s.Key] = s.Value
-		}
+		result[s.Key] = s.Value
 	}
 	utils.Success(c, result)
-}
-
-var sensitiveSettingKeys = map[string]bool{
-	"smtp_password":             true,
-	"pay_alipay_private_key":    true,
-	"pay_alipay_public_key":     true,
-	"pay_wechat_api_key":        true,
-	"pay_epay_secret_key":       true,
-	"pay_stripe_secret_key":     true,
-	"pay_stripe_webhook_secret": true,
-	"backup_github_token":       true,
-	"notify_telegram_bot_token": true,
 }
 
 func AdminUpdateSettings(c *gin.Context) {

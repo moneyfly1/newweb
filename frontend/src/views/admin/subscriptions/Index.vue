@@ -7,10 +7,10 @@
       </div>
       <div class="header-right">
         <n-space>
-          <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注/订阅地址" clearable style="width: 250px" @keyup.enter="handleSearch">
+          <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注/订阅地址" clearable class="search-input" @keyup.enter="handleSearch">
             <template #prefix><n-icon><SearchOutline /></n-icon></template>
           </n-input>
-          <n-select v-model:value="statusFilter" :options="statusOptions" style="width: 120px" @update:value="handleSearch" />
+          <n-select v-model:value="statusFilter" :options="statusOptions" class="status-select" @update:value="handleSearch" />
           <n-button @click="handleRefresh" secondary>
             <template #icon><n-icon><RefreshOutline /></n-icon></template>
             刷新
@@ -28,7 +28,7 @@
             <template #prefix><n-icon><SearchOutline /></n-icon></template>
           </n-input>
           <div class="mobile-toolbar-row">
-            <n-select v-model:value="statusFilter" :options="statusOptions" size="small" style="flex:1" @update:value="handleSearch" />
+            <n-select v-model:value="statusFilter" :options="statusOptions" size="small" class="flex-1" @update:value="handleSearch" />
             <n-button size="small" type="info" @click="handleSearch">搜索</n-button>
           </div>
         </div>
@@ -36,8 +36,8 @@
 
       <!-- Desktop Table -->
       <template v-if="!appStore.isMobile">
-        <n-space v-if="checkedRowKeys.length > 0" align="center" style="margin-bottom:12px">
-          <span style="color:#666">已选择 {{ checkedRowKeys.length }} 项</span>
+        <n-space v-if="checkedRowKeys.length > 0" align="center" class="batch-operations">
+          <span class="batch-selected-text">已选择 {{ checkedRowKeys.length }} 项</span>
           <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
           <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
           <n-button size="small" type="info" @click="handleBatchEmail">批量发送</n-button>
@@ -55,7 +55,7 @@
       <!-- Mobile Card List -->
       <template v-else>
         <n-spin :show="loading">
-          <div v-if="tableData.length === 0 && !loading" style="text-align:center;padding:40px 0;color:#999">暂无数据</div>
+          <div v-if="tableData.length === 0 && !loading" class="empty-state">暂无数据</div>
           <div class="mobile-card-list">
             <div v-for="row in tableData" :key="row.id" class="sub-card">
               <div class="sub-card-header">
@@ -80,7 +80,7 @@
                   <n-button size="tiny" @click="inlineAddTime(row, 365)">+1年</n-button>
                   <n-button size="tiny" @click="inlineAddTime(row, 730)">+2年</n-button>
                 </div>
-                <n-date-picker v-model:value="row._expireTs" type="datetime" size="small" style="width:100%;margin-top:6px" @update:value="(v) => inlineSetExpire(row, v)" clearable />
+                <n-date-picker v-model:value="row._expireTs" type="datetime" size="small" class="full-width date-picker-spacing" @update:value="(v) => inlineSetExpire(row, v)" clearable />
               </div>
               <div class="sub-section" :class="{ 'section-overlimit': isOverlimit(row) }">
                 <div class="sub-section-row">
@@ -148,7 +148,7 @@
               </div>
             </div>
           </div>
-          <div style="display:flex;justify-content:center;margin-top:16px">
+          <div class="pagination-center">
             <n-pagination v-model:page="pagination.page" :page-count="Math.ceil((pagination.itemCount||0)/(pagination.pageSize||20))" @update:page="(p) => { pagination.page = p; fetchData() }" />
           </div>
         </n-spin>
@@ -182,12 +182,12 @@
           <n-descriptions-item label="设备">{{ detailData.current_devices || 0 }} / {{ detailData.device_limit || 0 }}</n-descriptions-item>
           <n-descriptions-item label="到期时间">{{ fmtDate(detailData.expire_time) }}</n-descriptions-item>
         </n-descriptions>
-        <div v-if="detailData.universal_url" style="margin-top:8px">
+        <div v-if="detailData.universal_url" class="url-section">
           <div class="url-row"><span class="url-label">通用</span><code class="url-text">{{ detailData.universal_url }}</code></div>
           <div class="url-row"><span class="url-label">Clash</span><code class="url-text">{{ detailData.clash_url }}</code></div>
         </div>
 
-        <n-tabs type="line" style="margin-top:16px" animated>
+        <n-tabs type="line" class="tabs-spacing" animated>
           <n-tab-pane name="orders" tab="订单记录">
             <n-data-table v-if="(detailData.recent_orders||[]).length" :columns="orderCols" :data="detailData.recent_orders" :bordered="false" size="small" :max-height="240" />
             <n-empty v-else description="暂无订单" size="small" />
@@ -236,7 +236,7 @@
 
     <!-- Single Shadowrocket QR Modal -->
     <n-modal v-model:show="showSingleQRModal" title="Shadowrocket 二维码" preset="card" :style="{ width: appStore.isMobile ? '85%' : '320px' }" @after-enter="renderSingleQRCode">
-      <div style="text-align:center">
+      <div class="qr-center">
         <canvas ref="singleQRCanvas"></canvas>
       </div>
     </n-modal>
@@ -252,12 +252,15 @@ import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatLocation } from '@/utils/i18n'
+import { handleApiCall } from '@/utils/apiHandler'
+import type { Subscription } from '@/types/admin'
 import {
   listAdminSubscriptions, getAdminSubscription, resetAdminSubscription,
   extendSubscription, updateSubscriptionDeviceLimit, sendSubscriptionEmail,
   setSubscriptionExpireTime, deleteUserFull, toggleUserActive, loginAsUser,
   deleteUserDevice, updateUserNotes
 } from '@/api/admin'
+import '@/styles/admin-common.css'
 
 const message = useMessage()
 const dialog = useDialog()

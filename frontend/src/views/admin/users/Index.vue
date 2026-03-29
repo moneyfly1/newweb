@@ -11,7 +11,7 @@
             v-model:value="searchQuery"
             placeholder="搜索邮箱/用户名/订阅地址"
             clearable
-            style="width: 250px"
+            class="search-input"
             @keyup.enter="handleSearch"
           >
             <template #prefix>
@@ -22,7 +22,7 @@
             v-model:value="statusFilter"
             placeholder="状态"
             clearable
-            style="width: 120px"
+            class="status-select"
             :options="statusOptions"
             @update:value="handleSearch"
           />
@@ -62,7 +62,7 @@
                 placeholder="状态筛选"
                 clearable
                 size="small"
-                style="flex: 1"
+                class="flex-1"
                 :options="statusOptions"
                 @update:value="handleSearch"
               />
@@ -86,14 +86,14 @@
                 <template #icon><n-icon :component="CloudUploadOutline" /></template>
                 导入
               </n-button>
-              <input ref="importFileInput" type="file" accept=".csv" style="display:none" @change="handleImportCSV" />
+              <input ref="importFileInput" type="file" accept=".csv" class="hidden-input" @change="handleImportCSV" />
             </div>
           </div>
         </div>
 
         <!-- Batch operations -->
         <n-space v-if="checkedRowKeys.length > 0" align="center">
-          <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+          <span class="batch-selected-text">已选择 {{ checkedRowKeys.length }} 项</span>
           <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
           <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
           <n-popconfirm @positive-click="doBatchDelete">
@@ -124,10 +124,10 @@
 
         <!-- Mobile card layout -->
         <template v-else>
-          <div v-if="loading" style="text-align: center; padding: 40px;">
+          <div v-if="loading" class="loading-center">
             <n-spin size="medium" />
           </div>
-          <div v-else-if="users.length === 0" style="text-align: center; padding: 40px; color: #999;">
+          <div v-else-if="users.length === 0" class="empty-state">
             暂无数据
           </div>
           <div v-else class="mobile-card-list">
@@ -206,7 +206,7 @@
       @confirm="handleSaveUser"
       @cancel="showEditDrawer = false"
     >
-      <n-form ref="formRef" :model="editForm" :rules="formRulesComputed" label-placement="left" label-width="80" style="margin-top: 8px">
+      <n-form ref="formRef" :model="editForm" :rules="formRulesComputed" label-placement="left" label-width="80" class="form-spacing">
         <n-form-item label="用户名" path="username">
           <n-input v-model:value="editForm.username" placeholder="请输入用户名" />
         </n-form-item>
@@ -217,7 +217,7 @@
           <n-input v-model:value="editForm.password" type="password" show-password-on="click" placeholder="请输入密码" />
         </n-form-item>
         <n-form-item label="余额" path="balance">
-          <n-input-number v-model:value="editForm.balance" placeholder="请输入余额" :min="0" :precision="2" style="width: 100%" />
+          <n-input-number v-model:value="editForm.balance" placeholder="请输入余额" :min="0" :precision="2" class="full-width" />
         </n-form-item>
         <n-form-item label="管理员" path="is_admin">
           <n-switch v-model:value="editForm.is_admin" />
@@ -230,17 +230,17 @@
             v-model:value="editForm.expire_time"
             type="datetime"
             clearable
-            style="width: 100%"
+            class="full-width"
             placeholder="选择到期时间"
           />
         </n-form-item>
         <n-form-item label="设备数量" path="device_limit">
-          <n-space vertical style="width: 100%">
+          <n-space vertical class="full-width">
             <n-input-number
               v-model:value="editForm.device_limit"
               :min="1"
               :max="1000"
-              style="width: 100%"
+              class="full-width"
               placeholder="设备数量限制"
             />
             <n-space :size="8">
@@ -267,7 +267,7 @@
           <n-descriptions-item label="余额">¥{{ (userDetail.balance ?? 0).toFixed(2) }}</n-descriptions-item>
           <n-descriptions-item label="状态">
             <n-tag :type="userDetail.is_active ? 'success' : 'error'" size="small">{{ userDetail.is_active ? '激活' : '禁用' }}</n-tag>
-            <n-tag v-if="userDetail.is_admin" type="warning" size="small" style="margin-left:4px">管理员</n-tag>
+            <n-tag v-if="userDetail.is_admin" type="warning" size="small" class="tag-spacing">管理员</n-tag>
           </n-descriptions-item>
           <n-descriptions-item label="等级">{{ userDetail.level_name || '无' }}</n-descriptions-item>
           <n-descriptions-item label="注册时间">{{ fmtDate(userDetail.created_at) }}</n-descriptions-item>
@@ -281,12 +281,12 @@
             <n-descriptions-item label="套餐">{{ userDetail.package_name || '-' }}</n-descriptions-item>
             <n-descriptions-item label="状态">
               <n-tag :type="subStatusType(userDetail.subscription.status)" size="small">{{ subStatusText(userDetail.subscription.status) }}</n-tag>
-              <n-tag v-if="!userDetail.subscription.is_active" type="error" size="small" style="margin-left:4px">已停用</n-tag>
+              <n-tag v-if="!userDetail.subscription.is_active" type="error" size="small" class="tag-spacing">已停用</n-tag>
             </n-descriptions-item>
             <n-descriptions-item label="设备">{{ userDetail.subscription.current_devices || 0 }} / {{ userDetail.subscription.device_limit || 0 }}</n-descriptions-item>
             <n-descriptions-item label="到期时间">{{ fmtDate(userDetail.subscription.expire_time) }}</n-descriptions-item>
           </n-descriptions>
-          <div v-if="userDetail.subscription_urls" style="margin-top:8px">
+          <div v-if="userDetail.subscription_urls" class="url-section">
             <div class="url-row"><span class="url-label">通用</span><code class="url-text">{{ userDetail.subscription_urls.universal_url }}</code></div>
             <div class="url-row"><span class="url-label">Clash</span><code class="url-text">{{ userDetail.subscription_urls.clash_url }}</code></div>
           </div>
@@ -294,7 +294,7 @@
         <n-empty v-else description="暂无订阅" size="small" />
 
         <!-- Tabs for records -->
-        <n-tabs type="line" style="margin-top:16px" animated>
+        <n-tabs type="line" class="tabs-spacing" animated>
           <n-tab-pane name="orders" tab="订单记录">
             <n-data-table v-if="(userDetail.recent_orders||[]).length" :columns="orderCols" :data="userDetail.recent_orders" :bordered="false" size="small" :max-height="240" />
             <n-empty v-else description="暂无订单" size="small" />
@@ -400,7 +400,10 @@ import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useRoute } from 'vue-router'
 import { translateLoginStatus, translateBalanceChangeType, parseDeviceInfo, formatLocation } from '@/utils/i18n'
+import { handleApiCall } from '@/utils/apiHandler'
+import type { User } from '@/types/admin'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import '@/styles/admin-common.css'
 
 const message = useMessage()
 const dialog = useDialog()

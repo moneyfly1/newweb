@@ -18,6 +18,14 @@
         </n-button>
       </div>
 
+      <!-- Batch operations -->
+      <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
+        <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+        <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
+        <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
+        <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
+      </n-space>
+
       <template v-if="!appStore.isMobile">
         <n-data-table
           class="unified-admin-table"
@@ -27,6 +35,9 @@
           :loading="loading"
           :pagination="pagination"
           :bordered="false"
+          :row-key="(row) => row.id"
+          :checked-row-keys="checkedRowKeys"
+          @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
           @update:page="(p) => { pagination.page = p; fetchData() }"
           @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
           @update:sorter="handleSorterChange"
@@ -195,6 +206,7 @@ const formRef = ref(null)
 const isEdit = ref(false)
 const editId = ref(null)
 const sortState = ref({ sort: 'id', order: 'desc' })
+const checkedRowKeys = ref([])
 
 const typeOptions = [
   { label: '折扣（百分比）', value: 'discount' },
@@ -266,6 +278,7 @@ const formatDateTime = (timestamp) => {
 }
 
 const columns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   {
     title: '优惠券代码',
@@ -505,6 +518,47 @@ const handleDelete = (row) => {
       } catch (error) {
         message.error(error.message || '删除优惠券失败')
       }
+    }
+  })
+}
+
+const handleBatchEnable = async () => {
+  try {
+    await Promise.all(checkedRowKeys.value.map(id => {
+      const coupon = tableData.value.find(c => c.id === id)
+      return updateCoupon(id, { ...coupon, status: 'active' })
+    }))
+    message.success('批量启用成功')
+    checkedRowKeys.value = []
+    fetchData()
+  } catch { message.error('批量启用失败') }
+}
+
+const handleBatchDisable = async () => {
+  try {
+    await Promise.all(checkedRowKeys.value.map(id => {
+      const coupon = tableData.value.find(c => c.id === id)
+      return updateCoupon(id, { ...coupon, status: 'inactive' })
+    }))
+    message.success('批量禁用成功')
+    checkedRowKeys.value = []
+    fetchData()
+  } catch { message.error('批量禁用失败') }
+}
+
+const handleBatchDelete = () => {
+  dialog.warning({
+    title: '批量删除',
+    content: `确定要删除选中的 ${checkedRowKeys.value.length} 个优惠券吗？此操作不可恢复。`,
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await Promise.all(checkedRowKeys.value.map(id => deleteCoupon(id)))
+        message.success('批量删除成功')
+        checkedRowKeys.value = []
+        fetchData()
+      } catch { message.error('批量删除失败') }
     }
   })
 }

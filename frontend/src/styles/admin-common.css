@@ -1,0 +1,45 @@
+/* 通用管理页面样式 */
+.search-input { width: 250px; }
+.status-select { width: 120px; }
+.flex-1 { flex: 1; }
+.full-width { width: 100%; }
+.hidden-input { display: none; }
+
+/* 文本样式 */
+.batch-selected-text { color: #666; }
+.tag-spacing { margin-left: 4px; }
+
+/* 间距 */
+.form-spacing { margin-top: 8px; }
+.url-section { margin-top: 8px; }
+.tabs-spacing { margin-top: 16px; }
+.batch-operations { margin-bottom: 12px; }
+.date-picker-spacing { margin-top: 6px; }
+.pagination-center { display: flex; justify-content: center; margin-top: 16px; }
+.qr-center { text-align: center; }
+
+/* 移动端工具栏 */
+.mobile-toolbar-controls { display: flex; flex-direction: column; gap: 8px; }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
+
+/* 操作按钮网格 */
+.action-btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+
+/* 移动端卡片列表 */
+.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
+.mobile-card { background: var(--bg-color, #fff); border-radius: 12px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); overflow: hidden; }
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-color, #f0f0f0); }
+.card-title { font-weight: 600; font-size: 14px; color: var(--text-color, #333); }
+.card-body { padding: 10px 14px; }
+.card-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; gap: 8px; }
+.card-label { color: var(--text-color-secondary, #999); flex-shrink: 0; }
+.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color, #f0f0f0); flex-wrap: wrap; }
+
+/* URL 显示 */
+.url-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.url-label { font-size: 12px; color: var(--text-color-secondary, #666); min-width: 40px; }
+.url-text { font-size: 12px; word-break: break-all; color: var(--text-color, #333); background: rgba(0,0,0,0.03); padding: 2px 6px; border-radius: 3px; }
+
+/* 加载和空状态 */
+.loading-center { text-align: center; padding: 40px; }
+.empty-state { text-align: center; padding: 40px; color: #999; }

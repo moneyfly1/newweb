@@ -145,6 +145,12 @@
 
                 <!-- 通知设置 -->
                 <div v-else-if="activeTab === 'notify'" key="notify">
+                  <n-h3 prefix="bar">邮件通知</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="启用通知"><n-switch v-model:value="form.notify_email_enabled" /></n-form-item-gi>
+                    <n-form-item-gi label="管理员邮箱"><n-input v-model:value="form.notify_admin_email" placeholder="admin@example.com" /></n-form-item-gi>
+                  </n-grid>
+                  <n-divider />
                   <n-h3 prefix="bar">Telegram 机器人通知</n-h3>
                   <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
                     <n-form-item-gi label="启用通知"><n-switch v-model:value="form.notify_telegram_enabled" /></n-form-item-gi>
@@ -152,12 +158,42 @@
                     <n-form-item-gi label="Bot Token" span="2"><n-input v-model:value="form.notify_telegram_bot_token" type="password" show-password-on="click" /></n-form-item-gi>
                   </n-grid>
                   <n-divider />
+                  <n-h3 prefix="bar">Bark 推送通知</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="启用通知"><n-switch v-model:value="form.notify_bark_enabled" /></n-form-item-gi>
+                    <n-form-item-gi label="Device Key"><n-input v-model:value="form.notify_bark_device_key" placeholder="设备密钥" /></n-form-item-gi>
+                    <n-form-item-gi label="服务器地址" span="2"><n-input v-model:value="form.notify_bark_server" placeholder="https://api.day.app" /></n-form-item-gi>
+                  </n-grid>
+                  <n-button type="info" :loading="testingBark" @click="handleTestBark" style="margin-top: 12px;">发送测试</n-button>
+                  <n-divider />
                   <n-h3 prefix="bar">管理员订阅事件</n-h3>
-                  <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="24" :y-gap="12">
+                  <n-text depth="3" style="display: block; margin-bottom: 16px; font-size: 13px;">
+                    控制是否向管理员发送通知（邮件/Telegram/Bark）
+                  </n-text>
+                  <n-grid :cols="appStore.isMobile ? 2 : 3" :x-gap="24" :y-gap="12">
                     <n-form-item-gi label="新用户注册"><n-switch v-model:value="form.notify_new_user" /></n-form-item-gi>
                     <n-form-item-gi label="新订单创建"><n-switch v-model:value="form.notify_new_order" /></n-form-item-gi>
                     <n-form-item-gi label="支付成功"><n-switch v-model:value="form.notify_payment_success" /></n-form-item-gi>
+                    <n-form-item-gi label="充值成功"><n-switch v-model:value="form.notify_recharge_success" /></n-form-item-gi>
                     <n-form-item-gi label="新工单提醒"><n-switch v-model:value="form.notify_new_ticket" /></n-form-item-gi>
+                    <n-form-item-gi label="订阅重置"><n-switch v-model:value="form.notify_subscription_reset" /></n-form-item-gi>
+                    <n-form-item-gi label="异常登录"><n-switch v-model:value="form.notify_abnormal_login" /></n-form-item-gi>
+                    <n-form-item-gi label="未支付订单"><n-switch v-model:value="form.notify_unpaid_order" /></n-form-item-gi>
+                    <n-form-item-gi label="到期提醒"><n-switch v-model:value="form.notify_expiry_reminder" /></n-form-item-gi>
+                  </n-grid>
+                  <n-divider />
+                  <n-h3 prefix="bar">用户通知开关</n-h3>
+                  <n-text depth="3" style="display: block; margin-bottom: 16px; font-size: 13px;">
+                    控制是否向用户发送邮件通知（用户可在个人设置中进一步控制）
+                  </n-text>
+                  <n-grid :cols="appStore.isMobile ? 2 : 3" :x-gap="24" :y-gap="12">
+                    <n-form-item-gi label="欢迎邮件"><n-switch v-model:value="form.user_notify_welcome" /></n-form-item-gi>
+                    <n-form-item-gi label="支付成功"><n-switch v-model:value="form.user_notify_payment" /></n-form-item-gi>
+                    <n-form-item-gi label="到期提醒"><n-switch v-model:value="form.user_notify_expiry" /></n-form-item-gi>
+                    <n-form-item-gi label="已过期通知"><n-switch v-model:value="form.user_notify_expired" /></n-form-item-gi>
+                    <n-form-item-gi label="订阅重置"><n-switch v-model:value="form.user_notify_reset" /></n-form-item-gi>
+                    <n-form-item-gi label="账户状态变更"><n-switch v-model:value="form.user_notify_account_status" /></n-form-item-gi>
+                    <n-form-item-gi label="未支付订单"><n-switch v-model:value="form.user_notify_unpaid_order" /></n-form-item-gi>
                   </n-grid>
                 </div>
 
@@ -208,7 +244,7 @@ import {
   SaveOutline, SettingsOutline, RocketOutline, CardOutline, 
   MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline 
 } from '@vicons/ionicons5'
-import { getSettings, updateSettings, sendTestEmail, testTelegram, createBackup, listBackups, updateGeoIPFiles } from '@/api/admin'
+import { getSettings, updateSettings, sendTestEmail, testTelegram, testBark, createBackup, listBackups, updateGeoIPFiles } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -218,6 +254,7 @@ const activeTab = ref('basic')
 const loading = ref(false)
 const saving = ref(false)
 const sendingTest = ref(false)
+const testingBark = ref(false)
 const backupCreating = ref(false)
 const testEmail = ref('')
 
@@ -248,8 +285,15 @@ const form = ref<Record<string, any>>({
   pay_epay_gateway: '', pay_epay_merchant_id: '', pay_epay_secret_key: '',
   pay_stripe_enabled: false, pay_stripe_secret_key: '', pay_stripe_webhook_secret: '', pay_stripe_exchange_rate: 7.2,
   pay_balance_enabled: true,
+  notify_email_enabled: false, notify_admin_email: '',
   notify_telegram_enabled: false, notify_telegram_bot_token: '', notify_telegram_chat_id: '',
+  notify_bark_enabled: false, notify_bark_server: '', notify_bark_device_key: '',
   notify_new_user: false, notify_new_order: false, notify_payment_success: false, notify_new_ticket: false,
+  notify_recharge_success: false, notify_subscription_reset: false, notify_abnormal_login: false,
+  notify_unpaid_order: false, notify_expiry_reminder: false,
+  user_notify_welcome: true, user_notify_payment: true, user_notify_expiry: true,
+  user_notify_expired: true, user_notify_reset: true, user_notify_account_status: true,
+  user_notify_unpaid_order: true,
   max_login_attempts: 5, login_lockout_minutes: 30, ip_whitelist: '',
   backup_github_enabled: false, backup_github_token: '', backup_github_repo: '',
   checkin_enabled: true, checkin_min_reward: 10, checkin_max_reward: 50
@@ -350,6 +394,16 @@ const handleSendTestEmail = async () => {
     await sendTestEmail({ email: testEmail.value })
     message.success('测试邮件已发出')
   } finally { sendingTest.value = false }
+}
+
+const handleTestBark = async () => {
+  testingBark.value = true
+  try {
+    await testBark()
+    message.success('Bark 测试消息已发送')
+  } catch (e: any) {
+    message.error(e.response?.data?.message || 'Bark 测试失败')
+  } finally { testingBark.value = false }
 }
 
 const handleCreateBackup = async () => {

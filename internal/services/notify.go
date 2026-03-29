@@ -222,6 +222,40 @@ func SendTestTelegram() error {
 	return sendTelegramSync(botToken, chatID, sb.String())
 }
 
+// SendTestBark sends a test message via Bark using saved settings.
+func SendTestBark() error {
+	settings := utils.GetSettings("notify_bark_server", "notify_bark_device_key", "site_name")
+	barkServer := settings["notify_bark_server"]
+	barkKey := settings["notify_bark_device_key"]
+	if barkServer == "" || barkKey == "" {
+		return fmt.Errorf("请先配置 Bark 服务器地址和 Device Key")
+	}
+	siteName := settings["site_name"]
+	if siteName == "" {
+		siteName = "CBoard"
+	}
+	now := time.Now().Format("2006-01-02 15:04:05")
+
+	title := fmt.Sprintf("[%s] ✅ Bark 测试", siteName)
+	body := fmt.Sprintf("🏷️ 站点: %s\n🕐 时间: %s\n\n📡 通知服务运行正常", siteName, now)
+
+	barkServer = strings.TrimRight(barkServer, "/")
+	reqURL := fmt.Sprintf("%s/%s/%s/%s",
+		barkServer, url.PathEscape(barkKey),
+		url.PathEscape(title), url.PathEscape(body))
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(reqURL)
+	if err != nil {
+		return fmt.Errorf("Bark 发送失败: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Bark 返回状态码: %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func sendTelegram(botToken, chatID, message string) {
 	if err := sendTelegramSync(botToken, chatID, message); err != nil {
 		log.Printf("[Notify] Telegram 异步发送失败: %v", err)

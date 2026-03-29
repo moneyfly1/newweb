@@ -31,6 +31,10 @@
           </div>
         </div>
 
+        <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
+          <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+          <n-button size="small" type="success" @click="handleBatchClose">批量关闭</n-button>
+        </n-space>
         <template v-if="!appStore.isMobile">
           <n-data-table
             remote
@@ -39,6 +43,9 @@
             :loading="loading"
             :pagination="pagination"
             :bordered="false"
+            :row-key="(row: any) => row.id"
+            :checked-row-keys="checkedRowKeys"
+            @update:checked-row-keys="(keys: any) => { checkedRowKeys = keys }"
             @update:page="(p: number) => { pagination.page = p; loadTickets() }"
             @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; loadTickets() }"
             @update:sorter="handleSorterChange"
@@ -183,6 +190,7 @@ const loading = ref(false)
 const detailLoading = ref(false)
 const replyLoading = ref(false)
 const tickets = ref<any[]>([])
+const checkedRowKeys = ref<any[]>([])
 const currentTicket = ref<any>(null)
 const showDetailDrawer = ref(false)
 const replyContent = ref('')
@@ -228,6 +236,7 @@ const priorityOptions = [
 ]
 
 const columns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 60, resizable: true, sorter: 'default' },
   { title: '工单编号', key: 'ticket_no', width: 150, resizable: true },
   { title: '用户ID', key: 'user_id', width: 80, resizable: true },
@@ -450,6 +459,18 @@ const handleQuickStatusUpdate = (row: any) => {
       }
     }
   })
+}
+
+const handleBatchClose = async () => {
+  try {
+    await Promise.all(checkedRowKeys.value.map(id => {
+      const ticket = tickets.value.find(t => t.id === id)
+      return updateTicket(id, { ...ticket, status: 'closed' })
+    }))
+    message.success('批量关闭成功')
+    checkedRowKeys.value = []
+    loadTickets()
+  } catch { message.error('批量关闭失败') }
 }
 
 onMounted(() => {

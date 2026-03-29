@@ -12,6 +12,14 @@
         <n-button size="small" type="primary" @click="handleCreate">发布公告</n-button>
       </div>
 
+      <!-- Batch operations -->
+      <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
+        <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+        <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
+        <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
+        <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
+      </n-space>
+
       <template v-if="!appStore.isMobile">
         <n-data-table
           remote
@@ -20,6 +28,9 @@
           :loading="loading"
           :pagination="pagination"
           :bordered="false"
+          :row-key="(row: any) => row.id"
+          :checked-row-keys="checkedRowKeys"
+          @update:checked-row-keys="(keys: number[]) => { checkedRowKeys = keys }"
           @update:page="(p) => { pagination.page = p; fetchData() }"
           @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
           @update:sorter="handleSorterChange"
@@ -145,6 +156,7 @@ const modalTitle = ref('发布公告')
 const tableData = ref<any[]>([])
 const isEdit = ref(false)
 const sortState = ref({ sort: 'id', order: 'desc' })
+const checkedRowKeys = ref<number[]>([])
 
 const pagination = reactive({
   page: 1,
@@ -194,6 +206,7 @@ const getTypeTag = (type: string) => {
 }
 
 const columns: DataTableColumns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '标题', key: 'title', ellipsis: { tooltip: true } },
   {
@@ -323,6 +336,46 @@ const handleDelete = async (id: number) => {
   } catch (error: any) {
     message.error(error.message || '删除失败')
   }
+}
+
+const handleBatchEnable = async () => {
+  try {
+    await Promise.all(checkedRowKeys.value.map(id => {
+      const item = tableData.value.find(a => a.id === id)
+      return updateAnnouncement(id, { ...item, is_active: true })
+    }))
+    message.success('批量启用成功')
+    checkedRowKeys.value = []
+    loadData()
+  } catch { message.error('批量启用失败') }
+}
+
+const handleBatchDisable = async () => {
+  try {
+    await Promise.all(checkedRowKeys.value.map(id => {
+      const item = tableData.value.find(a => a.id === id)
+      return updateAnnouncement(id, { ...item, is_active: false })
+    }))
+    message.success('批量禁用成功')
+    checkedRowKeys.value = []
+    loadData()
+  } catch { message.error('批量禁用失败') }
+}
+
+const handleBatchDelete = async () => {
+  dialog.warning({
+    title: '批量删除',
+    content: `确定要删除选中的 ${checkedRowKeys.value.length} 个公告吗？`,
+    positiveText: '确定',
+    onPositiveClick: async () => {
+      try {
+        await Promise.all(checkedRowKeys.value.map(id => deleteAnnouncement(id)))
+        message.success('批量删除成功')
+        checkedRowKeys.value = []
+        loadData()
+      } catch { message.error('批量删除失败') }
+    }
+  })
 }
 
 onMounted(() => {

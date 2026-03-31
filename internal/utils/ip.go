@@ -75,23 +75,30 @@ func ipCacheCleaner() {
 
 func loadIP2RegionSearcher() *xdb.Searcher {
 	ip2regionOnce.Do(func() {
-		xdbPath := filepath.Join("uploads", "config", "ip2region.xdb")
-		if _, err := os.Stat(xdbPath); err != nil {
-			fmt.Printf("[IP2Region] 文件不存在: %s\n", xdbPath)
+		// 优先尝试 v4，然后 v6
+		candidates := []string{
+			filepath.Join("uploads", "config", "ip2region_v4.xdb"),
+			filepath.Join("uploads", "config", "ip2region_v6.xdb"),
+		}
+		for _, xdbPath := range candidates {
+			if _, err := os.Stat(xdbPath); err != nil {
+				continue
+			}
+			cBuff, err := xdb.LoadContentFromFile(xdbPath)
+			if err != nil {
+				fmt.Printf("[IP2Region] 加载失败 %s: %v\n", xdbPath, err)
+				continue
+			}
+			searcher, err := xdb.NewWithBuffer(nil, cBuff)
+			if err != nil {
+				fmt.Printf("[IP2Region] 创建失败 %s: %v\n", xdbPath, err)
+				continue
+			}
+			ip2regionSearcher = searcher
+			fmt.Printf("[IP2Region] 成功加载: %s\n", xdbPath)
 			return
 		}
-		cBuff, err := xdb.LoadContentFromFile(xdbPath)
-		if err != nil {
-			fmt.Printf("[IP2Region] 加载失败: %v\n", err)
-			return
-		}
-		searcher, err := xdb.NewWithBuffer(nil, cBuff)
-		if err != nil {
-			fmt.Printf("[IP2Region] 创建失败: %v\n", err)
-			return
-		}
-		ip2regionSearcher = searcher
-		fmt.Printf("[IP2Region] 成功加载: %s\n", xdbPath)
+		fmt.Printf("[IP2Region] 所有数据库文件加载失败\n")
 	})
 	return ip2regionSearcher
 }

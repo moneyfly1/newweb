@@ -138,6 +138,7 @@ func GetIPLocation(ip string) string {
 	// Validate IP format
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
+		fmt.Printf("[IP] 无效的 IP 格式: %s\n", ip)
 		return ""
 	}
 
@@ -155,7 +156,9 @@ func GetIPLocation(ip string) string {
 	ipLocationMu.RUnlock()
 
 	// Try MMDB first
-	if location := lookupLocationFromMMDB(ip); location != "" {
+	location := lookupLocationFromMMDB(ip)
+	fmt.Printf("[IP] MMDB 查询 %s => %s\n", ip, location)
+	if location != "" {
 		ipLocationMu.Lock()
 		if len(ipLocationCache) >= ipCacheMaxSize {
 			ipLocationCache = make(map[string]ipLocationCacheEntry)
@@ -169,7 +172,8 @@ func GetIPLocation(ip string) string {
 	}
 
 	// Fallback to ip-api.com (supports both IPv4 and IPv6)
-	location := queryIPAPI(ip)
+	location = queryIPAPI(ip)
+	fmt.Printf("[IP] API 查询 %s => %s\n", ip, location)
 	if location != "" {
 		ipLocationMu.Lock()
 		if len(ipLocationCache) >= ipCacheMaxSize {

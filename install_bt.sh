@@ -495,7 +495,7 @@ update_code() {
         systemctl stop ${SERVICE_NAME}
         export PATH=$PATH:/usr/local/go/bin
         go build -o cboard cmd/server/main.go
-        cd frontend && npm install && npx vite build && cd ..
+        cd frontend && echo "loglevel=error" > .npmrc && npm install && npx vite build && cd ..
         chown -R www:www .
         systemctl start ${SERVICE_NAME}
     fi

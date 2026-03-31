@@ -136,7 +136,8 @@ func GetIPLocation(ip string) string {
 	}
 
 	// Validate IP format
-	if net.ParseIP(ip) == nil {
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
 		return ""
 	}
 
@@ -153,6 +154,7 @@ func GetIPLocation(ip string) string {
 	}
 	ipLocationMu.RUnlock()
 
+	// Try MMDB first
 	if location := lookupLocationFromMMDB(ip); location != "" {
 		ipLocationMu.Lock()
 		if len(ipLocationCache) >= ipCacheMaxSize {
@@ -166,6 +168,23 @@ func GetIPLocation(ip string) string {
 		return location
 	}
 
+	// Fallback to ip-api.com (supports both IPv4 and IPv6)
+	location := queryIPAPI(ip)
+	if location != "" {
+		ipLocationMu.Lock()
+		if len(ipLocationCache) >= ipCacheMaxSize {
+			ipLocationCache = make(map[string]ipLocationCacheEntry)
+		}
+		ipLocationCache[ip] = ipLocationCacheEntry{
+			location: location,
+			expireAt: now.Add(ipLocationTTL),
+		}
+		ipLocationMu.Unlock()
+	}
+	return location
+}
+
+func queryIPAPI(ip string) string {
 	urls := []string{
 		fmt.Sprintf("https://ip-api.com/json/%s?lang=zh-CN&fields=status,country,regionName,city,query", ip),
 		fmt.Sprintf("http://ip-api.com/json/%s?lang=zh-CN&fields=status,country,regionName,city,query", ip),
@@ -198,18 +217,6 @@ func GetIPLocation(ip string) string {
 	if info.City != "" && info.City != info.Region {
 		location += " " + info.City
 	}
-
-	ipLocationMu.Lock()
-	// Evict all if cache grows too large
-	if len(ipLocationCache) >= ipCacheMaxSize {
-		ipLocationCache = make(map[string]ipLocationCacheEntry)
-	}
-	ipLocationCache[ip] = ipLocationCacheEntry{
-		location: location,
-		expireAt: now.Add(ipLocationTTL),
-	}
-	ipLocationMu.Unlock()
-
 	return location
 }
 

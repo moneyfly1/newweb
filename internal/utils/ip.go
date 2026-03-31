@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lionsoul2014/ip2region/binding/golang/xdb"
 	"github.com/oschwald/maxminddb-golang"
 )
 
@@ -48,6 +49,8 @@ var (
 	ipLocationTTL    = 30 * time.Minute
 	mmdbReader       *maxminddb.Reader
 	mmdbOnce         sync.Once
+	ip2regionSearcher *xdb.Searcher
+	ip2regionOnce     sync.Once
 )
 
 func init() {
@@ -68,6 +71,56 @@ func ipCacheCleaner() {
 		}
 		ipLocationMu.Unlock()
 	}
+}
+
+func loadIP2RegionSearcher() *xdb.Searcher {
+	ip2regionOnce.Do(func() {
+		xdbPath := filepath.Join("uploads", "config", "ip2region.xdb")
+		if _, err := os.Stat(xdbPath); err != nil {
+			fmt.Printf("[IP2Region] 文件不存在: %s\n", xdbPath)
+			return
+		}
+		cBuff, err := xdb.LoadContentFromFile(xdbPath)
+		if err != nil {
+			fmt.Printf("[IP2Region] 加载失败: %v\n", err)
+			return
+		}
+		searcher, err := xdb.NewWithBuffer(nil, cBuff)
+		if err != nil {
+			fmt.Printf("[IP2Region] 创建失败: %v\n", err)
+			return
+		}
+		ip2regionSearcher = searcher
+		fmt.Printf("[IP2Region] 成功加载: %s\n", xdbPath)
+	})
+	return ip2regionSearcher
+}
+
+func lookupLocationFromIP2Region(ip string) string {
+	searcher := loadIP2RegionSearcher()
+	if searcher == nil {
+		return ""
+	}
+	region, err := searcher.SearchByStr(ip)
+	if err != nil {
+		return ""
+	}
+	// ip2region 格式: 国家|区域|省份|城市|ISP
+	parts := strings.Split(region, "|")
+	if len(parts) < 4 {
+		return ""
+	}
+	result := []string{}
+	if parts[0] != "0" && parts[0] != "" {
+		result = append(result, parts[0])
+	}
+	if parts[2] != "0" && parts[2] != "" && parts[2] != parts[0] {
+		result = append(result, parts[2])
+	}
+	if parts[3] != "0" && parts[3] != "" && parts[3] != parts[2] {
+		result = append(result, parts[3])
+	}
+	return strings.Join(result, " ")
 }
 
 func loadMMDBReader() *maxminddb.Reader {
@@ -165,9 +218,27 @@ func GetIPLocation(ip string) string {
 	}
 	ipLocationMu.RUnlock()
 
-	// Try MMDB first
-	location := lookupLocationFromMMDB(ip)
-	fmt.Printf("[IP] MMDB 查询 %s => %s\n", ip, location)
+	// Try ip2region first (best for Chinese IPs)
+	location := lookupLocationFromIP2Region(ip)
+	fmt.Printf("[IP] IP2Region 查询 %s => %s\n", ip, location)
+	if location != "" && strings.Contains(location, " ") {
+		ipLocationMu.Lock()
+		if len(ipLocationCache) >= ipCacheMaxSize {
+			ipLocationCache = make(map[string]ipLocationCacheEntry)
+		}
+		ipLocationCache[ip] = ipLocationCacheEntry{
+			location: location,
+			expireAt: now.Add(ipLocationTTL),
+		}
+		ipLocationMu.Unlock()
+		return location
+	}
+
+	// Try MMDB second
+	if location == "" {
+		location = lookupLocationFromMMDB(ip)
+		fmt.Printf("[IP] MMDB 查询 %s => %s\n", ip, location)
+	}
 
 	// 如果 MMDB 只返回国家（没有省份/城市），尝试 API 获取更详细信息
 	if location != "" && !strings.Contains(location, " ") {

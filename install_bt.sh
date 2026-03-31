@@ -493,6 +493,10 @@ update_code() {
     read -rp "是否重新构建? (y/n) [y]: " rb
     if [[ "${rb:-y}" =~ ^[Yy]$ ]]; then
         systemctl stop ${SERVICE_NAME}
+
+        # 删除旧的构建文件
+        rm -rf frontend/dist frontend/node_modules
+
         export PATH=$PATH:/usr/local/go/bin
         go build -o cboard cmd/server/main.go
         cd frontend && echo "loglevel=error" > .npmrc && npm install && npx vite build && cd ..

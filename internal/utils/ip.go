@@ -107,8 +107,13 @@ func lookupLocationFromMMDB(ip string) string {
 	}
 	var record mmdbCityRecord
 	if err := reader.Lookup(parsedIP, &record); err != nil {
+		fmt.Printf("[MMDB] 查询失败: %v\n", err)
 		return ""
 	}
+
+	fmt.Printf("[MMDB] 原始数据 - Country: %v, Subdivisions: %v, City: %v\n",
+		record.Country.Names, record.Subdivisions, record.City.Names)
+
 	parts := make([]string, 0, 3)
 	if country := record.Country.Names["zh-CN"]; country != "" {
 		parts = append(parts, country)

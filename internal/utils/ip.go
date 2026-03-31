@@ -105,8 +105,10 @@ func lookupLocationFromIP2Region(ip string) string {
 	}
 	region, err := searcher.SearchByStr(ip)
 	if err != nil {
+		fmt.Printf("[IP2Region] 查询错误 %s: %v\n", ip, err)
 		return ""
 	}
+	fmt.Printf("[IP2Region] 原始数据 %s: %s\n", ip, region)
 	// ip2region 格式: 国家|区域|省份|城市|ISP
 	parts := strings.Split(region, "|")
 	if len(parts) < 4 {

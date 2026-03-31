@@ -1494,20 +1494,17 @@ update_code() {
     echo -e "  分支: ${GREEN}$branch${NC}"
 
     if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-        warn "检测到未提交的更改"
-        echo "  1. 暂存 (stash)  2. 放弃 (reset)  3. 取消"
-        read -rp "选择 [1-3, 默认: 2]: " handle
-        case ${handle:-2} in
-            1) git stash push -m "Auto stash $(date +%Y%m%d_%H%M%S)" 2>/dev/null ;;
-            2) git reset --hard HEAD 2>/dev/null ;;
-            3) read -rp "按回车键继续..."; return 0 ;;
-        esac
+        warn "检测到未提交的更改，将强制重置到远程版本"
+        git reset --hard HEAD 2>/dev/null
+        git clean -fd 2>/dev/null
     fi
 
     git config --global --add safe.directory "$work_dir" 2>/dev/null || true
 
     info "拉取更新..."
-    if git pull origin "$branch" 2>&1; then
+    git fetch origin "$branch" 2>&1
+    git reset --hard origin/"$branch" 2>&1
+    if [ $? -eq 0 ]; then
         ok "代码更新成功"
     else
         err "更新失败"; read -rp "按回车键继续..."; return 1

@@ -222,27 +222,9 @@ func GetIPLocation(ip string) string {
 	}
 	ipLocationMu.RUnlock()
 
-	// Try ip2region first (best for Chinese IPs)
-	location := lookupLocationFromIP2Region(ip)
-	fmt.Printf("[IP] IP2Region 查询 %s => %s\n", ip, location)
-	if location != "" && strings.Contains(location, " ") {
-		ipLocationMu.Lock()
-		if len(ipLocationCache) >= ipCacheMaxSize {
-			ipLocationCache = make(map[string]ipLocationCacheEntry)
-		}
-		ipLocationCache[ip] = ipLocationCacheEntry{
-			location: location,
-			expireAt: now.Add(ipLocationTTL),
-		}
-		ipLocationMu.Unlock()
-		return location
-	}
-
-	// Try MMDB second
-	if location == "" {
-		location = lookupLocationFromMMDB(ip)
-		fmt.Printf("[IP] MMDB 查询 %s => %s\n", ip, location)
-	}
+	// Try MMDB first
+	location := lookupLocationFromMMDB(ip)
+	fmt.Printf("[IP] MMDB 查询 %s => %s\n", ip, location)
 
 	// 如果 MMDB 只返回国家（没有省份/城市），尝试 API 获取更详细信息
 	if location != "" && !strings.Contains(location, " ") {

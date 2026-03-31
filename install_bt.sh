@@ -1523,7 +1523,7 @@ update_code() {
         chmod +x cboard 2>/dev/null || true
 
         info "安装前端依赖..."
-        cd frontend && npm install || { err "依赖安装失败"; cd ..; return 1; }
+        cd frontend && npm install --legacy-peer-deps --no-optional || { err "依赖安装失败"; cd ..; return 1; }
 
         info "构建前端..."
         npx vite build || { err "前端构建失败"; cd ..; return 1; }

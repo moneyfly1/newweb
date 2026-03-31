@@ -113,6 +113,12 @@ func detectSoftware(lower, ua string, info *ClientInfo) {
 		{"pharos", "Pharos"},
 		{"potatso", "Potatso"},
 		{"kitsunebi", "Kitsunebi"},
+		{"shadowsocks", "Shadowsocks"},
+		{"v2rayu", "V2RayU"},
+		{"qv2ray", "Qv2ray"},
+		{"anxray", "AnXray"},
+		{"matsuri", "Matsuri"},
+		{"sagernet", "SagerNet"},
 	}
 	for _, r := range rules {
 		if strings.Contains(lower, r.keyword) {
@@ -121,11 +127,28 @@ func detectSoftware(lower, ua string, info *ClientInfo) {
 			return
 		}
 	}
-	// iOS proxy app: CFNetwork + Darwin + iPhone/iPad without Mozilla
+	// iOS proxy app
 	if (strings.Contains(lower, "cfnetwork") || strings.Contains(lower, "darwin")) &&
 		(strings.Contains(lower, "iphone") || strings.Contains(lower, "ipad")) &&
 		!strings.Contains(lower, "mozilla") {
-		info.SoftwareName = "Shadowrocket"
+		info.SoftwareName = "iOS 代理客户端"
+		return
+	}
+	// Browser detection
+	if strings.Contains(lower, "mozilla") || strings.Contains(lower, "chrome") ||
+	   strings.Contains(lower, "safari") || strings.Contains(lower, "firefox") {
+		if strings.Contains(lower, "edg/") {
+			info.SoftwareName = "Edge 浏览器"
+		} else if strings.Contains(lower, "chrome") && !strings.Contains(lower, "edg") {
+			info.SoftwareName = "Chrome 浏览器"
+		} else if strings.Contains(lower, "firefox") {
+			info.SoftwareName = "Firefox 浏览器"
+		} else if strings.Contains(lower, "safari") && !strings.Contains(lower, "chrome") {
+			info.SoftwareName = "Safari 浏览器"
+		} else {
+			info.SoftwareName = "浏览器"
+		}
+		return
 	}
 }
 

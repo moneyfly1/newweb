@@ -1516,10 +1516,22 @@ update_code() {
     read -rp "是否重新构建? (y/n) [y]: " rebuild
     if [[ "${rebuild:-y}" =~ ^[Yy]$ ]]; then
         systemctl stop ${SERVICE_NAME} 2>/dev/null || true
+
+        info "清理旧的前端构建..."
+        rm -rf frontend/dist 2>/dev/null || true
+
+        info "构建后端..."
         export PATH=$PATH:/usr/local/go/bin
-        go build -o cboard cmd/server/main.go 2>&1 || err "后端构建失败"
+        go build -o cboard cmd/server/main.go || { err "后端构建失败"; return 1; }
         chmod +x cboard 2>/dev/null || true
-        cd frontend && npm install --silent 2>/dev/null && npx vite build 2>/dev/null; cd ..
+
+        info "安装前端依赖..."
+        cd frontend && npm install || { err "依赖安装失败"; cd ..; return 1; }
+
+        info "构建前端..."
+        npx vite build || { err "前端构建失败"; cd ..; return 1; }
+        cd ..
+
         chown -R www:www "$work_dir" 2>/dev/null || true
         systemctl start ${SERVICE_NAME}
         sleep 3

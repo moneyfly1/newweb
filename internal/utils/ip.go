@@ -168,6 +168,16 @@ func GetIPLocation(ip string) string {
 	// Try MMDB first
 	location := lookupLocationFromMMDB(ip)
 	fmt.Printf("[IP] MMDB 查询 %s => %s\n", ip, location)
+
+	// 如果 MMDB 只返回国家（没有省份/城市），尝试 API 获取更详细信息
+	if location != "" && !strings.Contains(location, " ") {
+		apiLocation := queryIPAPI(ip)
+		fmt.Printf("[IP] API 补充查询 %s => %s\n", ip, apiLocation)
+		if apiLocation != "" && strings.Contains(apiLocation, " ") {
+			location = apiLocation
+		}
+	}
+
 	if location != "" {
 		ipLocationMu.Lock()
 		if len(ipLocationCache) >= ipCacheMaxSize {

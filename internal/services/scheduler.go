@@ -43,14 +43,14 @@ func (s *Scheduler) Start() {
 	log.Println("[Scheduler] 后台任务调度器已启动")
 	utils.SysInfo("scheduler", "后台任务调度器已启动")
 
-	s.startLoop("EmailQueue", 10*time.Second, processEmailQueueTask)
-	s.startLoop("DeactivateExpired", 5*time.Minute, deactivateExpiredTask)
-	s.startLoop("ExpiryCheck", 10*time.Minute, checkExpiryStatusTask)
-	s.startLoop("ExpiryReminder", 1*time.Hour, sendExpiryRemindersTask)
-	s.startLoop("UnpaidOrderReminder", 15*time.Minute, sendUnpaidOrderRemindersTask)
-	s.startLoop("CleanCodes", 30*time.Minute, cleanExpiredCodesTask)
-	s.startLoop("CancelExpiredOrders", 1*time.Hour, cancelExpiredOrdersTask)
-	s.startLoop("CleanPaymentNonces", 6*time.Hour, cleanPaymentNoncesTask)
+	s.startLoop("EmailQueue", 30*time.Second, processEmailQueueTask)
+	s.startLoop("DeactivateExpired", 30*time.Minute, deactivateExpiredTask)
+	s.startLoop("ExpiryCheck", 1*time.Hour, checkExpiryStatusTask)
+	s.startLoop("ExpiryReminder", 6*time.Hour, sendExpiryRemindersTask)
+	s.startLoop("UnpaidOrderReminder", 1*time.Hour, sendUnpaidOrderRemindersTask)
+	s.startLoop("CleanCodes", 2*time.Hour, cleanExpiredCodesTask)
+	s.startLoop("CancelExpiredOrders", 2*time.Hour, cancelExpiredOrdersTask)
+	s.startLoop("CleanPaymentNonces", 12*time.Hour, cleanPaymentNoncesTask)
 }
 
 // Stop gracefully shuts down all background loops.

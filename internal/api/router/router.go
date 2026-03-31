@@ -23,11 +23,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	}
 
 	r := gin.New()
-	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 	r.Use(middleware.SecurityHeaders())
-	r.Use(middleware.RequestLogger())         // 添加请求日志中间件
-	r.Use(gzip.Gzip(gzip.DefaultCompression)) // 添加 Gzip 压缩，提升传输性能
+	r.Use(middleware.RequestLogger())
+	r.Use(gzip.Gzip(gzip.DefaultCompression))
 
 	// CORS
 	corsConfig := cors.Config{

@@ -195,7 +195,9 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		subType := clientInfo.SubscriptionType
 		deviceName := buildDeviceName(clientInfo)
 		userID := int64(sub.UserID)
+		fmt.Printf("[设备创建] IP: %s, UA: %s\n", ip, ua)
 		region := utils.GetIPLocation(ip)
+		fmt.Printf("[设备创建] 地理位置: %s\n", region)
 		newDevice := models.Device{
 			UserID:            &userID,
 			SubscriptionID:    sub.ID,

@@ -195,12 +195,14 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		subType := clientInfo.SubscriptionType
 		deviceName := buildDeviceName(clientInfo)
 		userID := int64(sub.UserID)
+		region := utils.GetIPLocation(ip)
 		newDevice := models.Device{
 			UserID:            &userID,
 			SubscriptionID:    sub.ID,
 			DeviceFingerprint: fingerprint,
 			UserAgent:         &ua,
 			IPAddress:         &ip,
+			Region:            region,
 			SoftwareName:      &softwareName,
 			SoftwareVersion:   &softwareVer,
 			OSName:            &osName,

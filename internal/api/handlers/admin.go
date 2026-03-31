@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"archive/zip"
+	"compress/gzip"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -3078,6 +3079,7 @@ func AdminUpdateGeoIP(c *gin.Context) {
 		"geoip.dat":    "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
 		"geosite.dat":  "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
 		"geoip.metadb": "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb",
+		"GeoLite2-City.mmdb": "https://github.com/wp-statistics/GeoLite2-City/raw/master/GeoLite2-City.mmdb.gz",
 	}
 
 	if err := os.MkdirAll(filepath.Join("uploads", "config"), 0750); err != nil {
@@ -3099,21 +3101,49 @@ func AdminUpdateGeoIP(c *gin.Context) {
 			return
 		}
 		targetPath := filepath.Join("uploads", "config", fileName)
-		file, err := os.Create(targetPath)
-		if err != nil {
-			resp.Body.Close()
-			utils.InternalError(c, "写入 "+fileName+" 失败: "+err.Error())
-			return
-		}
-		if _, err := io.Copy(file, resp.Body); err != nil {
+
+		// 如果是 .gz 文件，需要解压
+		if strings.HasSuffix(fileName, ".gz") {
+			gzReader, err := gzip.NewReader(resp.Body)
+			if err != nil {
+				resp.Body.Close()
+				utils.InternalError(c, "解压 "+fileName+" 失败: "+err.Error())
+				return
+			}
+			defer gzReader.Close()
+
+			// 去掉 .gz 后缀
+			targetPath = strings.TrimSuffix(targetPath, ".gz")
+			file, err := os.Create(targetPath)
+			if err != nil {
+				utils.InternalError(c, "写入 "+fileName+" 失败: "+err.Error())
+				return
+			}
+			if _, err := io.Copy(file, gzReader); err != nil {
+				file.Close()
+				utils.InternalError(c, "保存 "+fileName+" 失败: "+err.Error())
+				return
+			}
 			file.Close()
 			resp.Body.Close()
-			utils.InternalError(c, "保存 "+fileName+" 失败: "+err.Error())
-			return
+			updated = append(updated, strings.TrimSuffix(fileName, ".gz"))
+		} else {
+			file, err := os.Create(targetPath)
+			if err != nil {
+				resp.Body.Close()
+				utils.InternalError(c, "写入 "+fileName+" 失败: "+err.Error())
+				return
+			}
+			if _, err := io.Copy(file, resp.Body); err != nil {
+				file.Close()
+				resp.Body.Close()
+				utils.InternalError(c, "保存 "+fileName+" 失败: "+err.Error())
+				return
+			}
+			file.Close()
+			resp.Body.Close()
+			updated = append(updated, fileName)
 		}
-		file.Close()
-		resp.Body.Close()
-		updated = append(updated, fileName)
 	}
 
 	utils.Success(c, gin.H{

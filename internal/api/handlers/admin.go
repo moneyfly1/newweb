@@ -3076,10 +3076,10 @@ func AdminBackfillLocations(c *gin.Context) {
 
 func AdminUpdateGeoIP(c *gin.Context) {
 	resources := map[string]string{
-		"geoip.dat":    "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
-		"geosite.dat":  "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
-		"geoip.metadb": "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb",
-		"GeoLite2-City.mmdb": "https://github.com/wp-statistics/GeoLite2-City/raw/master/GeoLite2-City.mmdb.gz",
+		"geoip.dat":              "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
+		"geosite.dat":            "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
+		"geoip.metadb":           "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb",
+		"GeoLite2-City.mmdb.gz": "https://github.com/wp-statistics/GeoLite2-City/raw/master/GeoLite2-City.mmdb.gz",
 	}
 
 	if err := os.MkdirAll(filepath.Join("uploads", "config"), 0750); err != nil {

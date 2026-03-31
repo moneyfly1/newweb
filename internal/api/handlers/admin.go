@@ -3080,7 +3080,8 @@ func AdminUpdateGeoIP(c *gin.Context) {
 		"geosite.dat":            "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
 		"geoip.metadb":           "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb",
 		"GeoLite2-City.mmdb.gz": "https://github.com/wp-statistics/GeoLite2-City/raw/master/GeoLite2-City.mmdb.gz",
-		"ip2region.xdb":          "https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region.xdb",
+		"ip2region_v4.xdb":       "https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region_v4.xdb",
+		"ip2region_v6.xdb":       "https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region_v6.xdb",
 	}
 
 	if err := os.MkdirAll(filepath.Join("uploads", "config"), 0750); err != nil {

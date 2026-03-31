@@ -84,12 +84,7 @@ func loadIP2RegionSearcher() *xdb.Searcher {
 			if _, err := os.Stat(xdbPath); err != nil {
 				continue
 			}
-			cBuff, err := xdb.LoadContentFromFile(xdbPath)
-			if err != nil {
-				fmt.Printf("[IP2Region] 加载失败 %s: %v\n", xdbPath, err)
-				continue
-			}
-			searcher, err := xdb.NewWithBuffer(nil, cBuff)
+			searcher, err := xdb.NewWithFileOnly(xdb.IPvx, xdbPath)
 			if err != nil {
 				fmt.Printf("[IP2Region] 创建失败 %s: %v\n", xdbPath, err)
 				continue

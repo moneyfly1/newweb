@@ -73,20 +73,25 @@ func ipCacheCleaner() {
 func loadMMDBReader() *maxminddb.Reader {
 	mmdbOnce.Do(func() {
 		candidates := []string{
+			filepath.Join("uploads", "config", "GeoLite2-City.mmdb"),
 			filepath.Join("uploads", "config", "geoip.metadb"),
 			filepath.Join("uploads", "config", "Country.mmdb"),
-			filepath.Join("uploads", "config", "GeoLite2-City.mmdb"),
 		}
 		for _, candidate := range candidates {
+			fmt.Printf("[MMDB] 尝试加载: %s\n", candidate)
 			if _, err := os.Stat(candidate); err != nil {
+				fmt.Printf("[MMDB] 文件不存在: %v\n", err)
 				continue
 			}
 			reader, err := maxminddb.Open(candidate)
 			if err == nil {
 				mmdbReader = reader
+				fmt.Printf("[MMDB] 成功加载: %s\n", candidate)
 				return
 			}
+			fmt.Printf("[MMDB] 加载失败: %v\n", err)
 		}
+		fmt.Printf("[MMDB] 所有数据库文件加载失败\n")
 	})
 	return mmdbReader
 }
@@ -196,20 +201,25 @@ func queryIPAPI(ip string) string {
 	var resp *http.Response
 	var err error
 	for _, apiURL := range urls {
+		fmt.Printf("[API] 请求: %s\n", apiURL)
 		resp, err = ipLocationClient.Get(apiURL) // #nosec G107 -- ip already validated by net.ParseIP
 		if err == nil {
 			break
 		}
+		fmt.Printf("[API] 请求失败: %v\n", err)
 	}
 	if err != nil || resp == nil {
+		fmt.Printf("[API] 所有请求失败\n")
 		return ""
 	}
 	defer resp.Body.Close()
 
 	var info IPInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		fmt.Printf("[API] 解析失败: %v\n", err)
 		return ""
 	}
+	fmt.Printf("[API] 响应: status=%s, country=%s, region=%s, city=%s\n", info.Status, info.Country, info.Region, info.City)
 	if info.Status != "success" {
 		return ""
 	}

@@ -190,6 +190,11 @@ func inferOSFromSoftware(info *ClientInfo) {
 	androidApps := map[string]bool{
 		"Clash for Android": true, "v2rayNG": true, "Surfboard": true,
 	}
+	// Mihomo Party 和 Clash Party 默认为 macOS，除非明确是其他系统
+	multiPlatformApps := map[string]bool{
+		"Mihomo Party": true, "Clash Party": true,
+	}
+
 	switch {
 	case iosApps[info.SoftwareName]:
 		info.OSName = "iOS"
@@ -199,6 +204,9 @@ func inferOSFromSoftware(info *ClientInfo) {
 		info.OSName = "macOS"
 	case androidApps[info.SoftwareName]:
 		info.OSName = "Android"
+	case multiPlatformApps[info.SoftwareName]:
+		// 默认为 macOS（主要平台）
+		info.OSName = "macOS"
 	}
 }
 

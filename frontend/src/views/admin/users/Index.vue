@@ -944,9 +944,15 @@ const orderCols = [
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]
 const deviceCols = [
-  { title: '设备名', key: 'device_name', ellipsis: { tooltip: true }, render: (r) => r.device_name || r.software_name || '未知设备' },
+  { title: '设备名', key: 'device_name', width: 120, ellipsis: { tooltip: true }, render: (r) => r.device_name || '未知设备' },
+  { title: '客户端', key: 'software_name', width: 120, render: (r) => r.software_name || '未知' },
+  { title: '版本', key: 'software_version', width: 80, render: (r) => r.software_version || '-' },
+  { title: '系统', key: 'os_name', width: 80, render: (r) => r.os_name || '-' },
+  { title: '设备型号', key: 'device_model', width: 130, ellipsis: { tooltip: true }, render: (r) => r.device_model || '-' },
+  { title: '订阅类型', key: 'subscription_type', width: 90, render: (r) => r.subscription_type || '-' },
   { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
-  { title: '最后活跃', key: 'last_access', width: 160, render: (r) => fmtDate(r.last_access || r.updated_at) },
+  { title: '地区', key: 'region', width: 100, render: (r) => r.region || '-' },
+  { title: '最后活跃', key: 'last_access', width: 150, render: (r) => fmtDate(r.last_access || r.updated_at) },
   {
     title: '操作', key: 'actions', width: 80,
     render: (r) => h(NButton, { size: 'small', type: 'error', secondary: true, onClick: () => handleDeleteDevice(r) }, { default: () => '删除' })

@@ -171,6 +171,21 @@
             </div>
           </div>
         </div>
+
+        <!-- 设备列表卡片 -->
+        <div class="device-card">
+          <div class="card-header">
+            <h3 class="card-title">我的设备</h3>
+            <span class="card-subtitle">{{ devices.length }}/{{ subscription.device_limit }} 台设备</span>
+          </div>
+          <n-data-table
+            :columns="deviceColumns"
+            :data="devices"
+            :pagination="false"
+            :bordered="false"
+            size="small"
+          />
+        </div>
       </template>
     </n-spin>
 
@@ -359,6 +374,16 @@ const router = useRouter()
 
 const subscription = ref<any>(null)
 const devices = ref<any[]>([])
+const deviceColumns = [
+  { title: '设备名称', key: 'device_name', width: 150 },
+  { title: '客户端', key: 'software_name', width: 120, render: (row: any) => row.software_name || '未知' },
+  { title: '版本', key: 'software_version', width: 80 },
+  { title: '系统', key: 'os_name', width: 80, render: (row: any) => row.os_name || '未知' },
+  { title: '设备型号', key: 'device_model', width: 150 },
+  { title: '订阅类型', key: 'subscription_type', width: 100 },
+  { title: '地区', key: 'region', width: 120 },
+  { title: '最后访问', key: 'last_access', width: 150, render: (row: any) => formatDateTime(row.last_access) }
+]
 const loading = ref(false)
 const showSubUrls = ref(false)
 const showResetModal = ref(false)
@@ -530,6 +555,20 @@ const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleString('zh-CN', {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
   })
+}
+const formatDateTime = (dateStr: string) => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}小时前`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}天前`
+  return date.toLocaleDateString('zh-CN')
 }
 const copyToClipboard = async (text: string, label: string) => {
   if (!text) { message.warning('暂无可用订阅'); return }
@@ -876,6 +915,9 @@ onUnmounted(() => { stopPayPolling() })
 /* Payment */
 .payment-method { padding: 4px 0; }
 .pm-label { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
+
+/* Device Card */
+.device-card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
 /* Mobile */
 @media (max-width: 767px) {

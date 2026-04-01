@@ -181,32 +181,33 @@ func inferOSFromSoftware(info *ClientInfo) {
 		"Surge": true, "Loon": true, "Stash": true, "Pharos": true,
 		"Potatso": true, "Kitsunebi": true, "Karing": true,
 	}
-	winApps := map[string]bool{
-		"Clash for Windows": true, "Clash Verge": true, "v2rayN": true,
-	}
-	macApps := map[string]bool{
+	macOnlyApps := map[string]bool{
 		"ClashX": true, "ClashX Pro": true, "Clash for Mac": true, "V2RayU": true, "V2RayX": true,
+	}
+	winOnlyApps := map[string]bool{
+		"v2rayN": true,
 	}
 	androidApps := map[string]bool{
 		"Clash for Android": true, "v2rayNG": true, "Surfboard": true,
 	}
-	// Mihomo Party 和 Clash Party 默认为 Windows（主要平台）
-	// 但会被 browser_os 参数覆盖
+	// 多平台客户端：默认 Windows，但会被 browser_os 参数覆盖
 	multiPlatformApps := map[string]bool{
-		"Mihomo Party": true, "Clash Party": true,
+		"Clash for Windows": true, "Clash Verge": true, "FlClash": true,
+		"Mihomo Party": true, "Clash Party": true, "Hiddify": true,
+		"Clash": true, "Mihomo": true,
 	}
 
 	switch {
 	case iosApps[info.SoftwareName]:
 		info.OSName = "iOS"
-	case winApps[info.SoftwareName]:
+	case winOnlyApps[info.SoftwareName]:
 		info.OSName = "Windows"
-	case macApps[info.SoftwareName]:
+	case macOnlyApps[info.SoftwareName]:
 		info.OSName = "macOS"
 	case androidApps[info.SoftwareName]:
 		info.OSName = "Android"
 	case multiPlatformApps[info.SoftwareName]:
-		// 默认为 Windows（主要平台）
+		// 默认 Windows，会被 browser_os 参数覆盖
 		info.OSName = "Windows"
 	}
 }

@@ -588,13 +588,24 @@ const importFormat = (fmt: typeof formats[0]) => {
   }
 
   try {
-    const fullUrl = fmt.scheme + encodeURIComponent(url)
+    // 检测浏览器系统并添加到订阅 URL
+    const os = detectBrowserOS()
+    const urlWithOS = url.includes('?') ? `${url}&browser_os=${os}` : `${url}?browser_os=${os}`
+    const fullUrl = fmt.scheme + encodeURIComponent(urlWithOS)
     window.location.href = fullUrl
     message.success('正在打开客户端...')
   } catch (e) {
     message.error('打开失败，请确保已安装客户端')
     copyToClipboard(url, fmt.name)
   }
+}
+
+const detectBrowserOS = (): string => {
+  const ua = navigator.userAgent.toLowerCase()
+  if (ua.includes('mac os x') || ua.includes('macintosh')) return 'macos'
+  if (ua.includes('windows')) return 'windows'
+  if (ua.includes('linux')) return 'linux'
+  return 'unknown'
 }
 
 const showQrCode = async (url: string, label: string) => {

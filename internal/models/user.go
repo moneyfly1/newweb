@@ -87,10 +87,10 @@ func (UserActivity) TableName() string { return "user_activities" }
 // LoginHistory 登录历史
 type LoginHistory struct {
 	ID                uint       `gorm:"primaryKey" json:"id"`
-	UserID            uint       `gorm:"index;not null" json:"user_id"`
-	LoginTime         time.Time  `gorm:"autoCreateTime" json:"login_time"`
+	UserID            uint       `gorm:"index:idx_user_login;not null" json:"user_id"`
+	LoginTime         time.Time  `gorm:"autoCreateTime;index:idx_login_time" json:"login_time"`
 	LogoutTime        *time.Time `json:"logout_time,omitempty"`
-	IPAddress         *string    `gorm:"type:varchar(45)" json:"ip_address,omitempty"`
+	IPAddress         *string    `gorm:"type:varchar(45);index:idx_ip_time" json:"ip_address,omitempty"`
 	UserAgent         *string    `gorm:"type:text" json:"user_agent,omitempty"`
 	Location          *string    `gorm:"type:varchar(100)" json:"location,omitempty"`
 	DeviceFingerprint *string    `gorm:"type:varchar(255)" json:"device_fingerprint,omitempty"`

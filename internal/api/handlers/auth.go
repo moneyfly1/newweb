@@ -38,7 +38,6 @@ func Register(c *gin.Context) {
 	if req.Honeypot != "" {
 		utils.SysError("security", fmt.Sprintf("注册蜜罐触发: email=%s, honeypot=%s", req.Email, req.Honeypot))
 		// 返回成功但不实际创建账户，迷惑机器人
-		time.Sleep(2 * time.Second) // 模拟正常注册延迟
 		utils.Success(c, gin.H{
 			"user":          gin.H{"id": 0, "username": req.Username, "email": req.Email},
 			"access_token":  "fake_token",

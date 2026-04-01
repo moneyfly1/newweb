@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -34,6 +35,13 @@ const (
 
 var errDeviceLimitReached = errors.New("device limit reached")
 
+var (
+	configCache      map[string]string
+	configCacheMu    sync.RWMutex
+	configCacheTime  time.Time
+	configCacheTTL   = 10 * time.Minute
+)
+
 // subscriptionContext holds all info needed for subscription generation
 type subscriptionContext struct {
 	Sub            *models.Subscription
@@ -48,6 +56,15 @@ type subscriptionContext struct {
 
 // getSubscriptionSiteConfig reads site URL and support contact from system_configs
 func getSubscriptionSiteConfig() (siteURL, supportContact string) {
+	configCacheMu.RLock()
+	if time.Since(configCacheTime) < configCacheTTL && configCache != nil {
+		siteURL = configCache["site_url"]
+		supportContact = configCache["support_contact"]
+		configCacheMu.RUnlock()
+		return
+	}
+	configCacheMu.RUnlock()
+
 	db := database.GetDB()
 	var configs []models.SystemConfig
 	db.Where("`key` IN ?",
@@ -57,12 +74,10 @@ func getSubscriptionSiteConfig() (siteURL, supportContact string) {
 	for _, c := range configs {
 		switch c.Key {
 		case "site_url":
-			// site_url takes priority over domain_name
 			if c.Value != "" {
 				siteURL = c.Value
 			}
 		case "domain_name":
-			// fallback if site_url is not set
 			if siteURL == "" && c.Value != "" {
 				siteURL = c.Value
 			}
@@ -85,6 +100,15 @@ func getSubscriptionSiteConfig() (siteURL, supportContact string) {
 		siteURL = "https://" + siteURL
 	}
 	siteURL = strings.TrimRight(siteURL, "/")
+
+	configCacheMu.Lock()
+	configCache = map[string]string{
+		"site_url":        siteURL,
+		"support_contact": supportContact,
+	}
+	configCacheTime = time.Now()
+	configCacheMu.Unlock()
+
 	return
 }
 
@@ -195,16 +219,14 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		subType := clientInfo.SubscriptionType
 		deviceName := buildDeviceName(clientInfo)
 		userID := int64(sub.UserID)
-		fmt.Printf("[设备创建] IP: %s, UA: %s\n", ip, ua)
-		region := utils.GetIPLocation(ip)
-		fmt.Printf("[设备创建] 地理位置: %s\n", region)
+
 		newDevice := models.Device{
 			UserID:            &userID,
 			SubscriptionID:    sub.ID,
 			DeviceFingerprint: fingerprint,
 			UserAgent:         &ua,
 			IPAddress:         &ip,
-			Region:            region,
+			Region:            "",
 			SoftwareName:      &softwareName,
 			SoftwareVersion:   &softwareVer,
 			OSName:            &osName,

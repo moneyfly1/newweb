@@ -144,6 +144,19 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	ua := c.GetHeader("User-Agent")
 	clientInfo := services.ParseUserAgent(ua)
 
+	// 从 URL 参数获取浏览器系统信息（一键导入时传递）
+	browserOS := c.Query("browser_os")
+	if browserOS != "" && clientInfo.OSName == "Unknown" {
+		switch browserOS {
+		case "macos":
+			clientInfo.OSName = "macOS"
+		case "windows":
+			clientInfo.OSName = "Windows"
+		case "linux":
+			clientInfo.OSName = "Linux"
+		}
+	}
+
 	ctx := &subscriptionContext{SiteURL: siteURL, SupportContact: supportContact, ClientInfo: clientInfo}
 
 	var sub models.Subscription

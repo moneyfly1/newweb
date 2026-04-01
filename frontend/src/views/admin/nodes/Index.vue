@@ -32,6 +32,36 @@
       </div>
     </div>
 
+    <!-- Mobile Toolbar -->
+    <div v-if="appStore.isMobile" class="mobile-toolbar">
+      <div class="mobile-toolbar-title">节点管理</div>
+      <div class="mobile-toolbar-controls">
+        <n-input
+          v-model:value="searchQuery"
+          placeholder="搜索节点名称"
+          clearable
+          size="small"
+          @keyup.enter="handleSearch"
+        >
+          <template #prefix><n-icon :component="SearchOutline" /></template>
+        </n-input>
+        <div class="mobile-toolbar-row">
+          <n-button size="small" secondary @click="handleRefresh" :loading="loading">
+            <template #icon><n-icon><refresh-outline /></n-icon></template>
+            刷新
+          </n-button>
+          <n-button size="small" type="info" secondary @click="showImportLinksDrawer = true">
+            <template #icon><n-icon><link-outline /></n-icon></template>
+            导入
+          </n-button>
+          <n-button size="small" type="primary" secondary @click="showImportSubDrawer = true">
+            <template #icon><n-icon><cloud-download-outline /></n-icon></template>
+            订阅
+          </n-button>
+        </div>
+      </div>
+    </div>
+
     <transition name="fade">
       <div v-if="checkedRowKeys.length > 0" class="batch-bar">
         <div class="batch-info">已选择 {{ checkedRowKeys.length }} 个节点</div>
@@ -46,21 +76,109 @@
     </transition>
 
     <n-card :bordered="false" class="main-card">
-      <n-data-table
-        remote
-        :columns="columns"
-        :data="tableData"
-        :loading="loading"
-        :pagination="pagination"
-        :bordered="false"
-        :single-line="false"
-        :row-key="(row: any) => row.id"
-        :scroll-x="appStore.isMobile ? 980 : 1200"
-        class="unified-admin-table"
-        @update:checked-row-keys="handleCheck"
-        @update:sorter="handleSorterChange"
+      <!-- Desktop Table -->
+      <template v-if="!appStore.isMobile">
+        <n-data-table
+          remote
+          :columns="columns"
+          :data="tableData"
+          :loading="loading"
+          :pagination="pagination"
+          :bordered="false"
+          :single-line="false"
+          :row-key="(row: any) => row.id"
+          :scroll-x="1200"
+          class="unified-admin-table"
+          @update:checked-row-keys="handleCheck"
+          @update:sorter="handleSorterChange"
+          @update:page="(p: number) => { pagination.page = p; fetchData() }"
+          @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+        />
+      </template>
+
+      <!-- Mobile Card Layout -->
+      <template v-else>
+        <div v-if="loading" class="loading-center">
+          <n-spin size="medium" />
+        </div>
+        <div v-else-if="tableData.length === 0" class="empty-state">暂无数据</div>
+        <div v-else class="mobile-card-list">
+          <div v-for="row in tableData" :key="row.id" class="mobile-card">
+            <div class="card-header">
+              <div class="card-title-row">
+                <n-icon :component="ShieldCheckmarkOutline" class="node-icon" :style="{ color: row.is_active ? '#18a058' : '#d03050' }" />
+                <span class="card-title">{{ row.name }}</span>
+              </div>
+              <n-space :size="4">
+                <n-tag :type="protocolColorMap[row.type] || 'default'" size="small" round :bordered="false">{{ row.type?.toUpperCase() || '-' }}</n-tag>
+                <n-tag :type="row.status === 'online' ? 'success' : 'error'" size="small" ghost>{{ row.status === 'online' ? '在线' : '离线' }}</n-tag>
+              </n-space>
+            </div>
+            <div class="card-body">
+              <div class="card-row">
+                <span class="card-label">地区</span>
+                <span><n-icon :component="GlobeOutline" size="14" class="inline-icon" /> {{ row.region || '-' }}</span>
+              </div>
+              <div class="card-row">
+                <span class="card-label">延迟</span>
+                <span :class="row.latency > 0 ? 'latency-value' : 'latency-offline'">
+                  <n-icon :component="SpeedometerOutline" size="14" /> {{ row.latency > 0 ? `${row.latency}ms` : '-' }}
+                </span>
+              </div>
+              <div class="card-row">
+                <span class="card-label">来源</span>
+                <n-tag v-if="row.source_index && row.source_index > 0" type="info" size="small">订阅 #{{ row.source_index }}</n-tag>
+                <n-tag v-else type="default" size="small">手动添加</n-tag>
+              </div>
+              <div class="card-row" v-if="row.description">
+                <span class="card-label">备注</span>
+                <span class="card-desc">{{ row.description }}</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <n-button size="small" quaternary @click="handleTest(row)">
+                <template #icon><n-icon :component="SpeedometerOutline" /></template>
+                测试
+              </n-button>
+              <n-button size="small" type="primary" quaternary @click="handleEdit(row)">编辑</n-button>
+              <n-switch size="small" :value="row.is_active" @update:value="(v) => handleToggleActive(row, v)" />
+              <n-dropdown
+                trigger="click"
+                :options="[
+                  { label: '上线', key: 'online' },
+                  { label: '下线', key: 'offline' },
+                  { label: '删除', key: 'delete' }
+                ]"
+                @select="(key: string) => handleMobileAction(key, row)"
+              >
+                <n-button size="small" quaternary>
+                  <template #icon><n-icon :component="EllipsisVertical" /></template>
+                </n-button>
+              </n-dropdown>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Desktop Pagination -->
+      <n-pagination
+        v-if="!appStore.isMobile"
+        v-model:page="pagination.page"
+        v-model:page-size="pagination.pageSize"
+        :page-count="Math.ceil(pagination.itemCount / pagination.pageSize)"
+        :page-sizes="[20, 50, 100]"
+        show-size-picker
         @update:page="(p: number) => { pagination.page = p; fetchData() }"
         @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+      />
+
+      <!-- Mobile Pagination -->
+      <n-pagination
+        v-else
+        v-model:page="pagination.page"
+        :page-count="Math.ceil(pagination.itemCount / pagination.pageSize)"
+        size="small"
+        @update:page="(p: number) => { pagination.page = p; fetchData() }"
       />
     </n-card>
 
@@ -98,7 +216,8 @@ import { ref, reactive, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage, useDialog, type DataTableColumns, type FormInst, type TagProps } from 'naive-ui'
 import {
   CloudDownloadOutline, LinkOutline, RefreshOutline,
-  SpeedometerOutline, GlobeOutline, ShieldCheckmarkOutline, SearchOutline
+  SpeedometerOutline, GlobeOutline, ShieldCheckmarkOutline, SearchOutline,
+  EllipsisVertical
 } from '@vicons/ionicons5'
 import { listAdminNodes, updateNode, deleteNode, importNodes, batchNodeAction, testNode } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -346,6 +465,18 @@ const handleImportLinks = async () => {
 
 const handleRefresh = () => fetchData()
 
+const handleMobileAction = (key: string, row: any) => {
+  switch (key) {
+    case 'online':
+    case 'offline':
+      handleBatchAction.call(null, key === 'online' ? 'online' : 'offline')
+      break
+    case 'delete':
+      handleDelete(row)
+      break
+  }
+}
+
 onMounted(() => fetchData())
 </script>
 
@@ -387,7 +518,113 @@ onMounted(() => fetchData())
 @media (max-width: 767px) {
   .admin-page-shell { padding: 12px; }
   .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .header-right { width: 100%; }
+  .header-right .n-space { flex-wrap: wrap; }
   .batch-bar { flex-direction: column; gap: 12px; }
+
+  /* Mobile Toolbar */
+  .mobile-toolbar {
+    background: var(--n-card-color);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .mobile-toolbar-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--n-title-text-color);
+  }
+  .mobile-toolbar-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .mobile-toolbar-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .mobile-toolbar-row .n-button { flex: 1; min-width: 0; }
+
+  /* Mobile Card List */
+  .mobile-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .mobile-card {
+    background: var(--n-card-color);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid rgba(0,0,0,0.05);
+  }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .card-title {
+    font-weight: 600;
+    font-size: 15px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+  }
+  .card-label {
+    color: #888;
+    font-size: 12px;
+    min-width: 50px;
+  }
+  .card-desc {
+    color: #666;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+  }
+  .card-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    padding-top: 12px;
+  }
+  .card-actions .n-button { flex: 1; }
+
+  .loading-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px 0;
+  }
+  .empty-state {
+    text-align: center;
+    padding: 40px 0;
+    color: #888;
+  }
 }
 
 .fade-enter-active, .fade-leave-active { transition: all 0.3s ease; }

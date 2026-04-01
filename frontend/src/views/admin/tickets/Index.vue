@@ -586,6 +586,8 @@ onMounted(() => {
 
 @media (max-width: 767px) {
   .tickets-container { padding: 8px; }
+  /* 工单聊天界面移动端高度优化 */
+  .chat-container { max-height: 50vh; }
 }
 .mobile-toolbar { margin-bottom: 12px; }
 .mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }

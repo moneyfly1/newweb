@@ -97,20 +97,23 @@ func lookupLocationFromIP2Region(ip string) string {
 		fmt.Printf("[IP2Region] 查询错误 %s: %v\n", ip, err)
 		return ""
 	}
-	fmt.Printf("[IP2Region] 原始数据 %s: %s\n", ip, region)
 	// ip2region 格式: 国家|区域|省份|城市|ISP
+	// 返回 国家 省份 城市（识别不到的自动省略）
 	parts := strings.Split(region, "|")
-	if len(parts) < 4 {
+	if len(parts) < 2 {
 		return ""
 	}
 	result := []string{}
+	// 国家
 	if parts[0] != "0" && parts[0] != "" {
 		result = append(result, parts[0])
 	}
-	if parts[2] != "0" && parts[2] != "" && parts[2] != parts[0] {
+	// 省份
+	if len(parts) > 2 && parts[2] != "0" && parts[2] != "" && parts[2] != parts[0] {
 		result = append(result, parts[2])
 	}
-	if parts[3] != "0" && parts[3] != "" && parts[3] != parts[2] {
+	// 城市
+	if len(parts) > 3 && parts[3] != "0" && parts[3] != "" && parts[3] != parts[2] {
 		result = append(result, parts[3])
 	}
 	return strings.Join(result, " ")
@@ -157,22 +160,14 @@ func lookupLocationFromMMDB(ip string) string {
 		return ""
 	}
 
-	fmt.Printf("[MMDB] 原始数据 - Country: %v, Subdivisions: %v, City: %v\n",
-		record.Country.Names, record.Subdivisions, record.City.Names)
-
-	parts := make([]string, 0, 3)
+	// 只返回 国家 + 城市（跳过省份/州）
+	parts := make([]string, 0, 2)
 	if country := record.Country.Names["zh-CN"]; country != "" {
 		parts = append(parts, country)
 	} else if country := record.Country.Names["en"]; country != "" {
 		parts = append(parts, country)
 	}
-	if len(record.Subdivisions) > 0 {
-		if region := record.Subdivisions[0].Names["zh-CN"]; region != "" {
-			parts = append(parts, region)
-		} else if region := record.Subdivisions[0].Names["en"]; region != "" {
-			parts = append(parts, region)
-		}
-	}
+	// 跳过省份（Subdivisions），直接取城市
 	if city := record.City.Names["zh-CN"]; city != "" {
 		parts = append(parts, city)
 	} else if city := record.City.Names["en"]; city != "" {

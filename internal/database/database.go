@@ -62,8 +62,8 @@ func InitDatabase(cfg *config.Config) error {
 	}
 	sqlDB.SetMaxIdleConns(10)
 	if DB.Dialector.Name() == "sqlite" {
-		// SQLite with WAL supports limited concurrency; keep pool small
-		sqlDB.SetMaxOpenConns(10)
+		// SQLite with WAL mode supports better concurrency
+		sqlDB.SetMaxOpenConns(50)
 	} else {
 		sqlDB.SetMaxOpenConns(100)
 	}

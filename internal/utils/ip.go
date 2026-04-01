@@ -1,10 +1,8 @@
 package utils
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,14 +12,6 @@ import (
 	"github.com/lionsoul2014/ip2region/binding/golang/xdb"
 	"github.com/oschwald/maxminddb-golang"
 )
-
-type IPInfo struct {
-	Country string `json:"country"`
-	Region  string `json:"regionName"`
-	City    string `json:"city"`
-	Query   string `json:"query"`
-	Status  string `json:"status"`
-}
 
 type ipLocationCacheEntry struct {
 	location string
@@ -43,7 +33,6 @@ type mmdbCityRecord struct {
 const ipCacheMaxSize = 2048
 
 var (
-	ipLocationClient = &http.Client{Timeout: 3 * time.Second}
 	ipLocationCache  = make(map[string]ipLocationCacheEntry)
 	ipLocationMu     sync.RWMutex
 	ipLocationTTL    = 30 * time.Minute
@@ -196,20 +185,17 @@ func lookupLocationFromMMDB(ip string) string {
 }
 
 // GetIPLocation returns a location string for the given IP address.
-// Prefers local MMDB lookup and falls back to the free ip-api.com service.
+// Uses only local offline databases (ip2region + MMDB) for zero network latency.
 func GetIPLocation(ip string) string {
 	if ip == "" || ip == "127.0.0.1" || ip == "::1" {
 		return "本地"
 	}
 
-	// Validate IP format
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
-		fmt.Printf("[IP] 无效的 IP 格式: %s\n", ip)
 		return ""
 	}
 
-	// Check for private IP ranges
 	if isPrivateIP(ip) {
 		return "本地网络"
 	}
@@ -222,87 +208,26 @@ func GetIPLocation(ip string) string {
 	}
 	ipLocationMu.RUnlock()
 
-	// Try MMDB first
-	location := lookupLocationFromMMDB(ip)
-	fmt.Printf("[IP] MMDB 查询 %s => %s\n", ip, location)
-
-	// 如果 MMDB 只返回国家（没有省份/城市），尝试 API 获取更详细信息
-	if location != "" && !strings.Contains(location, " ") {
-		apiLocation := queryIPAPI(ip)
-		fmt.Printf("[IP] API 补充查询 %s => %s\n", ip, apiLocation)
-		if apiLocation != "" && strings.Contains(apiLocation, " ") {
-			location = apiLocation
-		}
+	// Try ip2region first (faster and more accurate for CN/Asia)
+	location := lookupLocationFromIP2Region(ip)
+	if location == "" {
+		// Fallback to MMDB
+		location = lookupLocationFromMMDB(ip)
 	}
 
-	if location != "" {
-		ipLocationMu.Lock()
-		if len(ipLocationCache) >= ipCacheMaxSize {
-			ipLocationCache = make(map[string]ipLocationCacheEntry)
-		}
-		ipLocationCache[ip] = ipLocationCacheEntry{
-			location: location,
-			expireAt: now.Add(ipLocationTTL),
-		}
-		ipLocationMu.Unlock()
-		return location
+	if location == "" {
+		location = "未知"
 	}
 
-	// Fallback to ip-api.com (supports both IPv4 and IPv6)
-	location = queryIPAPI(ip)
-	fmt.Printf("[IP] API 查询 %s => %s\n", ip, location)
-	if location != "" {
-		ipLocationMu.Lock()
-		if len(ipLocationCache) >= ipCacheMaxSize {
-			ipLocationCache = make(map[string]ipLocationCacheEntry)
-		}
-		ipLocationCache[ip] = ipLocationCacheEntry{
-			location: location,
-			expireAt: now.Add(ipLocationTTL),
-		}
-		ipLocationMu.Unlock()
+	ipLocationMu.Lock()
+	if len(ipLocationCache) >= ipCacheMaxSize {
+		ipLocationCache = make(map[string]ipLocationCacheEntry)
 	}
-	return location
-}
-
-func queryIPAPI(ip string) string {
-	urls := []string{
-		fmt.Sprintf("https://ip-api.com/json/%s?lang=zh-CN&fields=status,country,regionName,city,query", ip),
-		fmt.Sprintf("http://ip-api.com/json/%s?lang=zh-CN&fields=status,country,regionName,city,query", ip),
+	ipLocationCache[ip] = ipLocationCacheEntry{
+		location: location,
+		expireAt: now.Add(ipLocationTTL),
 	}
-	var resp *http.Response
-	var err error
-	for _, apiURL := range urls {
-		fmt.Printf("[API] 请求: %s\n", apiURL)
-		resp, err = ipLocationClient.Get(apiURL) // #nosec G107 -- ip already validated by net.ParseIP
-		if err == nil {
-			break
-		}
-		fmt.Printf("[API] 请求失败: %v\n", err)
-	}
-	if err != nil || resp == nil {
-		fmt.Printf("[API] 所有请求失败\n")
-		return ""
-	}
-	defer resp.Body.Close()
-
-	var info IPInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		fmt.Printf("[API] 解析失败: %v\n", err)
-		return ""
-	}
-	fmt.Printf("[API] 响应: status=%s, country=%s, region=%s, city=%s\n", info.Status, info.Country, info.Region, info.City)
-	if info.Status != "success" {
-		return ""
-	}
-
-	location := info.Country
-	if info.Region != "" && info.Region != info.Country {
-		location += " " + info.Region
-	}
-	if info.City != "" && info.City != info.Region {
-		location += " " + info.City
-	}
+	ipLocationMu.Unlock()
 	return location
 }
 

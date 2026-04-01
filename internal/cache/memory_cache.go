@@ -13,9 +13,12 @@ type TTLItem struct {
 
 // MemoryCache represents an in-memory TTL cache
 type MemoryCache struct {
-	mu    sync.RWMutex
-	items map[string]TTLItem
+	mu       sync.RWMutex
+	items    map[string]TTLItem
+	maxSize  int
 }
+
+const defaultMaxSize = 1000
 
 var (
 	memoryCache *MemoryCache
@@ -26,8 +29,10 @@ var (
 func GetMemoryCache() *MemoryCache {
 	memOnce.Do(func() {
 		memoryCache = &MemoryCache{
-			items: make(map[string]TTLItem),
+			items:   make(map[string]TTLItem),
+			maxSize: defaultMaxSize,
 		}
+		go memoryCache.cleanup()
 	})
 	return memoryCache
 }
@@ -36,9 +41,33 @@ func GetMemoryCache() *MemoryCache {
 func (c *MemoryCache) Set(key string, value interface{}, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if len(c.items) >= c.maxSize {
+		c.evictExpired()
+	}
+
 	c.items[key] = TTLItem{
 		Value:      value,
 		ExpireTime: time.Now().Add(ttl),
+	}
+}
+
+func (c *MemoryCache) evictExpired() {
+	now := time.Now()
+	for k, v := range c.items {
+		if now.After(v.ExpireTime) {
+			delete(c.items, k)
+		}
+	}
+}
+
+func (c *MemoryCache) cleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		c.mu.Lock()
+		c.evictExpired()
+		c.mu.Unlock()
 	}
 }
 

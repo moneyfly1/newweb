@@ -14,6 +14,15 @@ import (
 	"cboard/v2/internal/utils"
 )
 
+var epayHTTPClient = &http.Client{
+	Timeout: 10 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        50,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
+
 // EpayConfig holds the EasyPay gateway configuration
 type EpayConfig struct {
 	Gateway    string // e.g. https://pay.example.com
@@ -118,8 +127,7 @@ func EpayQueryOrder(cfg *EpayConfig, outTradeNo string) (map[string]string, erro
 	}
 	u.RawQuery = q.Encode()
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(u.String())
+	resp, err := epayHTTPClient.Get(u.String())
 	if err != nil {
 		return nil, err
 	}

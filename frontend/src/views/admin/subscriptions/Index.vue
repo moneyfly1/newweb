@@ -251,7 +251,7 @@ import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
-import { formatLocation } from '@/utils/i18n'
+import { formatLocation, parseDeviceInfo, translateLoginStatus } from '@/utils/i18n'
 import {
   listAdminSubscriptions, getAdminSubscription, resetAdminSubscription,
   extendSubscription, updateSubscriptionDeviceLimit, sendSubscriptionEmail,
@@ -373,9 +373,9 @@ const deviceCols = [
 ]
 const loginCols = [
   { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
-  { title: '位置', key: 'location', width: 100, render: (r) => formatLocation(r.location) },
-  { title: 'UA', key: 'user_agent', ellipsis: { tooltip: true }, render: (r) => r.user_agent || '-' },
-  { title: '状态', key: 'login_status', width: 70, render: (r) => h(NTag, { type: r.login_status === 'success' ? 'success' : 'error', size: 'small' }, { default: () => r.login_status === 'success' ? '成功' : '失败' }) },
+  { title: '位置', key: 'location', width: 150, render: (r) => formatLocation(r.location) },
+  { title: '设备', key: 'user_agent', width: 180, ellipsis: { tooltip: true }, render: (r) => parseDeviceInfo(r.user_agent) },
+  { title: '状态', key: 'login_status', width: 70, render: (r) => h(NTag, { type: r.login_status === 'success' ? 'success' : 'error', size: 'small' }, { default: () => translateLoginStatus(r.login_status) }) },
   { title: '时间', key: 'login_time', width: 160, render: (r) => fmtDate(r.login_time) }
 ]
 const resetCols = [
@@ -673,6 +673,17 @@ onMounted(() => fetchData())
 @media (max-width: 767px) {
   .subscriptions-container { padding: 8px; }
   .qr-grid { flex-direction: column; align-items: center; }
+  /* 超小屏幕按钮网格适配 */
+  .sub-btn-row { grid-template-columns: repeat(3, 1fr); }
+  .sub-btn-row-5 { grid-template-columns: repeat(3, 1fr); }
+  .sub-btn-row-6 { grid-template-columns: repeat(3, 1fr); }
+  .sub-action-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 360px) {
+  .sub-btn-row { grid-template-columns: repeat(2, 1fr); }
+  .sub-btn-row-5 { grid-template-columns: repeat(2, 1fr); }
+  .sub-btn-row-6 { grid-template-columns: repeat(2, 1fr); }
+  .sub-action-grid { grid-template-columns: repeat(2, 1fr); }
 }
 .mobile-toolbar { margin-bottom: 12px; }
 .mobile-toolbar-title { font-size: 17px; font-weight: 600; color: var(--text-color, #333); margin-bottom: 10px; }

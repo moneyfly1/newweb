@@ -120,44 +120,84 @@ export function parseDeviceInfo(userAgent: string): string {
   return `${device} · ${browser}`
 }
 
-// 位置格式化（国家+城市）
+// 位置格式化（国家+省份+城市，识别不到的自动省略）
 export function formatLocation(location: string): string {
-  if (!location || location === '-' || location === 'Unknown') return '未知位置'
+  if (!location || location === '-' || location === 'Unknown' || location === '未知' || location === '未知位置') return '未知位置'
+  if (location === '本地' || location === '本地网络') return location
 
-  // 如果已经是中文格式，直接返回
+  // 如果已经是中文格式（包含中文），直接返回
   if (/[\u4e00-\u9fa5]/.test(location)) {
     return location
   }
 
   // 尝试解析英文格式（如 "China, Beijing" 或 "United States, New York"）
-  const parts = location.split(',').map(p => p.trim())
+  const parts = location.split(/[,\s]+/).map(p => p.trim()).filter(Boolean)
 
   if (parts.length >= 2) {
     const country = parts[0]
-    const city = parts[1]
+    const city = parts[parts.length - 1]
 
-    // 国家名翻译
-    const countryMap: Record<string, string> = {
-      'China': '中国',
-      'United States': '美国',
-      'Japan': '日本',
-      'Korea': '韩国',
-      'United Kingdom': '英国',
-      'France': '法国',
-      'Germany': '德国',
-      'Canada': '加拿大',
-      'Australia': '澳大利亚',
-      'Singapore': '新加坡',
-      'Hong Kong': '香港',
-      'Taiwan': '台湾',
-      'Macao': '澳门'
+    // 使用浏览器内置 API 自动翻译国家名（支持全球所有国家）
+    let translatedCountry = country
+    try {
+      const displayNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' })
+      // 尝试将国家名转为 ISO 代码再翻译
+      const countryCode = getCountryCode(country)
+      if (countryCode) {
+        translatedCountry = displayNames.of(countryCode) || country
+      }
+    } catch {
+      // 降级到手动映射表
+      translatedCountry = fallbackCountryMap[country] || country
     }
 
-    const translatedCountry = countryMap[country] || country
     return `${translatedCountry} · ${city}`
   }
 
   return location
+}
+
+// 降级用的国家名映射表（当 Intl.DisplayNames 不可用时使用）
+const fallbackCountryMap: Record<string, string> = {
+  'China': '中国', 'United States': '美国', 'USA': '美国', 'US': '美国',
+  'Japan': '日本', 'Korea': '韩国', 'South Korea': '韩国', 'Republic of Korea': '韩国',
+  'United Kingdom': '英国', 'UK': '英国', 'Great Britain': '英国',
+  'France': '法国', 'Germany': '德国', 'Canada': '加拿大',
+  'Australia': '澳大利亚', 'Singapore': '新加坡',
+  'Hong Kong': '香港', 'Taiwan': '台湾', 'Macao': '澳门',
+  'Russia': '俄罗斯', 'India': '印度', 'Brazil': '巴西',
+  'Italy': '意大利', 'Spain': '西班牙', 'Netherlands': '荷兰',
+  'Sweden': '瑞典', 'Norway': '挪威', 'Denmark': '丹麦',
+  'Finland': '芬兰', 'Switzerland': '瑞士', 'Austria': '奥地利',
+  'Belgium': '比利时', 'Portugal': '葡萄牙', 'Ireland': '爱尔兰',
+  'New Zealand': '新西兰', 'Mexico': '墨西哥', 'Argentina': '阿根廷',
+  'Thailand': '泰国', 'Vietnam': '越南', 'Malaysia': '马来西亚',
+  'Indonesia': '印度尼西亚', 'Philippines': '菲律宾',
+  'Turkey': '土耳其', 'Israel': '以色列', 'UAE': '阿联酋',
+  'Saudi Arabia': '沙特阿拉伯', 'Egypt': '埃及', 'South Africa': '南非'
+}
+
+// 常见国家名到 ISO 3166-1 alpha-2 代码的映射
+function getCountryCode(name: string): string | null {
+  const codeMap: Record<string, string> = {
+    'China': 'CN', 'United States': 'US', 'USA': 'US', 'US': 'US',
+    'Japan': 'JP', 'Korea': 'KR', 'South Korea': 'KR', 'Republic of Korea': 'KR',
+    'United Kingdom': 'GB', 'UK': 'GB', 'Great Britain': 'GB',
+    'France': 'FR', 'Germany': 'DE', 'Canada': 'CA',
+    'Australia': 'AU', 'Singapore': 'SG',
+    'Hong Kong': 'HK', 'Taiwan': 'TW', 'Macao': 'MO',
+    'Russia': 'RU', 'India': 'IN', 'Brazil': 'BR',
+    'Italy': 'IT', 'Spain': 'ES', 'Netherlands': 'NL',
+    'Sweden': 'SE', 'Norway': 'NO', 'Denmark': 'DK',
+    'Finland': 'FI', 'Switzerland': 'CH', 'Austria': 'AT',
+    'Belgium': 'BE', 'Portugal': 'PT', 'Ireland': 'IE',
+    'New Zealand': 'NZ', 'Mexico': 'MX', 'Argentina': 'AR',
+    'Thailand': 'TH', 'Vietnam': 'VN', 'Malaysia': 'MY',
+    'Indonesia': 'ID', 'Philippines': 'PH',
+    'Turkey': 'TR', 'Israel': 'IL', 'UAE': 'AE',
+    'Saudi Arabia': 'SA', 'Egypt': 'EG', 'South Africa': 'ZA'
+  }
+  return codeMap[name] || null
 }
 
 // 翻译邮件类型

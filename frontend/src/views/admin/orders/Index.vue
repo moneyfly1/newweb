@@ -32,32 +32,63 @@
       </div>
     </div>
 
-    <n-grid v-if="!appStore.isMobile" :cols="4" :x-gap="16" class="stats-summary">
-      <n-grid-item>
-        <div class="mini-stat-card">
-          <div class="stat-label">今日营收</div>
-          <div class="stat-value">¥{{ orderStats.today_revenue || '0.00' }}</div>
-        </div>
-      </n-grid-item>
-      <n-grid-item>
-        <div class="mini-stat-card">
-          <div class="stat-label">本月营收</div>
-          <div class="stat-value">¥{{ orderStats.month_revenue || '0.00' }}</div>
-        </div>
-      </n-grid-item>
-      <n-grid-item>
-        <div class="mini-stat-card">
-          <div class="stat-label">待支付订单</div>
-          <div class="stat-value text-warning">{{ orderStats.pending_count || 0 }}</div>
-        </div>
-      </n-grid-item>
-      <n-grid-item>
-        <div class="mini-stat-card">
-          <div class="stat-label">退款订单</div>
-          <div class="stat-value text-error">{{ orderStats.refunded_count || 0 }}</div>
-        </div>
-      </n-grid-item>
-    </n-grid>
+    <!-- Stats Summary - Desktop & Mobile -->
+    <div class="stats-summary">
+      <!-- Desktop: 4 columns -->
+      <n-grid v-if="!appStore.isMobile" :cols="4" :x-gap="16">
+        <n-grid-item>
+          <div class="mini-stat-card">
+            <div class="stat-label">今日营收</div>
+            <div class="stat-value">¥{{ orderStats.today_revenue || '0.00' }}</div>
+          </div>
+        </n-grid-item>
+        <n-grid-item>
+          <div class="mini-stat-card">
+            <div class="stat-label">本月营收</div>
+            <div class="stat-value">¥{{ orderStats.month_revenue || '0.00' }}</div>
+          </div>
+        </n-grid-item>
+        <n-grid-item>
+          <div class="mini-stat-card">
+            <div class="stat-label">待支付订单</div>
+            <div class="stat-value text-warning">{{ orderStats.pending_count || 0 }}</div>
+          </div>
+        </n-grid-item>
+        <n-grid-item>
+          <div class="mini-stat-card">
+            <div class="stat-label">退款订单</div>
+            <div class="stat-value text-error">{{ orderStats.refunded_count || 0 }}</div>
+          </div>
+        </n-grid-item>
+      </n-grid>
+      <!-- Mobile: 2x2 grid -->
+      <n-grid v-else :cols="2" :x-gap="8" :y-gap="8">
+        <n-grid-item>
+          <div class="mini-stat-card mobile-stat">
+            <div class="stat-label">今日营收</div>
+            <div class="stat-value">¥{{ orderStats.today_revenue || '0.00' }}</div>
+          </div>
+        </n-grid-item>
+        <n-grid-item>
+          <div class="mini-stat-card mobile-stat">
+            <div class="stat-label">本月营收</div>
+            <div class="stat-value">¥{{ orderStats.month_revenue || '0.00' }}</div>
+          </div>
+        </n-grid-item>
+        <n-grid-item>
+          <div class="mini-stat-card mobile-stat">
+            <div class="stat-label">待支付</div>
+            <div class="stat-value text-warning">{{ orderStats.pending_count || 0 }}</div>
+          </div>
+        </n-grid-item>
+        <n-grid-item>
+          <div class="mini-stat-card mobile-stat">
+            <div class="stat-label">退款</div>
+            <div class="stat-value text-error">{{ orderStats.refunded_count || 0 }}</div>
+          </div>
+        </n-grid-item>
+      </n-grid>
+    </div>
 
     <n-card :bordered="false" class="main-card">
       <n-space vertical :size="16">

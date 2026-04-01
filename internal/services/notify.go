@@ -13,6 +13,15 @@ import (
 	"cboard/v2/internal/utils"
 )
 
+var httpClient = &http.Client{
+	Timeout: 10 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
+
 // userNotifySettingKey maps email template name to system-level setting key.
 // Returns "" for templates that must always be sent (verification, reset_password).
 func userNotifySettingKey(emailTemplate string) string {
@@ -244,8 +253,7 @@ func SendTestBark() error {
 		barkServer, url.PathEscape(barkKey),
 		url.PathEscape(title), url.PathEscape(body))
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(reqURL)
+	resp, err := httpClient.Get(reqURL)
 	if err != nil {
 		return fmt.Errorf("Bark 发送失败: %v", err)
 	}
@@ -269,8 +277,7 @@ func sendTelegramSync(botToken, chatID, message string) error {
 	form.Set("text", message)
 	form.Set("parse_mode", "HTML")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.PostForm(apiURL, form)
+	resp, err := httpClient.PostForm(apiURL, form)
 	if err != nil {
 		log.Printf("[Notify] Telegram 发送失败: %v", err)
 		utils.SysError("notify", "Telegram 发送失败", err.Error())

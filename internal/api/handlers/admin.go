@@ -38,7 +38,10 @@ func AdminDashboard(c *gin.Context) {
 		return
 	}
 
-	db := database.GetDB()
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	db := database.GetDB().WithContext(ctx)
 
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -141,6 +144,14 @@ func AdminDashboard(c *gin.Context) {
 
 	wg.Wait()
 	close(errCh)
+
+	select {
+	case <-ctx.Done():
+		utils.InternalError(c, "查询超时")
+		return
+	default:
+	}
+
 	for err := range errCh {
 		if err != nil {
 			utils.InternalError(c, "获取仪表盘统计失败")
@@ -676,17 +687,28 @@ func AdminGetAbnormalUsers(c *gin.Context) {
 			Having("COUNT(*) > ?", 5).
 			Find(&resetCounts)
 
-		for _, rc := range resetCounts {
-			var user models.User
-			if err := db.First(&user, rc.UserID).Error; err == nil {
-				abnormalUsers = append(abnormalUsers, AbnormalUser{
-					UserID:       user.ID,
-					Username:     user.Username,
-					Email:        user.Email,
-					AbnormalType: "excessive_resets",
-					Details:      strconv.FormatInt(rc.Count, 10) + " 次订阅重置",
-					LastActive:   user.LastLogin,
-				})
+		if len(resetCounts) > 0 {
+			userIDs := make([]uint, len(resetCounts))
+			for i, rc := range resetCounts {
+				userIDs[i] = rc.UserID
+			}
+			var users []models.User
+			db.Where("id IN ?", userIDs).Find(&users)
+			userMap := make(map[uint]models.User)
+			for _, u := range users {
+				userMap[u.ID] = u
+			}
+			for _, rc := range resetCounts {
+				if user, ok := userMap[rc.UserID]; ok {
+					abnormalUsers = append(abnormalUsers, AbnormalUser{
+						UserID:       user.ID,
+						Username:     user.Username,
+						Email:        user.Email,
+						AbnormalType: "excessive_resets",
+						Details:      strconv.FormatInt(rc.Count, 10) + " 次订阅重置",
+						LastActive:   user.LastLogin,
+					})
+				}
 			}
 		}
 	}

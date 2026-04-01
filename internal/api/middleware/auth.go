@@ -3,6 +3,8 @@ package middleware
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"cboard/v2/internal/config"
 	"cboard/v2/internal/database"
@@ -13,11 +15,91 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type userCacheEntry struct {
+	user     *models.User
+	expireAt time.Time
+}
+
+var (
+	userCache      = make(map[uint]userCacheEntry)
+	userCacheMu    sync.RWMutex
+	userCacheTTL   = 5 * time.Minute
+	blacklistCache = make(map[string]time.Time)
+	blacklistMu    sync.RWMutex
+)
+
 // Claims JWT 声明
 type Claims struct {
 	UserID uint   `json:"user_id"`
 	Type   string `json:"type"` // "access" or "refresh"
 	jwt.RegisteredClaims
+}
+
+func init() {
+	go cacheCleanup()
+}
+
+func cacheCleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+		userCacheMu.Lock()
+		for k, v := range userCache {
+			if now.After(v.expireAt) {
+				delete(userCache, k)
+			}
+		}
+		userCacheMu.Unlock()
+
+		blacklistMu.Lock()
+		for k, v := range blacklistCache {
+			if now.After(v) {
+				delete(blacklistCache, k)
+			}
+		}
+		blacklistMu.Unlock()
+	}
+}
+
+func isTokenBlacklisted(tokenHash string) bool {
+	blacklistMu.RLock()
+	expireAt, exists := blacklistCache[tokenHash]
+	blacklistMu.RUnlock()
+	if exists {
+		return time.Now().Before(expireAt)
+	}
+
+	if models.IsTokenBlacklisted(database.GetDB(), tokenHash) {
+		blacklistMu.Lock()
+		blacklistCache[tokenHash] = time.Now().Add(24 * time.Hour)
+		blacklistMu.Unlock()
+		return true
+	}
+	return false
+}
+
+func getUserByID(userID uint) (*models.User, error) {
+	now := time.Now()
+	userCacheMu.RLock()
+	if cached, ok := userCache[userID]; ok && now.Before(cached.expireAt) {
+		userCacheMu.RUnlock()
+		return cached.user, nil
+	}
+	userCacheMu.RUnlock()
+
+	var user models.User
+	if err := database.GetDB().First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+
+	userCacheMu.Lock()
+	userCache[userID] = userCacheEntry{
+		user:     &user,
+		expireAt: now.Add(userCacheTTL),
+	}
+	userCacheMu.Unlock()
+	return &user, nil
 }
 
 // AuthRequired 要求用户已登录
@@ -36,13 +118,13 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 		tokenHash := utils.SHA256Hash(tokenString)
-		if models.IsTokenBlacklisted(database.GetDB(), tokenHash) {
+		if isTokenBlacklisted(tokenHash) {
 			utils.Unauthorized(c, "Token 已失效")
 			c.Abort()
 			return
 		}
-		var user models.User
-		if err := database.GetDB().First(&user, claims.UserID).Error; err != nil {
+		user, err := getUserByID(claims.UserID)
+		if err != nil {
 			utils.Unauthorized(c, "用户不存在")
 			c.Abort()
 			return
@@ -52,7 +134,7 @@ func AuthRequired() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		c.Set("user", &user)
+		c.Set("user", user)
 		c.Set("user_id", user.ID)
 		c.Set("token", tokenString)
 		c.Next()
@@ -91,13 +173,13 @@ func OptionalAuth() gin.HandlerFunc {
 			return
 		}
 		tokenHash := utils.SHA256Hash(tokenString)
-		if models.IsTokenBlacklisted(database.GetDB(), tokenHash) {
+		if isTokenBlacklisted(tokenHash) {
 			c.Next()
 			return
 		}
-		var user models.User
-		if err := database.GetDB().First(&user, claims.UserID).Error; err == nil && user.IsActive {
-			c.Set("user", &user)
+		user, err := getUserByID(claims.UserID)
+		if err == nil && user.IsActive {
+			c.Set("user", user)
 			c.Set("user_id", user.ID)
 		}
 		c.Next()

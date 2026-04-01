@@ -30,12 +30,16 @@ func RequestLogger() gin.HandlerFunc {
 			utils.LogCallback("  User-Agent: %s", c.Request.Header.Get("User-Agent"))
 			utils.LogCallback("  Content-Type: %s", c.Request.Header.Get("Content-Type"))
 
-			// 读取请求体
+			// 读取请求体（限制最大 10KB）
 			if c.Request.Body != nil {
-				bodyBytes, _ := io.ReadAll(c.Request.Body)
+				bodyBytes, _ := io.ReadAll(io.LimitReader(c.Request.Body, 10240))
 				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 				if len(bodyBytes) > 0 {
-					utils.LogCallback("  Body: %s", string(bodyBytes))
+					if len(bodyBytes) >= 10240 {
+						utils.LogCallback("  Body: %s... (truncated)", string(bodyBytes[:200]))
+					} else {
+						utils.LogCallback("  Body: %s", string(bodyBytes))
+					}
 				}
 			}
 

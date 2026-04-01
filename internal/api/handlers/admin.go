@@ -3,6 +3,7 @@ package handlers
 import (
 	"archive/zip"
 	"compress/gzip"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"

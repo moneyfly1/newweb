@@ -30,7 +30,15 @@
             <div v-for="device in devices" :key="device.id" class="mobile-card">
               <div class="card-row">
                 <span class="label">设备名称</span>
-                <span class="value">{{ parseDeviceInfo(device.user_agent) || device.device_name || device.software_name || '未知设备' }}</span>
+                <span class="value">{{ device.device_name || device.software_name || '未知设备' }}</span>
+              </div>
+              <div class="card-row">
+                <span class="label">客户端</span>
+                <span class="value">{{ device.software_name || '未知' }}</span>
+              </div>
+              <div class="card-row">
+                <span class="label">系统</span>
+                <span class="value">{{ device.os_name || '-' }}</span>
               </div>
               <div class="card-row">
                 <span class="label">IP 地址</span>
@@ -78,6 +86,12 @@ interface Device {
   id: number
   device_name: string
   software_name: string
+  software_version: string
+  os_name: string
+  os_version: string
+  device_model: string
+  device_brand: string
+  subscription_type: string
   user_agent: string
   ip_address: string
   region: string
@@ -102,11 +116,34 @@ const columns = [
   {
     title: '设备名称',
     key: 'device_name',
-    minWidth: 180,
+    minWidth: 150,
     render: (row: Device) => {
-      const name = parseDeviceInfo(row.user_agent) || row.device_name || row.software_name
-      return h('span', name)
+      return h('span', row.device_name || row.software_name || '未知设备')
     }
+  },
+  {
+    title: '客户端',
+    key: 'software_name',
+    width: 120,
+    render: (row: Device) => row.software_name || '未知'
+  },
+  {
+    title: '版本',
+    key: 'software_version',
+    width: 80,
+    render: (row: Device) => row.software_version || '-'
+  },
+  {
+    title: '系统',
+    key: 'os_name',
+    width: 80,
+    render: (row: Device) => row.os_name || '-'
+  },
+  {
+    title: '设备型号',
+    key: 'device_model',
+    width: 130,
+    render: (row: Device) => row.device_model || '-'
   },
   {
     title: 'IP 地址',

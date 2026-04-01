@@ -1,5 +1,13 @@
 /* 统一的列表和卡片样式 */
 
+/* ========== Safe Area 适配 ========== */
+html {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
 /* ========== 移动端卡片列表通用样式 ========== */
 .mobile-card-list {
   display: flex;
@@ -382,5 +390,42 @@
 
   .stat-value {
     font-size: 20px;
+  }
+}
+
+/* 超小屏幕适配 (360px 以下) */
+@media (max-width: 360px) {
+  .admin-page-shell {
+    padding: 8px;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
+  .page-subtitle {
+    font-size: 12px;
+  }
+
+  .mobile-card {
+    padding: 12px;
+  }
+
+  .card-title {
+    font-size: 13px;
+  }
+
+  .card-label {
+    font-size: 11px;
+    min-width: 45px;
+  }
+
+  .card-value {
+    font-size: 12px;
+  }
+
+  .card-actions .n-button {
+    font-size: 12px;
+    padding: 4px 8px;
   }
 }

@@ -178,13 +178,34 @@
             <h3 class="card-title">我的设备</h3>
             <span class="card-subtitle">{{ devices.length }}/{{ subscription.device_limit }} 台设备</span>
           </div>
+          <!-- Desktop Table -->
           <n-data-table
+            v-if="!appStore.isMobile"
             :columns="deviceColumns"
             :data="devices"
             :pagination="false"
             :bordered="false"
             size="small"
           />
+          <!-- Mobile Card List -->
+          <div v-else class="mobile-device-list">
+            <div v-if="devices.length === 0" class="empty-device-list">暂无设备记录</div>
+            <div v-for="dev in devices" :key="dev.id" class="mobile-device-item">
+              <div class="device-name">{{ dev.name || dev.ip || '未知设备' }}</div>
+              <div class="device-info-row">
+                <span class="device-label">IP</span>
+                <span class="device-value">{{ dev.ip || '-' }}</span>
+              </div>
+              <div class="device-info-row">
+                <span class="device-label">位置</span>
+                <span class="device-value">{{ formatLocation(dev.location || dev.region || '') || '-' }}</span>
+              </div>
+              <div class="device-info-row">
+                <span class="device-label">最后在线</span>
+                <span class="device-value">{{ dev.last_active ? formatDate(dev.last_active) : '-' }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </template>
     </n-spin>
@@ -367,7 +388,11 @@ import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { safeRedirect } from '@/utils/security'
 import { getErrorMessage } from '@/utils/error'
 import { useRouter } from 'vue-router'
+import { useAppStore } from '@/stores/app'
+import { formatLocation } from '@/utils/i18n'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+
+const appStore = useAppStore()
 
 const message = useMessage()
 const router = useRouter()
@@ -381,7 +406,7 @@ const deviceColumns = [
   { title: '系统', key: 'os_name', width: 80, render: (row: any) => row.os_name || '未知' },
   { title: '设备型号', key: 'device_model', width: 150 },
   { title: '订阅类型', key: 'subscription_type', width: 100 },
-  { title: '地区', key: 'region', width: 120 },
+  { title: '地区', key: 'region', width: 120, render: (row: any) => formatLocation(row.region || '') || '-' },
   { title: '最后访问', key: 'last_access', width: 150, render: (row: any) => formatDateTime(row.last_access) }
 ]
 const loading = ref(false)
@@ -929,6 +954,15 @@ onUnmounted(() => { stopPayPolling() })
 
 /* Device Card */
 .device-card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+/* Mobile Device List */
+.mobile-device-list { display: flex; flex-direction: column; gap: 10px; }
+.mobile-device-item { background: #f8f9fa; border-radius: 10px; padding: 14px; }
+.device-name { font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #333; }
+.device-info-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 4px 0; }
+.device-label { color: #888; font-size: 12px; }
+.device-value { color: #555; }
+.empty-device-list { text-align: center; padding: 20px 0; color: #999; font-size: 14px; }
 
 /* Mobile */
 @media (max-width: 767px) {

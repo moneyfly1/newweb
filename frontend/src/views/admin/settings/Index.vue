@@ -512,7 +512,7 @@ onMounted(() => loadSettings())
 .mobile-fab {
   position: fixed;
   right: 24px;
-  bottom: 80px;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   z-index: 100;
 }
 

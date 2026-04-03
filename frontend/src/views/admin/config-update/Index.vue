@@ -38,7 +38,41 @@
       <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '120'">
         <n-form-item label="订阅URL列表">
           <div style="width: 100%">
-            <n-dynamic-input v-model:value="config.urls" placeholder="请输入订阅URL" />
+            <div ref="urlListRef" class="url-list">
+              <div v-for="(url, index) in config.urls" :key="index" class="url-item">
+                <div class="drag-handle">
+                  <n-icon size="20"><ReorderThreeOutline /></n-icon>
+                </div>
+                <div class="url-index">{{ index + 1 }}</div>
+                <n-input
+                  v-model:value="config.urls[index]"
+                  placeholder="请输入订阅URL"
+                  class="url-input"
+                />
+                <n-button
+                  text
+                  type="error"
+                  @click="config.urls.splice(index, 1)"
+                  class="delete-btn"
+                >
+                  <template #icon>
+                    <n-icon size="18">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                        <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" d="M368 368L144 144M368 144L144 368"/>
+                      </svg>
+                    </n-icon>
+                  </template>
+                </n-button>
+              </div>
+            </div>
+            <n-button
+              dashed
+              block
+              @click="config.urls.push('')"
+              style="margin-top: 8px"
+            >
+              + 添加订阅URL
+            </n-button>
           </div>
         </n-form-item>
         <n-form-item label="关键词过滤">
@@ -91,7 +125,8 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { useMessage } from 'naive-ui'
-import { RefreshOutline, PlayOutline, StopOutline } from '@vicons/ionicons5'
+import { RefreshOutline, PlayOutline, StopOutline, ReorderThreeOutline } from '@vicons/ionicons5'
+import Sortable from 'sortablejs'
 import {
   getConfigUpdateStatus,
   getConfigUpdateConfig,
@@ -107,6 +142,7 @@ const appStore = useAppStore()
 
 const message = useMessage()
 const logViewerRef = ref(null)
+const urlListRef = ref(null)
 const starting = ref(false)
 const saving = ref(false)
 let pollTimer = null
@@ -220,6 +256,23 @@ onMounted(() => {
   fetchConfig()
   fetchLogs()
   startPolling()
+
+  nextTick(() => {
+    if (urlListRef.value) {
+      Sortable.create(urlListRef.value, {
+        animation: 150,
+        handle: '.drag-handle',
+        ghostClass: 'sortable-ghost',
+        onEnd: (evt) => {
+          const { oldIndex, newIndex } = evt
+          if (oldIndex !== newIndex) {
+            const item = config.urls.splice(oldIndex, 1)[0]
+            config.urls.splice(newIndex, 0, item)
+          }
+        }
+      })
+    }
+  })
 })
 
 onUnmounted(() => {
@@ -266,9 +319,80 @@ onUnmounted(() => {
 .log-success .log-level { color: #6a9955; }
 .log-success .log-message { color: #6a9955; }
 
+.url-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.url-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--n-color);
+  border: 1px solid var(--n-border-color);
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.url-item:hover {
+  border-color: var(--n-border-color-hover);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.drag-handle {
+  cursor: move;
+  color: var(--n-text-color-disabled);
+  display: flex;
+  align-items: center;
+  transition: color 0.3s;
+  flex-shrink: 0;
+}
+
+.drag-handle:hover {
+  color: var(--n-primary-color);
+}
+
+.url-index {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--n-text-color-disabled);
+  min-width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.url-input {
+  flex: 1;
+}
+
+.delete-btn {
+  flex-shrink: 0;
+}
+
+.sortable-ghost {
+  opacity: 0.5;
+  background: var(--n-primary-color-hover);
+}
+
 @media (max-width: 767px) {
   .config-update-container { padding: 8px; }
   .log-viewer { font-size: 12px; padding: 12px; max-height: 300px; }
+
+  .url-item {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  .drag-handle {
+    font-size: 16px;
+  }
+
+  .url-index {
+    font-size: 12px;
+    min-width: 20px;
+  }
 }
 .mobile-toolbar { margin-bottom: 12px; }
 .mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }

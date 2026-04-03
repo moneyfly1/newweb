@@ -1631,6 +1631,33 @@ func convertNonStandardToClashMap(link string, name string, nodeType string) (ma
 				m["password"] = parts[1]
 			}
 		}
+
+	case "tuic":
+		// userPart = "auto:uuid" or "uuid:password"
+		uuid := userPart
+		password := ""
+		if parts := strings.SplitN(userPart, ":", 2); len(parts) == 2 {
+			uuid = parts[1]
+			password = parts[0]
+			// If first part is "auto", use second part as uuid
+			if parts[0] == "auto" {
+				uuid = parts[1]
+				password = ""
+			}
+		}
+		m["uuid"] = uuid
+		if password != "" {
+			m["password"] = password
+		}
+		if cc := query.Get("congestion_control"); cc != "" {
+			m["congestion-controller"] = cc
+		}
+		if alpn := query.Get("alpn"); alpn != "" {
+			m["alpn"] = strings.Split(alpn, ",")
+		}
+		if sni := query.Get("sni"); sni != "" {
+			m["sni"] = sni
+		}
 	}
 
 	return m, nil
@@ -2320,6 +2347,12 @@ func TUICLinkToClashMap(link string, name string) (map[string]interface{}, error
 	if err != nil {
 		return nil, err
 	}
+
+	// Detect non-standard Base64 format: tuic://Base64(auto:uuid@server:port)?params
+	if u.User == nil || u.User.Username() == "" || u.Hostname() == "" {
+		return convertNonStandardToClashMap(link, name, "tuic")
+	}
+
 	q := u.Query()
 	host, portStr := splitHostPort(u.Host)
 	port := parsePortWithDefault(portStr, 0)

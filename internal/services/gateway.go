@@ -83,6 +83,8 @@ func GetPaymentGateway(gatewayType string) (PaymentGateway, error) {
 		return NewStripeGateway()
 	case "epay":
 		return NewEpayGateway()
+	case "codepay":
+		return NewCodepayGateway()
 	default:
 		return nil, &PaymentError{
 			Code:    "UNKNOWN_GATEWAY",
@@ -105,6 +107,10 @@ func GetAvailableGateways() []PaymentGateway {
 	}
 
 	if gateway, err := NewEpayGateway(); err == nil && gateway.IsConfigured() {
+		gateways = append(gateways, gateway)
+	}
+
+	if gateway, err := NewCodepayGateway(); err == nil && gateway.IsConfigured() {
 		gateways = append(gateways, gateway)
 	}
 
@@ -133,7 +139,7 @@ func GetGatewayInfo(gatewayType string) map[string]interface{} {
 
 // GetAllGatewaysInfo 获取所有支付网关信息
 func GetAllGatewaysInfo() []map[string]interface{} {
-	gatewayTypes := []string{"alipay", "stripe", "epay"}
+	gatewayTypes := []string{"alipay", "stripe", "epay", "codepay"}
 	var infos []map[string]interface{}
 
 	for _, gatewayType := range gatewayTypes {

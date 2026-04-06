@@ -153,6 +153,44 @@ func CreateRecharge(c *gin.Context) {
 			})
 			return
 		}
+
+		// CodePay payment
+		if payConfig.PayType == "codepay" || payConfig.PayType == "codepay_alipay" || payConfig.PayType == "codepay_wxpay" {
+			codepayCfg, err := services.GetCodepayConfig()
+			if err != nil {
+				utils.Success(c, record)
+				return
+			}
+
+			codepayType := "alipay"
+			if payConfig.PayType == "codepay_wxpay" {
+				codepayType = "wxpay"
+			}
+
+			orderName := "充值-" + record.OrderNo
+			notifyURL, returnURL := services.BuildPaymentURLs("codepay", record.OrderNo)
+			paymentURL, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+			if err != nil {
+				utils.Success(c, record)
+				return
+			}
+
+			if err := db.Model(&record).Update("payment_url", &paymentURL).Error; err != nil {
+				utils.InternalError(c, "更新支付链接失败")
+				return
+			}
+			if err := db.First(&record, record.ID).Error; err != nil {
+				utils.InternalError(c, "读取充值记录失败")
+				return
+			}
+
+			utils.Success(c, gin.H{
+				"record":         record,
+				"transaction_id": txID,
+				"payment_url":    paymentURL,
+			})
+			return
+		}
 	}
 
 	utils.Success(c, record)

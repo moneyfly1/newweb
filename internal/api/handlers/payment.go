@@ -122,6 +122,29 @@ func GetPaymentMethods(c *gin.Context) {
 		}
 	}
 
+	// Auto-create PaymentConfig for CodePay if enabled
+	codepayConfigured := cfgMap["pay_codepay_gateway"] != "" && cfgMap["pay_codepay_merchant_id"] != "" && cfgMap["pay_codepay_secret_key"] != ""
+	if isEnabled(cfgMap["pay_codepay_enabled"]) && codepayConfigured {
+		if isEnabled(cfgMap["pay_codepay_alipay_enabled"]) {
+			if !hasPayType("codepay_alipay") {
+				pc := models.PaymentConfig{PayType: "codepay_alipay", Status: 1, SortOrder: 105}
+				if err := db.Create(&pc).Error; err != nil {
+					utils.SysError("payment", fmt.Sprintf("创建支付配置失败(codepay_alipay): %v", err))
+				}
+				methods = append(methods, gin.H{"id": pc.ID, "pay_type": "codepay_alipay", "sort_order": 105})
+			}
+		}
+		if isEnabled(cfgMap["pay_codepay_wxpay_enabled"]) {
+			if !hasPayType("codepay_wxpay") {
+				pc := models.PaymentConfig{PayType: "codepay_wxpay", Status: 1, SortOrder: 106}
+				if err := db.Create(&pc).Error; err != nil {
+					utils.SysError("payment", fmt.Sprintf("创建支付配置失败(codepay_wxpay): %v", err))
+				}
+				methods = append(methods, gin.H{"id": pc.ID, "pay_type": "codepay_wxpay", "sort_order": 106})
+			}
+		}
+	}
+
 	utils.Success(c, gin.H{
 		"methods":         methods,
 		"balance_enabled": balanceEnabled,
@@ -329,6 +352,43 @@ func CreatePayment(c *gin.Context) {
 			"amount":         payAmount,
 			"pay_type":       "stripe",
 			"payment_url":    checkoutURL,
+		})
+		return
+	}
+
+	// CodePay payment (codepay_alipay / codepay_wxpay / codepay)
+	if payConfig.PayType == "codepay" || payConfig.PayType == "codepay_alipay" || payConfig.PayType == "codepay_wxpay" {
+		codepayCfg, err := services.GetCodepayConfig()
+		if err != nil {
+			utils.BadRequest(c, "码支付网关未配置，请在系统设置中配置")
+			return
+		}
+
+		var pkg models.Package
+		orderName := "订单-" + order.OrderNo
+		if err := db.First(&pkg, order.PackageID).Error; err == nil {
+			orderName = pkg.Name
+		}
+
+		codepayType := "alipay"
+		if payConfig.PayType == "codepay_wxpay" {
+			codepayType = "wxpay"
+		}
+
+		notifyURL, returnURL := services.BuildPaymentURLs("codepay", order.OrderNo)
+		paymentURL, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
+		if err != nil {
+			utils.InternalError(c, "创建码支付订单失败: "+err.Error())
+			return
+		}
+
+		utils.Success(c, gin.H{
+			"message":        "支付创建成功",
+			"order_no":       order.OrderNo,
+			"transaction_id": txID,
+			"amount":         payAmount,
+			"pay_type":       payConfig.PayType,
+			"payment_url":    paymentURL,
 		})
 		return
 	}
@@ -790,6 +850,12 @@ func PaymentNotify(c *gin.Context) {
 		return
 	}
 
+	// CodePay callback (same protocol as EasyPay)
+	if payType == "codepay" {
+		handleCodepayNotify(c, db)
+		return
+	}
+
 	// 限制请求体大小为 10MB，防止 DoS 攻击
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 10*1024*1024)
 
@@ -1099,6 +1165,172 @@ func getPaymentBusinessKind(transaction *models.PaymentTransaction) string {
 		return "recharge"
 	}
 	return ""
+}
+
+func handleCodepayNotify(c *gin.Context, db *gorm.DB) {
+	utils.LogCallback("========== 开始处理码支付回调 ==========")
+	utils.LogCallback("Method: %s, URL: %s, IP: %s", c.Request.Method, c.Request.URL.String(), utils.GetRealClientIP(c))
+
+	// CodePay sends params via GET query or POST form (same as EasyPay)
+	params := make(map[string]string)
+	if c.Request.Method == "GET" {
+		for k, v := range c.Request.URL.Query() {
+			if len(v) > 0 {
+				params[k] = v[0]
+			}
+		}
+	} else {
+		if err := c.Request.ParseForm(); err != nil {
+			utils.SysError("payment", fmt.Sprintf("码支付回调解析表单失败: %v", err))
+			c.String(400, "fail")
+			return
+		}
+		for k, v := range c.Request.PostForm {
+			if len(v) > 0 {
+				params[k] = v[0]
+			}
+		}
+	}
+
+	// Get CodePay config for signature verification
+	codepayCfg, err := services.GetCodepayConfig()
+	if err != nil {
+		c.String(400, "fail")
+		return
+	}
+
+	// Verify signature
+	if !services.CodepayVerifySign(params, codepayCfg.SecretKey) {
+		utils.SysError("payment", "码支付回调签名验证失败")
+		c.String(400, "sign error")
+		return
+	}
+
+	// Check trade status
+	tradeStatus := params["trade_status"]
+	utils.LogCallback("[Codepay] trade_status=%s out_trade_no=%s trade_no=%s money=%s",
+		tradeStatus, params["out_trade_no"], params["trade_no"], params["money"])
+	if tradeStatus != "TRADE_SUCCESS" {
+		utils.LogCallback("[Codepay] 交易状态非成功，忽略回调")
+		c.String(200, "success")
+		return
+	}
+
+	outTradeNo := params["out_trade_no"]
+	tradeNo := params["trade_no"]
+	callbackMoney := params["money"]
+
+	// 防重放攻击
+	if models.IsNonceProcessed(db, outTradeNo, "codepay") {
+		utils.SysError("payment", fmt.Sprintf("码支付回调重放攻击检测: %s", outTradeNo))
+		c.String(200, "success")
+		return
+	}
+
+	rawJSON, _ := json.Marshal(params)
+	rawStr := string(rawJSON)
+
+	// Find transaction
+	var transaction models.PaymentTransaction
+	if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err != nil {
+		callback := models.PaymentCallback{
+			CallbackType: "codepay",
+			CallbackData: rawStr,
+			RawRequest:   &rawStr,
+			Processed:    false,
+		}
+		if err := db.Create(&callback).Error; err != nil {
+			utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+		}
+		c.String(200, "success")
+		return
+	}
+
+	callback := models.PaymentCallback{
+		PaymentTransactionID: transaction.ID,
+		CallbackType:         "codepay",
+		CallbackData:         rawStr,
+		RawRequest:           &rawStr,
+		Processed:            true,
+	}
+
+	if transaction.Status == "pending" {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			var txn models.PaymentTransaction
+			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
+				return err
+			}
+
+			if callbackMoney != "" {
+				utils.LogCallback("[Codepay] 金额校验: expected=%.2f actual=%s out_trade_no=%s", txn.Amount, callbackMoney, outTradeNo)
+				if !amountsMatch(txn.Amount, callbackMoney) {
+					expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
+					utils.SysError("payment", fmt.Sprintf("码支付金额不匹配: 订单 %s, 期望 %s, 实际 %s", outTradeNo, expectedAmount, callbackMoney))
+					return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, callbackMoney)
+				}
+			} else {
+				utils.SysError("payment", fmt.Sprintf("码支付回调缺少金额字段: %s", outTradeNo))
+				return fmt.Errorf("回调数据缺少金额字段")
+			}
+
+			if err := models.RecordNonce(tx, outTradeNo, "codepay", tradeNo); err != nil {
+				return fmt.Errorf("记录 nonce 失败: %w", err)
+			}
+
+			callbackJSON := rawStr
+			updates := map[string]interface{}{
+				"status":        "paid",
+				"callback_data": &callbackJSON,
+			}
+			if tradeNo != "" {
+				updates["external_transaction_id"] = &tradeNo
+			}
+			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
+				return err
+			}
+			utils.LogCallback("[Codepay] 支付事务已标记为 paid: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
+
+			// Reuse epay business handlers (same order/recharge processing)
+			switch getPaymentBusinessKind(&txn) {
+			case "recharge":
+				if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
+					return err
+				}
+			case "order":
+				if err := handleEpayOrderCallback(tx, &txn); err != nil {
+					return err
+				}
+			default:
+				return fmt.Errorf("无法识别支付业务类型")
+			}
+
+			return nil
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "金额不匹配") {
+				s := err.Error()
+				callback.ProcessingResult = &s
+				callback.Processed = false
+				if err := db.Create(&callback).Error; err != nil {
+					utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+				}
+				c.String(200, "success")
+				return
+			}
+			utils.LogCallback("[Codepay] ⚠️  回调已处理（重复），忽略: out_trade_no=%s", outTradeNo)
+		} else {
+			result := "success"
+			callback.ProcessingResult = &result
+			utils.LogCallback("[Codepay] ✅ 码支付回调处理成功: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
+		}
+	} else {
+		utils.LogCallback("[Codepay] 幂等命中，支付事务已是 %s: out_trade_no=%s", transaction.Status, outTradeNo)
+	}
+
+	if err := db.Create(&callback).Error; err != nil {
+		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+	}
+	c.String(200, "success")
 }
 
 func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) error {

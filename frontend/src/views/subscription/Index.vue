@@ -648,6 +648,7 @@ const getPaymentLabel = (payType: string) => {
   const labels: Record<string, string> = {
     epay: '在线支付', alipay: '支付宝', wxpay: '微信支付',
     qqpay: 'QQ支付', stripe: 'Stripe (国际卡)', crypto: '加密货币 (USDT)',
+    codepay: '码支付', codepay_alipay: '码支付-支付宝', codepay_wxpay: '码支付-微信',
   }
   return labels[payType] || payType
 }

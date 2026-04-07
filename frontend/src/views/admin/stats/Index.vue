@@ -160,10 +160,19 @@
         <n-card title="用户地区分布" :bordered="false">
           <n-spin :show="regionLoading">
             <div v-if="regionStats.length > 0">
+              <div class="region-header">
+                <span class="region-rank">#</span>
+                <span class="region-col">国家</span>
+                <span class="region-col">省份</span>
+                <span class="region-col">城市</span>
+                <span class="region-count">用户数</span>
+              </div>
               <div v-for="(item, index) in regionStats" :key="index" class="region-item">
                 <div class="region-info">
                   <span class="region-rank">{{ index + 1 }}</span>
-                  <span class="region-name">{{ item.location || '未知' }}</span>
+                  <span class="region-col">{{ item.country || '-' }}</span>
+                  <span class="region-col">{{ item.province || '-' }}</span>
+                  <span class="region-col">{{ item.city || '-' }}</span>
                   <span class="region-count">{{ item.count }} 人</span>
                 </div>
                 <n-progress
@@ -208,7 +217,7 @@ const revenueChart = ref<any[]>([])
 const paymentMethodStats = ref<any[]>([])
 const packageStats = ref<any[]>([])
 const topUsers = ref<any[]>([])
-const regionStats = ref<Array<{ location: string; count: number }>>([])
+const regionStats = ref<Array<{ country: string; province: string; city: string; count: number }>>([])
 
 const dateShortcuts = {
   '最近7天': () => {
@@ -349,15 +358,19 @@ onMounted(() => { loadFinancialReport() })
 .method-info { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px; }
 .method-name { font-weight: 500; }
 .method-detail { color: #999; font-size: 13px; }
+.region-header {
+  display: flex; align-items: center; margin-bottom: 8px; font-size: 13px;
+  color: #999; font-weight: 500; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0;
+}
 .region-item { margin-bottom: 12px; }
 .region-info { display: flex; align-items: center; margin-bottom: 4px; font-size: 14px; }
 .region-rank {
   width: 24px; height: 24px; border-radius: 50%; background: #f0f0f0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 600; margin-right: 8px; color: #666;
+  font-size: 12px; font-weight: 600; margin-right: 8px; color: #666; flex-shrink: 0;
 }
-.region-name { flex: 1; }
-.region-count { color: #999; font-size: 13px; }
+.region-col { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.region-count { color: #999; font-size: 13px; width: 70px; text-align: right; flex-shrink: 0; }
 @media (max-width: 767px) {
   .stats-container { padding: 8px; }
   .filters-toolbar { flex-direction: column; align-items: stretch !important; gap: 12px; }

@@ -3985,21 +3985,93 @@ func AdminExportFinancialReport(c *gin.Context) {
 func AdminRegionStats(c *gin.Context) {
 	db := database.GetDB()
 
-	type RegionCount struct {
-		Location string `json:"location"`
-		Count    int64  `json:"count"`
+	type RawRegion struct {
+		Location string
+		Count    int64
 	}
 
-	var regions []RegionCount
+	var rawRegions []RawRegion
 	db.Model(&models.LoginHistory{}).
 		Select("COALESCE(location, '未知') as location, COUNT(DISTINCT user_id) as count").
 		Where("location IS NOT NULL AND location != ''").
 		Group("location").
 		Order("count DESC").
-		Limit(20).
-		Find(&regions)
+		Find(&rawRegions)
 
-	utils.Success(c, regions)
+	// 解析 location 字段（兼容旧 JSON 格式和新纯文本格式），按 国家|省份|城市 聚合
+	type RegionKey struct {
+		Country  string
+		Province string
+		City     string
+	}
+	aggregated := make(map[RegionKey]int64)
+
+	for _, r := range rawRegions {
+		loc := strings.TrimSpace(r.Location)
+		var country, province, city string
+
+		if strings.HasPrefix(loc, "{") {
+			// 旧 JSON 格式: {"country":"中国","country_code":"CN","city":"深圳","region":"广东",...}
+			var obj map[string]interface{}
+			if err := json.Unmarshal([]byte(loc), &obj); err == nil {
+				if v, ok := obj["country"].(string); ok {
+					country = v
+				}
+				if v, ok := obj["region"].(string); ok {
+					province = v
+				}
+				if v, ok := obj["city"].(string); ok {
+					city = v
+				}
+			}
+		} else {
+			// 新纯文本格式: "国家 省份 城市"
+			parts := strings.Fields(loc)
+			if len(parts) >= 1 {
+				country = parts[0]
+			}
+			if len(parts) >= 3 {
+				province = parts[1]
+				city = parts[2]
+			} else if len(parts) == 2 {
+				city = parts[1]
+			}
+		}
+
+		if country == "" {
+			country = "未知"
+		}
+
+		key := RegionKey{Country: country, Province: province, City: city}
+		aggregated[key] += r.Count
+	}
+
+	// 转为切片并排序
+	type RegionResult struct {
+		Country  string `json:"country"`
+		Province string `json:"province"`
+		City     string `json:"city"`
+		Count    int64  `json:"count"`
+	}
+
+	results := make([]RegionResult, 0, len(aggregated))
+	for k, v := range aggregated {
+		results = append(results, RegionResult{
+			Country:  k.Country,
+			Province: k.Province,
+			City:     k.City,
+			Count:    v,
+		})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Count > results[j].Count
+	})
+
+	if len(results) > 30 {
+		results = results[:30]
+	}
+
+	utils.Success(c, results)
 }
 
 // ==================== Batch Operations ====================

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"log"
+	"mime"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -47,7 +48,7 @@ func GetSMTPConfig() (*SMTPConfig, error) {
 		from = m["smtp_username"]
 	}
 	if name := m["smtp_from_name"]; name != "" && from != "" && !strings.Contains(from, "<") {
-		from = fmt.Sprintf("%s <%s>", name, from)
+		from = fmt.Sprintf("%s <%s>", mime.QEncoding.Encode("UTF-8", name), from)
 	}
 
 	return &SMTPConfig{
@@ -134,7 +135,7 @@ func buildMIME(from, to, subject, body string) string {
 	var sb strings.Builder
 	sb.WriteString("From: " + sanitizeHeader(from) + "\r\n")
 	sb.WriteString("To: " + sanitizeHeader(to) + "\r\n")
-	sb.WriteString("Subject: " + sanitizeHeader(subject) + "\r\n")
+	sb.WriteString("Subject: " + mime.QEncoding.Encode("UTF-8", sanitizeHeader(subject)) + "\r\n")
 	sb.WriteString("MIME-Version: 1.0\r\n")
 	sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
 	sb.WriteString("\r\n")

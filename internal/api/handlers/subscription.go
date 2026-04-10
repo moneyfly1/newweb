@@ -819,7 +819,7 @@ func ResetSubscription(c *gin.Context) {
 		return
 	}
 	oldURL := sub.SubscriptionURL
-	newURL := utils.GenerateRandomString(64)
+	newURL := utils.GenerateHexToken()
 	devicesBefore := sub.CurrentDevices
 	resetBy := "user"
 	if err := db.Transaction(func(tx *gorm.DB) error {

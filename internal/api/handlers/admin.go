@@ -2034,7 +2034,7 @@ func AdminResetSubscription(c *gin.Context) {
 	}
 
 	oldURL := sub.SubscriptionURL
-	newURL := utils.GenerateRandomString(64)
+	newURL := utils.GenerateHexToken()
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("subscription_id = ?", sub.ID).Delete(&models.Device{}).Error; err != nil {
 			return err
@@ -3236,7 +3236,7 @@ func AdminCreateUser(c *gin.Context) {
 	}
 
 	// Auto-create subscription for new user
-	subURL := utils.GenerateRandomString(64)
+	subURL := utils.GenerateHexToken()
 
 	// 设置到期时间和设备限制
 	expireTime := time.Now()
@@ -4392,7 +4392,7 @@ func AdminImportUsersCSV(c *gin.Context) {
 		}
 
 		// Create subscription
-		subURL := utils.GenerateRandomString(64)
+		subURL := utils.GenerateHexToken()
 
 		// 默认值
 		deviceLimit := 3

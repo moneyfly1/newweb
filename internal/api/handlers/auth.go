@@ -295,7 +295,7 @@ func Register(c *gin.Context) {
 		expireTime = time.Now().AddDate(0, 0, subscribeDays)
 	}
 
-	subURL := utils.GenerateRandomString(64)
+	subURL := utils.GenerateHexToken()
 	subscription := models.Subscription{
 		UserID:          user.ID,
 		SubscriptionURL: subURL,

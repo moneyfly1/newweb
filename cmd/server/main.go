@@ -189,7 +189,7 @@ func createDefaultAdmin() {
 	log.Printf("========================================")
 
 	// Auto-create subscription for admin
-	subURL := utils.GenerateRandomString(64)
+	subURL := utils.GenerateHexToken()
 	db.Create(&models.Subscription{
 		UserID:          admin.ID,
 		SubscriptionURL: subURL,
@@ -303,7 +303,7 @@ func runResetPassword() {
 			if err := db.Create(&user).Error; err != nil {
 				log.Fatalf("创建管理员失败: %v", err)
 			}
-			subURL := utils.GenerateRandomString(64)
+			subURL := utils.GenerateHexToken()
 			db.Create(&models.Subscription{
 				UserID:          user.ID,
 				SubscriptionURL: subURL,
@@ -330,7 +330,7 @@ func ensureUserSubscriptions() {
 	var users []models.User
 	db.Where("id NOT IN (SELECT user_id FROM subscriptions)").Find(&users)
 	for _, user := range users {
-		subURL := utils.GenerateRandomString(64)
+		subURL := utils.GenerateHexToken()
 		sub := models.Subscription{
 			UserID:          user.ID,
 			SubscriptionURL: subURL,

@@ -33,6 +33,15 @@ func GenerateRandomString(length int) string {
 	return string(b)
 }
 
+// GenerateHexToken 生成32位小写十六进制token（16字节随机数）
+func GenerateHexToken() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		panic(fmt.Sprintf("crypto/rand 失败: %v", err))
+	}
+	return hex.EncodeToString(b)
+}
+
 func GenerateVerificationCode() string {
 	n, err := rand.Int(rand.Reader, big.NewInt(900000))
 	if err != nil {

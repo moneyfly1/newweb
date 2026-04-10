@@ -336,7 +336,7 @@ func PayOrder(c *gin.Context) {
 			}
 			sub = models.Subscription{
 				UserID:          userID,
-				SubscriptionURL: utils.GenerateRandomString(64),
+				SubscriptionURL: utils.GenerateHexToken(),
 				DeviceLimit:     deviceLimit,
 				IsActive:        true,
 				Status:          "active",

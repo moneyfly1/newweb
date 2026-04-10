@@ -377,7 +377,7 @@ func OpenMysteryBox(c *gin.Context) {
 			var sub models.Subscription
 			if err := tx.Where("user_id = ?", userID).First(&sub).Error; err != nil {
 				sub = models.Subscription{
-					UserID: userID, SubscriptionURL: utils.GenerateRandomString(64),
+					UserID: userID, SubscriptionURL: utils.GenerateHexToken(),
 					DeviceLimit: 3, IsActive: true, Status: "active",
 					ExpireTime: time.Now().AddDate(0, 0, days),
 				}

@@ -112,7 +112,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			order.UserID, deviceLimit, durationDays)
 		sub = models.Subscription{
 			UserID:          order.UserID,
-			SubscriptionURL: utils.GenerateRandomString(64),
+			SubscriptionURL: utils.GenerateHexToken(),
 			DeviceLimit:     deviceLimit,
 			IsActive:        true,
 			Status:          "active",

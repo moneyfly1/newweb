@@ -13,7 +13,7 @@ type Order struct {
 	Status               string     `gorm:"type:varchar(20);default:'pending';index" json:"status"`
 	PaymentMethodID      *int64     `json:"payment_method_id"`
 	PaymentMethodName    *string    `gorm:"type:varchar(100)" json:"payment_method_name"`
-	PaymentTime          *time.Time `json:"payment_time"`
+	PaymentTime          *time.Time `gorm:"index" json:"payment_time"`
 	PaymentTransactionID *string    `gorm:"type:varchar(100)" json:"payment_transaction_id"`
 	ExpireTime           *time.Time `json:"expire_time"`
 	CouponID             *int64     `gorm:"index" json:"coupon_id"`

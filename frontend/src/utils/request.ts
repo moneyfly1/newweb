@@ -33,6 +33,11 @@ const CACHEABLE_URLS = [
   '/admin/coupons',
   '/admin/levels',
   '/admin/announcements',
+  '/config',
+  '/packages',
+  '/announcements',
+  '/nodes',
+  '/settings',
 ]
 
 function shouldCache(url: string): boolean {

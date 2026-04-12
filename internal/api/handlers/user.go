@@ -344,7 +344,7 @@ func GetUserDevices(c *gin.Context) {
 		return
 	}
 	var devices []models.Device
-	database.GetDB().Where("subscription_id = ? AND is_active = ?", sub.ID, true).Find(&devices)
+	database.GetDB().Where("subscription_id = ? AND is_active = ?", sub.ID, true).Limit(100).Find(&devices)
 	utils.Success(c, devices)
 }
 

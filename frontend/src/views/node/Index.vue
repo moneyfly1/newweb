@@ -265,7 +265,7 @@ const handleTestNode = async (node: Node) => {
 const fetchNodes = async () => {
   loading.value = true
   try {
-    const res = await listNodes({ page_size: 500 })
+    const res = await listNodes({ page_size: 100 })
     const items = res.data?.items || res.data || []
     nodes.value = items.map((n: any) => ({
       id: n.id,

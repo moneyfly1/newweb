@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -44,8 +45,10 @@ func UserCheckIn(c *gin.Context) {
 	err := db.Transaction(func(tx *gorm.DB) error {
 		// 在事务内再次检查是否已签到（防重放）
 		today := time.Now().Format("2006-01-02")
+		todayStart, _ := time.ParseInLocation("2006-01-02", today, time.Now().Location())
+		tomorrowStart := todayStart.AddDate(0, 0, 1)
 		var count int64
-		tx.Model(&models.CheckIn{}).Where("user_id = ? AND DATE(created_at) = ?", userID, today).Count(&count)
+		tx.Model(&models.CheckIn{}).Where("user_id = ? AND created_at >= ? AND created_at < ?", userID, todayStart, tomorrowStart).Count(&count)
 		if count > 0 {
 			return fmt.Errorf("already_checked_in")
 		}
@@ -117,19 +120,38 @@ func GetCheckInStatus(c *gin.Context) {
 	db := database.GetDB()
 
 	today := time.Now().Format("2006-01-02")
-	var todayCount int64
-	db.Model(&models.CheckIn{}).Where("user_id = ? AND DATE(created_at) = ?", userID, today).Count(&todayCount)
+	todayStart, _ := time.ParseInLocation("2006-01-02", today, time.Now().Location())
+	tomorrowStart := todayStart.AddDate(0, 0, 1)
 
-	var totalCheckIns int64
-	db.Model(&models.CheckIn{}).Where("user_id = ?", userID).Count(&totalCheckIns)
+	var (
+		todayCount      int64
+		totalCheckIns   int64
+		lastCheckIn     *time.Time
+		consecutiveDays int
+	)
 
-	var lastCheckIn *time.Time
-	var last models.CheckIn
-	if err := db.Where("user_id = ?", userID).Order("created_at DESC").First(&last).Error; err == nil {
-		lastCheckIn = &last.CreatedAt
-	}
-
-	consecutiveDays := calcConsecutiveDays(db, userID)
+	var wg sync.WaitGroup
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		db.Model(&models.CheckIn{}).Where("user_id = ? AND created_at >= ? AND created_at < ?", userID, todayStart, tomorrowStart).Count(&todayCount)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Model(&models.CheckIn{}).Where("user_id = ?", userID).Count(&totalCheckIns)
+	}()
+	go func() {
+		defer wg.Done()
+		var last models.CheckIn
+		if err := db.Where("user_id = ?", userID).Order("created_at DESC").First(&last).Error; err == nil {
+			lastCheckIn = &last.CreatedAt
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		consecutiveDays = calcConsecutiveDays(db, userID)
+	}()
+	wg.Wait()
 
 	utils.Success(c, gin.H{
 		"checked_in_today": todayCount > 0,
@@ -160,13 +182,14 @@ func calcConsecutiveDays(db *gorm.DB, userID uint) int {
 	type DateRow struct {
 		D string
 	}
+	// 查最近 365 天，覆盖最长连续签到
+	since := time.Now().AddDate(0, 0, -365)
 	var dates []DateRow
 	db.Model(&models.CheckIn{}).
 		Select("DATE(created_at) as d").
-		Where("user_id = ?", userID).
+		Where("user_id = ? AND created_at >= ?", userID, since).
 		Group("DATE(created_at)").
 		Order("d DESC").
-		Limit(365).
 		Find(&dates)
 
 	if len(dates) == 0 {
@@ -174,8 +197,9 @@ func calcConsecutiveDays(db *gorm.DB, userID uint) int {
 	}
 
 	consecutive := 0
-	// Start from today
-	checkDate := time.Now().Truncate(24 * time.Hour)
+	// Start from today (local time)
+	now := time.Now()
+	checkDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	for _, row := range dates {
 		d, err := time.Parse("2006-01-02", row.D)

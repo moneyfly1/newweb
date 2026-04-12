@@ -31,8 +31,8 @@ type SubscriptionReset struct {
 	SubscriptionID     uint      `gorm:"index" json:"subscription_id"`
 	ResetType          string    `gorm:"type:varchar(50)" json:"reset_type"`
 	Reason             string    `gorm:"type:text" json:"reason"`
-	OldSubscriptionURL *string   `gorm:"type:varchar(255)" json:"old_subscription_url"`
-	NewSubscriptionURL *string   `gorm:"type:varchar(255)" json:"new_subscription_url"`
+	OldSubscriptionURL *string   `gorm:"type:varchar(255);index" json:"old_subscription_url"`
+	NewSubscriptionURL *string   `gorm:"type:varchar(255);index" json:"new_subscription_url"`
 	DeviceCountBefore  int       `gorm:"default:0" json:"device_count_before"`
 	DeviceCountAfter   int       `gorm:"default:0" json:"device_count_after"`
 	ResetBy            *string   `gorm:"type:varchar(50)" json:"reset_by"`

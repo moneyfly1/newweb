@@ -204,7 +204,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useMessage } from 'naive-ui'
-import QRCode from 'qrcode'
 import {
   WalletOutline, RibbonOutline, CartOutline, LinkOutline,
   ChatbubblesOutline, PeopleOutline, CopyOutline, CloudDownloadOutline,
@@ -399,6 +398,7 @@ watch(showQrCode, async (val) => {
   if (val && qrCodeData.value) {
     await nextTick()
     if (dashQrCanvas.value) {
+      const QRCode = (await import('qrcode')).default
       QRCode.toCanvas(dashQrCanvas.value, qrCodeData.value, { width: 200, margin: 2 })
     }
   }
@@ -445,18 +445,31 @@ function oneClickImport(client: string) {
 function openUrl(url: string) { if (url) window.open(url, '_blank') }
 
 onMounted(async () => {
-  try { const res: any = await getDashboardInfo(); info.value = res.data || {} } catch {}
-  try {
-    const res: any = await getPublicConfig()
-    if (res.data) { clientConfig.value = res.data; if (res.data.site_name) info.value.site_name = res.data.site_name }
-  } catch {}
   subscriptionLoading.value = true
-  try { const res: any = await getSubscription(); subscription.value = res.data || {} } catch {} finally { subscriptionLoading.value = false }
   announcementsLoading.value = true
-  try { const res: any = await listPublicAnnouncements(); announcements.value = (res.data?.items || res.data || []).slice(0, 5) } catch {} finally { announcementsLoading.value = false }
   ordersLoading.value = true
-  try { const res: any = await listOrders({ page: 1, page_size: 5 }); recentOrders.value = (res.data?.items || []).slice(0, 5) } catch {} finally { ordersLoading.value = false }
-  try { const res: any = await getCheckInStatus(); if (res.data) checkinStatus.value = res.data } catch {}
+
+  const [dashRes, configRes, subRes, annRes, ordersRes, checkinRes] = await Promise.allSettled([
+    getDashboardInfo(),
+    getPublicConfig(),
+    getSubscription(),
+    listPublicAnnouncements(),
+    listOrders({ page: 1, page_size: 5 }),
+    getCheckInStatus(),
+  ])
+
+  if (dashRes.status === 'fulfilled') { const res: any = dashRes.value; info.value = res.data || {} }
+  if (configRes.status === 'fulfilled') {
+    const res: any = configRes.value
+    if (res.data) { clientConfig.value = res.data; if (res.data.site_name) info.value.site_name = res.data.site_name }
+  }
+  if (subRes.status === 'fulfilled') { const res: any = subRes.value; subscription.value = res.data || {} }
+  subscriptionLoading.value = false
+  if (annRes.status === 'fulfilled') { const res: any = annRes.value; announcements.value = (res.data?.items || res.data || []).slice(0, 5) }
+  announcementsLoading.value = false
+  if (ordersRes.status === 'fulfilled') { const res: any = ordersRes.value; recentOrders.value = (res.data?.items || []).slice(0, 5) }
+  ordersLoading.value = false
+  if (checkinRes.status === 'fulfilled') { const res: any = checkinRes.value; if (res.data) checkinStatus.value = res.data }
 })
 </script>
 <style scoped>

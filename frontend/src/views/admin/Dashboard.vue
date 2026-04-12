@@ -27,7 +27,7 @@
           <div class="metric-card metric-success">
             <div class="metric-label">活跃订阅</div>
             <div class="metric-value">{{ stats.active_subscriptions || 0 }}</div>
-            <div class="metric-sub">付费率: {{ calculateConversion() }}%</div>
+            <div class="metric-sub">付费率: {{ conversionRate }}%</div>
             <div class="metric-icon"><n-icon :size="48"><checkmark-circle-outline /></n-icon></div>
           </div>
         </n-grid-item>
@@ -175,10 +175,10 @@ const recentUsers = ref<any[]>([])
 const recentOrders = ref<any[]>([])
 const revenueTrend = ref<{ date: string; value: number }[]>([])
 
-const calculateConversion = () => {
+const conversionRate = computed(() => {
   if (!stats.value.total_users) return 0
   return ((stats.value.active_subscriptions / stats.value.total_users) * 100).toFixed(1)
-}
+})
 
 const revenueChartOption = computed(() => ({
   tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },

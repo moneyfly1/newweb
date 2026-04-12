@@ -330,23 +330,24 @@ func AdminGetUser(c *gin.Context) {
 	var subscription models.Subscription
 	db.Where("user_id = ?", id).First(&subscription)
 
-	var orders []models.Order
-	db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&orders)
+	var (
+		orders          []models.Order
+		devices         []models.Device
+		resets          []models.SubscriptionReset
+		balanceLogs     []models.BalanceLog
+		loginHistory    []models.LoginHistory
+		rechargeRecords []models.RechargeRecord
+	)
 
-	var devices []models.Device
-	db.Where("subscription_id = ?", subscription.ID).Order("last_access DESC").Find(&devices)
-
-	var resets []models.SubscriptionReset
-	db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&resets)
-
-	var balanceLogs []models.BalanceLog
-	db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&balanceLogs)
-
-	var loginHistory []models.LoginHistory
-	db.Where("user_id = ?", id).Order("login_time DESC").Limit(20).Find(&loginHistory)
-
-	var rechargeRecords []models.RechargeRecord
-	db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&rechargeRecords)
+	var wg sync.WaitGroup
+	wg.Add(6)
+	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&orders) }()
+	go func() { defer wg.Done(); db.Where("subscription_id = ?", subscription.ID).Order("last_access DESC").Find(&devices) }()
+	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&resets) }()
+	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&balanceLogs) }()
+	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("login_time DESC").Limit(20).Find(&loginHistory) }()
+	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&rechargeRecords) }()
+	wg.Wait()
 
 	// Build subscription URLs
 	baseURL := getSubscriptionBaseURL()
@@ -801,7 +802,22 @@ func AdminGetAbnormalUsers(c *gin.Context) {
 	if abnormalUsers == nil {
 		abnormalUsers = []AbnormalUser{}
 	}
-	utils.Success(c, gin.H{"users": abnormalUsers})
+
+	// 分页处理
+	total := int64(len(abnormalUsers))
+	p := utils.GetPagination(c)
+	start := p.Offset()
+	if start < 0 {
+		start = 0
+	}
+	end := start + p.PageSize
+	if start > int(total) {
+		start = int(total)
+	}
+	if end > int(total) {
+		end = int(total)
+	}
+	utils.SuccessPage(c, abnormalUsers[start:end], total, p.Page, p.PageSize)
 }
 
 // ==================== Login As User ====================
@@ -1276,7 +1292,8 @@ func AdminListNodes(c *gin.Context) {
 	query.Count(&total)
 
 	var nodes []models.Node
-	query.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&nodes)
+	query.Select("id, name, region, type, status, load, speed, uptime, latency, description, is_recommended, is_active, is_manual, source_index, order_index, last_test, created_at, updated_at").
+		Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&nodes)
 
 	utils.SuccessPage(c, nodes, total, p.Page, p.PageSize)
 }
@@ -1876,25 +1893,50 @@ func AdminListSubscriptions(c *gin.Context) {
 		UniversalURL string  `json:"universal_url"`
 		ClashURL     string  `json:"clash_url"`
 	}
+
+	// 批量查询 user 和 package，避免 N+1
+	userIDs := make([]uint, 0, len(subs))
+	pkgIDs := make([]int64, 0, len(subs))
+	for _, sub := range subs {
+		userIDs = append(userIDs, sub.UserID)
+		if sub.PackageID != nil {
+			pkgIDs = append(pkgIDs, *sub.PackageID)
+		}
+	}
+	userMap := make(map[uint]models.User)
+	if len(userIDs) > 0 {
+		var users []models.User
+		db.Select("id, email, username, notes").Where("id IN ?", userIDs).Find(&users)
+		for _, u := range users {
+			userMap[u.ID] = u
+		}
+	}
+	pkgMap := make(map[int64]string)
+	if len(pkgIDs) > 0 {
+		var pkgs []models.Package
+		db.Select("id, name").Where("id IN ?", pkgIDs).Find(&pkgs)
+		for _, p := range pkgs {
+			pkgMap[int64(p.ID)] = p.Name
+		}
+	}
+
 	items := make([]SubItem, 0, len(subs))
 	for _, sub := range subs {
 		item := SubItem{Subscription: sub}
 		subURLs := buildSubscriptionURLs(baseURL, sub.SubscriptionURL)
 		item.UniversalURL, _ = subURLs["universal_url"].(string)
 		item.ClashURL, _ = subURLs["clash_url"].(string)
-		var user models.User
-		if db.Select("email, username, notes").First(&user, sub.UserID).Error == nil {
-			item.UserEmail = user.Email
-			item.Username = user.Username
-			item.UserNotes = user.Notes
+		if u, ok := userMap[sub.UserID]; ok {
+			item.UserEmail = u.Email
+			item.Username = u.Username
+			item.UserNotes = u.Notes
 		}
 		if sub.PackageID != nil {
-			var pkg models.Package
-			if db.Select("name").First(&pkg, *sub.PackageID).Error == nil {
-				item.PackageName = pkg.Name
+			if name, ok := pkgMap[*sub.PackageID]; ok {
+				item.PackageName = name
 			}
 		}
-		// 仍在有效期内时，以到期时间为准纠正 status，避免显示“已过期”
+		// 仍在有效期内时，以到期时间为准纠正 status，避免显示"已过期"
 		if sub.IsActive && sub.ExpireTime.After(time.Now()) {
 			if time.Until(sub.ExpireTime) <= 7*24*time.Hour {
 				item.Status = "expiring"
@@ -1947,8 +1989,26 @@ func AdminGetSubscription(c *gin.Context) {
 		return
 	}
 
-	var devices []models.Device
-	db.Where("subscription_id = ?", sub.ID).Find(&devices)
+	var (
+		devices         []models.Device
+		user            models.User
+		orders          []models.Order
+		balanceLogs     []models.BalanceLog
+		loginHistory    []models.LoginHistory
+		resets          []models.SubscriptionReset
+		rechargeRecords []models.RechargeRecord
+	)
+
+	var wg sync.WaitGroup
+	wg.Add(7)
+	go func() { defer wg.Done(); db.Where("subscription_id = ?", sub.ID).Find(&devices) }()
+	go func() { defer wg.Done(); db.First(&user, sub.UserID) }()
+	go func() { defer wg.Done(); db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&orders) }()
+	go func() { defer wg.Done(); db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&balanceLogs) }()
+	go func() { defer wg.Done(); db.Where("user_id = ?", sub.UserID).Order("login_time DESC").Limit(20).Find(&loginHistory) }()
+	go func() { defer wg.Done(); db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&resets) }()
+	go func() { defer wg.Done(); db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&rechargeRecords) }()
+	wg.Wait()
 
 	result := gin.H{
 		"id":               sub.ID,
@@ -1965,6 +2025,11 @@ func AdminGetSubscription(c *gin.Context) {
 		"created_at":       sub.CreatedAt,
 		"updated_at":       sub.UpdatedAt,
 		"devices":          devices,
+		"recent_orders":    orders,
+		"balance_logs":     balanceLogs,
+		"login_history":    loginHistory,
+		"resets":           resets,
+		"recharge_records": rechargeRecords,
 	}
 
 	// Build full subscription URLs
@@ -1973,8 +2038,7 @@ func AdminGetSubscription(c *gin.Context) {
 		result[key] = value
 	}
 
-	var user models.User
-	if db.First(&user, sub.UserID).Error == nil {
+	if user.ID != 0 {
 		result["user_email"] = user.Email
 		result["username"] = user.Username
 		result["user_balance"] = user.Balance
@@ -1995,27 +2059,6 @@ func AdminGetSubscription(c *gin.Context) {
 			result["package_name"] = pkg.Name
 		}
 	}
-
-	// Rich user data (same as AdminGetUser)
-	var orders []models.Order
-	db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&orders)
-	result["recent_orders"] = orders
-
-	var balanceLogs []models.BalanceLog
-	db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&balanceLogs)
-	result["balance_logs"] = balanceLogs
-
-	var loginHistory []models.LoginHistory
-	db.Where("user_id = ?", sub.UserID).Order("login_time DESC").Limit(20).Find(&loginHistory)
-	result["login_history"] = loginHistory
-
-	var resets []models.SubscriptionReset
-	db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&resets)
-	result["resets"] = resets
-
-	var rechargeRecords []models.RechargeRecord
-	db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&rechargeRecords)
-	result["recharge_records"] = rechargeRecords
 
 	utils.Success(c, result)
 }

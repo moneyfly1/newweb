@@ -37,13 +37,23 @@ func AdminListInviteCodes(c *gin.Context) {
 		Username string `json:"username"`
 		Status   string `json:"status"`
 	}
+	// 批量查询用户名，避免 N+1
+	userIDs := make([]uint, 0, len(codes))
+	for _, code := range codes {
+		userIDs = append(userIDs, code.UserID)
+	}
+	userMap := make(map[uint]string)
+	if len(userIDs) > 0 {
+		var users []models.User
+		db.Select("id, username").Where("id IN ?", userIDs).Find(&users)
+		for _, u := range users {
+			userMap[u.ID] = u.Username
+		}
+	}
 	var result []R
 	for _, code := range codes {
 		item := R{InviteCode: code}
-		var u models.User
-		if db.Select("username").First(&u, code.UserID).Error == nil {
-			item.Username = u.Username
-		}
+		item.Username = userMap[code.UserID]
 		item.Status = inviteCodeStatus(code)
 		result = append(result, item)
 	}
@@ -108,20 +118,35 @@ func AdminListInviteRelations(c *gin.Context) {
 		InviteeUsername string `json:"invitee_username"`
 		Code            string `json:"invite_code"`
 	}
+	// 批量查询用户名和邀请码，避免 N+1
+	allUserIDs := make([]uint, 0, len(rels)*2)
+	codeIDs := make([]uint, 0, len(rels))
+	for _, rel := range rels {
+		allUserIDs = append(allUserIDs, rel.InviterID, rel.InviteeID)
+		codeIDs = append(codeIDs, rel.InviteCodeID)
+	}
+	userNameMap := make(map[uint]string)
+	if len(allUserIDs) > 0 {
+		var users []models.User
+		db.Select("id, username").Where("id IN ?", allUserIDs).Find(&users)
+		for _, u := range users {
+			userNameMap[u.ID] = u.Username
+		}
+	}
+	codeMap := make(map[uint]string)
+	if len(codeIDs) > 0 {
+		var inviteCodes []models.InviteCode
+		db.Select("id, code").Where("id IN ?", codeIDs).Find(&inviteCodes)
+		for _, ic := range inviteCodes {
+			codeMap[ic.ID] = ic.Code
+		}
+	}
 	var result []RR
 	for _, rel := range rels {
 		item := RR{InviteRelation: rel}
-		var inviter, invitee models.User
-		if db.Select("username").First(&inviter, rel.InviterID).Error == nil {
-			item.InviterUsername = inviter.Username
-		}
-		if db.Select("username").First(&invitee, rel.InviteeID).Error == nil {
-			item.InviteeUsername = invitee.Username
-		}
-		var ic models.InviteCode
-		if db.Select("code").First(&ic, rel.InviteCodeID).Error == nil {
-			item.Code = ic.Code
-		}
+		item.InviterUsername = userNameMap[rel.InviterID]
+		item.InviteeUsername = userNameMap[rel.InviteeID]
+		item.Code = codeMap[rel.InviteCodeID]
 		result = append(result, item)
 	}
 	utils.Success(c, gin.H{"items": result, "total": total})
@@ -132,7 +157,7 @@ func AdminListInviteRelations(c *gin.Context) {
 func ListInviteCodes(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var codes []models.InviteCode
-	database.GetDB().Where("user_id = ?", userID).Order("created_at DESC").Find(&codes)
+	database.GetDB().Where("user_id = ?", userID).Order("created_at DESC").Limit(100).Find(&codes)
 	type codeResponse struct {
 		models.InviteCode
 		Status string `json:"status"`
@@ -229,10 +254,22 @@ func GetInviteStats(c *gin.Context) {
 		RewardStatus      string  `json:"reward_status"`
 		RewardAmount      float64 `json:"reward_amount"`
 	}
+	// 批量查询受邀用户信息，避免 N+1
+	inviteeIDs := make([]uint, 0, len(relations))
+	for _, r := range relations {
+		inviteeIDs = append(inviteeIDs, r.InviteeID)
+	}
+	inviteeMap := make(map[uint]models.User)
+	if len(inviteeIDs) > 0 {
+		var invitees []models.User
+		db.Select("id, username, email").Where("id IN ?", inviteeIDs).Find(&invitees)
+		for _, u := range invitees {
+			inviteeMap[u.ID] = u
+		}
+	}
 	var recentInvites []recentInvite
 	for _, r := range relations {
-		var user models.User
-		db.Select("username, email").Where("id = ?", r.InviteeID).First(&user)
+		user := inviteeMap[r.InviteeID]
 		status := "pending"
 		if r.InviterRewardGiven {
 			status = "paid"

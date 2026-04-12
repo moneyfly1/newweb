@@ -21,12 +21,11 @@ import { getSettings } from '@/api/admin'
 const appStore = useAppStore()
 const naiveTheme = computed(() => appStore.isDark ? darkTheme : null)
 
-onMounted(async () => {
+onMounted(() => {
   appStore.initTheme()
 
-  // 动态设置网站标题、描述和图标
-  try {
-    const res = await getSettings()
+  // 动态设置网站标题、描述和图标（不阻塞渲染）
+  getSettings().then(res => {
     if (res.code === 0 && res.data) {
       const siteName = res.data.site_name || 'CBoard'
       const siteDesc = res.data.site_description || '高效流畅的管理面板'
@@ -46,9 +45,9 @@ onMounted(async () => {
         }
       }
     }
-  } catch {
+  }).catch(() => {
     document.title = 'CBoard'
-  }
+  })
 })
 
 onUnmounted(() => {

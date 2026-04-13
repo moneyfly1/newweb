@@ -255,13 +255,26 @@ func sendUnpaidOrderRemindersTask() {
 			"pending", now.Add(-20*time.Minute), now.Add(-15*time.Minute), true).
 		Scan(&orders)
 
+	// 批量加载所有涉及的套餐名称，避免循环内逐条查询
+	pkgMap := make(map[uint]string)
+	if len(orders) > 0 {
+		var pkgIDs []uint
+		for _, o := range orders {
+			pkgIDs = append(pkgIDs, o.PackageID)
+		}
+		var pkgs []models.Package
+		db.Where("id IN ?", pkgIDs).Select("id, name").Find(&pkgs)
+		for _, p := range pkgs {
+			pkgMap[p.ID] = p.Name
+		}
+	}
+
 	for _, o := range orders {
 		amount := o.Amount
 		if o.FinalAmount != nil {
 			amount = *o.FinalAmount
 		}
-		var pkgName string
-		db.Model(&models.Package{}).Where("id = ?", o.PackageID).Pluck("name", &pkgName)
+		pkgName := pkgMap[o.PackageID]
 		if pkgName == "" {
 			pkgName = "未知套餐"
 		}

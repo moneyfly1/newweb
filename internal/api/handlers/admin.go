@@ -249,13 +249,23 @@ func AdminListUsers(c *gin.Context) {
 	query := db.Model(&models.User{})
 	if search := c.Query("search"); search != "" {
 		like := "%" + search + "%"
-		// Also search by old subscription URL in reset history
-		var resetUserIDs []uint
-		db.Model(&models.SubscriptionReset{}).Where("old_subscription_url LIKE ? OR new_subscription_url LIKE ?", like, like).Distinct().Pluck("user_id", &resetUserIDs)
-		// Search by current subscription URL
-		var subUserIDs []uint
-		db.Model(&models.Subscription{}).Where("subscription_url LIKE ?", like).Pluck("user_id", &subUserIDs)
-		query = query.Where("username LIKE ? OR email LIKE ? OR id IN ? OR id IN ?", like, like, resetUserIDs, subUserIDs)
+		// 只在搜索词较长时才查 subscription 相关表（短词不可能是 subscription URL）
+		if len(search) >= 8 {
+			var resetUserIDs, subUserIDs []uint
+			var swg sync.WaitGroup
+			swg.Add(2)
+			go func() { defer swg.Done(); db.Model(&models.SubscriptionReset{}).Where("old_subscription_url LIKE ? OR new_subscription_url LIKE ?", like, like).Distinct().Pluck("user_id", &resetUserIDs) }()
+			go func() { defer swg.Done(); db.Model(&models.Subscription{}).Where("subscription_url LIKE ?", like).Pluck("user_id", &subUserIDs) }()
+			swg.Wait()
+			allIDs := append(resetUserIDs, subUserIDs...)
+			if len(allIDs) > 0 {
+				query = query.Where("username LIKE ? OR email LIKE ? OR id IN ?", like, like, allIDs)
+			} else {
+				query = query.Where("username LIKE ? OR email LIKE ?", like, like)
+			}
+		} else {
+			query = query.Where("username LIKE ? OR email LIKE ?", like, like)
+		}
 	}
 	if status := c.Query("is_active"); status != "" {
 		query = query.Where("is_active = ?", status == "true")
@@ -342,7 +352,7 @@ func AdminGetUser(c *gin.Context) {
 	var wg sync.WaitGroup
 	wg.Add(6)
 	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&orders) }()
-	go func() { defer wg.Done(); db.Where("subscription_id = ?", subscription.ID).Order("last_access DESC").Find(&devices) }()
+	go func() { defer wg.Done(); db.Where("subscription_id = ?", subscription.ID).Order("last_access DESC").Limit(50).Find(&devices) }()
 	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&resets) }()
 	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&balanceLogs) }()
 	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("login_time DESC").Limit(20).Find(&loginHistory) }()
@@ -718,7 +728,7 @@ func AdminGetAbnormalUsers(c *gin.Context) {
 	// 2. Users with too many devices (current_devices > device_limit)
 	if abnormalType == "" || abnormalType == "device_limit_exceeded" {
 		var subs []models.Subscription
-		db.Where("current_devices > device_limit").Find(&subs)
+		db.Where("current_devices > device_limit").Limit(500).Find(&subs)
 
 		// 批量查询用户信息，避免 N+1 查询
 		if len(subs) > 0 {
@@ -1693,11 +1703,15 @@ func replaceCustomNodeAssignments(db *gorm.DB, nodeID uint, userIDs []uint) erro
 		if err := tx.Where("custom_node_id = ?", nodeID).Delete(&models.UserCustomNode{}).Error; err != nil {
 			return fmt.Errorf("清理分配关系失败")
 		}
+		if len(uniqueUserIDs) == 0 {
+			return nil
+		}
+		assignments := make([]models.UserCustomNode, 0, len(uniqueUserIDs))
 		for _, uid := range uniqueUserIDs {
-			assignment := models.UserCustomNode{UserID: uid, CustomNodeID: nodeID}
-			if err := tx.Create(&assignment).Error; err != nil {
-				return fmt.Errorf("分配专线节点失败")
-			}
+			assignments = append(assignments, models.UserCustomNode{UserID: uid, CustomNodeID: nodeID})
+		}
+		if err := tx.CreateInBatches(assignments, 100).Error; err != nil {
+			return fmt.Errorf("分配专线节点失败")
 		}
 		return nil
 	})
@@ -1736,7 +1750,7 @@ func AdminImportCustomNodeLinks(c *gin.Context) {
 	}
 
 	db := database.GetDB()
-	successCount := 0
+	customNodes := make([]models.CustomNode, 0, len(nodes))
 	for _, node := range nodes {
 		domain := ""
 		port := 443
@@ -1760,10 +1774,11 @@ func AdminImportCustomNodeLinks(c *gin.Context) {
 		if node.Config != nil {
 			customNode.Config = *node.Config
 		}
-		if err := db.Create(&customNode).Error; err == nil {
-			successCount++
-		}
+		customNodes = append(customNodes, customNode)
 	}
+
+	result := db.CreateInBatches(customNodes, 100)
+	successCount := int(result.RowsAffected)
 
 	cache.ClearAllSubscriptionCache()
 	utils.Success(c, gin.H{
@@ -1826,7 +1841,7 @@ func AdminGetCustomNodeUsers(c *gin.Context) {
 	}
 	db := database.GetDB()
 	var assignments []models.UserCustomNode
-	db.Where("custom_node_id = ?", id).Find(&assignments)
+	db.Where("custom_node_id = ?", id).Limit(1000).Find(&assignments)
 
 	var userIDs []uint
 	for _, a := range assignments {

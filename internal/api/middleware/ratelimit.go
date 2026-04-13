@@ -63,8 +63,9 @@ func (rl *memRateLimiter) allow(key string) bool {
 }
 
 func (rl *memRateLimiter) cleanup() {
-	for {
-		time.Sleep(rl.window)
+	ticker := time.NewTicker(rl.window)
+	defer ticker.Stop()
+	for range ticker.C {
 		rl.mu.Lock()
 		now := time.Now()
 		for key, v := range rl.visitors {

@@ -90,6 +90,11 @@ export function clearRequestSessionCache() {
   requestCache.clear()
 }
 
+// 预取 CSRF token，登录后调用以消除首次 mutation 请求的阻塞
+export function prefetchCSRFToken() {
+  ensureCSRFToken()
+}
+
 async function ensureCSRFToken(): Promise<string> {
   const userStore = useUserStore()
   if (!userStore.token) {

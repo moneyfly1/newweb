@@ -42,7 +42,7 @@ func InitDatabase(cfg *config.Config) error {
 	gormLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
-			SlowThreshold:             time.Second,
+			SlowThreshold:             200 * time.Millisecond,
 			LogLevel:                  logLevel,
 			IgnoreRecordNotFoundError: true,
 			Colorful:                  true,
@@ -60,15 +60,15 @@ func InitDatabase(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("获取底层数据库实例失败: %w", err)
 	}
-	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxIdleConns(25)
 	if DB.Dialector.Name() == "sqlite" {
 		// SQLite with WAL mode supports better concurrency
 		sqlDB.SetMaxOpenConns(50)
 	} else {
 		sqlDB.SetMaxOpenConns(100)
 	}
-	sqlDB.SetConnMaxLifetime(time.Hour)
-	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 
 	// 验证连接可用
 	if err := sqlDB.Ping(); err != nil {

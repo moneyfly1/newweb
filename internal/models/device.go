@@ -5,7 +5,7 @@ import "time"
 type Device struct {
 	ID                uint       `gorm:"primaryKey" json:"id"`
 	UserID            *int64     `gorm:"index" json:"user_id"`
-	SubscriptionID    uint       `gorm:"index;index:idx_device_lookup,priority:1" json:"subscription_id"`
+	SubscriptionID    uint       `gorm:"index;index:idx_device_lookup,priority:1;index:idx_sub_active_access,priority:1" json:"subscription_id"`
 	DeviceFingerprint string     `gorm:"type:varchar(255);index;index:idx_device_lookup,priority:2" json:"device_fingerprint"`
 	DeviceHash        *string    `gorm:"type:varchar(255)" json:"device_hash"`
 	DeviceUA          *string    `gorm:"type:varchar(255)" json:"device_ua"`
@@ -21,10 +21,10 @@ type Device struct {
 	DeviceModel       *string    `gorm:"type:varchar(100)" json:"device_model"`
 	DeviceBrand       *string    `gorm:"type:varchar(50)" json:"device_brand"`
 	SubscriptionType  *string    `gorm:"type:varchar(20);index" json:"subscription_type"`
-	IsActive          bool       `gorm:"default:true;index;index:idx_device_lookup,priority:3" json:"is_active"`
+	IsActive          bool       `gorm:"default:true;index;index:idx_device_lookup,priority:3;index:idx_sub_active_access,priority:2" json:"is_active"`
 	IsAllowed         bool       `gorm:"default:true" json:"is_allowed"`
 	FirstSeen         *time.Time `json:"first_seen"`
-	LastAccess        time.Time  `gorm:"autoCreateTime" json:"last_access"`
+	LastAccess        time.Time  `gorm:"autoCreateTime;index:idx_sub_active_access,priority:3" json:"last_access"`
 	LastSeen          *time.Time `json:"last_seen"`
 	AccessCount       int        `gorm:"default:0" json:"access_count"`
 	CreatedAt         time.Time  `gorm:"autoCreateTime" json:"created_at"`

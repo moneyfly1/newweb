@@ -1,3 +1,9 @@
+// 合并所有全局样式，减少渲染阻塞的 CSS 文件数量
+@import '../../styles/unified.css';
+@import '../../styles/admin-mobile.css';
+@import '../../styles/mobile-cards.css';
+@import '../../styles/text-selection.css';
+
 * {
   margin: 0;
   padding: 0;

@@ -68,6 +68,11 @@ func userPrefAllowed(user *models.User, emailTemplate string) bool {
 
 // NotifyUser sends an email notification to a user, respecting system-level and user-level preferences.
 func NotifyUser(userID uint, emailTemplate string, data map[string]string) {
+	defer func() {
+		if r := recover(); r != nil {
+			utils.SysError("notify", fmt.Sprintf("NotifyUser panic: %v", r))
+		}
+	}()
 	// Check system-level toggle
 	sysKey := userNotifySettingKey(emailTemplate)
 	if sysKey != "" {
@@ -90,6 +95,11 @@ func NotifyUser(userID uint, emailTemplate string, data map[string]string) {
 
 // NotifyUserDirect sends an email to a specific address (for pre-registration or deleted users).
 func NotifyUserDirect(email, emailTemplate string, data map[string]string) {
+	defer func() {
+		if r := recover(); r != nil {
+			utils.SysError("notify", fmt.Sprintf("NotifyUserDirect panic: %v", r))
+		}
+	}()
 	sysKey := userNotifySettingKey(emailTemplate)
 	if sysKey != "" {
 		settings := utils.GetSettings(sysKey)
@@ -103,6 +113,11 @@ func NotifyUserDirect(email, emailTemplate string, data map[string]string) {
 
 // NotifyAdmin sends notifications to admin via all configured and enabled channels.
 func NotifyAdmin(eventType string, data map[string]string) {
+	defer func() {
+		if r := recover(); r != nil {
+			utils.SysError("notify", fmt.Sprintf("NotifyAdmin panic: %v", r))
+		}
+	}()
 	settingKey := ""
 	switch eventType {
 	case "new_order":

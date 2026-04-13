@@ -4,7 +4,6 @@ import { resolve } from 'path'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { NaiveUiResolver } from 'unplugin-vue-components/resolvers'
-import { compression } from 'vite-plugin-compression2'
 
 export default defineConfig({
   plugins: [
@@ -20,7 +19,6 @@ export default defineConfig({
     Components({
       resolvers: [NaiveUiResolver()],
     }),
-    compression({ algorithm: 'brotliCompress', threshold: 10240 }),
   ],
   resolve: {
     alias: {
@@ -56,10 +54,13 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          'naive-ui': ['naive-ui'],
-          'echarts': ['echarts', 'vue-echarts'],
-          'vendor': ['vue', 'vue-router', 'pinia', 'axios'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('naive-ui')) return 'naive-ui'
+            if (id.includes('echarts') || id.includes('zrender')) return 'echarts'
+            if (id.includes('vue-echarts')) return 'echarts'
+            if (id.includes('vue') || id.includes('vue-router') || id.includes('pinia') || id.includes('axios')) return 'vendor'
+          }
         },
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',

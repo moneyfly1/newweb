@@ -31,7 +31,7 @@ func GetPublicConfig(c *gin.Context) {
 		"custom_package_min_devices", "custom_package_max_devices",
 		"custom_package_min_months", "custom_package_duration_discounts",
 	}
-	db.Where("is_public = ? OR `key` IN ?", true, publicKeys).Find(&configs)
+	db.Select("`key`, value").Where("is_public = ? OR `key` IN ?", true, publicKeys).Find(&configs)
 	result := make(map[string]string)
 	for _, cfg := range configs {
 		result[cfg.Key] = cfg.Value

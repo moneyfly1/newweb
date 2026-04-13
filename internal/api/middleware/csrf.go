@@ -106,6 +106,16 @@ func generateCSRFToken(userID uint) string {
 		}
 	}
 
+	// 安全上限：防止极端情况下 map 无限增长
+	if len(store.tokens) > 50000 {
+		now := time.Now()
+		for uid, t := range store.tokens {
+			if now.Sub(t.createdAt) > csrfTokenExpiry {
+				delete(store.tokens, uid)
+			}
+		}
+	}
+
 	return generateNewToken(userID)
 }
 

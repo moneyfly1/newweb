@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { prefetchCSRFToken } from '@/utils/request'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -96,6 +97,7 @@ router.beforeEach(async (to, _from, next) => {
 
   if (userStore.token && !userStore.userInfo) {
     try {
+      prefetchCSRFToken()
       await userStore.fetchUser()
     } catch {
       userStore.logout(true)

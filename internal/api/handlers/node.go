@@ -262,13 +262,18 @@ func BatchTestNodes(c *gin.Context) {
 	)
 	now := time.Now()
 
+	// 限制并发测试数量，避免大量 goroutine 耗尽资源
+	sem := make(chan struct{}, 20)
+
 	for _, node := range nodes {
 		if node.Config == nil || *node.Config == "" {
 			continue
 		}
 		wg.Add(1)
+		sem <- struct{}{}
 		go func(n models.Node) {
 			defer wg.Done()
+			defer func() { <-sem }()
 			latency, reachable := testNodeConnectivity(*n.Config)
 			status := "offline"
 			if reachable {

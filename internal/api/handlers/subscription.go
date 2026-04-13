@@ -355,19 +355,13 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 // fetchUserCustomNodes returns custom nodes assigned to a user, converted to models.Node format.
 // subExpireTime is the user's subscription expiry, used for FollowUserExpire nodes.
 func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) []models.Node {
-	var assignments []models.UserCustomNode
-	db.Where("user_id = ?", userID).Find(&assignments)
-	if len(assignments) == 0 {
+	var customNodes []models.CustomNode
+	db.Joins("JOIN user_custom_nodes ON user_custom_nodes.custom_node_id = custom_nodes.id").
+		Where("user_custom_nodes.user_id = ? AND custom_nodes.is_active = ?", userID, true).
+		Find(&customNodes)
+	if len(customNodes) == 0 {
 		return nil
 	}
-
-	var customNodeIDs []uint
-	for _, a := range assignments {
-		customNodeIDs = append(customNodeIDs, a.CustomNodeID)
-	}
-
-	var customNodes []models.CustomNode
-	db.Where("id IN ? AND is_active = ?", customNodeIDs, true).Find(&customNodes)
 
 	now := time.Now()
 	var nodes []models.Node

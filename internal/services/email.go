@@ -146,6 +146,11 @@ func buildMIME(from, to, subject, body string) string {
 // QueueEmail inserts an email into the email_queue table.
 // A background worker or the caller can process it later.
 func QueueEmail(toEmail, subject, content, emailType string) {
+	defer func() {
+		if r := recover(); r != nil {
+			utils.SysError("email", fmt.Sprintf("QueueEmail panic: %v", r))
+		}
+	}()
 	db := database.GetDB()
 	if err := db.Create(&models.EmailQueue{
 		ToEmail:     toEmail,

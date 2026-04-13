@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { login as loginApi, telegramLogin as telegramLoginApi } from '@/api/auth'
 import { getCurrentUser } from '@/api/user'
-import request, { clearRequestSessionCache } from '@/utils/request'
+import request, { clearRequestSessionCache, prefetchCSRFToken } from '@/utils/request'
 
 export interface UserInfo {
   id: number
@@ -30,6 +30,7 @@ export const useUserStore = defineStore('user', () => {
     refreshTokenVal.value = res.data.refresh_token || ''
     localStorage.setItem('token', token.value)
     localStorage.setItem('refresh_token', refreshTokenVal.value)
+    prefetchCSRFToken()
     // Login response includes user info, use it directly
     if (res.data.user) {
       userInfo.value = res.data.user
@@ -61,6 +62,7 @@ export const useUserStore = defineStore('user', () => {
     refreshTokenVal.value = res.data.refresh_token || ''
     localStorage.setItem('token', token.value)
     localStorage.setItem('refresh_token', refreshTokenVal.value)
+    prefetchCSRFToken()
     if (res.data.user) {
       userInfo.value = res.data.user
     } else {

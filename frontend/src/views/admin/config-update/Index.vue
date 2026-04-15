@@ -265,10 +265,20 @@ onMounted(() => {
         ghostClass: 'sortable-ghost',
         onEnd: (evt) => {
           const { oldIndex, newIndex } = evt
-          if (oldIndex !== newIndex) {
-            const item = config.urls.splice(oldIndex, 1)[0]
-            config.urls.splice(newIndex, 0, item)
+          if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
+
+          // Revert the DOM move that Sortable did — let Vue handle rendering
+          const parent = evt.from
+          const children = parent.children
+          if (evt.oldIndex < evt.newIndex) {
+            parent.insertBefore(evt.item, children[evt.oldIndex] || null)
+          } else {
+            parent.insertBefore(evt.item, children[evt.oldIndex + 1] || null)
           }
+
+          // Now update the reactive array — Vue will re-render correctly
+          const item = config.urls.splice(oldIndex, 1)[0]
+          config.urls.splice(newIndex, 0, item)
         }
       })
     }

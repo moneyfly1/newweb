@@ -9,13 +9,46 @@
         <n-space>
           <n-input
             v-model:value="searchQuery"
-            placeholder="搜索节点名称 / 地区 / 协议"
+            placeholder="搜索名称 / 地区 / 协议 / 域名"
             clearable
-            style="width: 250px"
+            style="width: 260px"
             @keyup.enter="handleSearch"
+            @clear="handleSearch"
           >
             <template #prefix><n-icon :component="SearchOutline" /></template>
           </n-input>
+          <n-select
+            v-model:value="filterSource"
+            placeholder="来源"
+            clearable
+            :options="sourceOptions"
+            style="width: 130px"
+            @update:value="handleSearch"
+          />
+          <n-select
+            v-model:value="filterManual"
+            placeholder="手动/自动"
+            clearable
+            :options="[{ label: '手动添加', value: '1' }, { label: '自动采集', value: '0' }]"
+            style="width: 130px"
+            @update:value="handleSearch"
+          />
+          <n-select
+            v-model:value="filterRegion"
+            placeholder="地区"
+            clearable
+            :options="regionOptions"
+            style="width: 130px"
+            @update:value="handleSearch"
+          />
+          <n-select
+            v-model:value="filterStatus"
+            placeholder="状态"
+            clearable
+            :options="[{ label: '在线', value: 'online' }, { label: '离线', value: 'offline' }]"
+            style="width: 110px"
+            @update:value="handleSearch"
+          />
           <n-button secondary @click="handleRefresh" :loading="loading">
             <template #icon><n-icon><refresh-outline /></n-icon></template>
             刷新
@@ -38,13 +71,22 @@
       <div class="mobile-toolbar-controls">
         <n-input
           v-model:value="searchQuery"
-          placeholder="搜索节点名称"
+          placeholder="搜索名称 / 域名"
           clearable
           size="small"
           @keyup.enter="handleSearch"
+          @clear="handleSearch"
         >
           <template #prefix><n-icon :component="SearchOutline" /></template>
         </n-input>
+        <div class="mobile-toolbar-row">
+          <n-select v-model:value="filterSource" placeholder="来源" clearable :options="sourceOptions" size="small" @update:value="handleSearch" />
+          <n-select v-model:value="filterManual" placeholder="手动/自动" clearable :options="[{ label: '手动', value: '1' }, { label: '自动', value: '0' }]" size="small" @update:value="handleSearch" />
+        </div>
+        <div class="mobile-toolbar-row">
+          <n-select v-model:value="filterRegion" placeholder="地区" clearable :options="regionOptions" size="small" @update:value="handleSearch" />
+          <n-select v-model:value="filterStatus" placeholder="状态" clearable :options="[{ label: '在线', value: 'online' }, { label: '离线', value: 'offline' }]" size="small" @update:value="handleSearch" />
+        </div>
         <div class="mobile-toolbar-row">
           <n-button size="small" secondary @click="handleRefresh" :loading="loading">
             <template #icon><n-icon><refresh-outline /></n-icon></template>
@@ -212,7 +254,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, h, onMounted } from 'vue'
+import { ref, reactive, h, onMounted, computed } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage, useDialog, type DataTableColumns, type FormInst, type TagProps } from 'naive-ui'
 import {
   CloudDownloadOutline, LinkOutline, RefreshOutline,
@@ -240,6 +282,19 @@ const checkedRowKeys = ref<number[]>([])
 const subscriptionUrl = ref('')
 const nodeLinks = ref('')
 const searchQuery = ref('')
+const filterSource = ref<string | null>(null)
+const filterManual = ref<string | null>(null)
+const filterRegion = ref<string | null>(null)
+const filterStatus = ref<string | null>(null)
+
+const sourceOptions = computed(() => {
+  const indexes = [...new Set(tableData.value.map((n: any) => n.source_index).filter((v: number) => v > 0))].sort((a, b) => a - b)
+  return indexes.map((i: number) => ({ label: `订阅 #${i}`, value: String(i) }))
+})
+const regionOptions = computed(() => {
+  const regions = [...new Set(tableData.value.map((n: any) => n.region).filter(Boolean))].sort()
+  return regions.map((r: string) => ({ label: r, value: r }))
+})
 
 const sortState = ref({ sort: 'order_index', order: 'asc' })
 const pagination = reactive({ page: 1, pageSize: 20, itemCount: 0, showSizePicker: true, pageSizes: [20, 50, 100] })
@@ -338,7 +393,11 @@ const fetchData = async () => {
       page_size: pagination.pageSize,
       sort: sortState.value.sort,
       order: sortState.value.order,
-      search: searchQuery.value || undefined
+      search: searchQuery.value || undefined,
+      source_index: filterSource.value || undefined,
+      is_manual: filterManual.value || undefined,
+      region: filterRegion.value || undefined,
+      status: filterStatus.value || undefined
     })
     tableData.value = res.data.items || []
     pagination.itemCount = res.data.total || 0

@@ -1293,9 +1293,17 @@ func AdminListNodes(c *gin.Context) {
 	if region := c.Query("region"); region != "" {
 		query = query.Where("region = ?", region)
 	}
+	if sourceIndex := c.Query("source_index"); sourceIndex != "" {
+		if si, err := strconv.Atoi(sourceIndex); err == nil {
+			query = query.Where("source_index = ?", si)
+		}
+	}
+	if isManual := c.Query("is_manual"); isManual != "" {
+		query = query.Where("is_manual = ?", isManual == "1" || isManual == "true")
+	}
 	if search := c.Query("search"); search != "" {
 		like := "%" + search + "%"
-		query = query.Where("name LIKE ? OR region LIKE ? OR type LIKE ? OR description LIKE ?", like, like, like, like)
+		query = query.Where("name LIKE ? OR region LIKE ? OR type LIKE ? OR description LIKE ? OR config LIKE ?", like, like, like, like, like)
 	}
 
 	var total int64

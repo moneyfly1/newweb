@@ -56,10 +56,8 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('naive-ui')) return 'naive-ui'
-            if (id.includes('echarts') || id.includes('zrender')) return 'echarts'
-            if (id.includes('vue-echarts')) return 'echarts'
-            if (id.includes('vue') || id.includes('vue-router') || id.includes('pinia') || id.includes('axios')) return 'vendor'
+            if (id.includes('echarts') || id.includes('zrender') || id.includes('vue-echarts')) return 'echarts'
+            if (id.includes('naive-ui') || id.includes('vue') || id.includes('vue-router') || id.includes('pinia') || id.includes('axios')) return 'vendor'
           }
         },
         chunkFileNames: 'assets/js/[name]-[hash].js',

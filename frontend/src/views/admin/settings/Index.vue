@@ -231,6 +231,32 @@
                     <n-button secondary @click="handleUpdateGeoIP">更新 GeoIP 数据库</n-button>
                   </n-space>
                 </div>
+
+                <!-- 协议过滤 -->
+                <div v-else-if="activeTab === 'protocol'" key="protocol">
+                  <n-alert type="info" style="margin-bottom: 24px;">
+                    控制每种订阅格式包含哪些代理协议。取消勾选的协议将不会出现在对应的订阅配置中。未配置时默认包含所有协议。
+                  </n-alert>
+
+                  <n-h3 prefix="bar">Clash / Stash 订阅协议</n-h3>
+                  <n-checkbox-group v-model:value="protocolFilter.clash_protocols">
+                    <n-space>
+                      <n-checkbox v-for="p in ALL_PROTOCOLS" :key="'clash-'+p" :value="p" :label="p" />
+                    </n-space>
+                  </n-checkbox-group>
+
+                  <n-divider />
+
+                  <n-h3 prefix="bar">通用订阅协议 (Shadowrocket / Surge / QuantumultX / Loon / SingBox)</n-h3>
+                  <n-checkbox-group v-model:value="protocolFilter.universal_protocols">
+                    <n-space>
+                      <n-checkbox v-for="p in ALL_PROTOCOLS" :key="'uni-'+p" :value="p" :label="p" />
+                    </n-space>
+                  </n-checkbox-group>
+
+                  <n-divider />
+                  <n-button type="primary" :loading="savingProtocol" @click="handleSaveProtocolFilter">保存协议过滤设置</n-button>
+                </div>
               </transition>
             </div>
           </n-spin>
@@ -250,11 +276,12 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
-import { 
-  SaveOutline, SettingsOutline, RocketOutline, CardOutline, 
-  MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline 
+import {
+  SaveOutline, SettingsOutline, RocketOutline, CardOutline,
+  MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline,
+  FunnelOutline
 } from '@vicons/ionicons5'
-import { getSettings, updateSettings, sendTestEmail, testTelegram, testBark, createBackup, listBackups, updateGeoIPFiles } from '@/api/admin'
+import { getSettings, updateSettings, sendTestEmail, testTelegram, testBark, createBackup, listBackups, updateGeoIPFiles, getProtocolFilter, updateProtocolFilter } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -275,6 +302,7 @@ const menuOptions = [
   { label: '邮件服务', key: 'email', icon: MailOutline },
   { label: '通知监控', key: 'notify', icon: NotificationsOutline },
   { label: '安全维护', key: 'security', icon: ShieldCheckmarkOutline },
+  { label: '协议过滤', key: 'protocol', icon: FunnelOutline },
 ]
 
 const encryptionOptions = [
@@ -310,6 +338,36 @@ const form = ref<Record<string, any>>({
   backup_github_enabled: false, backup_github_token: '', backup_github_repo: '',
   checkin_enabled: true, checkin_min_reward: 10, checkin_max_reward: 50
 })
+
+const ALL_PROTOCOLS = [
+  'vmess', 'vless', 'trojan', 'ss', 'ssr', 'hysteria', 'hysteria2',
+  'tuic', 'anytls', 'socks', 'socks5', 'http', 'wireguard'
+]
+const protocolFilter = ref({
+  clash_protocols: [...ALL_PROTOCOLS],
+  universal_protocols: [...ALL_PROTOCOLS]
+})
+const savingProtocol = ref(false)
+
+const loadProtocolFilter = async () => {
+  try {
+    const res = await getProtocolFilter()
+    if (res.code === 0 && res.data) {
+      if (res.data.clash_protocols) protocolFilter.value.clash_protocols = res.data.clash_protocols
+      if (res.data.universal_protocols) protocolFilter.value.universal_protocols = res.data.universal_protocols
+    }
+  } catch {}
+}
+
+const handleSaveProtocolFilter = async () => {
+  savingProtocol.value = true
+  try {
+    const res = await updateProtocolFilter(protocolFilter.value)
+    if (res.code === 0) message.success('协议过滤设置已保存')
+  } finally {
+    savingProtocol.value = false
+  }
+}
 
 const maskedFields = ref<Set<string>>(new Set())
 const sensitiveKeys = ['smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key', 'pay_epay_secret_key', 'pay_codepay_secret_key', 'pay_stripe_secret_key', 'pay_stripe_webhook_secret', 'notify_telegram_bot_token', 'backup_github_token']
@@ -433,7 +491,7 @@ const handleUpdateGeoIP = async () => {
   } catch {}
 }
 
-onMounted(() => loadSettings())
+onMounted(() => { loadSettings(); loadProtocolFilter() })
 </script>
 
 <style scoped>

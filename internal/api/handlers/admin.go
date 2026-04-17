@@ -4557,6 +4557,81 @@ func AdminBatchNodeAction(c *gin.Context) {
 
 // ==================== Check-In Stats ====================
 
+var defaultProtocolFilter = map[string][]string{
+	"clash_protocols":     {"vmess", "vless", "trojan", "ss", "ssr", "hysteria", "hysteria2", "tuic", "anytls", "socks5", "http", "wireguard"},
+	"universal_protocols": {"vmess", "vless", "trojan", "ss", "ssr", "hysteria", "hysteria2", "tuic", "anytls", "socks", "socks5", "http", "wireguard"},
+}
+
+func AdminGetProtocolFilter(c *gin.Context) {
+	db := database.GetDB()
+	result := make(map[string][]string)
+	for _, key := range []string{"clash_protocols", "universal_protocols"} {
+		var cfg models.SystemConfig
+		if err := db.Where("category = ? AND `key` = ?", "protocol_filter", key).First(&cfg).Error; err == nil && cfg.Value != "" {
+			var protocols []string
+			if json.Unmarshal([]byte(cfg.Value), &protocols) == nil {
+				result[key] = protocols
+				continue
+			}
+		}
+		result[key] = defaultProtocolFilter[key]
+	}
+	utils.Success(c, result)
+}
+
+func AdminUpdateProtocolFilter(c *gin.Context) {
+	var req map[string][]string
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+	db := database.GetDB()
+	for _, key := range []string{"clash_protocols", "universal_protocols"} {
+		protocols, ok := req[key]
+		if !ok {
+			continue
+		}
+		val, _ := json.Marshal(protocols)
+		result := db.Model(&models.SystemConfig{}).Where("category = ? AND `key` = ?", "protocol_filter", key).Updates(map[string]interface{}{"value": string(val)})
+		if result.Error == nil && result.RowsAffected == 0 {
+			db.Create(&models.SystemConfig{Category: "protocol_filter", Key: key, Value: string(val)})
+		}
+	}
+	utils.CreateAuditLog(c, "update_protocol_filter", "settings", 0, "更新协议过滤设置")
+	utils.InvalidateSettingsCache()
+	utils.SuccessMessage(c, "协议过滤设置已保存")
+}
+
+func GetProtocolFilter(filterType string) map[string]bool {
+	db := database.GetDB()
+	var cfg models.SystemConfig
+	if err := db.Where("category = ? AND `key` = ?", "protocol_filter", filterType).First(&cfg).Error; err != nil || cfg.Value == "" {
+		return nil
+	}
+	var protocols []string
+	if json.Unmarshal([]byte(cfg.Value), &protocols) != nil {
+		return nil
+	}
+	m := make(map[string]bool, len(protocols))
+	for _, p := range protocols {
+		m[p] = true
+	}
+	return m
+}
+
+func FilterNodesByProtocol(nodes []models.Node, allowed map[string]bool) []models.Node {
+	if allowed == nil {
+		return nodes
+	}
+	var result []models.Node
+	for _, n := range nodes {
+		if allowed[n.Type] {
+			result = append(result, n)
+		}
+	}
+	return result
+}
+
 func AdminGetCheckInStats(c *gin.Context) {
 	db := database.GetDB()
 	today := time.Now().Format("2006-01-02")

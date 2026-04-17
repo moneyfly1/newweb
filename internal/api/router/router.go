@@ -385,6 +385,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			settings.POST("/test-bark", handlers.AdminTestBark)
 			settings.POST("/update-geoip", handlers.AdminUpdateGeoIP)
 			settings.POST("/backfill-locations", handlers.AdminBackfillLocations)
+			settings.GET("/protocol-filter", handlers.AdminGetProtocolFilter)
+			settings.PUT("/protocol-filter", handlers.AdminUpdateProtocolFilter)
 		}
 
 		// 公告

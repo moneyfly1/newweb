@@ -289,34 +289,31 @@ func (s *ConfigUpdateService) runUpdate() {
 	}
 
 	// Insert new nodes, respecting manual node positions.
-	// Manual nodes keep their order_index. Auto nodes fill around them.
-	// Strategy: assign auto nodes order_index based on source order,
-	// placing them before or after manual nodes depending on manual nodes' positions.
+	// Manual nodes keep their order_index unchanged. Auto nodes fill around them.
 	var manualNodes []models.Node
 	db.Where("is_manual = ?", true).Order("order_index ASC").Find(&manualNodes)
 
-	// Build final ordered list: each subscription source gets a block,
-	// manual nodes are placed at their source_index position (0 = no source = end).
-	// Simple approach: auto nodes get sequential indices, manual nodes with
-	// order_index > max auto index stay at end, others keep their position.
-	totalAuto := len(allNodes)
+	// Collect manual node occupied positions
+	manualPositions := make(map[int]bool, len(manualNodes))
+	for _, mn := range manualNodes {
+		manualPositions[mn.OrderIndex] = true
+	}
+
+	// Assign auto nodes sequential order_index, skipping positions occupied by manual nodes
 	successCount := 0
-	for i, node := range allNodes {
+	slot := 0
+	for _, node := range allNodes {
+		for manualPositions[slot] {
+			slot++
+		}
 		node.IsManual = false
-		node.OrderIndex = i
+		node.OrderIndex = slot
 		if err := db.Create(&node).Error; err == nil {
 			successCount++
 		} else {
 			s.addLog("error", fmt.Sprintf("导入节点失败(%s): %v", node.Name, err))
 		}
-	}
-
-	// Update manual nodes: if their order_index < totalAuto, shift them to end
-	for i, mn := range manualNodes {
-		newOrder := totalAuto + i
-		if err := db.Model(&models.Node{}).Where("id = ?", mn.ID).Update("order_index", newOrder).Error; err != nil {
-			s.addLog("error", fmt.Sprintf("更新手动节点排序失败(%s): %v", mn.Name, err))
-		}
+		slot++
 	}
 
 	s.addLog("success", fmt.Sprintf("更新完成: 共 %d 个节点，成功导入 %d 个", len(allNodes), successCount))

@@ -217,12 +217,15 @@ func (s *ConfigUpdateService) runUpdate() {
 	}
 
 	var allNodes []models.Node
+	realSourceIdx := 0
 
-	for urlIdx, u := range cfg.URLs {
+	for _, u := range cfg.URLs {
 		u = strings.TrimSpace(u)
-		if u == "" {
+		if u == "" || u == "__MANUAL_NODES__" {
 			continue
 		}
+
+		realSourceIdx++
 
 		// Check stop signal
 		if s.shouldStopRun() {
@@ -243,9 +246,8 @@ func (s *ConfigUpdateService) runUpdate() {
 			continue
 		}
 
-		// 记录订阅来源编号（从1开始）
 		for i := range nodes {
-			nodes[i].SourceIndex = urlIdx + 1
+			nodes[i].SourceIndex = realSourceIdx
 		}
 
 		s.addLog("info", fmt.Sprintf("从 %s 解析到 %d 个节点", u, len(nodes)))
@@ -289,22 +291,49 @@ func (s *ConfigUpdateService) runUpdate() {
 	}
 
 	// Insert new nodes, respecting manual node positions.
-	// Manual nodes keep their order_index unchanged. Auto nodes fill around them.
+	// Manual nodes keep their order_index based on the "__MANUAL_NODES__" placeholder
+	// position in the URL list. Auto nodes fill around them.
 	var manualNodes []models.Node
 	db.Where("is_manual = ?", true).Order("order_index ASC").Find(&manualNodes)
 
-	// Collect manual node occupied positions
-	manualPositions := make(map[int]bool, len(manualNodes))
-	for _, mn := range manualNodes {
-		manualPositions[mn.OrderIndex] = true
+	// Find where __MANUAL_NODES__ placeholder is in the URL list.
+	// Count how many real URLs come before it to determine manual node insertion point.
+	manualInsertAfterSource := -1 // -1 means no placeholder found, default to end
+	realURLIndex := 0
+	for _, u := range cfg.URLs {
+		u = strings.TrimSpace(u)
+		if u == "__MANUAL_NODES__" {
+			manualInsertAfterSource = realURLIndex
+			break
+		}
+		if u != "" {
+			realURLIndex++
+		}
 	}
 
-	// Assign auto nodes sequential order_index, skipping positions occupied by manual nodes
+	// Count nodes per source to find the insertion point
+	manualInsertAt := len(allNodes) // default: end
+	if manualInsertAfterSource >= 0 {
+		manualInsertAt = 0
+		for _, n := range allNodes {
+			if n.SourceIndex <= manualInsertAfterSource {
+				manualInsertAt++
+			}
+		}
+	}
+
+	// Assign order_index: auto nodes get sequential slots, manual nodes inserted at manualInsertAt
 	successCount := 0
 	slot := 0
-	for _, node := range allNodes {
-		for manualPositions[slot] {
-			slot++
+	for i, node := range allNodes {
+		if i == manualInsertAt {
+			// Reserve slots for manual nodes
+			for j := range manualNodes {
+				if err := db.Model(&models.Node{}).Where("id = ?", manualNodes[j].ID).Update("order_index", slot).Error; err != nil {
+					s.addLog("error", fmt.Sprintf("更新手动节点排序失败(%s): %v", manualNodes[j].Name, err))
+				}
+				slot++
+			}
 		}
 		node.IsManual = false
 		node.OrderIndex = slot
@@ -314,6 +343,15 @@ func (s *ConfigUpdateService) runUpdate() {
 			s.addLog("error", fmt.Sprintf("导入节点失败(%s): %v", node.Name, err))
 		}
 		slot++
+	}
+	// If manual nodes go at the very end (or no auto nodes)
+	if manualInsertAt >= len(allNodes) {
+		for j := range manualNodes {
+			if err := db.Model(&models.Node{}).Where("id = ?", manualNodes[j].ID).Update("order_index", slot).Error; err != nil {
+				s.addLog("error", fmt.Sprintf("更新手动节点排序失败(%s): %v", manualNodes[j].Name, err))
+			}
+			slot++
+		}
 	}
 
 	s.addLog("success", fmt.Sprintf("更新完成: 共 %d 个节点，成功导入 %d 个", len(allNodes), successCount))

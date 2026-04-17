@@ -44,12 +44,21 @@
                   <n-icon size="20"><ReorderThreeOutline /></n-icon>
                 </div>
                 <div class="url-index">{{ index + 1 }}</div>
-                <n-input
-                  v-model:value="config.urls[index]"
-                  placeholder="请输入订阅URL"
-                  class="url-input"
-                />
+                <template v-if="url === '__MANUAL_NODES__'">
+                  <div class="url-input manual-placeholder">
+                    <n-tag type="warning" size="small" round>手动节点</n-tag>
+                    <n-text depth="3" style="margin-left: 8px; font-size: 12px">拖动此条目可调整手动节点在订阅中的显示位置</n-text>
+                  </div>
+                </template>
+                <template v-else>
+                  <n-input
+                    v-model:value="config.urls[index]"
+                    placeholder="请输入订阅URL"
+                    class="url-input"
+                  />
+                </template>
                 <n-button
+                  v-if="url !== '__MANUAL_NODES__'"
                   text
                   type="error"
                   @click="config.urls.splice(index, 1)"
@@ -63,16 +72,13 @@
                     </n-icon>
                   </template>
                 </n-button>
+                <div v-else style="width: 18px"></div>
               </div>
             </div>
-            <n-button
-              dashed
-              block
-              @click="config.urls.push('')"
-              style="margin-top: 8px"
-            >
-              + 添加订阅URL
-            </n-button>
+            <n-space style="margin-top: 8px">
+              <n-button dashed @click="config.urls.push('')" style="flex: 1">+ 添加订阅URL</n-button>
+              <n-button dashed type="warning" @click="addManualPlaceholder" :disabled="config.urls.includes('__MANUAL_NODES__')">+ 插入手动节点位置</n-button>
+            </n-space>
           </div>
         </n-form-item>
         <n-form-item label="关键词过滤">
@@ -186,6 +192,12 @@ const handleSaveConfig = async () => {
     message.error(error.message || '保存配置失败')
   } finally {
     saving.value = false
+  }
+}
+
+const addManualPlaceholder = () => {
+  if (!config.urls.includes('__MANUAL_NODES__')) {
+    config.urls.push('__MANUAL_NODES__')
   }
 }
 
@@ -375,6 +387,16 @@ onUnmounted(() => {
 
 .url-input {
   flex: 1;
+}
+
+.manual-placeholder {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 34px;
+  border: 1px dashed #e8a838;
+  border-radius: 4px;
+  background: rgba(232, 168, 56, 0.06);
 }
 
 .delete-btn {

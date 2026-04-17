@@ -578,6 +578,12 @@ func GetSubscription(c *gin.Context) {
 		incrementSubscriptionCounter(ctx.Sub, subType)
 	}
 
+	if useStash || useClash {
+		nodes = FilterNodesByProtocol(nodes, GetProtocolFilter("clash_protocols"))
+	} else {
+		nodes = FilterNodesByProtocol(nodes, GetProtocolFilter("universal_protocols"))
+	}
+
 	subscriptionName := generateSubscriptionName(ctx)
 
 	var responseData string

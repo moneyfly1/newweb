@@ -74,6 +74,8 @@ export const updateSettings = (data: any) => request.put('/admin/settings', data
 export const sendTestEmail = (data: { email: string }) => request.post('/admin/settings/test-email', data)
 export const testTelegram = () => request.post('/admin/settings/test-telegram')
 export const testBark = () => request.post('/admin/settings/test-bark')
+export const getProtocolFilter = () => request.get('/admin/settings/protocol-filter')
+export const updateProtocolFilter = (data: any) => request.put('/admin/settings/protocol-filter', data)
 
 // Announcements
 export const listAnnouncements = (params?: any) => request.get('/admin/announcements', { params })

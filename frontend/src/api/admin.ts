@@ -49,6 +49,8 @@ export const extendSubscription = (id: number, data: { days: number }) =>
   request.post(`/admin/subscriptions/${id}/extend`, data)
 export const updateSubscriptionDeviceLimit = (id: number, data: any) =>
   request.put(`/admin/subscriptions/${id}`, data)
+export const updateSubscriptionProtocolFilter = (id: number, protocolFilter: string) =>
+  request.put(`/admin/subscriptions/${id}`, { protocol_filter: protocolFilter })
 export const sendSubscriptionEmail = (id: number) =>
   request.post(`/admin/subscriptions/${id}/send-email`)
 export const setSubscriptionExpireTime = (id: number, data: { expire_time: string }) =>

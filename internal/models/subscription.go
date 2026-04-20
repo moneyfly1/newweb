@@ -14,6 +14,7 @@ type Subscription struct {
 	SurgeCount        int       `gorm:"default:0" json:"surge_count"`
 	QuanXCount        int       `gorm:"default:0" json:"quanx_count"`
 	ShadowrocketCount int       `gorm:"default:0" json:"shadowrocket_count"`
+	ProtocolFilter    string    `gorm:"type:text" json:"protocol_filter"` // JSON: {"clash":["vmess",...], "universal":["vmess",...]}; empty = use global
 	IsActive          bool      `gorm:"default:true;index:idx_active_expire" json:"is_active"`
 	Status            string    `gorm:"type:varchar(20);default:'active';index:idx_user_status" json:"status"`
 	ExpireTime        time.Time `gorm:"index:idx_active_expire" json:"expire_time"`

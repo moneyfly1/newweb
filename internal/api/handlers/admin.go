@@ -3433,7 +3433,7 @@ func AdminUpdateSubscription(c *gin.Context) {
 	}
 
 	allowed := map[string]bool{
-		"device_limit": true, "is_active": true, "expire_time": true,
+		"device_limit": true, "is_active": true, "expire_time": true, "protocol_filter": true,
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {

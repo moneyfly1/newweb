@@ -187,6 +187,28 @@
           <div class="url-row"><span class="url-label">Clash</span><code class="url-text">{{ detailData.clash_url }}</code></div>
         </div>
 
+        <n-divider>协议过滤 <n-tooltip trigger="hover"><template #trigger><n-icon size="14" style="cursor:help;vertical-align:middle"><information-circle-outline /></n-icon></template>留空则使用全局设置；勾选后仅订阅勾选的协议节点</n-tooltip></n-divider>
+        <div style="margin-bottom:8px">
+          <n-text depth="3" style="font-size:12px">Clash / Stash 订阅</n-text>
+          <n-checkbox-group v-model:value="detailProtocolFilter.clash" style="margin-top:6px">
+            <n-space>
+              <n-checkbox v-for="p in ALL_PROTOCOLS" :key="'dc-'+p" :value="p" :label="p" />
+            </n-space>
+          </n-checkbox-group>
+        </div>
+        <div style="margin-bottom:8px">
+          <n-text depth="3" style="font-size:12px">通用订阅 (V2RayN / Shadowrocket 等)</n-text>
+          <n-checkbox-group v-model:value="detailProtocolFilter.universal" style="margin-top:6px">
+            <n-space>
+              <n-checkbox v-for="p in ALL_PROTOCOLS" :key="'du-'+p" :value="p" :label="p" />
+            </n-space>
+          </n-checkbox-group>
+        </div>
+        <n-space style="margin-bottom:16px">
+          <n-button type="primary" size="small" :loading="savingProtocolFilter" @click="saveDetailProtocolFilter">保存协议过滤</n-button>
+          <n-button size="small" @click="clearDetailProtocolFilter">清除（使用全局）</n-button>
+        </n-space>
+
         <n-tabs type="line" class="tabs-spacing" animated>
           <n-tab-pane name="orders" tab="订单记录">
             <n-data-table v-if="(detailData.recent_orders||[]).length" :columns="orderCols" :data="detailData.recent_orders" :bordered="false" size="small" :max-height="240" />
@@ -245,7 +267,7 @@
 <script setup>
 import { ref, h, onMounted, nextTick } from 'vue'
 import { NButton, NTag, NSpace, NDatePicker, NInputNumber, NInput, NDataTable, NEmpty, useMessage, useDialog } from 'naive-ui'
-import { SearchOutline, RefreshOutline, PersonOutline, MailOutline, PowerOutline, TrashOutline, CopyOutline, QrCodeOutline } from '@vicons/ionicons5'
+import { SearchOutline, RefreshOutline, PersonOutline, MailOutline, PowerOutline, TrashOutline, CopyOutline, QrCodeOutline, InformationCircleOutline } from '@vicons/ionicons5'
 import QRCode from 'qrcode'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
@@ -256,7 +278,7 @@ import {
   listAdminSubscriptions, getAdminSubscription, resetAdminSubscription,
   extendSubscription, updateSubscriptionDeviceLimit, sendSubscriptionEmail,
   setSubscriptionExpireTime, deleteUserFull, toggleUserActive, loginAsUser,
-  deleteUserDevice, updateUserNotes
+  deleteUserDevice, updateUserNotes, updateSubscriptionProtocolFilter
 } from '@/api/admin'
 import '@/styles/admin-common.css'
 
@@ -278,6 +300,10 @@ const showSingleQRModal = ref(false)
 const singleQRUrl = ref('')
 const detailData = ref({})
 const checkedRowKeys = ref([])
+
+const ALL_PROTOCOLS = ['vmess', 'vless', 'trojan', 'ss', 'ssr', 'hysteria', 'hysteria2', 'tuic', 'anytls', 'socks', 'socks5', 'http', 'wireguard']
+const detailProtocolFilter = ref({ clash: [...ALL_PROTOCOLS], universal: [...ALL_PROTOCOLS] })
+const savingProtocolFilter = ref(false)
 
 const statusOptions = [
   { label: '全部', value: null }, { label: '活跃', value: 'active' },
@@ -530,8 +556,42 @@ const inlineSetDevice = async (row, v) => {
 }
 
 const handleViewDetail = async (row) => {
-  try { const res = await getAdminSubscription(row.id); detailData.value = res.data; showDetailDrawer.value = true }
-  catch { message.error('获取详情失败') }
+  try {
+    const res = await getAdminSubscription(row.id)
+    detailData.value = res.data
+    // Load per-subscription protocol filter
+    const pf = res.data.protocol_filter
+    if (pf) {
+      try {
+        const parsed = typeof pf === 'string' ? JSON.parse(pf) : pf
+        detailProtocolFilter.value.clash = parsed.clash_protocols || [...ALL_PROTOCOLS]
+        detailProtocolFilter.value.universal = parsed.universal_protocols || [...ALL_PROTOCOLS]
+      } catch { detailProtocolFilter.value = { clash: [...ALL_PROTOCOLS], universal: [...ALL_PROTOCOLS] } }
+    } else {
+      detailProtocolFilter.value = { clash: [...ALL_PROTOCOLS], universal: [...ALL_PROTOCOLS] }
+    }
+    showDetailDrawer.value = true
+  } catch { message.error('获取详情失败') }
+}
+
+const saveDetailProtocolFilter = async () => {
+  savingProtocolFilter.value = true
+  try {
+    const pf = JSON.stringify({ clash_protocols: detailProtocolFilter.value.clash, universal_protocols: detailProtocolFilter.value.universal })
+    await updateSubscriptionProtocolFilter(detailData.value.id, pf)
+    message.success('协议过滤已保存')
+  } catch { message.error('保存失败') }
+  finally { savingProtocolFilter.value = false }
+}
+
+const clearDetailProtocolFilter = async () => {
+  savingProtocolFilter.value = true
+  try {
+    await updateSubscriptionProtocolFilter(detailData.value.id, '')
+    detailProtocolFilter.value = { clash: [...ALL_PROTOCOLS], universal: [...ALL_PROTOCOLS] }
+    message.success('已清除，将使用全局协议过滤设置')
+  } catch { message.error('清除失败') }
+  finally { savingProtocolFilter.value = false }
 }
 const handleLoginAs = async (row) => {
   try {

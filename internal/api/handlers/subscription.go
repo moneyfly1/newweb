@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -579,9 +580,13 @@ func GetSubscription(c *gin.Context) {
 	}
 
 	if useStash || useClash {
-		nodes = FilterNodesByProtocol(nodes, GetProtocolFilter("clash_protocols"))
+		nodes = FilterNodesByProtocol(nodes, getEffectiveProtocolFilter(ctx.Sub, "clash"))
 	} else {
-		nodes = FilterNodesByProtocol(nodes, GetProtocolFilter("universal_protocols"))
+		nodes = FilterNodesByProtocol(nodes, getEffectiveProtocolFilter(ctx.Sub, "universal"))
+		// V2RayN 通用订阅不支持 socks 节点，自动排除
+		if ctx.ClientInfo != nil && isV2RayNClient(ctx.ClientInfo.SoftwareName) {
+			nodes = FilterNodesByProtocol(nodes, excludeProtocols(nodes, "socks", "socks5"))
+		}
 	}
 
 	subscriptionName := generateSubscriptionName(ctx)
@@ -985,4 +990,47 @@ func DeleteSubscriptionDevice(c *gin.Context) {
 		return
 	}
 	utils.SuccessMessage(c, "设备已删除")
+}
+
+// getEffectiveProtocolFilter returns per-subscription filter if set, else falls back to global.
+// filterType: "clash" or "universal"
+func getEffectiveProtocolFilter(sub *models.Subscription, filterType string) map[string]bool {
+	if sub != nil && sub.ProtocolFilter != "" {
+		var pf map[string][]string
+		if json.Unmarshal([]byte(sub.ProtocolFilter), &pf) == nil {
+			key := filterType + "_protocols"
+			if protocols, ok := pf[key]; ok && len(protocols) > 0 {
+				m := make(map[string]bool, len(protocols))
+				for _, p := range protocols {
+					m[p] = true
+				}
+				return m
+			}
+		}
+	}
+	globalKey := filterType + "_protocols"
+	return GetProtocolFilter(globalKey)
+}
+
+// isV2RayNClient returns true for V2RayN (Windows) clients.
+func isV2RayNClient(softwareName string) bool {
+	return softwareName == "v2rayN"
+}
+
+// excludeProtocols builds an allowed map from existing nodes, excluding specified protocols.
+func excludeProtocols(nodes []models.Node, excluded ...string) map[string]bool {
+	excl := make(map[string]bool, len(excluded))
+	for _, e := range excluded {
+		excl[e] = true
+	}
+	allowed := make(map[string]bool)
+	for _, n := range nodes {
+		if !excl[n.Type] {
+			allowed[n.Type] = true
+		}
+	}
+	if len(allowed) == 0 {
+		return nil
+	}
+	return allowed
 }

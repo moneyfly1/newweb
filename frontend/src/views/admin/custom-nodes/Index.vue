@@ -229,8 +229,17 @@
             :loading="loadingUsers"
           />
         </n-form-item>
+        <n-form-item label="专线独立到期时间（可选）">
+          <n-date-picker
+            v-model:value="assignExpiresAt"
+            type="datetime"
+            clearable
+            style="width: 100%"
+            placeholder="不设置则跟随订阅到期时间"
+          />
+        </n-form-item>
         <n-alert type="info" style="margin-top: 12px">
-          选中的用户将可以使用此专线节点
+          设置独立到期时间后，用户订阅将只显示专线节点，且不受设备数量限制。
         </n-alert>
       </n-form>
     </common-drawer>
@@ -328,6 +337,7 @@ const editId = ref(null)
 const assignNodeId = ref(null)
 const assignNodeIds = ref([])
 const assignUserIds = ref([])
+const assignExpiresAt = ref(null)
 const userOptions = ref([])
 const showImportDrawer = ref(false)
 const showLinkModal = ref(false)
@@ -648,17 +658,21 @@ const handleAssignSubmit = async () => {
     return
   }
 
+  const expiresAt = assignExpiresAt.value ? new Date(assignExpiresAt.value).toISOString() : null
+
   assigning.value = true
   try {
     if (assignNodeIds.value.length === 1) {
       await assignCustomNode(assignNodeIds.value[0], {
-        user_ids: assignUserIds.value
+        user_ids: assignUserIds.value,
+        expires_at: expiresAt
       })
       message.success('分配节点成功')
     } else {
       const res = await batchAssignCustomNodes({
         ids: assignNodeIds.value,
-        user_ids: assignUserIds.value
+        user_ids: assignUserIds.value,
+        expires_at: expiresAt
       })
       const successCount = res.data?.success || 0
       const totalCount = res.data?.total || assignNodeIds.value.length
@@ -673,6 +687,7 @@ const handleAssignSubmit = async () => {
     checkedRowKeys.value = []
     assignNodeId.value = null
     assignNodeIds.value = []
+    assignExpiresAt.value = null
     fetchData()
   } catch (error) {
     message.error(error.message || '分配节点失败')

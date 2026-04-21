@@ -178,11 +178,18 @@ type clashSubscription struct {
 	Proxies []map[string]interface{} `yaml:"proxies"`
 }
 
-// ParseSubscriptionContent parses either Clash YAML subscriptions or traditional node links.
+// ParseSubscriptionContent parses either Clash YAML subscriptions, JSON node lists, or traditional node links.
 func ParseSubscriptionContent(content string) ([]models.Node, error) {
 	content = normalizeSubscriptionContent(content)
 	if content == "" {
 		return nil, nil
+	}
+
+	// Try JSON extraction (e.g. {"data":[{"vmessLink":"..."}]})
+	if len(content) > 0 && (content[0] == '{' || content[0] == '[') {
+		if nodes, ok := parseJSONNodeList(content); ok {
+			return nodes, nil
+		}
 	}
 
 	if nodes, ok, err := parseClashSubscription(content); ok {
@@ -190,6 +197,59 @@ func ParseSubscriptionContent(content string) ([]models.Node, error) {
 	}
 
 	return ParseNodeLinks(content)
+}
+
+// parseJSONNodeList recursively walks any JSON structure and collects proxy links.
+func parseJSONNodeList(content string) ([]models.Node, bool) {
+	var raw interface{}
+	if err := json.Unmarshal([]byte(content), &raw); err != nil {
+		return nil, false
+	}
+	links := extractProxyLinksFromJSON(raw)
+	if len(links) == 0 {
+		return nil, false
+	}
+	var nodes []models.Node
+	seen := make(map[string]bool)
+	for _, link := range links {
+		if seen[link] {
+			continue
+		}
+		seen[link] = true
+		node, err := parseNodeFromLine(link)
+		if err == nil && node != nil {
+			nodes = append(nodes, *node)
+		}
+	}
+	return nodes, len(nodes) > 0
+}
+
+var proxyLinkPrefixes = []string{
+	"vmess://", "vless://", "trojan://", "ss://", "ssr://",
+	"hysteria://", "hysteria2://", "tuic://", "naive+", "anytls://", "wireguard://",
+}
+
+func extractProxyLinksFromJSON(v interface{}) []string {
+	var links []string
+	switch val := v.(type) {
+	case string:
+		s := strings.TrimSpace(val)
+		for _, prefix := range proxyLinkPrefixes {
+			if strings.HasPrefix(s, prefix) {
+				links = append(links, s)
+				break
+			}
+		}
+	case []interface{}:
+		for _, item := range val {
+			links = append(links, extractProxyLinksFromJSON(item)...)
+		}
+	case map[string]interface{}:
+		for _, item := range val {
+			links = append(links, extractProxyLinksFromJSON(item)...)
+		}
+	}
+	return links
 }
 
 func ExtractDomainPortFromNodeLink(link string) (string, int, error) {

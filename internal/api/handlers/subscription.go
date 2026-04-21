@@ -45,14 +45,15 @@ var (
 
 // subscriptionContext holds all info needed for subscription generation
 type subscriptionContext struct {
-	Sub            *models.Subscription
-	Nodes          []models.Node
-	Status         subscriptionStatus
-	SiteURL        string
-	SupportContact string
-	CurrentDevices int
-	DeviceLimit    int
-	ClientInfo     *services.ClientInfo
+	Sub               *models.Subscription
+	Nodes             []models.Node
+	Status            subscriptionStatus
+	SiteURL           string
+	SupportContact    string
+	CurrentDevices    int
+	DeviceLimit       int
+	ClientInfo        *services.ClientInfo
+	HasDedicatedExpiry bool // 用户有专线独立到期时间，订阅只含专线节点且不受设备数限制
 }
 
 // getSubscriptionSiteConfig reads site URL and support contact from system_configs
@@ -200,10 +201,15 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 	// Browser requests: allow access but don't count as device
 	if clientInfo.IsBrowser {
+		customNodes, hasDedicated := fetchUserCustomNodes(db, sub.UserID, sub.ExpireTime)
 		var nodes []models.Node
-		db.Where("is_active = ? AND status = ?", true, "online").Order("order_index ASC").Find(&nodes)
-		customNodes := fetchUserCustomNodes(db, sub.UserID, sub.ExpireTime)
-		nodes = append(customNodes, nodes...)
+		if hasDedicated {
+			nodes = customNodes
+		} else {
+			db.Where("is_active = ? AND status = ?", true, "online").Order("order_index ASC").Find(&nodes)
+			nodes = append(customNodes, nodes...)
+		}
+		ctx.HasDedicatedExpiry = hasDedicated
 		ctx.Nodes = nodes
 		ctx.Status = subStatusOK
 		return ctx
@@ -211,6 +217,16 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 	// Device fingerprint tracking using feature-based hash
 	ip := utils.GetRealClientIP(c)
+
+	// 先检查专线独立到期：有独立时间则跳过设备数限制，只返回专线节点
+	customNodes, hasDedicated := fetchUserCustomNodes(db, sub.UserID, sub.ExpireTime)
+	if hasDedicated {
+		ctx.HasDedicatedExpiry = true
+		ctx.Nodes = customNodes
+		ctx.Status = subStatusOK
+		return ctx
+	}
+
 	fingerprint := services.GenerateDeviceFingerprint(ua, ip)
 
 	var device models.Device
@@ -346,7 +362,7 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 	var nodes []models.Node
 	db.Where("is_active = ? AND status = ?", true, "online").Order("order_index ASC").Find(&nodes)
-	customNodes := fetchUserCustomNodes(db, sub.UserID, sub.ExpireTime)
+	// customNodes and hasDedicated already fetched above; hasDedicated=false here
 	nodes = append(customNodes, nodes...)
 	ctx.Nodes = nodes
 	ctx.Status = subStatusOK
@@ -355,40 +371,53 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 // fetchUserCustomNodes returns custom nodes assigned to a user, converted to models.Node format.
 // subExpireTime is the user's subscription expiry, used for FollowUserExpire nodes.
-func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) []models.Node {
-	var customNodes []models.CustomNode
-	db.Joins("JOIN user_custom_nodes ON user_custom_nodes.custom_node_id = custom_nodes.id").
+// hasDedicatedExpiry is true if any assignment has an independent ExpiresAt set (not nil).
+func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) (nodes []models.Node, hasDedicatedExpiry bool) {
+	type customNodeWithExpiry struct {
+		models.CustomNode
+		AssignExpiresAt *time.Time `gorm:"column:assign_expires_at"`
+	}
+	var rows []customNodeWithExpiry
+	db.Model(&models.CustomNode{}).
+		Select("custom_nodes.*, user_custom_nodes.expires_at AS assign_expires_at").
+		Joins("JOIN user_custom_nodes ON user_custom_nodes.custom_node_id = custom_nodes.id").
 		Where("user_custom_nodes.user_id = ? AND custom_nodes.is_active = ?", userID, true).
-		Find(&customNodes)
-	if len(customNodes) == 0 {
-		return nil
+		Scan(&rows)
+	if len(rows) == 0 {
+		return nil, false
 	}
 
 	now := time.Now()
-	var nodes []models.Node
-	for _, cn := range customNodes {
-		// Check custom node's own expiry
-		if cn.ExpireTime != nil && cn.ExpireTime.Before(now) {
-			continue
+	for _, row := range rows {
+		// 检查分配级别的独立到期时间
+		if row.AssignExpiresAt != nil {
+			hasDedicatedExpiry = true
+			if row.AssignExpiresAt.Before(now) {
+				continue // 专线独立时间已过期，跳过
+			}
+		} else {
+			// 无独立时间：检查节点自身到期
+			if row.ExpireTime != nil && row.ExpireTime.Before(now) {
+				continue
+			}
+			if row.FollowUserExpire && now.After(subExpireTime) {
+				continue
+			}
 		}
-		// If FollowUserExpire is set, also check user's subscription expiry
-		if cn.FollowUserExpire && now.After(subExpireTime) {
-			continue
-		}
-		config := cn.Config
-		displayName := cn.DisplayName
+		config := row.Config
+		displayName := row.DisplayName
 		if displayName == "" {
-			displayName = cn.Name
+			displayName = row.Name
 		}
 		nodes = append(nodes, models.Node{
 			Name:     "⭐ " + displayName,
-			Type:     cn.Protocol,
+			Type:     row.Protocol,
 			Status:   "online",
 			Config:   &config,
 			IsActive: true,
 		})
 	}
-	return nodes
+	return nodes, hasDedicatedExpiry
 }
 
 func buildDeviceName(info *services.ClientInfo) string {

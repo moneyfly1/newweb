@@ -539,6 +539,7 @@ func GetSubscription(c *gin.Context) {
 	useQuantumultX := subType == "quantumult" || subType == "quantumultx"
 	useLoon := subType == "loon"
 	useSingBox := subType == "singbox" || subType == "sing-box"
+	useShadowrocket := subType == "shadowrocket"
 
 	// 尝试从 Redis 缓存获取下发内容 (仅当订阅状态正常时缓存)
 	var cacheKey string
@@ -582,7 +583,10 @@ func GetSubscription(c *gin.Context) {
 	if useStash || useClash {
 		nodes = FilterNodesByProtocol(nodes, getEffectiveProtocolFilter(ctx.Sub, "clash"))
 	} else {
-		nodes = FilterNodesByProtocol(nodes, getEffectiveProtocolFilter(ctx.Sub, "universal"))
+		// Shadowrocket 支持 socks 节点，跳过 universal 协议过滤
+		if !useShadowrocket {
+			nodes = FilterNodesByProtocol(nodes, getEffectiveProtocolFilter(ctx.Sub, "universal"))
+		}
 		// V2RayN 通用订阅不支持 socks 节点，自动排除
 		if ctx.ClientInfo != nil && isV2RayNClient(ctx.ClientInfo.SoftwareName) {
 			nodes = FilterNodesByProtocol(nodes, excludeProtocols(nodes, "socks", "socks5"))

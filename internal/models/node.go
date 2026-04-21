@@ -51,11 +51,12 @@ func (CustomNode) TableName() string {
 }
 
 type UserCustomNode struct {
-	ID           uint      `gorm:"primaryKey" json:"id"`
-	UserID       uint      `gorm:"index:idx_user_node" json:"user_id"`
-	CustomNodeID uint      `gorm:"index:idx_user_node" json:"custom_node_id"`
-	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	UserID       uint       `gorm:"index:idx_user_node" json:"user_id"`
+	CustomNodeID uint       `gorm:"index:idx_user_node" json:"custom_node_id"`
+	ExpiresAt    *time.Time `json:"expires_at"` // 专线独立到期时间，nil 表示跟随订阅
+	CreatedAt    time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt    time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 func (UserCustomNode) TableName() string {

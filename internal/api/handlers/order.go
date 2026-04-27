@@ -424,7 +424,7 @@ func PayOrder(c *gin.Context) {
 			subURL = siteURL + "/api/v1/subscribe/" + userSub.SubscriptionURL
 		}
 		emailSubject, emailBody := services.RenderEmail("payment_success", map[string]string{
-			"order_no": orderNo, "amount": payAmountStr, "package_name": pkgName, "subscription_url": subURL,
+			"username": notifyUser.Username, "order_no": orderNo, "amount": payAmountStr, "package_name": pkgName, "subscription_url": subURL,
 		})
 		go services.QueueEmail(notifyUser.Email, emailSubject, emailBody, "payment_success")
 		go services.NotifyAdmin("payment_success", map[string]string{

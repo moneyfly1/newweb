@@ -145,7 +145,7 @@ func sendExpiryRemindersTask() {
 		Scan(&remind3)
 	for _, r := range remind3 {
 		subject, body := RenderEmail("expiry_reminder", map[string]string{
-			"days": "3", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+			"username": r.Username, "days": "3", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
 		})
 		QueueEmail(r.Email, subject, body, "expiry_reminder")
 		go NotifyAdmin("expiry_reminder", map[string]string{
@@ -164,7 +164,7 @@ func sendExpiryRemindersTask() {
 		Scan(&remind1)
 	for _, r := range remind1 {
 		subject, body := RenderEmail("expiry_reminder", map[string]string{
-			"days": "1", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+			"username": r.Username, "days": "1", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
 		})
 		QueueEmail(r.Email, subject, body, "expiry_reminder")
 		go NotifyAdmin("expiry_reminder", map[string]string{
@@ -183,7 +183,7 @@ func sendExpiryRemindersTask() {
 		Scan(&expired)
 	for _, r := range expired {
 		subject, body := RenderEmail("expiry_notice", map[string]string{
-			"expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+			"username": r.Username, "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
 		})
 		QueueEmail(r.Email, subject, body, "expiry_notice")
 	}
@@ -279,7 +279,7 @@ func sendUnpaidOrderRemindersTask() {
 			pkgName = "未知套餐"
 		}
 		subject, body := RenderEmail("unpaid_order", map[string]string{
-			"order_no": o.OrderNo, "package_name": pkgName,
+			"username": o.Username, "order_no": o.OrderNo, "package_name": pkgName,
 			"amount": fmt.Sprintf("%.2f", amount),
 		})
 		QueueEmail(o.Email, subject, body, "unpaid_order")

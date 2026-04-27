@@ -77,7 +77,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 					}
 				}
 				emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
-					"order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL,
+					"username": user.Username, "order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL,
 				})
 				go QueueEmail(user.Email, emailSubject, emailBody, "payment_success")
 				go NotifyAdmin("payment_success", map[string]string{
@@ -168,7 +168,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			}
 		}
 		emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
-			"order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL,
+			"username": user.Username, "order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL,
 		})
 		go QueueEmail(user.Email, emailSubject, emailBody, "payment_success")
 		go NotifyAdmin("payment_success", map[string]string{

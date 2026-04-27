@@ -238,7 +238,7 @@ import { listPackages, verifyCoupon, getPaymentMethods, getPublicConfig } from '
 import { createOrder, payOrder, createPayment, getOrderStatus, createCustomOrder } from '@/api/order'
 import { getDashboardInfo } from '@/api/user'
 import { safeRedirect } from '@/utils/security'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, silentCatch } from '@/utils/error'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const router = useRouter()
@@ -333,7 +333,11 @@ const loadPackages = async () => {
     if (cfg.custom_package_max_devices) customMaxDevices.value = parseInt(cfg.custom_package_max_devices) || 20
     if (cfg.custom_package_min_months) customMinMonths.value = parseInt(cfg.custom_package_min_months) || 6
     if (cfg.custom_package_duration_discounts) {
-      try { customDiscountTiers.value = JSON.parse(cfg.custom_package_duration_discounts) } catch {}
+      try {
+        customDiscountTiers.value = JSON.parse(cfg.custom_package_duration_discounts)
+      } catch (e) {
+        silentCatch(e, 'parse custom_package_duration_discounts')
+      }
     }
     customDevices.value = Math.max(customMinDevices.value, Math.min(customDevices.value, customMaxDevices.value))
     customMonths.value = Math.max(customMinMonths.value, customMonths.value)
@@ -346,7 +350,9 @@ const fetchUserBalance = async () => {
   try {
     const res = await getDashboardInfo()
     userBalance.value = res.data?.balance || 0
-  } catch {}
+  } catch (e) {
+    silentCatch(e, 'fetchUserBalance')
+  }
 }
 
 const getPaymentLabel = (payType: string) => {

@@ -64,7 +64,7 @@ import { useMessage, type FormInst } from 'naive-ui'
 import { MailOutline, LockClosedOutline } from '@vicons/ionicons5'
 import { useUserStore } from '@/stores/user'
 import { getPublicConfig } from '@/api/common'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, silentCatch } from '@/utils/error'
 
 const router = useRouter()
 const message = useMessage()
@@ -138,7 +138,9 @@ onMounted(async () => {
         setTimeout(loadTelegramWidget, 100)
       }
     }
-  } catch {}
+  } catch (e) {
+    silentCatch(e, 'loadTelegramConfig')
+  }
 })
 </script>
 

@@ -16,3 +16,14 @@ export function getErrorMessage(error: unknown, fallback = '操作失败'): stri
 
   return fallback
 }
+
+/**
+ * Silently catch errors but log them in development mode
+ * Use this for optional data loading that shouldn't block the UI
+ */
+export function silentCatch(error: unknown, context?: string): void {
+  if (import.meta.env.DEV) {
+    const prefix = context ? `[${context}]` : '[Silent Error]'
+    console.warn(prefix, error)
+  }
+}

@@ -386,7 +386,7 @@ import { getPaymentMethods } from '@/api/common'
 import { getDashboardInfo } from '@/api/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { safeRedirect } from '@/utils/security'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, silentCatch } from '@/utils/error'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { formatLocation } from '@/utils/i18n'
@@ -656,7 +656,12 @@ const getPaymentLabel = (payType: string) => {
 const isQrCodeUrl = (url: string) => url.includes('qr.alipay.com') || (url.startsWith('https://qr.') && url.length < 200)
 
 const fetchUserBalance = async () => {
-  try { const res = await getDashboardInfo(); userBalance.value = res.data?.balance ?? 0 } catch {}
+  try {
+    const res = await getDashboardInfo()
+    userBalance.value = res.data?.balance ?? 0
+  } catch (e) {
+    silentCatch(e, 'fetchUserBalance')
+  }
 }
 const loadPaymentMethods = async () => {
   try {
@@ -665,7 +670,9 @@ const loadPaymentMethods = async () => {
     paymentMethods.value = pmData.methods || []
     balanceEnabled.value = pmData.balance_enabled !== false
     if (!balanceEnabled.value && paymentMethods.value.length > 0) paymentMethod.value = 'pm_' + paymentMethods.value[0].id
-  } catch {}
+  } catch (e) {
+    silentCatch(e, 'loadPaymentMethods')
+  }
 }
 const buildUpgradeSuccessInfo = () => {
   upgradeSuccessInfo.value = {

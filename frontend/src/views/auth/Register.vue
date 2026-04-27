@@ -84,7 +84,7 @@ import { useMessage, type FormInst } from 'naive-ui'
 import { PersonOutline, MailOutline, LockClosedOutline, GiftOutline, ShieldCheckmarkOutline } from '@vicons/ionicons5'
 import { register, sendVerificationCode } from '@/api/auth'
 import { getPublicConfig, validateInviteCode } from '@/api/common'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, silentCatch } from '@/utils/error'
 
 const router = useRouter()
 const route = useRoute()
@@ -199,7 +199,9 @@ onMounted(async () => {
   try {
     const res = await getPublicConfig()
     siteConfig.value = res.data || {}
-  } catch {}
+  } catch (e) {
+    silentCatch(e, 'loadSiteConfig')
+  }
   // Read invite code from URL
   const code = route.query.code as string
   if (code) {

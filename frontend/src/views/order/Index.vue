@@ -267,7 +267,7 @@ import { listOrders, payOrder, cancelOrder, createPayment, getOrderStatus } from
 import { listRechargeRecords, cancelRecharge, getPaymentMethods, getRechargeStatus, createRechargePayment } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 import { safeRedirect } from '@/utils/security'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, silentCatch } from '@/utils/error'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const router = useRouter()
@@ -334,7 +334,9 @@ const loadPaymentMethods = async () => {
     if (pmMethods.value.length > 0) {
       rechargePayMethod.value = 'pm_' + pmMethods.value[0].id
     }
-  } catch {}
+  } catch (e) {
+    silentCatch(e, 'loadPaymentMethods')
+  }
 }
 
 const statusFilters = [

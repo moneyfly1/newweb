@@ -202,7 +202,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import {
   WalletOutline, RibbonOutline, CartOutline, LinkOutline,
@@ -444,6 +444,27 @@ function oneClickImport(client: string) {
 
 function openUrl(url: string) { if (url) window.open(url, '_blank') }
 
+const loadDashboardData = async () => {
+  const [dashRes, subRes, ordersRes, checkinRes] = await Promise.allSettled([
+    getDashboardInfo(),
+    getSubscription(),
+    listOrders({ page: 1, page_size: 5 }),
+    getCheckInStatus(),
+  ])
+
+  if (dashRes.status === 'fulfilled') { const res: any = dashRes.value; info.value = res.data || {} }
+  if (subRes.status === 'fulfilled') { const res: any = subRes.value; subscription.value = res.data || {} }
+  if (ordersRes.status === 'fulfilled') { const res: any = ordersRes.value; recentOrders.value = (res.data?.items || []).slice(0, 5) }
+  if (checkinRes.status === 'fulfilled') { const res: any = checkinRes.value; if (res.data) checkinStatus.value = res.data }
+}
+
+const handleVisibilityChange = () => {
+  if (!document.hidden) {
+    // Page became visible, refresh data
+    loadDashboardData().catch(() => {})
+  }
+}
+
 onMounted(async () => {
   subscriptionLoading.value = true
   announcementsLoading.value = true
@@ -470,6 +491,13 @@ onMounted(async () => {
   if (ordersRes.status === 'fulfilled') { const res: any = ordersRes.value; recentOrders.value = (res.data?.items || []).slice(0, 5) }
   ordersLoading.value = false
   if (checkinRes.status === 'fulfilled') { const res: any = checkinRes.value; if (res.data) checkinStatus.value = res.data }
+
+  // Listen for visibility changes to auto-refresh
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 <style scoped>

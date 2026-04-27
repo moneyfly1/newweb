@@ -45,8 +45,28 @@ func RedeemCode(c *gin.Context) {
 		}
 
 		if code.Type == "balance" {
+			// Get user balance before update
+			var user models.User
+			if err := tx.First(&user, userID).Error; err != nil {
+				return err
+			}
+			balanceBefore := user.Balance
+
 			if err := tx.Model(&models.User{}).Where("id = ?", userID).
 				UpdateColumn("balance", gorm.Expr("balance + ?", code.Value)).Error; err != nil {
+				return err
+			}
+
+			// Create balance log
+			desc := "兑换卡密获得余额"
+			if err := tx.Create(&models.BalanceLog{
+				UserID:        userID,
+				ChangeType:    "redeem",
+				Amount:        code.Value,
+				BalanceBefore: balanceBefore,
+				BalanceAfter:  balanceBefore + code.Value,
+				Description:   &desc,
+			}).Error; err != nil {
 				return err
 			}
 		}

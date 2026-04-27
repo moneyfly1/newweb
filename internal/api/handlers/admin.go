@@ -875,37 +875,92 @@ func AdminListOrders(c *gin.Context) {
 	p := utils.GetPagination(c)
 
 	type AdminOrderItem struct {
-		models.Order
-		UserEmail     string  `json:"user_email"`
-		OrderType     string  `json:"order_type"`
-		OrderTypeText string  `json:"order_type_text"`
-		OrderSummary  string  `json:"order_summary"`
-		PackageName   string  `json:"package_name"`
-		Devices       *int    `json:"devices,omitempty"`
-		Months        *int    `json:"months,omitempty"`
-		AddDevices    *int    `json:"add_devices,omitempty"`
-		ExtendMonths  *int    `json:"extend_months,omitempty"`
-		BalanceAmount *float64 `json:"balance_amount,omitempty"`
+		ID                   uint       `json:"id"`
+		OrderNo              string     `json:"order_no"`
+		UserID               uint       `json:"user_id"`
+		UserEmail            string     `json:"user_email"`
+		PackageID            uint       `json:"package_id"`
+		Amount               float64    `json:"amount"`
+		Status               string     `json:"status"`
+		PaymentMethodID      *int64     `json:"payment_method_id"`
+		PaymentMethodName    *string    `json:"payment_method_name"`
+		PaymentTime          *time.Time `json:"payment_time"`
+		PaymentTransactionID *string    `json:"payment_transaction_id"`
+		ExpireTime           *time.Time `json:"expire_time"`
+		CouponID             *int64     `json:"coupon_id"`
+		DiscountAmount       *float64   `json:"discount_amount"`
+		FinalAmount          *float64   `json:"final_amount"`
+		ExtraData            *string    `json:"extra_data"`
+		CreatedAt            time.Time  `json:"created_at"`
+		UpdatedAt            time.Time  `json:"updated_at"`
+		OrderType            string     `json:"order_type"`
+		OrderTypeText        string     `json:"order_type_text"`
+		OrderSummary         string     `json:"order_summary"`
+		PackageName          string     `json:"package_name"`
+		Devices              *int       `json:"devices,omitempty"`
+		Months               *int       `json:"months,omitempty"`
+		AddDevices           *int       `json:"add_devices,omitempty"`
+		ExtendMonths         *int       `json:"extend_months,omitempty"`
+		BalanceAmount        *float64   `json:"balance_amount,omitempty"`
 	}
 
-	query := db.Table("orders").
+	statusFilter := c.Query("status")
+	userIDFilter := c.Query("user_id")
+	orderNoFilter := c.Query("order_no")
+
+	// Query all orders without pagination first
+	orderQuery := db.Table("orders").
 		Select("orders.*, users.email as user_email").
 		Joins("LEFT JOIN users ON users.id = orders.user_id")
-	if status := c.Query("status"); status != "" {
-		query = query.Where("orders.status = ?", status)
+	if statusFilter != "" {
+		orderQuery = orderQuery.Where("orders.status = ?", statusFilter)
 	}
-	if userID := c.Query("user_id"); userID != "" {
-		query = query.Where("orders.user_id = ?", userID)
+	if userIDFilter != "" {
+		orderQuery = orderQuery.Where("orders.user_id = ?", userIDFilter)
 	}
-	if orderNo := c.Query("order_no"); orderNo != "" {
-		query = query.Where("orders.order_no LIKE ?", "%"+orderNo+"%")
+	if orderNoFilter != "" {
+		orderQuery = orderQuery.Where("orders.order_no LIKE ?", "%"+orderNoFilter+"%")
 	}
 
-	var total int64
-	query.Count(&total)
+	var orderItems []AdminOrderItem
+	orderQuery.Scan(&orderItems)
 
-	var items []AdminOrderItem
-	query.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Scan(&items)
+	// Query all recharge records without pagination
+	rechargeQuery := db.Table("recharge_records").
+		Select("recharge_records.id, recharge_records.order_no, recharge_records.user_id, 0 as package_id, recharge_records.amount, recharge_records.status, NULL as payment_method_id, recharge_records.payment_method as payment_method_name, recharge_records.paid_at as payment_time, recharge_records.payment_transaction_id, NULL as expire_time, NULL as coupon_id, NULL as discount_amount, recharge_records.amount as final_amount, NULL as extra_data, recharge_records.created_at, recharge_records.updated_at, users.email as user_email").
+		Joins("LEFT JOIN users ON users.id = recharge_records.user_id")
+	if statusFilter != "" {
+		rechargeQuery = rechargeQuery.Where("recharge_records.status = ?", statusFilter)
+	}
+	if userIDFilter != "" {
+		rechargeQuery = rechargeQuery.Where("recharge_records.user_id = ?", userIDFilter)
+	}
+	if orderNoFilter != "" {
+		rechargeQuery = rechargeQuery.Where("recharge_records.order_no LIKE ?", "%"+orderNoFilter+"%")
+	}
+
+	var rechargeItems []AdminOrderItem
+	rechargeQuery.Scan(&rechargeItems)
+
+	// Merge all results
+	allItems := append(orderItems, rechargeItems...)
+	total := int64(len(allItems))
+
+	// Sort merged results by created_at desc
+	sort.Slice(allItems, func(i, j int) bool {
+		return allItems[i].CreatedAt.After(allItems[j].CreatedAt)
+	})
+
+	// Apply pagination to merged results
+	start := p.Offset()
+	end := start + p.PageSize
+	if start > len(allItems) {
+		start = len(allItems)
+	}
+	if end > len(allItems) {
+		end = len(allItems)
+	}
+	items := allItems[start:end]
 
 	packageIDs := make([]uint, 0, len(items))
 	for _, item := range items {
@@ -925,6 +980,16 @@ func AdminListOrders(c *gin.Context) {
 
 	for i := range items {
 		item := &items[i]
+
+		// Check if this is a recharge record (order_no starts with "RCH")
+		if len(item.OrderNo) >= 3 && item.OrderNo[:3] == "RCH" {
+			item.OrderType = "recharge"
+			item.OrderTypeText = "余额充值"
+			item.OrderSummary = fmt.Sprintf("充值 %.2f 元", item.Amount)
+			item.PackageName = "余额充值"
+			continue
+		}
+
 		item.OrderType = "package"
 		item.OrderTypeText = "套餐订单"
 		item.OrderSummary = "标准套餐"
@@ -939,7 +1004,7 @@ func AdminListOrders(c *gin.Context) {
 				switch extra["type"] {
 				case "custom_package":
 					item.OrderType = "custom_package"
-					item.OrderTypeText = "充值信息"
+					item.OrderTypeText = "自定义套餐"
 					if devices, ok := extra["devices"].(float64); ok {
 						v := int(devices)
 						item.Devices = &v
@@ -2204,19 +2269,19 @@ func AdminListCoupons(c *gin.Context) {
 
 func AdminCreateCoupon(c *gin.Context) {
 	var req struct {
-		Code                 string   `json:"code" binding:"required"`
-		Name                 string   `json:"name"`
-		Description          string   `json:"description"`
-		Type                 string   `json:"type" binding:"required"`
-		DiscountValue        float64  `json:"discount_value"`
-		MaxDiscount          *float64 `json:"max_discount"`
-		MinAmount            float64  `json:"min_amount"`
-		ValidFrom            string   `json:"valid_from" binding:"required"`
-		ValidUntil           string   `json:"valid_until" binding:"required"`
-		TotalQuantity        *int64   `json:"total_quantity"`
-		MaxUsesPerUser       int      `json:"max_uses_per_user"`
-		Status               string   `json:"status"`
-		ApplicablePackageIDs string   `json:"applicable_package_ids"`
+		Code               string   `json:"code" binding:"required"`
+		Name               string   `json:"name"`
+		Description        string   `json:"description"`
+		Type               string   `json:"type" binding:"required"`
+		DiscountValue      float64  `json:"discount_value"`
+		MaxDiscount        *float64 `json:"max_discount"`
+		MinAmount          float64  `json:"min_amount"`
+		ValidFrom          string   `json:"valid_from" binding:"required"`
+		ValidUntil         string   `json:"valid_until" binding:"required"`
+		TotalQuantity      *int64   `json:"total_quantity"`
+		MaxUsesPerUser     int      `json:"max_uses_per_user"`
+		Status             string   `json:"status"`
+		ApplicablePackages string   `json:"applicable_packages"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -2245,7 +2310,7 @@ func AdminCreateCoupon(c *gin.Context) {
 		DiscountValue: req.DiscountValue, MaxDiscount: req.MaxDiscount, MinAmount: &req.MinAmount,
 		ValidFrom: validFrom, ValidUntil: validUntil, TotalQuantity: req.TotalQuantity,
 		MaxUsesPerUser: req.MaxUsesPerUser, Status: req.Status, CreatedBy: &adminIDInt64,
-		ApplicablePackages: req.ApplicablePackageIDs,
+		ApplicablePackages: req.ApplicablePackages,
 	}
 	if coupon.Status == "" {
 		coupon.Status = "active"
@@ -2282,7 +2347,7 @@ func AdminUpdateCoupon(c *gin.Context) {
 		"name": true, "description": true, "type": true, "discount_value": true,
 		"min_amount": true, "valid_from": true, "valid_until": true,
 		"total_quantity": true, "max_uses_per_user": true, "status": true,
-		"applicable_package_ids": true,
+		"applicable_packages": true,
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {

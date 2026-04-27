@@ -1378,7 +1378,7 @@ func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransact
 		amountStr := fmt.Sprintf("%.2f", notifyRecord.Amount)
 		utils.CreateBalanceLogSimple(notifyRecord.UserID, "recharge", notifyRecord.Amount, notifyUser.Balance-notifyRecord.Amount, notifyUser.Balance, nil, fmt.Sprintf("充值到账: %s", notifyRecord.OrderNo))
 		emailSubject, emailBody := services.RenderEmail("recharge_success", map[string]string{
-			"order_no": notifyRecord.OrderNo, "amount": amountStr,
+			"username": notifyUser.Username, "order_no": notifyRecord.OrderNo, "amount": amountStr,
 		})
 		go services.QueueEmail(notifyUser.Email, emailSubject, emailBody, "recharge_success")
 		go services.NotifyAdmin("recharge_success", map[string]string{

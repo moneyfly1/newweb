@@ -7,7 +7,18 @@
         <span v-if="!appStore.sidebarCollapsed">CBoard Admin</span>
         <span v-else>A</span>
       </div>
-      <n-menu :collapsed="appStore.sidebarCollapsed" :collapsed-width="64" :options="menuOptions" :value="activeKey" :default-expanded-keys="expandedKeys" @update:value="handleMenuClick" />
+      <n-menu
+        :collapsed="appStore.sidebarCollapsed"
+        :collapsed-width="64"
+        :collapsed-icon-size="22"
+        :options="menuOptions"
+        :value="activeKey"
+        :default-expanded-keys="expandedKeys"
+        :inverted="false"
+        :accordion="true"
+        :dropdown-props="{ trigger: 'hover', placement: 'right-start' }"
+        @update:value="handleMenuClick"
+      />
     </n-layout-sider>
     <n-layout>
       <n-layout-header bordered class="desktop-header">

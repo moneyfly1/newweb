@@ -38,7 +38,6 @@ func UserCheckIn(c *gin.Context) {
 	rewardCents := minReward + int(n.Int64())
 	amount := float64(rewardCents) / 100.0
 
-	var consecutiveDays int
 	var newBalance float64
 
 	// 使用事务防止重放攻击和竞态条件
@@ -104,8 +103,8 @@ func UserCheckIn(c *gin.Context) {
 		return
 	}
 
-	// 计算连续签到天数（事务外，不影响核心逻辑）
-	consecutiveDays = calcConsecutiveDays(db, userID)
+	// 计算连续签到天数（事务外，确保新记录已提交）
+	consecutiveDays := calcConsecutiveDays(db, userID)
 
 	utils.Success(c, gin.H{
 		"amount":           amount,

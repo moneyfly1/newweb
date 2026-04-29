@@ -127,6 +127,9 @@
                         <n-form-item-gi label="网关地址" span="2"><n-input v-model:value="form.pay_codepay_gateway" placeholder="https://mzf.akwl.net" /><template #feedback>填写官网地址，系统自动拼接 API 路径</template></n-form-item-gi>
                         <n-form-item-gi label="商户ID"><n-input v-model:value="form.pay_codepay_merchant_id" /></n-form-item-gi>
                         <n-form-item-gi label="商户密钥"><n-input v-model:value="form.pay_codepay_secret_key" type="password" show-password-on="click" /></n-form-item-gi>
+                        <n-form-item-gi label="支付基址" span="2"><n-input v-model:value="form.pay_codepay_base_url" placeholder="https://pay.example.com；留空则回退到支付公网域名" /></n-form-item-gi>
+                        <n-form-item-gi label="异步通知地址" span="2"><n-input v-model:value="form.pay_codepay_notify_url" placeholder="留空则按支付基址自动生成 /api/v1/payment/notify/codepay" /></n-form-item-gi>
+                        <n-form-item-gi label="同步返回地址" span="2"><n-input v-model:value="form.pay_codepay_return_url" placeholder="留空则按支付基址自动生成 /api/v1/payment/success" /></n-form-item-gi>
                         <n-form-item-gi label="启用支付宝"><n-switch v-model:value="form.pay_codepay_alipay_enabled" /></n-form-item-gi>
                         <n-form-item-gi label="启用微信支付"><n-switch v-model:value="form.pay_codepay_wxpay_enabled" /></n-form-item-gi>
                       </n-grid>
@@ -322,6 +325,7 @@ const form = ref<Record<string, any>>({
   payment_public_base_url: '', pay_alipay_notify_url: '', pay_alipay_return_url: '',
   pay_epay_gateway: '', pay_epay_merchant_id: '', pay_epay_secret_key: '',
   pay_codepay_enabled: false, pay_codepay_gateway: '', pay_codepay_merchant_id: '', pay_codepay_secret_key: '',
+  pay_codepay_base_url: '', pay_codepay_notify_url: '', pay_codepay_return_url: '',
   pay_codepay_alipay_enabled: true, pay_codepay_wxpay_enabled: false,
   pay_stripe_enabled: false, pay_stripe_secret_key: '', pay_stripe_webhook_secret: '', pay_stripe_exchange_rate: 7.2,
   pay_balance_enabled: true,

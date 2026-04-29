@@ -123,6 +123,9 @@ func CreateRecharge(c *gin.Context) {
 						}
 						orderName := "充值-" + record.OrderNo
 						notifyURL, returnURL := services.BuildPaymentURLs("codepay", record.OrderNo)
+						if codepayCfg.NotifyURL != "" || codepayCfg.ReturnURL != "" || codepayCfg.BaseURL != "" {
+							notifyURL, returnURL = services.CodepayBuildURLs(codepayCfg, record.OrderNo)
+						}
 						codepayResult, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
 						if err == nil {
 							_ = db.Model(&record).Update("payment_url", codepayResult.PaymentURL).Error

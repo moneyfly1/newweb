@@ -23,7 +23,13 @@ export const deleteDeviceById = (id: number) => request.delete(`/devices/${id}`)
 export const listRechargeRecords = (params?: any) => request.get('/recharge', { params })
 export const createRecharge = (data: any) => request.post('/recharge', data)
 export const getRechargeStatus = (id: number) => request.get(`/recharge/${id}/status`)
-export const createRechargePayment = (id: number, data: any) => request.post(`/recharge/${id}/pay`, data)
+export const createRechargePayment = (id: number, data: { recharge_id: number; payment_method_id: number; is_mobile?: boolean }) =>
+  request.post<{
+    record?: any
+    transaction_id: string
+    payment_url?: string
+    payment_mode?: 'qrcode' | 'page' | 'redirect'
+  }>(`/recharge/${id}/pay`, data)
 export const cancelRecharge = (id: number) => request.post(`/recharge/${id}/cancel`)
 export const getPaymentMethods = () => request.get('/payment/methods')
 export const listPublicAnnouncements = () => request.get('/announcements')

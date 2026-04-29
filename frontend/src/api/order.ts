@@ -8,7 +8,20 @@ export const payOrder = (orderNo: string, data: { payment_method: string }) =>
 export const cancelOrder = (orderNo: string) => request.post(`/orders/${orderNo}/cancel`)
 export const getOrderStatus = (orderNo: string) => request.get(`/orders/${orderNo}/status`)
 export const createPayment = (data: { order_id: number; payment_method_id: number; is_mobile?: boolean; use_balance?: boolean; balance_amount?: number }) =>
-  request.post('/payment', data)
+  request.post<{
+    order_no: string
+    transaction_id: string
+    amount: number
+    pay_type: string
+    payment_url?: string
+    payment_mode?: 'qrcode' | 'page' | 'redirect'
+    crypto_info?: {
+      wallet_address: string
+      network: string
+      currency: string
+      amount_usdt: string
+    }
+  }>('/payment', data)
 export const createCustomOrder = (data: { devices: number; months: number; coupon_code?: string }) =>
   request.post('/orders/custom', data)
 

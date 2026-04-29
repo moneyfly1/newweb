@@ -248,7 +248,19 @@ const loadData = async () => {
   }
 }
 
-const isQrCodeUrl = (url: string) => url.includes('qr.alipay.com') || (url.startsWith('https://qr.') && url.length < 200)
+const isQrCodeUrl = (url: string) => {
+  // 支付宝二维码
+  if (url.includes('qr.alipay.com')) return true
+  // 通用二维码链接（短链接）
+  if (url.startsWith('https://qr.') && url.length < 200) return true
+  // 码支付二维码（通常是短链接或包含特定关键词）
+  if (url.includes('qrcode') || url.includes('qr_code')) return true
+  // 微信支付二维码
+  if (url.includes('wxpay') && url.startsWith('weixin://')) return true
+  // 其他常见二维码模式：短链接（长度小于100）且以 http 开头
+  if ((url.startsWith('http://') || url.startsWith('https://')) && url.length < 100) return true
+  return false
+}
 
 const checkRechargeStatus = async (recordId: number) => {
   const res = await getRechargeStatus(recordId)
@@ -299,19 +311,29 @@ const stopPolling = () => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
 
-const handlePayUrl = async (payUrl: string, recordId: number) => {
-  if (appStore.isMobile) {
-    mobilePayUrl.value = payUrl
-    showMobilePayModal.value = true
-    startPolling(recordId)
-  } else if (isQrCodeUrl(payUrl)) {
-    showQrModal.value = true
-    await nextTick()
-    if (qrCanvas.value) QRCode.toCanvas(qrCanvas.value, payUrl, { width: 240, margin: 2 })
-    startPolling(recordId)
-  } else {
+const handlePayUrl = async (payUrl: string, recordId: number, paymentMode?: 'qrcode' | 'page' | 'redirect') => {
+  if (paymentMode === 'page') {
     safeRedirect(payUrl)
+    startPolling(recordId)
+    return
   }
+  if (paymentMode === 'redirect') {
+    safeRedirect(payUrl)
+    return
+  }
+  if (paymentMode === 'qrcode' || isQrCodeUrl(payUrl)) {
+    if (appStore.isMobile) {
+      mobilePayUrl.value = payUrl
+      showMobilePayModal.value = true
+    } else {
+      showQrModal.value = true
+      await nextTick()
+      if (qrCanvas.value) QRCode.toCanvas(qrCanvas.value, payUrl, { width: 240, margin: 2 })
+    }
+    startPolling(recordId)
+    return
+  }
+  safeRedirect(payUrl)
 }
 
 const handleRecharge = async () => {
@@ -325,9 +347,10 @@ const handleRecharge = async () => {
     const res = await createRecharge({ amount: amount.value, payment_method_id: paymentMethodId.value })
     const data = res.data
     const payUrl = data?.payment_url || data?.record?.payment_url
+    const paymentMode = data?.payment_mode
     const recordId = data?.record?.id || data?.id || 0
     if (payUrl) {
-      await handlePayUrl(payUrl, recordId)
+      await handlePayUrl(payUrl, recordId, paymentMode)
     } else {
       message.success('充值订单已创建，请等待处理')
       loadData()
@@ -357,8 +380,9 @@ const handlePendingPay = async () => {
     })
     showPayDrawer.value = false
     const payUrl = res.data?.payment_url
+    const paymentMode = res.data?.payment_mode
     if (payUrl) {
-      await handlePayUrl(payUrl, pendingTarget.value.id)
+      await handlePayUrl(payUrl, pendingTarget.value.id, paymentMode)
     } else {
       message.info('支付订单已创建，请等待处理')
     }

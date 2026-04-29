@@ -39,6 +39,7 @@ type CodepayResponse struct {
 	QRCode    string `json:"qrcode"`
 	URLScheme string `json:"urlscheme"`
 	Money     string `json:"money"`
+	Type      string `json:"type"`
 }
 
 // GetCodepayConfig reads CodePay gateway settings from system_configs.
@@ -97,9 +98,14 @@ func codepaySubmitURL(gateway string) string {
 	return gateway + "/xpay/epay/submit.php"
 }
 
+type CodepayResult struct {
+	PaymentURL string
+	Mode       string
+}
+
 // CodepayCreateOrder creates a payment order via CodePay
-// First tries mapi.php for direct QR code, falls back to submit.php page redirect
-func CodepayCreateOrder(cfg *CodepayConfig, payType, outTradeNo, name, money, notifyURL, returnURL string) (string, error) {
+// First tries mapi.php for QR/page data, falls back to submit.php page redirect
+func CodepayCreateOrder(cfg *CodepayConfig, payType, outTradeNo, name, money, notifyURL, returnURL string) (*CodepayResult, error) {
 	params := map[string]string{
 		"pid":          cfg.MerchantID,
 		"type":         payType,
@@ -115,7 +121,6 @@ func CodepayCreateOrder(cfg *CodepayConfig, payType, outTradeNo, name, money, no
 	params["sign"] = codepaySign(params, cfg.SecretKey)
 	params["sign_type"] = "MD5"
 
-	// Try mapi.php first for direct QR code
 	apiURL := codepayAPIURL(cfg.Gateway)
 	utils.LogInfo("码支付发起mapi请求: URL=%s, Order=%s, Amount=%s, Type=%s", apiURL, outTradeNo, money, payType)
 
@@ -132,37 +137,35 @@ func CodepayCreateOrder(cfg *CodepayConfig, payType, outTradeNo, name, money, no
 			respStr := strings.TrimSpace(string(body))
 			utils.LogInfo("码支付mapi响应: %s", respStr)
 
-			// Direct URL response
 			if strings.HasPrefix(respStr, "http://") || strings.HasPrefix(respStr, "https://") {
-				return respStr, nil
+				return &CodepayResult{PaymentURL: respStr, Mode: "redirect"}, nil
 			}
 
 			var codepayResp CodepayResponse
 			if json.Unmarshal(body, &codepayResp) == nil && codepayResp.Code == 1 {
-				utils.LogInfo("码支付mapi返回: code=%d, trade_no=%s, payurl=%s, qrcode=%s, urlscheme=%s",
-					codepayResp.Code, codepayResp.TradeNo, codepayResp.PayURL, codepayResp.QRCode, codepayResp.URLScheme)
+				utils.LogInfo("码支付mapi返回: code=%d, trade_no=%s, payurl=%s, qrcode=%s, urlscheme=%s, type=%s",
+					codepayResp.Code, codepayResp.TradeNo, codepayResp.PayURL, codepayResp.QRCode, codepayResp.URLScheme, codepayResp.Type)
 
 				if codepayResp.QRCode != "" {
-					return codepayResp.QRCode, nil
+					return &CodepayResult{PaymentURL: codepayResp.QRCode, Mode: "qrcode"}, nil
 				}
 				if codepayResp.PayURL != "" {
-					return codepayResp.PayURL, nil
+					return &CodepayResult{PaymentURL: codepayResp.PayURL, Mode: "qrcode"}, nil
 				}
 				if codepayResp.URLScheme != "" {
-					return codepayResp.URLScheme, nil
+					return &CodepayResult{PaymentURL: codepayResp.URLScheme, Mode: "redirect"}, nil
 				}
 			}
 		}
 	}
 
-	// Fallback to submit.php page redirect
-	utils.LogInfo("码支付mapi未返回支付链接，使用submit.php页面方式: Order=%s", outTradeNo)
+	utils.LogInfo("码支付mapi未返回可直接使用的支付链接，改用submit.php签名页面: Order=%s", outTradeNo)
 	submitURL := codepaySubmitURL(cfg.Gateway)
 	submitParams := url.Values{}
 	for k, v := range params {
 		submitParams.Set(k, v)
 	}
-	return fmt.Sprintf("%s?%s", submitURL, submitParams.Encode()), nil
+	return &CodepayResult{PaymentURL: fmt.Sprintf("%s?%s", submitURL, submitParams.Encode()), Mode: "page"}, nil
 }
 
 // CodepayVerifySign verifies the callback signature from CodePay
@@ -229,10 +232,11 @@ func (g *CodepayGateway) CreatePaymentWithType(payType, orderNo string, amount f
 	}
 
 	return map[string]interface{}{
-		"pay_url":  payURL,
-		"order_no": orderNo,
-		"amount":   amount,
-		"pay_type": payType,
+		"pay_url":      payURL.PaymentURL,
+		"payment_mode": payURL.Mode,
+		"order_no":     orderNo,
+		"amount":       amount,
+		"pay_type":     payType,
 	}, nil
 }
 

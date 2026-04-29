@@ -653,7 +653,19 @@ const getPaymentLabel = (payType: string) => {
   return labels[payType] || payType
 }
 
-const isQrCodeUrl = (url: string) => url.includes('qr.alipay.com') || (url.startsWith('https://qr.') && url.length < 200)
+const isQrCodeUrl = (url: string) => {
+  // 支付宝二维码
+  if (url.includes('qr.alipay.com')) return true
+  // 通用二维码链接（短链接）
+  if (url.startsWith('https://qr.') && url.length < 200) return true
+  // 码支付二维码（通常是短链接或包含特定关键词）
+  if (url.includes('qrcode') || url.includes('qr_code')) return true
+  // 微信支付二维码
+  if (url.includes('wxpay') && url.startsWith('weixin://')) return true
+  // 其他常见二维码模式：短链接（长度小于100）且以 http 开头
+  if ((url.startsWith('http://') || url.startsWith('https://')) && url.length < 100) return true
+  return false
+}
 
 const fetchUserBalance = async () => {
   try {
@@ -797,6 +809,31 @@ const handleOpenUpgradePay = async () => {
   finally { upgradeSubmitting.value = false }
 }
 
+const handleUpgradePaymentUrl = async (payUrl: string, orderNo: string, paymentMode?: 'qrcode' | 'page' | 'redirect') => {
+  if (paymentMode === 'page') {
+    safeRedirect(payUrl)
+    startPayPolling(orderNo)
+    return
+  }
+  if (paymentMode === 'redirect') {
+    safeRedirect(payUrl)
+    return
+  }
+  if (paymentMode === 'qrcode' || isQrCodeUrl(payUrl)) {
+    if (isMobile.value) {
+      mobilePayUrl.value = payUrl
+      showPayQrModal.value = true
+    } else {
+      showPayQrModal.value = true
+      await nextTick()
+      if (payQrCanvas.value) QRCode.toCanvas(payQrCanvas.value, payUrl, { width: 240, margin: 2 })
+    }
+    startPayPolling(orderNo)
+    return
+  }
+  safeRedirect(payUrl)
+}
+
 const handleUpgradePay = async () => {
   if (!upgradeOrderInfo.value) return
   paying.value = true
@@ -821,13 +858,7 @@ const handleUpgradePay = async () => {
       }
       if (data?.payment_url) {
         showUpgradePayModal.value = false
-        if (isMobile.value) {
-          mobilePayUrl.value = data.payment_url; showPayQrModal.value = true; startPayPolling(upgradeOrderInfo.value.order_no)
-        } else if (isQrCodeUrl(data.payment_url)) {
-          showPayQrModal.value = true; await nextTick()
-          if (payQrCanvas.value) QRCode.toCanvas(payQrCanvas.value, data.payment_url, { width: 240, margin: 2 })
-          startPayPolling(upgradeOrderInfo.value.order_no)
-        } else { safeRedirect(data.payment_url) }
+        await handleUpgradePaymentUrl(data.payment_url, upgradeOrderInfo.value.order_no, data?.payment_mode)
       } else { message.info('支付已创建，请等待处理'); showUpgradePayModal.value = false; await loadData() }
     }
   } catch (e: any) { message.error(getErrorMessage(e, '支付失败')) }

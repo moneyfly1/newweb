@@ -376,6 +376,9 @@ func CreatePayment(c *gin.Context) {
 		}
 
 		notifyURL, returnURL := services.BuildPaymentURLs("codepay", order.OrderNo)
+		if codepayCfg.NotifyURL != "" || codepayCfg.ReturnURL != "" || codepayCfg.BaseURL != "" {
+			notifyURL, returnURL = services.CodepayBuildURLs(codepayCfg, order.OrderNo)
+		}
 		codepayResult, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
 		if err != nil {
 			utils.InternalError(c, "创建码支付订单失败: "+err.Error())
@@ -579,6 +582,48 @@ func CreateRechargePayment(c *gin.Context) {
 			"amount":         record.Amount,
 			"pay_type":       payConfig.PayType,
 			"payment_url":    paymentURL,
+		})
+		return
+	}
+
+	// CodePay recharge payment
+	if payConfig.PayType == "codepay" || payConfig.PayType == "codepay_alipay" || payConfig.PayType == "codepay_wxpay" {
+		codepayCfg, err := services.GetCodepayConfig()
+		if err != nil {
+			utils.BadRequest(c, "码支付网关未配置，请在系统设置中配置")
+			return
+		}
+
+		orderName := "充值-" + record.OrderNo
+		codepayType := "alipay"
+		if payConfig.PayType == "codepay_wxpay" {
+			codepayType = "wxpay"
+		}
+
+		notifyURL, returnURL := services.BuildPaymentURLs("codepay", record.OrderNo)
+		if codepayCfg.NotifyURL != "" || codepayCfg.ReturnURL != "" || codepayCfg.BaseURL != "" {
+			notifyURL, returnURL = services.CodepayBuildURLs(codepayCfg, record.OrderNo)
+		}
+
+		codepayResult, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+		if err != nil {
+			utils.InternalError(c, "创建码支付订单失败: "+err.Error())
+			return
+		}
+
+		if err := db.Model(&record).Update("payment_url", codepayResult.PaymentURL).Error; err != nil {
+			utils.InternalError(c, "保存支付链接失败")
+			return
+		}
+
+		utils.Success(c, gin.H{
+			"message":        "支付创建成功",
+			"order_no":       record.OrderNo,
+			"transaction_id": txID,
+			"amount":         record.Amount,
+			"pay_type":       payConfig.PayType,
+			"payment_url":    codepayResult.PaymentURL,
+			"payment_mode":   codepayResult.Mode,
 		})
 		return
 	}
@@ -1209,6 +1254,9 @@ func handleCodepayNotify(c *gin.Context, db *gorm.DB) {
 
 	// Check trade status
 	tradeStatus := params["trade_status"]
+	if tradeStatus == "" {
+		tradeStatus = params["status"]
+	}
 	utils.LogCallback("[Codepay] trade_status=%s out_trade_no=%s trade_no=%s money=%s",
 		tradeStatus, params["out_trade_no"], params["trade_no"], params["money"])
 	if tradeStatus != "TRADE_SUCCESS" {
@@ -1291,14 +1339,14 @@ func handleCodepayNotify(c *gin.Context, db *gorm.DB) {
 			}
 			utils.LogCallback("[Codepay] 支付事务已标记为 paid: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
 
-			// Reuse epay business handlers (same order/recharge processing)
+			// Reuse shared business handlers while preserving CodePay payment method labeling
 			switch getPaymentBusinessKind(&txn) {
 			case "recharge":
 				if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
 					return err
 				}
 			case "order":
-				if err := handleEpayOrderCallback(tx, &txn); err != nil {
+				if err := handleGatewayOrderCallback(tx, &txn, "codepay"); err != nil {
 					return err
 				}
 			default:
@@ -1390,6 +1438,10 @@ func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransact
 }
 
 func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) error {
+	return handleGatewayOrderCallback(db, transaction, "epay")
+}
+
+func handleGatewayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction, paymentMethod string) error {
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
 		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
@@ -1397,23 +1449,25 @@ func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction
 		}
 
 		now := time.Now()
-		pmName := "epay"
-		txIDStr := fmt.Sprintf("%d", transaction.ID)
+		txIDStr := ""
+		if transaction.TransactionID != nil {
+			txIDStr = *transaction.TransactionID
+		}
 		if err := tx.Model(&order).Updates(map[string]interface{}{
 			"status":                 "paid",
-			"payment_method_name":    &pmName,
+			"payment_method_name":    &paymentMethod,
 			"payment_time":           &now,
 			"payment_transaction_id": &txIDStr,
 		}).Error; err != nil {
 			return err
 		}
-		if err := services.ActivateSubscription(tx, &order, "epay"); err != nil {
+		if err := services.ActivateSubscription(tx, &order, paymentMethod); err != nil {
 			return fmt.Errorf("激活订阅失败: %w", err)
 		}
 		return nil
 	})
 	if err != nil {
-		utils.SysError("payment", fmt.Sprintf("易支付订单回调处理失败: %v", err))
+		utils.SysError("payment", fmt.Sprintf("%s订单回调处理失败: %v", paymentMethod, err))
 		return err
 	}
 	return nil

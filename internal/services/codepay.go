@@ -28,6 +28,9 @@ type CodepayConfig struct {
 	Gateway    string // e.g. https://mzf.akwl.net
 	MerchantID string
 	SecretKey  string
+	NotifyURL  string
+	ReturnURL  string
+	BaseURL    string
 }
 
 // CodepayResponse represents the mapi.php JSON response
@@ -44,7 +47,14 @@ type CodepayResponse struct {
 
 // GetCodepayConfig reads CodePay gateway settings from system_configs.
 func GetCodepayConfig() (*CodepayConfig, error) {
-	m := utils.GetSettings("pay_codepay_gateway", "pay_codepay_merchant_id", "pay_codepay_secret_key")
+	m := utils.GetSettings(
+		"pay_codepay_gateway",
+		"pay_codepay_merchant_id",
+		"pay_codepay_secret_key",
+		"pay_codepay_notify_url",
+		"pay_codepay_return_url",
+		"pay_codepay_base_url",
+	)
 
 	if m["pay_codepay_gateway"] == "" || m["pay_codepay_merchant_id"] == "" || m["pay_codepay_secret_key"] == "" {
 		return nil, fmt.Errorf("码支付网关未配置")
@@ -56,6 +66,9 @@ func GetCodepayConfig() (*CodepayConfig, error) {
 		Gateway:    gateway,
 		MerchantID: m["pay_codepay_merchant_id"],
 		SecretKey:  m["pay_codepay_secret_key"],
+		NotifyURL:  normalizePublicBaseURL(strings.TrimSpace(m["pay_codepay_notify_url"])),
+		ReturnURL:  normalizePublicBaseURL(strings.TrimSpace(m["pay_codepay_return_url"])),
+		BaseURL:    normalizePublicBaseURL(strings.TrimSpace(m["pay_codepay_base_url"])),
 	}, nil
 }
 
@@ -96,6 +109,46 @@ func codepaySubmitURL(gateway string) string {
 		return gateway + "/submit.php"
 	}
 	return gateway + "/xpay/epay/submit.php"
+}
+
+func CodepayBuildURLs(cfg *CodepayConfig, orderNo string) (notifyURL, returnURL string) {
+	if cfg == nil {
+		return "", ""
+	}
+
+	if cfg.NotifyURL != "" {
+		notifyURL = cfg.NotifyURL
+	} else {
+		baseURL := cfg.BaseURL
+		if baseURL == "" {
+			baseURL = GetPaymentPublicBaseURL()
+		}
+		if baseURL != "" {
+			notifyURL = baseURL + "/api/v1/payment/notify/codepay"
+		}
+	}
+
+	if cfg.ReturnURL != "" {
+		returnURL = cfg.ReturnURL
+	} else {
+		baseURL := cfg.BaseURL
+		if baseURL == "" {
+			baseURL = GetPaymentPublicBaseURL()
+		}
+		if baseURL != "" {
+			returnURL = baseURL + "/api/v1/payment/success"
+		}
+	}
+
+	if returnURL != "" && orderNo != "" {
+		separator := "?"
+		if strings.Contains(returnURL, "?") {
+			separator = "&"
+		}
+		returnURL += separator + "order_no=" + url.QueryEscape(orderNo)
+	}
+
+	return notifyURL, returnURL
 }
 
 type CodepayResult struct {
@@ -242,7 +295,32 @@ func (g *CodepayGateway) CreatePaymentWithType(payType, orderNo string, amount f
 
 // VerifyCallback 验证回调签名
 func (g *CodepayGateway) VerifyCallback(data map[string]interface{}) bool {
-	return true
+	if g.config == nil {
+		config, err := GetCodepayConfig()
+		if err != nil {
+			return false
+		}
+		g.config = config
+	}
+	if g.config == nil || g.config.SecretKey == "" {
+		return false
+	}
+
+	params := make(map[string]string, len(data))
+	for k, v := range data {
+		switch value := v.(type) {
+		case string:
+			params[k] = value
+		case fmt.Stringer:
+			params[k] = value.String()
+		case nil:
+			params[k] = ""
+		default:
+			params[k] = fmt.Sprintf("%v", value)
+		}
+	}
+
+	return CodepayVerifySign(params, g.config.SecretKey)
 }
 
 // GetName 获取网关名称

@@ -376,7 +376,7 @@ func CreatePayment(c *gin.Context) {
 		}
 
 		notifyURL, returnURL := services.BuildPaymentURLs("codepay", order.OrderNo)
-		paymentURL, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
+		codepayResult, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
 		if err != nil {
 			utils.InternalError(c, "创建码支付订单失败: "+err.Error())
 			return
@@ -388,7 +388,8 @@ func CreatePayment(c *gin.Context) {
 			"transaction_id": txID,
 			"amount":         payAmount,
 			"pay_type":       payConfig.PayType,
-			"payment_url":    paymentURL,
+			"payment_url":    codepayResult.PaymentURL,
+			"payment_mode":   codepayResult.Mode,
 		})
 		return
 	}
@@ -566,7 +567,7 @@ func CreateRechargePayment(c *gin.Context) {
 		}
 
 		// Store payment URL on the recharge record
-		if err := db.Model(&record).Update("payment_url", &paymentURL).Error; err != nil {
+		if err := db.Model(&record).Update("payment_url", paymentURL).Error; err != nil {
 			utils.InternalError(c, "保存支付链接失败")
 			return
 		}

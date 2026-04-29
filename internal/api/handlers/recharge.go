@@ -35,77 +35,75 @@ func CreateRecharge(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	if req.Amount > 100000 {
-		utils.BadRequest(c, "单次充值金额不能超过 100000")
-		return
-	}
 	userID := c.GetUint("user_id")
 	db := database.GetDB()
-	orderNo := fmt.Sprintf("RCH%d%s", time.Now().Unix(), utils.GenerateRandomString(6))
+
 	record := models.RechargeRecord{
-		UserID:  userID,
-		OrderNo: orderNo,
-		Amount:  req.Amount,
-		Status:  "pending",
+		UserID:    userID,
+		OrderNo:   fmt.Sprintf("R%d%s", time.Now().Unix(), utils.GenerateRandomString(6)),
+		Amount:    req.Amount,
+		Status:    "pending",
+		CreatedAt: time.Now(),
 	}
 	if err := db.Create(&record).Error; err != nil {
 		utils.InternalError(c, "创建充值记录失败")
 		return
 	}
 
-	// If payment_method_id provided, create payment immediately
-	if req.PaymentMethodID > 0 {
+	if req.PaymentMethodID != 0 {
 		var payConfig models.PaymentConfig
-		if err := db.Where("id = ? AND status = ?", req.PaymentMethodID, 1).First(&payConfig).Error; err != nil {
-			utils.BadRequest(c, "支付方式不可用")
-			return
-		}
+		if err := db.Where("id = ? AND status = ?", req.PaymentMethodID, 1).First(&payConfig).Error; err == nil {
+			txID := fmt.Sprintf("RCH%d%s", time.Now().Unix(), utils.GenerateRandomString(8))
+			paymentData := fmt.Sprintf(`{"recharge_id":%d}`, record.ID)
+			transaction := models.PaymentTransaction{
+				OrderID:         0,
+				UserID:          userID,
+				PaymentMethodID: req.PaymentMethodID,
+				Amount:          record.Amount,
+				Currency:        "CNY",
+				TransactionID:   &txID,
+				Status:          "pending",
+				PaymentData:     &paymentData,
+			}
+			if err := db.Create(&transaction).Error; err == nil {
+				pmName := payConfig.PayType
+				_ = db.Model(&record).Updates(map[string]interface{}{
+					"payment_method":         &pmName,
+					"payment_transaction_id": &txID,
+				}).Error
 
-		txID := fmt.Sprintf("RCH%d%s", time.Now().Unix(), utils.GenerateRandomString(8))
-		paymentData := fmt.Sprintf(`{"recharge_id":%d}`, record.ID)
-		transaction := models.PaymentTransaction{
-			OrderID:         0,
-			UserID:          userID,
-			PaymentMethodID: req.PaymentMethodID,
-			Amount:          record.Amount,
-			Currency:        "CNY",
-			TransactionID:   &txID,
-			Status:          "pending",
-			PaymentData:     &paymentData,
-		}
-		if err := db.Create(&transaction).Error; err != nil {
-			utils.Success(c, record)
-			return
-		}
+				if payConfig.PayType == "epay" || payConfig.PayType == "alipay" || payConfig.PayType == "wxpay" || payConfig.PayType == "qqpay" {
+					orderName := "充值-" + record.OrderNo
 
-		pmName := payConfig.PayType
-		if err := db.Model(&record).Updates(map[string]interface{}{
-			"payment_method":         &pmName,
-			"payment_transaction_id": &txID,
-		}).Error; err != nil {
-			utils.InternalError(c, "更新充值记录失败")
-			return
-		}
-
-		if payConfig.PayType == "epay" || payConfig.PayType == "alipay" || payConfig.PayType == "wxpay" || payConfig.PayType == "qqpay" {
-			orderName := "充值-" + record.OrderNo
-
-			// Try direct Alipay first
-			if payConfig.PayType == "alipay" {
-				if services.IsDirectAlipayConfigured() {
-					alipayCfg, err := services.GetAlipayConfig()
-					if err == nil {
-						notifyURL, returnURL := services.BuildPaymentURLs("alipay", record.OrderNo)
-						paymentURL, err := services.AlipayCreateOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+					if payConfig.PayType == "alipay" && services.IsDirectAlipayConfigured() {
+						alipayCfg, err := services.GetAlipayConfig()
 						if err == nil {
-							if err := db.Model(&record).Update("payment_url", &paymentURL).Error; err != nil {
-								utils.InternalError(c, "更新支付链接失败")
+							notifyURL, returnURL := services.BuildPaymentURLs("alipay", record.OrderNo)
+							paymentURL, err := services.AlipayCreateOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+							if err == nil {
+								_ = db.Model(&record).Update("payment_url", &paymentURL).Error
+								_ = db.First(&record, record.ID).Error
+								utils.Success(c, gin.H{
+									"record":         record,
+									"transaction_id": txID,
+									"payment_url":    paymentURL,
+								})
 								return
 							}
-							if err := db.First(&record, record.ID).Error; err != nil {
-								utils.InternalError(c, "读取充值记录失败")
-								return
-							}
+						}
+					}
+
+					epayCfg, err := services.GetEpayConfig()
+					if err == nil {
+						epayType := payConfig.PayType
+						if epayType == "epay" {
+							epayType = "alipay"
+						}
+						notifyURL, returnURL := services.BuildPaymentURLs("epay", record.OrderNo)
+						paymentURL, err := services.EpayCreateOrder(epayCfg, epayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+						if err == nil {
+							_ = db.Model(&record).Update("payment_url", &paymentURL).Error
+							_ = db.First(&record, record.ID).Error
 							utils.Success(c, gin.H{
 								"record":         record,
 								"transaction_id": txID,
@@ -115,85 +113,35 @@ func CreateRecharge(c *gin.Context) {
 						}
 					}
 				}
-			}
 
-			// Fall back to epay gateway
-			epayCfg, err := services.GetEpayConfig()
-			if err != nil {
-				utils.Success(c, record)
-				return
+				if payConfig.PayType == "codepay" || payConfig.PayType == "codepay_alipay" || payConfig.PayType == "codepay_wxpay" {
+					codepayCfg, err := services.GetCodepayConfig()
+					if err == nil {
+						codepayType := "alipay"
+						if payConfig.PayType == "codepay_wxpay" {
+							codepayType = "wxpay"
+						}
+						orderName := "充值-" + record.OrderNo
+						notifyURL, returnURL := services.BuildPaymentURLs("codepay", record.OrderNo)
+						codepayResult, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+						if err == nil {
+							_ = db.Model(&record).Update("payment_url", codepayResult.PaymentURL).Error
+							_ = db.First(&record, record.ID).Error
+							utils.Success(c, gin.H{
+								"record":         record,
+								"transaction_id": txID,
+								"payment_url":    codepayResult.PaymentURL,
+								"payment_mode":   codepayResult.Mode,
+							})
+							return
+						}
+					}
+				}
 			}
-
-			epayType := payConfig.PayType
-			if epayType == "epay" {
-				epayType = "alipay"
-			}
-
-			notifyURL, returnURL := services.BuildPaymentURLs("epay", record.OrderNo)
-
-			paymentURL, err := services.EpayCreateOrder(epayCfg, epayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
-			if err != nil {
-				utils.Success(c, record)
-				return
-			}
-
-			if err := db.Model(&record).Update("payment_url", &paymentURL).Error; err != nil {
-				utils.InternalError(c, "更新支付链接失败")
-				return
-			}
-			if err := db.First(&record, record.ID).Error; err != nil {
-				utils.InternalError(c, "读取充值记录失败")
-				return
-			}
-
-			utils.Success(c, gin.H{
-				"record":         record,
-				"transaction_id": txID,
-				"payment_url":    paymentURL,
-			})
-			return
-		}
-
-		// CodePay payment
-		if payConfig.PayType == "codepay" || payConfig.PayType == "codepay_alipay" || payConfig.PayType == "codepay_wxpay" {
-			codepayCfg, err := services.GetCodepayConfig()
-			if err != nil {
-				utils.Success(c, record)
-				return
-			}
-
-			codepayType := "alipay"
-			if payConfig.PayType == "codepay_wxpay" {
-				codepayType = "wxpay"
-			}
-
-			orderName := "充值-" + record.OrderNo
-			notifyURL, returnURL := services.BuildPaymentURLs("codepay", record.OrderNo)
-			paymentURL, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
-			if err != nil {
-				utils.Success(c, record)
-				return
-			}
-
-			if err := db.Model(&record).Update("payment_url", &paymentURL).Error; err != nil {
-				utils.InternalError(c, "更新支付链接失败")
-				return
-			}
-			if err := db.First(&record, record.ID).Error; err != nil {
-				utils.InternalError(c, "读取充值记录失败")
-				return
-			}
-
-			utils.Success(c, gin.H{
-				"record":         record,
-				"transaction_id": txID,
-				"payment_url":    paymentURL,
-			})
-			return
 		}
 	}
 
-	utils.Success(c, record)
+	utils.Success(c, gin.H{"record": record})
 }
 
 func GetRechargeStatus(c *gin.Context) {

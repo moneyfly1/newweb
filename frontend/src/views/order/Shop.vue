@@ -223,6 +223,33 @@
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
     </common-drawer>
+
+    <!-- CodePay Page Payment Drawer -->
+    <common-drawer
+      v-model:show="showCodepayModal"
+      title="码支付"
+      :width="500"
+      :mask-closable="false"
+      show-footer
+      :show-confirm="false"
+      cancel-text="取消支付"
+      @cancel="showCodepayModal = false"
+      @after-leave="stopPolling"
+    >
+      <div class="codepay-window-container" style="text-align: center; padding: 24px 0;">
+        <p style="margin-bottom: 20px; color: #666; font-size: 15px;">请在新打开的页面中完成支付</p>
+        <n-button type="primary" size="large" @click="openCodepayWindow">
+          打开支付页面
+        </n-button>
+        <p style="margin-top: 20px; color: #999; font-size: 13px;">
+          如果页面被浏览器拦截，请允许弹出窗口
+        </p>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">
+          支付完成后系统会自动确认并跳转，若未更新请前往订单页手动刷新
+        </p>
+        <n-spin v-if="pollingStatus" size="small" style="margin-top: 12px;" />
+      </div>
+    </common-drawer>
   </div>
 </template>
 
@@ -432,7 +459,22 @@ const handleBuy = async (pkg: any) => {
 }
 
 const isQrCodeUrl = (url: string) => {
-  return url.includes('qr.alipay.com') || (url.startsWith('https://qr.') && url.length < 200)
+  // 支付宝二维码
+  if (url.includes('qr.alipay.com')) return true
+  // 通用二维码链接（短链接）
+  if (url.startsWith('https://qr.') && url.length < 200) return true
+  // 码支付二维码（通常是短链接或包含特定关键词）
+  if (url.includes('qrcode') || url.includes('qr_code')) return true
+  // 微信支付二维码
+  if (url.includes('wxpay') && url.startsWith('weixin://')) return true
+  // 其他常见二维码模式：短链接（长度小于100）且以 http 开头
+  if ((url.startsWith('http://') || url.startsWith('https://')) && url.length < 100) return true
+  return false
+}
+
+const isCodepayPageUrl = (url: string) => {
+  // 码支付的submit.php页面（需要在iframe中显示）
+  return url.includes('/xpay/epay/submit.php') || url.includes('/submit.php')
 }
 
 const goToPurchaseSuccess = (orderNo: string) => {
@@ -478,6 +520,28 @@ const stopPolling = () => {
 const showCryptoModal = ref(false)
 const cryptoInfo = ref<any>(null)
 const cryptoOrderNo = ref('')
+const showCodepayModal = ref(false)
+const codepayUrl = ref('')
+
+const openCodepayWindow = () => {
+  if (codepayUrl.value) {
+    window.open(codepayUrl.value, '_blank', 'width=800,height=700,scrollbars=yes,resizable=yes')
+  }
+}
+
+const showQrPayment = async (payUrl: string, orderNo: string) => {
+  if (isMobile.value) {
+    mobilePayUrl.value = payUrl
+    showQrModal.value = true
+  } else {
+    showQrModal.value = true
+    await nextTick()
+    if (qrCanvas.value) {
+      QRCode.toCanvas(qrCanvas.value, payUrl, { width: 240, margin: 2 })
+    }
+  }
+  startPolling(orderNo)
+}
 
 const handlePay = async () => {
   if (!orderInfo.value) return
@@ -509,19 +573,25 @@ const handlePay = async () => {
 
       if (data?.payment_url) {
         showPaymentModal.value = false
-        if (isMobile.value) {
-          // Mobile: show button to open payment app
-          mobilePayUrl.value = data.payment_url
-          showQrModal.value = true
+
+        if (data?.payment_mode === 'page') {
+          codepayUrl.value = data.payment_url
+          showCodepayModal.value = true
+          await nextTick()
+          openCodepayWindow()
+          startPolling(orderInfo.value.order_no)
+        } else if (data?.payment_mode === 'qrcode') {
+          await showQrPayment(data.payment_url, orderInfo.value.order_no)
+        } else if (data?.payment_mode === 'redirect') {
+          safeRedirect(data.payment_url)
+        } else if (isCodepayPageUrl(data.payment_url)) {
+          codepayUrl.value = data.payment_url
+          showCodepayModal.value = true
+          await nextTick()
+          openCodepayWindow()
           startPolling(orderInfo.value.order_no)
         } else if (isQrCodeUrl(data.payment_url)) {
-          // Desktop: show QR code
-          showQrModal.value = true
-          await nextTick()
-          if (qrCanvas.value) {
-            QRCode.toCanvas(qrCanvas.value, data.payment_url, { width: 240, margin: 2 })
-          }
-          startPolling(orderInfo.value.order_no)
+          await showQrPayment(data.payment_url, orderInfo.value.order_no)
         } else {
           safeRedirect(data.payment_url)
         }

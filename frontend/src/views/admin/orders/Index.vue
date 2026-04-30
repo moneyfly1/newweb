@@ -1,6 +1,6 @@
 <template>
   <div class="admin-orders-page admin-page-shell">
-    <div class="page-header">
+    <div class="page-header" v-if="!appStore.isMobile">
       <div class="header-left">
         <h2 class="page-title">订单管理</h2>
         <p class="page-subtitle">查看和处理全站订单，支持退款、状态调整及财务对账</p>
@@ -29,6 +29,36 @@
             刷新
           </n-button>
         </n-space>
+      </div>
+    </div>
+
+    <div v-else class="mobile-toolbar">
+      <div class="mobile-toolbar-title">订单管理</div>
+      <div class="mobile-toolbar-controls">
+        <n-input
+          v-model:value="searchQuery"
+          placeholder="订单号 / 用户ID / 邮箱"
+          clearable
+          size="small"
+          @keyup.enter="handleSearch"
+        >
+          <template #prefix><n-icon :component="SearchOutline" /></template>
+        </n-input>
+        <div class="mobile-toolbar-row">
+          <n-select
+            v-model:value="statusFilter"
+            placeholder="所有状态"
+            clearable
+            size="small"
+            :options="statusOptions"
+            @update:value="handleSearch"
+          />
+          <n-button size="small" type="primary" @click="handleSearch">搜索</n-button>
+          <n-button size="small" @click="fetchOrders">
+            <template #icon><n-icon><refresh-outline /></n-icon></template>
+            刷新
+          </n-button>
+        </div>
       </div>
     </div>
 
@@ -92,15 +122,14 @@
 
     <n-card :bordered="false" class="main-card">
       <n-space vertical :size="16">
-
-        <!-- Batch operations -->
-        <n-space v-if="checkedRowKeys.length > 0" align="center" class="batch-operations">
+        <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" class="batch-operations">
           <span class="batch-selected-text">已选择 {{ checkedRowKeys.length }} 项</span>
           <n-button size="small" type="warning" @click="handleBatchCancel">批量取消</n-button>
           <n-button size="small" type="error" @click="handleBatchRefund">批量退款</n-button>
         </n-space>
 
         <n-data-table
+          v-if="!appStore.isMobile"
           remote
           :columns="columns"
           :data="orders"
@@ -110,16 +139,77 @@
           :single-line="false"
           :row-key="(row: any) => row.id"
           :checked-row-keys="checkedRowKeys"
-          :scroll-x="appStore.isMobile ? 1100 : 1450"
+          :scroll-x="1450"
           class="unified-admin-table"
           @update:checked-row-keys="(keys: number[]) => { checkedRowKeys = keys }"
           @update:page="(p: number) => { pagination.page = p; fetchOrders() }"
           @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; fetchOrders() }"
         />
+
+        <template v-else>
+          <n-spin :show="loading">
+            <div v-if="orders.length === 0" class="mobile-empty">暂无订单</div>
+            <div v-else class="mobile-card-list">
+              <div
+                v-for="order in orders"
+                :key="order.id"
+                class="mobile-card order-mobile-card"
+                @click="handleViewDetail(order)"
+              >
+                <div class="card-header">
+                  <div class="card-title-block">
+                    <div class="card-title mono">{{ order.order_no }}</div>
+                    <div class="card-sub">UID: {{ order.user_id }} · {{ order.user_email || '-' }}</div>
+                  </div>
+                  <n-tag :type="getStatusType(order.status)" size="small">{{ getStatusText(order.status) }}</n-tag>
+                </div>
+                <div class="card-body">
+                  <div class="card-row">
+                    <span class="card-label">订单类型</span>
+                    <span>{{ getOrderTypeText(order) }}</span>
+                  </div>
+                  <div class="card-row">
+                    <span class="card-label">订单内容</span>
+                    <span class="card-value-strong">{{ getOrderSummary(order) }}</span>
+                  </div>
+                  <div class="card-row">
+                    <span class="card-label">实付金额</span>
+                    <span class="amount-text">{{ formatCurrency(order.final_amount || order.amount || 0) }}</span>
+                  </div>
+                  <div class="card-row">
+                    <span class="card-label">支付方式</span>
+                    <span>{{ getPaymentMethodText(order) }}</span>
+                  </div>
+                  <div class="card-row">
+                    <span class="card-label">创建时间</span>
+                    <span>{{ formatDate(order.created_at) }}</span>
+                  </div>
+                </div>
+                <div class="card-actions" @click.stop>
+                  <n-button size="small" quaternary type="info" @click="handleViewDetail(order)">详情</n-button>
+                  <n-button v-if="order.status === 'pending'" size="small" type="error" @click="handleCancel(order)">取消</n-button>
+                  <n-button v-if="order.status === 'paid'" size="small" type="success" @click="handleComplete(order)">完成</n-button>
+                  <n-button v-if="['paid', 'completed'].includes(order.status)" size="small" type="warning" @click="handleRefund(order)">退款</n-button>
+                </div>
+              </div>
+            </div>
+          </n-spin>
+          <n-pagination
+            v-if="orders.length > 0"
+            v-model:page="pagination.page"
+            v-model:page-size="pagination.pageSize"
+            :item-count="pagination.itemCount"
+            :page-sizes="pagination.pageSizes"
+            :show-size-picker="pagination.showSizePicker"
+            style="margin-top: 16px"
+            @update:page="() => fetchOrders()"
+            @update:page-size="() => { pagination.page = 1; fetchOrders() }"
+          />
+        </template>
       </n-space>
     </n-card>
 
-    <common-drawer v-model:show="showDetailDrawer" title="订单流水详情" :width="540">
+    <common-drawer v-model:show="showDetailDrawer" title="订单流水详情" :width="appStore.isMobile ? '100%' : 540">
       <div v-if="currentOrder" class="detail-container">
         <div class="detail-header">
           <div class="amount-display">
@@ -144,19 +234,22 @@
           <n-descriptions-item label="优惠抵扣" v-if="currentOrder.discount_amount > 0">
             - {{ formatCurrency(currentOrder.discount_amount) }}
           </n-descriptions-item>
-          <n-descriptions-item label="支付网关">{{ getPaymentMethodText(currentOrder.payment_method_name) }}</n-descriptions-item>
+          <n-descriptions-item label="支付网关">{{ getPaymentMethodText(currentOrder) }}</n-descriptions-item>
           <n-descriptions-item label="创建时间">{{ formatFullDate(currentOrder.created_at) }}</n-descriptions-item>
           <n-descriptions-item label="支付时间" v-if="currentOrder.payment_time">
             {{ formatFullDate(currentOrder.payment_time) }}
           </n-descriptions-item>
           <n-descriptions-item label="外部流水号" v-if="currentOrder.gateway_order_id">
-            <code class="gateway-no">{{ currentOrder.gateway_order_id }}</code>
+            <div class="copyable-row wrap-copyable-row">
+              <code class="gateway-no">{{ currentOrder.gateway_order_id }}</code>
+              <n-button size="tiny" quaternary @click="copyToClipboard(currentOrder.gateway_order_id)">复制</n-button>
+            </div>
           </n-descriptions-item>
         </n-descriptions>
 
         <div class="detail-actions" v-if="['paid', 'completed', 'pending'].includes(currentOrder.status)">
           <n-divider />
-          <n-space justify="end">
+          <n-space :justify="appStore.isMobile ? 'start' : 'end'" :wrap="true">
             <n-button v-if="currentOrder.status === 'pending'" type="error" ghost @click="handleCancel(currentOrder)">取消订单</n-button>
             <n-button v-if="currentOrder.status === 'paid'" type="success" @click="handleComplete(currentOrder)">标记完成</n-button>
             <n-button v-if="['paid', 'completed'].includes(currentOrder.status)" type="warning" @click="handleRefund(currentOrder)">全额退款</n-button>
@@ -456,15 +549,49 @@ onMounted(() => fetchOrders())
 .time-text { color: #64748b; font-size: 13px; }
 .left-text { justify-content: flex-start; }
 
-.detail-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; padding: 0 4px; }
+.mobile-empty { text-align: center; color: #999; padding: 40px 0; }
+.order-mobile-card { cursor: pointer; }
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border-color, #f0f0f0); }
+.card-title-block { min-width: 0; }
+.card-title { font-weight: 600; color: var(--text-color, #333); }
+.card-title.mono { font-family: monospace; font-size: 13px; word-break: break-all; }
+.card-sub { margin-top: 4px; font-size: 12px; color: var(--text-color-secondary, #999); word-break: break-all; }
+.card-body { padding: 10px 14px; }
+.card-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 13px; }
+.card-row > span:last-child { text-align: right; color: var(--text-color, #333); word-break: break-word; }
+.card-label { color: var(--text-color-secondary, #999); flex-shrink: 0; }
+.card-value-strong { font-weight: 500; }
+
+.detail-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; padding: 0 4px; gap: 12px; }
 .amount-display .label { font-size: 12px; color: #888; margin-bottom: 4px; }
 .amount-display .value { font-size: 32px; font-weight: 800; color: #10b981; line-height: 1; }
 .copyable-row { display: flex; align-items: center; gap: 8px; }
+.wrap-copyable-row { align-items: flex-start; flex-wrap: wrap; }
 .order-no-code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
 .gateway-no { font-size: 11px; color: #666; word-break: break-all; }
 
 @media (max-width: 767px) {
   .admin-page-shell { padding: 12px; }
-  .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .stats-summary { margin-bottom: 16px; }
+  .mini-stat-card { padding: 14px 12px; }
+  .mini-stat-card .stat-value { font-size: 18px; }
+  .mobile-toolbar-row :deep(.n-select),
+  .mobile-toolbar-row :deep(.n-base-selection) {
+    min-width: 0;
+  }
+  .mobile-toolbar-row > *:first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .mobile-toolbar-row > .n-button {
+    flex-shrink: 0;
+  }
+  .detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .amount-display .value {
+    font-size: 28px;
+  }
 }
 </style>

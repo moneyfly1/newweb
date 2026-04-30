@@ -162,7 +162,7 @@
           <n-descriptions-item label="ID">{{ detailData.user_id || detailData.id }}</n-descriptions-item>
           <n-descriptions-item label="用户名">{{ detailData.username || '-' }}</n-descriptions-item>
           <n-descriptions-item label="邮箱">{{ detailData.user_email || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="余额">¥{{ (detailData.user_balance ?? 0).toFixed(2) }}</n-descriptions-item>
+          <n-descriptions-item label="余额">{{ formatCurrency(detailData.user_balance) }}</n-descriptions-item>
           <n-descriptions-item label="状态">
             <n-tag :type="detailData.user_is_active ? 'success' : 'error'" size="small">{{ detailData.user_is_active ? '激活' : '禁用' }}</n-tag>
             <n-tag v-if="detailData.user_is_admin" type="warning" size="small" style="margin-left:4px">管理员</n-tag>
@@ -251,6 +251,7 @@ import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { formatCurrency } from '@/utils/amount'
 import { formatLocation, parseDeviceInfo, translateLoginStatus } from '@/utils/i18n'
 import {
   listAdminSubscriptions, getAdminSubscription, resetAdminSubscription,
@@ -357,7 +358,7 @@ const handleDeleteDevice = (device) => {
 
 const orderCols = [
   { title: '订单号', key: 'order_no', width: 180, ellipsis: { tooltip: true } },
-  { title: '金额', key: 'final_amount', width: 90, render: (r) => `¥${(r.final_amount ?? r.amount ?? 0).toFixed(2)}` },
+  { title: '金额', key: 'final_amount', width: 90, render: (r) => formatCurrency(r.final_amount ?? r.amount ?? 0) },
   { title: '状态', key: 'status', width: 80 },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]
@@ -389,13 +390,13 @@ const resetCols = [
 ]
 const balanceCols = [
   { title: '类型', key: 'change_type', width: 90 },
-  { title: '金额', key: 'amount', width: 90, render: (r) => `¥${(r.amount ?? 0).toFixed(2)}` },
-  { title: '变动后', key: 'balance_after', width: 90, render: (r) => `¥${(r.balance_after ?? 0).toFixed(2)}` },
+  { title: '金额', key: 'amount', width: 90, render: (r) => formatCurrency(r.amount) },
+  { title: '变动后', key: 'balance_after', width: 90, render: (r) => formatCurrency(r.balance_after) },
   { title: '说明', key: 'description', ellipsis: { tooltip: true }, render: (r) => r.description || '-' },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]
 const rechargeCols = [
-  { title: '金额', key: 'amount', width: 90, render: (r) => `¥${(r.amount ?? 0).toFixed(2)}` },
+  { title: '金额', key: 'amount', width: 90, render: (r) => formatCurrency(r.amount) },
   { title: '方式', key: 'payment_method', width: 100 },
   { title: '状态', key: 'status', width: 80 },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }

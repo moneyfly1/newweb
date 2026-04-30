@@ -3,7 +3,7 @@
     <n-space vertical :size="20">
       <div class="header">
         <h1 class="title">余额充值</h1>
-        <p class="subtitle">当前余额：<span class="balance-val">¥{{ balance }}</span></p>
+        <p class="subtitle">当前余额：<span class="balance-val">{{ formatCurrency(balance) }}</span></p>
       </div>
 
       <!-- 待支付充值提示 -->
@@ -159,11 +159,11 @@
     >
       <n-space vertical :size="14">
         <n-alert type="success" :bordered="false">
-          您已成功充值 <strong>¥{{ rechargeSuccessInfo?.amount.toFixed(2) || '0.00' }}</strong>。
+          您已成功充值 <strong>{{ formatCurrency(rechargeSuccessInfo?.amount) }}</strong>。
         </n-alert>
         <n-descriptions :column="1" bordered>
-          <n-descriptions-item label="充值金额">¥{{ rechargeSuccessInfo?.amount.toFixed(2) || '0.00' }}</n-descriptions-item>
-          <n-descriptions-item label="当前余额">¥{{ rechargeSuccessInfo?.balance || '0.00' }}</n-descriptions-item>
+          <n-descriptions-item label="充值金额">{{ formatCurrency(rechargeSuccessInfo?.amount) }}</n-descriptions-item>
+          <n-descriptions-item label="当前余额">{{ formatCurrency(rechargeSuccessInfo?.balance) }}</n-descriptions-item>
           <n-descriptions-item label="余额用途">可用于购买套餐和升级设备数量</n-descriptions-item>
         </n-descriptions>
       </n-space>
@@ -180,6 +180,7 @@ import { getPaymentMethods, createRecharge, listRechargeRecords, getRechargeStat
 import { getDashboardInfo } from '@/api/user'
 import { useAppStore } from '@/stores/app'
 import { safeRedirect } from '@/utils/security'
+import { formatAmount, formatCurrency } from '@/utils/amount'
 import { getErrorMessage } from '@/utils/error'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
@@ -233,7 +234,7 @@ const loadData = async () => {
       getPaymentMethods(),
       listRechargeRecords({ page: 1, page_size: 20, status: 'pending' }),
     ])
-    balance.value = (dashRes.data?.balance ?? 0).toFixed(2)
+    balance.value = formatAmount(dashRes.data?.balance ?? 0)
     const pmData = pmRes.data || {}
     paymentMethods.value = pmData.methods || []
     if (paymentMethods.value.length > 0) {

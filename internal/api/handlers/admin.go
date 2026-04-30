@@ -30,6 +30,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// roundToTwoDecimals 格式化浮点数为两位小数，避免浮点精度问题
+func roundToTwoDecimals(value float64) float64 {
+	return float64(int(value*100+0.5)) / 100
+}
+
 // ==================== Dashboard ====================
 
 func AdminDashboard(c *gin.Context) {
@@ -163,8 +168,8 @@ func AdminDashboard(c *gin.Context) {
 	resultData := gin.H{
 		"total_users":          userCount,
 		"active_subscriptions": subCount,
-		"today_revenue":        revenueToday,
-		"month_revenue":        revenueMonth,
+		"today_revenue":        roundToTwoDecimals(revenueToday),
+		"month_revenue":        roundToTwoDecimals(revenueMonth),
 		"pending_orders":       pendingOrders,
 		"pending_tickets":      pendingTickets,
 		"new_users_today":      newUsersToday,
@@ -233,7 +238,7 @@ func AdminStats(c *gin.Context) {
 		"subscription_count": subCount,
 		"active_sub_count":   activeSubCount,
 		"node_count":         nodeCount,
-		"total_revenue":      totalRevenue,
+		"total_revenue":      roundToTwoDecimals(totalRevenue),
 	}
 
 	cache.SetDashboardCache("admin_stats_overview", resultData, 60*time.Second)
@@ -2820,9 +2825,9 @@ func AdminRevenueStats(c *gin.Context) {
 	var orderCount int64
 	db.Model(&models.Order{}).Where("status IN ?", []string{"paid", "completed"}).Count(&orderCount)
 	utils.Success(c, gin.H{
-		"total_revenue":     totalRevenue,
-		"today_revenue":     todayRevenue,
-		"monthly_revenue":   monthRevenue,
+		"total_revenue":     roundToTwoDecimals(totalRevenue),
+		"today_revenue":     roundToTwoDecimals(todayRevenue),
+		"monthly_revenue":   roundToTwoDecimals(monthRevenue),
 		"paid_orders_count": orderCount,
 	})
 }
@@ -3854,12 +3859,12 @@ func AdminFinancialReport(c *gin.Context) {
 		Count(&newSubscriptions)
 
 	summary := gin.H{
-		"total_revenue":        totalRevenue,
+		"total_revenue":        roundToTwoDecimals(totalRevenue),
 		"total_orders":         totalOrders,
 		"paid_orders":          paidOrders,
 		"refunded_orders":      refundedOrders,
-		"average_order_amount": avgOrderAmount,
-		"total_recharge":       totalRecharge,
+		"average_order_amount": roundToTwoDecimals(avgOrderAmount),
+		"total_recharge":       roundToTwoDecimals(totalRecharge),
 		"total_recharge_count": totalRechargeCount,
 		"new_users":            newUsers,
 		"new_subscriptions":    newSubscriptions,

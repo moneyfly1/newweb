@@ -33,7 +33,7 @@
               </div>
               <div class="stat-content">
                 <span class="stat-label">账户余额</span>
-                <span class="stat-value">¥{{ (userBalance ?? 0).toFixed(2) }}</span>
+                <span class="stat-value">{{ formatCurrency(userBalance) }}</span>
               </div>
             </div>
             <div class="stat-item">
@@ -110,7 +110,7 @@
                     <template #icon><n-icon :component="CopyOutline" /></template>
                     复制
                   </n-button>
-                  <n-button size="small" @click="showQrCode(subscriptionUrl, '通用订阅')">
+                  <n-button size="small" @click="showQrCode(subscriptionUrl, '通用订阅', 'shadowrocket')">
                     <template #icon><n-icon :component="QrCodeOutline" /></template>
                     二维码
                   </n-button>
@@ -130,7 +130,7 @@
                     <template #icon><n-icon :component="CopyOutline" /></template>
                     复制
                   </n-button>
-                  <n-button size="small" @click="showQrCode(clashUrl, 'Clash 订阅')">
+                  <n-button size="small" @click="showQrCode(clashUrl, 'Clash 订阅', 'raw')">
                     <template #icon><n-icon :component="QrCodeOutline" /></template>
                     二维码
                   </n-button>
@@ -214,7 +214,7 @@
     <common-drawer v-model:show="showQrModal" :title="qrTitle" :width="340">
       <div style="text-align: center;">
         <canvas ref="qrCanvas" style="margin: 0 auto;"></canvas>
-        <p style="margin-top: 12px; color: #999; font-size: 13px;">使用客户端扫描二维码导入订阅</p>
+        <p style="margin-top: 12px; color: #999; font-size: 13px;">{{ qrHint }}</p>
       </div>
     </common-drawer>
 
@@ -240,18 +240,18 @@
             增加 {{ upgradeAddDevices }} 台设备<span v-if="upgradeExtendMonths > 0">，续期 {{ upgradeExtendMonths }} 月</span>
           </n-descriptions-item>
           <n-descriptions-item label="应付金额">
-            <span style="color: #18a058; font-size: 20px; font-weight: bold;">¥{{ (upgradeOrderInfo?.final_amount ?? upgradeOrderInfo?.amount ?? 0).toFixed(2) }}</span>
+            <span style="color: #18a058; font-size: 20px; font-weight: bold;">{{ formatCurrency(upgradeOrderInfo?.final_amount ?? upgradeOrderInfo?.amount ?? 0) }}</span>
           </n-descriptions-item>
           <n-descriptions-item label="账户余额">
             <span :style="{ color: (userBalance ?? 0) >= (upgradeOrderInfo?.final_amount ?? upgradeOrderInfo?.amount ?? 0) ? '#18a058' : '#e03050' }">
-              ¥{{ (userBalance ?? 0).toFixed(2) }}
+              {{ formatCurrency(userBalance) }}
             </span>
           </n-descriptions-item>
           <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="余额抵扣">
-            <span style="color: #18a058;">-¥{{ balanceDeductAmount.toFixed(2) }}</span>
+            <span style="color: #18a058;">-{{ formatCurrency(balanceDeductAmount) }}</span>
           </n-descriptions-item>
           <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="还需支付">
-            <span style="color: #e03050; font-size: 18px; font-weight: bold;">¥{{ remainingAmount.toFixed(2) }}</span>
+            <span style="color: #e03050; font-size: 18px; font-weight: bold;">{{ formatCurrency(remainingAmount) }}</span>
           </n-descriptions-item>
         </n-descriptions>
         <div class="payment-method">
@@ -266,7 +266,7 @@
           </n-radio-group>
           <div v-if="paymentMethod !== 'balance' && (userBalance ?? 0) > 0 && balanceEnabled" style="margin-top: 8px;">
             <n-checkbox v-model:checked="useBalanceDeduct">
-              使用余额抵扣 ¥{{ Math.min(userBalance ?? 0, finalPayAmount).toFixed(2) }}
+              使用余额抵扣 {{ formatCurrency(Math.min(userBalance ?? 0, finalPayAmount)) }}
             </n-checkbox>
           </div>
         </div>
@@ -334,10 +334,10 @@
         </n-form-item>
         <div v-if="upgradeResult" class="upgrade-result">
           <n-descriptions :column="1" bordered size="small">
-            <n-descriptions-item label="新增设备费用">¥{{ upgradeResult.fee_new_devices.toFixed(2) }}</n-descriptions-item>
-            <n-descriptions-item label="续期费用">¥{{ upgradeResult.fee_extend.toFixed(2) }}</n-descriptions-item>
+            <n-descriptions-item label="新增设备费用">{{ formatCurrency(upgradeResult.fee_new_devices) }}</n-descriptions-item>
+            <n-descriptions-item label="续期费用">{{ formatCurrency(upgradeResult.fee_extend) }}</n-descriptions-item>
             <n-descriptions-item label="合计">
-              <span style="color: #e03050; font-size: 18px; font-weight: bold;">¥{{ upgradeResult.total.toFixed(2) }}</span>
+              <span style="color: #e03050; font-size: 18px; font-weight: bold;">{{ formatCurrency(upgradeResult.total) }}</span>
             </n-descriptions-item>
           </n-descriptions>
         </div>
@@ -361,7 +361,7 @@
           <n-descriptions-item label="续期时长">{{ upgradeSuccessInfo.extendMonths > 0 ? `${upgradeSuccessInfo.extendMonths} 个月` : '未续期' }}</n-descriptions-item>
           <n-descriptions-item label="升级后设备上限">{{ upgradeSuccessInfo.deviceLimit }} 台</n-descriptions-item>
           <n-descriptions-item label="升级后到期时间">{{ formatDate(upgradeSuccessInfo.expireTime) }}</n-descriptions-item>
-          <n-descriptions-item label="本次支付金额">¥{{ upgradeSuccessInfo.amount.toFixed(2) }}</n-descriptions-item>
+          <n-descriptions-item label="本次支付金额">{{ formatCurrency(upgradeSuccessInfo.amount) }}</n-descriptions-item>
         </n-descriptions>
       </n-space>
     </common-drawer>
@@ -390,6 +390,7 @@ import { getErrorMessage, silentCatch } from '@/utils/error'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { formatLocation } from '@/utils/i18n'
+import { formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
@@ -427,6 +428,7 @@ const upgradeSuccessInfo = ref<{ addDevices: number; extendMonths: number; devic
 const showQrModal = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const qrTitle = ref('')
+const qrHint = ref('使用客户端扫描二维码导入订阅')
 
 // Upgrade
 const upgradeAddDevices = ref(1)
@@ -633,14 +635,18 @@ const detectBrowserOS = (): string => {
   return 'unknown'
 }
 
-const showQrCode = async (url: string, label: string) => {
+const showQrCode = async (url: string, label: string, mode: 'shadowrocket' | 'raw' = 'raw') => {
   if (!url) { message.warning('暂无可用订阅'); return }
   const expiry = subscription.value?.expire_time ? formatDate(subscription.value.expire_time) : ''
   qrTitle.value = expiry ? `${label} (到期: ${expiry})` : label
+  qrHint.value = mode === 'shadowrocket'
+    ? '请直接使用 Shadowrocket 扫描二维码，一键添加订阅'
+    : '使用客户端扫描二维码导入订阅'
+  const qrValue = mode === 'shadowrocket' ? `shadowrocket://add/${encodeURIComponent(url)}` : url
   showQrModal.value = true
   await nextTick()
   if (qrCanvas.value) {
-    QRCode.toCanvas(qrCanvas.value, url, { width: 240, margin: 2 })
+    QRCode.toCanvas(qrCanvas.value, qrValue, { width: 240, margin: 2 })
   }
 }
 

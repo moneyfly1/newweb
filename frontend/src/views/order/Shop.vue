@@ -6,7 +6,7 @@
         <p class="subtitle">选择适合您的订阅套餐</p>
         <div v-if="userBalance !== null" class="balance-info">
           <span>账户余额：</span>
-          <span class="balance-amount">¥{{ userBalance.toFixed(2) }}</span>
+          <span class="balance-amount">{{ formatCurrency(userBalance) }}</span>
         </div>
       </div>
 
@@ -107,21 +107,21 @@
           <n-descriptions-item label="有效期">{{ selectedPackage?.duration_days }} 天</n-descriptions-item>
           <n-descriptions-item label="原价">¥{{ orderInfo?.amount }}</n-descriptions-item>
           <n-descriptions-item v-if="couponInfo" label="优惠">
-            <span style="color: #e03050;">-¥{{ (orderInfo?.amount - orderInfo?.final_amount).toFixed(2) }}</span>
+            <span style="color: #e03050;">-{{ formatCurrency(orderInfo?.amount - orderInfo?.final_amount) }}</span>
           </n-descriptions-item>
           <n-descriptions-item label="账户余额">
             <span :style="{ color: userBalance >= (orderInfo?.final_amount || 0) ? '#18a058' : '#e03050' }">
-              ¥{{ userBalance?.toFixed(2) }}
+              {{ formatCurrency(userBalance) }}
             </span>
           </n-descriptions-item>
           <n-descriptions-item label="实付金额">
             <span style="color: #18a058; font-size: 20px; font-weight: bold;">¥{{ orderInfo?.final_amount }}</span>
           </n-descriptions-item>
           <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="余额抵扣">
-            <span style="color: #18a058;">-¥{{ balanceDeductAmount.toFixed(2) }}</span>
+            <span style="color: #18a058;">-{{ formatCurrency(balanceDeductAmount) }}</span>
           </n-descriptions-item>
           <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="还需支付">
-            <span style="color: #e03050; font-size: 18px; font-weight: bold;">¥{{ remainingAmount.toFixed(2) }}</span>
+            <span style="color: #e03050; font-size: 18px; font-weight: bold;">{{ formatCurrency(remainingAmount) }}</span>
           </n-descriptions-item>
         </n-descriptions>
 
@@ -142,7 +142,7 @@
           <n-radio-group v-model:value="paymentMethod">
             <n-space vertical :size="8">
               <n-radio v-if="balanceEnabled" value="balance" :disabled="userBalance <= 0">
-                余额支付 (¥{{ userBalance.toFixed(2) }})
+                余额支付 ({{ formatCurrency(userBalance) }})
                 <span v-if="!canFullBalance && userBalance > 0" style="color: #e03050; font-size: 12px; margin-left: 4px;">余额不足</span>
               </n-radio>
               <n-radio v-for="pm in paymentMethods" :key="pm.id" :value="'pm_' + pm.id">
@@ -152,10 +152,10 @@
           </n-radio-group>
           <div v-if="paymentMethod !== 'balance' && userBalance > 0 && balanceEnabled" style="margin-top: 8px;">
             <n-checkbox v-model:checked="useBalanceDeduct">
-              使用余额抵扣 ¥{{ Math.min(userBalance, finalPayAmount).toFixed(2) }}
+              使用余额抵扣 {{ formatCurrency(Math.min(userBalance, finalPayAmount)) }}
             </n-checkbox>
             <div v-if="useBalanceDeduct" style="margin-top: 4px; font-size: 13px; color: #666;">
-              余额抵扣：¥{{ balanceDeductAmount.toFixed(2) }}，还需支付：<span style="color: #e03050; font-weight: 600;">¥{{ remainingAmount.toFixed(2) }}</span>
+              余额抵扣：{{ formatCurrency(balanceDeductAmount) }}，还需支付：<span style="color: #e03050; font-weight: 600;">{{ formatCurrency(remainingAmount) }}</span>
             </div>
           </div>
         </div>
@@ -265,6 +265,7 @@ import { listPackages, verifyCoupon, getPaymentMethods, getPublicConfig } from '
 import { createOrder, payOrder, createPayment, getOrderStatus, createCustomOrder } from '@/api/order'
 import { getDashboardInfo } from '@/api/user'
 import { safeRedirect } from '@/utils/security'
+import { formatCurrency } from '@/utils/amount'
 import { getErrorMessage, silentCatch } from '@/utils/error'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 

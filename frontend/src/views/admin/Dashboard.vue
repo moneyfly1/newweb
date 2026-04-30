@@ -116,7 +116,7 @@
                 <div class="activity-main">
                   <div class="activity-title">{{ order.user_email || `用户 #${order.user_id}` }}</div>
                   <div class="activity-meta">
-                    <span class="amount">¥{{ (order.final_amount || order.amount || 0).toFixed(2) }}</span>
+                    <span class="amount">{{ formatCurrency(order.final_amount || order.amount || 0) }}</span>
                     <n-tag :type="getOrderStatusType(order.status)" size="small" round :bordered="false">
                       {{ getOrderStatusText(order.status) }}
                     </n-tag>
@@ -154,6 +154,7 @@ import VChart from 'vue-echarts'
 import { useRouter } from 'vue-router'
 import { getAdminDashboard } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { formatCurrency } from '@/utils/amount'
 
 use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent, VisualMapComponent])
 

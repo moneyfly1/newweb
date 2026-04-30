@@ -148,7 +148,7 @@
                 </div>
                 <div class="card-row">
                   <span class="card-label">余额</span>
-                  <span>¥{{ (row.balance ?? 0).toFixed(2) }}</span>
+                  <span>{{ formatCurrency(row.balance) }}</span>
                 </div>
                 <div class="card-row">
                   <span class="card-label">等级</span>
@@ -264,7 +264,7 @@
           <n-descriptions-item label="ID">{{ userDetail.id }}</n-descriptions-item>
           <n-descriptions-item label="用户名">{{ userDetail.username || '-' }}</n-descriptions-item>
           <n-descriptions-item label="邮箱">{{ userDetail.email || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="余额">¥{{ (userDetail.balance ?? 0).toFixed(2) }}</n-descriptions-item>
+          <n-descriptions-item label="余额">{{ formatCurrency(userDetail.balance) }}</n-descriptions-item>
           <n-descriptions-item label="状态">
             <n-tag :type="userDetail.is_active ? 'success' : 'error'" size="small">{{ userDetail.is_active ? '激活' : '禁用' }}</n-tag>
             <n-tag v-if="userDetail.is_admin" type="warning" size="small" class="tag-spacing">管理员</n-tag>
@@ -400,6 +400,7 @@ import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useRoute } from 'vue-router'
 import { translateLoginStatus, translateBalanceChangeType, parseDeviceInfo, formatLocation } from '@/utils/i18n'
+import { formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import '@/styles/admin-common.css'
 
@@ -507,7 +508,7 @@ const columns = [
     key: 'balance',
     width: 100, resizable: true,
     sorter: (a, b) => a.balance - b.balance,
-    render: (row) => `¥${(row.balance ?? 0).toFixed(2)}`
+    render: (row) => formatCurrency(row.balance)
   },
   {
     title: '状态',
@@ -939,7 +940,7 @@ const subStatusText = (s) => ({ active: '活跃', expiring: '即将到期', expi
 
 const orderCols = [
   { title: '订单号', key: 'order_no', width: 180, ellipsis: { tooltip: true } },
-  { title: '金额', key: 'final_amount', width: 90, render: (r) => `¥${(r.final_amount ?? r.amount ?? 0).toFixed(2)}` },
+  { title: '金额', key: 'final_amount', width: 90, render: (r) => formatCurrency(r.final_amount ?? r.amount ?? 0) },
   { title: '状态', key: 'status', width: 80 },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]
@@ -976,13 +977,13 @@ const resetCols = [
 ]
 const balanceCols = [
   { title: '类型', key: 'change_type', width: 110, render: (r) => translateBalanceChangeType(r.change_type) },
-  { title: '金额', key: 'amount', width: 90, render: (r) => `¥${(r.amount ?? 0).toFixed(2)}` },
-  { title: '变动后', key: 'balance_after', width: 90, render: (r) => `¥${(r.balance_after ?? 0).toFixed(2)}` },
+  { title: '金额', key: 'amount', width: 90, render: (r) => formatCurrency(r.amount) },
+  { title: '变动后', key: 'balance_after', width: 90, render: (r) => formatCurrency(r.balance_after) },
   { title: '说明', key: 'description', ellipsis: { tooltip: true }, render: (r) => r.description || '-' },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
 ]
 const rechargeCols = [
-  { title: '金额', key: 'amount', width: 90, render: (r) => `¥${(r.amount ?? 0).toFixed(2)}` },
+  { title: '金额', key: 'amount', width: 90, render: (r) => formatCurrency(r.amount) },
   { title: '方式', key: 'payment_method', width: 100 },
   { title: '状态', key: 'status', width: 80 },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }

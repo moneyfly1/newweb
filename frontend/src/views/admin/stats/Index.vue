@@ -67,12 +67,12 @@
               <div class="chart-bars">
                 <div class="bar-group">
                   <div class="bar revenue-bar" :style="{ width: barWidth(item.revenue, maxRevenue) + '%' }">
-                    <span v-if="item.revenue > 0" class="bar-text">¥{{ item.revenue.toFixed(2) }}</span>
+                    <span v-if="item.revenue > 0" class="bar-text">{{ formatCurrency(item.revenue) }}</span>
                   </div>
                 </div>
                 <div class="bar-group">
                   <div class="bar recharge-bar" :style="{ width: barWidth(item.recharge, maxRevenue) + '%' }">
-                    <span v-if="item.recharge > 0" class="bar-text">¥{{ item.recharge.toFixed(2) }}</span>
+                    <span v-if="item.recharge > 0" class="bar-text">{{ formatCurrency(item.recharge) }}</span>
                   </div>
                 </div>
               </div>
@@ -93,7 +93,7 @@
                 <div v-for="(item, index) in paymentMethodStats" :key="index" class="method-item">
                   <div class="method-info">
                     <span class="method-name">{{ item.method || '未知' }}</span>
-                    <span class="method-detail">{{ item.count }} 笔 / ¥{{ item.amount.toFixed(2) }}</span>
+                    <span class="method-detail">{{ item.count }} 笔 / {{ formatCurrency(item.amount) }}</span>
                   </div>
                   <n-progress
                     type="line"
@@ -116,7 +116,7 @@
                   <div class="mobile-stat-main">{{ item.package_name }}</div>
                   <div class="mobile-stat-meta">
                     <span>销量 {{ item.count }}</span>
-                    <strong>¥{{ item.amount.toFixed(2) }}</strong>
+                    <strong>{{ formatCurrency(item.amount) }}</strong>
                   </div>
                 </div>
               </div>
@@ -141,7 +141,7 @@
               <div class="mobile-stat-sub">用户ID：{{ item.user_id }}</div>
               <div class="mobile-stat-meta">
                 <span>{{ item.order_count }} 单</span>
-                <strong>¥{{ item.total_spent.toFixed(2) }}</strong>
+                <strong>{{ formatCurrency(item.total_spent) }}</strong>
               </div>
             </div>
           </div>
@@ -198,6 +198,7 @@ import { ref, computed, h, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { getFinancialReport, exportFinancialReport, getRegionStats } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { formatCurrency } from '@/utils/amount'
 
 const appStore = useAppStore()
 const message = useMessage()
@@ -254,14 +255,14 @@ const barWidth = (val: number, max: number) => max > 0 ? Math.max((val / max) * 
 const packageColumns = [
   { title: '套餐', key: 'package_name' },
   { title: '销量', key: 'count', width: 80 },
-  { title: '金额', key: 'amount', width: 120, render: (row: any) => h('span', `¥${row.amount.toFixed(2)}`) },
+  { title: '金额', key: 'amount', width: 120, render: (row: any) => h('span', formatCurrency(row.amount)) },
 ]
 
 const topUserColumns = [
   { title: '排名', key: 'index', width: 60, render: (_: any, index: number) => h('span', `${index + 1}`) },
   { title: '用户ID', key: 'user_id', width: 80 },
   { title: '用户名', key: 'username' },
-  { title: '消费总额', key: 'total_spent', width: 120, render: (row: any) => h('span', `¥${row.total_spent.toFixed(2)}`) },
+  { title: '消费总额', key: 'total_spent', width: 120, render: (row: any) => h('span', formatCurrency(row.total_spent)) },
   { title: '订单数', key: 'order_count', width: 80 },
 ]
 const buildParams = () => {

@@ -17,11 +17,11 @@
             <span class="stat-lbl">邀请人数</span>
           </div>
           <div class="stat-item">
-            <span class="stat-val" style="color: #f0a020">¥{{ (stats.total_inviter_reward || 0).toFixed(2) }}</span>
+            <span class="stat-val" style="color: #f0a020">{{ formatCurrency(stats.total_inviter_reward) }}</span>
             <span class="stat-lbl">邀请人奖励</span>
           </div>
           <div class="stat-item">
-            <span class="stat-val" style="color: #2080f0">¥{{ (stats.total_invitee_reward || 0).toFixed(2) }}</span>
+            <span class="stat-val" style="color: #2080f0">{{ formatCurrency(stats.total_invitee_reward) }}</span>
             <span class="stat-lbl">受邀人奖励</span>
           </div>
         </div>
@@ -77,8 +77,8 @@
                     <div class="card-body">
                       <div class="card-row"><span class="card-label">创建者</span><span>{{ code.username }}</span></div>
                       <div class="card-row"><span class="card-label">使用</span><span>{{ code.used_count }} / {{ code.max_uses || '∞' }}</span></div>
-                      <div class="card-row"><span class="card-label">邀请人奖励</span><span>¥{{ code.inviter_reward }}</span></div>
-                      <div class="card-row"><span class="card-label">受邀人奖励</span><span>¥{{ code.invitee_reward }}</span></div>
+                      <div class="card-row"><span class="card-label">邀请人奖励</span><span>{{ formatCurrency(code.inviter_reward) }}</span></div>
+                      <div class="card-row"><span class="card-label">受邀人奖励</span><span>{{ formatCurrency(code.invitee_reward) }}</span></div>
                     </div>
                     <div class="card-actions">
                       <n-button size="small" @click="handleToggle(code)">{{ code.is_active ? '禁用' : '启用' }}</n-button>
@@ -104,8 +104,8 @@
                       <div class="card-row"><span class="card-label">邀请人</span><span>{{ rel.inviter_username }}</span></div>
                       <div class="card-row"><span class="card-label">受邀人</span><span>{{ rel.invitee_username }}</span></div>
                       <div class="card-row"><span class="card-label">邀请码</span><span style="font-family:monospace">{{ rel.invite_code }}</span></div>
-                      <div class="card-row"><span class="card-label">邀请人奖励</span><span>¥{{ rel.inviter_reward_amount }} {{ rel.inviter_reward_given ? '✓' : '✗' }}</span></div>
-                      <div class="card-row"><span class="card-label">受邀人奖励</span><span>¥{{ rel.invitee_reward_amount }} {{ rel.invitee_reward_given ? '✓' : '✗' }}</span></div>
+                      <div class="card-row"><span class="card-label">邀请人奖励</span><span>{{ formatCurrency(rel.inviter_reward_amount) }} {{ rel.inviter_reward_given ? '✓' : '✗' }}</span></div>
+                      <div class="card-row"><span class="card-label">受邀人奖励</span><span>{{ formatCurrency(rel.invitee_reward_amount) }} {{ rel.invitee_reward_given ? '✓' : '✗' }}</span></div>
                       <div class="card-row"><span class="card-label">时间</span><span>{{ fmtDate(rel.created_at) }}</span></div>
                     </div>
                   </div>
@@ -126,6 +126,7 @@ import { NButton, NTag, NIcon, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, RefreshOutline } from '@vicons/ionicons5'
 import { listAdminInviteCodes, getAdminInviteStats, listAdminInviteRelations, deleteAdminInviteCode, toggleAdminInviteCode } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { formatCurrency } from '@/utils/amount'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -225,8 +226,8 @@ const codeColumns = [
   { title: '邀请码', key: 'code', width: 120, render: (r) => h('span', { style: 'font-family:monospace;font-weight:600' }, r.code) },
   { title: '创建者', key: 'username', width: 120 },
   { title: '使用/上限', key: 'usage', width: 100, render: (r) => `${r.used_count} / ${r.max_uses || '∞'}` },
-  { title: '邀请人奖励', key: 'inviter_reward', width: 100, render: (r) => `¥${r.inviter_reward}` },
-  { title: '受邀人奖励', key: 'invitee_reward', width: 100, render: (r) => `¥${r.invitee_reward}` },
+  { title: '邀请人奖励', key: 'inviter_reward', width: 100, render: (r) => formatCurrency(r.inviter_reward) },
+  { title: '受邀人奖励', key: 'invitee_reward', width: 100, render: (r) => formatCurrency(r.invitee_reward) },
   { title: '状态', key: 'status', width: 80, render: (r) => h(NTag, { type: statusType(r.status), size: 'small' }, { default: () => statusText(r.status) }) },
   { title: '过期时间', key: 'expires_at', width: 160, render: (r) => fmtDate(r.expires_at) },
   { title: '创建时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) },
@@ -245,8 +246,8 @@ const relColumns = [
   { title: '邀请人', key: 'inviter_username', width: 120 },
   { title: '受邀人', key: 'invitee_username', width: 120 },
   { title: '邀请码', key: 'invite_code', width: 100, render: (r) => h('span', { style: 'font-family:monospace' }, r.invite_code) },
-  { title: '邀请人奖励', key: 'inviter_reward_amount', width: 110, render: (r) => h('span', null, [`¥${r.inviter_reward_amount} `, h(NTag, { type: r.inviter_reward_given ? 'success' : 'default', size: 'tiny', bordered: false }, { default: () => r.inviter_reward_given ? '已发' : '未发' })]) },
-  { title: '受邀人奖励', key: 'invitee_reward_amount', width: 110, render: (r) => h('span', null, [`¥${r.invitee_reward_amount} `, h(NTag, { type: r.invitee_reward_given ? 'success' : 'default', size: 'tiny', bordered: false }, { default: () => r.invitee_reward_given ? '已发' : '未发' })]) },
+  { title: '邀请人奖励', key: 'inviter_reward_amount', width: 110, render: (r) => h('span', null, [formatCurrency(r.inviter_reward_amount) + ' ', h(NTag, { type: r.inviter_reward_given ? 'success' : 'default', size: 'tiny', bordered: false }, { default: () => r.inviter_reward_given ? '已发' : '未发' })]) },
+  { title: '受邀人奖励', key: 'invitee_reward_amount', width: 110, render: (r) => h('span', null, [formatCurrency(r.invitee_reward_amount) + ' ', h(NTag, { type: r.invitee_reward_given ? 'success' : 'default', size: 'tiny', bordered: false }, { default: () => r.invitee_reward_given ? '已发' : '未发' })]) },
   { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) },
 ]
 

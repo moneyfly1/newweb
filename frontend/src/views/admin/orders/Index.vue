@@ -124,7 +124,7 @@
         <div class="detail-header">
           <div class="amount-display">
             <div class="label">实付金额</div>
-            <div class="value">¥{{ (currentOrder.final_amount || currentOrder.amount || 0).toFixed(2) }}</div>
+            <div class="value">{{ formatCurrency(currentOrder.final_amount || currentOrder.amount || 0) }}</div>
           </div>
           <n-tag :type="getStatusType(currentOrder.status)" round>{{ getStatusText(currentOrder.status) }}</n-tag>
         </div>
@@ -140,9 +140,9 @@
           <n-descriptions-item label="关联用户">ID: {{ currentOrder.user_id }}</n-descriptions-item>
           <n-descriptions-item label="订单类型">{{ currentOrder.order_type_text || '套餐订单' }}</n-descriptions-item>
           <n-descriptions-item label="订单内容">{{ currentOrder.order_summary || currentOrder.package_name || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="原始金额">¥{{ currentOrder.amount.toFixed(2) }}</n-descriptions-item>
+          <n-descriptions-item label="原始金额">{{ formatCurrency(currentOrder.amount) }}</n-descriptions-item>
           <n-descriptions-item label="优惠抵扣" v-if="currentOrder.discount_amount > 0">
-            - ¥{{ currentOrder.discount_amount.toFixed(2) }}
+            - {{ formatCurrency(currentOrder.discount_amount) }}
           </n-descriptions-item>
           <n-descriptions-item label="支付网关">{{ getPaymentMethodText(currentOrder.payment_method_name) }}</n-descriptions-item>
           <n-descriptions-item label="创建时间">{{ formatFullDate(currentOrder.created_at) }}</n-descriptions-item>
@@ -175,6 +175,7 @@ import { listAdminOrders, refundOrder, cancelOrder, completeOrder, getAdminDashb
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import { useRoute } from 'vue-router'
+import { formatCurrency } from '@/utils/amount'
 import '@/styles/admin-common.css'
 
 const message = useMessage()
@@ -263,7 +264,7 @@ const columns: DataTableColumns<any> = [
     title: '实付金额',
     key: 'final_amount',
     width: 120,
-    render: (row: any) => h('span', { class: 'amount-text' }, `¥${(row.final_amount || row.amount || 0).toFixed(2)}`)
+    render: (row: any) => h('span', { class: 'amount-text' }, formatCurrency(row.final_amount || row.amount || 0))
   },
   {
     title: '状态',
@@ -316,7 +317,7 @@ const handleViewDetail = (row: any) => { currentOrder.value = row; showDetailDra
 const handleRefund = (row: any) => {
   dialog.warning({
     title: '确认全额退款',
-    content: `订单 ${row.order_no} 将退款 ¥${(row.final_amount || row.amount).toFixed(2)} 到用户余额。`,
+    content: `订单 ${row.order_no} 将退款 ${formatCurrency(row.final_amount || row.amount)} 到用户余额。`,
     positiveText: '确认退款',
     onPositiveClick: async () => {
       await refundOrder(row.id)

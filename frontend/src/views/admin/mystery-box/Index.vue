@@ -13,8 +13,8 @@
       <!-- 统计概览 -->
       <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="12" :y-gap="12" style="margin-bottom:20px">
         <n-gi><n-statistic label="总开启次数" :value="stats.total_opens" /></n-gi>
-        <n-gi><n-statistic label="总收入"><template #prefix>¥</template>{{ stats.total_revenue?.toFixed(2) || '0.00' }}</n-statistic></n-gi>
-        <n-gi><n-statistic label="总奖品价值"><template #prefix>¥</template>{{ stats.total_prize_value?.toFixed(2) || '0.00' }}</n-statistic></n-gi>
+        <n-gi><n-statistic label="总收入"><template #prefix>¥</template>{{ formatCurrency(stats.total_revenue, '') }}</n-statistic></n-gi>
+        <n-gi><n-statistic label="总奖品价值"><template #prefix>¥</template>{{ formatCurrency(stats.total_prize_value, '') }}</n-statistic></n-gi>
         <n-gi><n-statistic label="奖池数量" :value="pools.length" /></n-gi>
       </n-grid>
 
@@ -87,6 +87,7 @@
 import { ref, reactive, computed, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
+import { formatCurrency } from '@/utils/amount'
 import {
   listAdminMysteryBoxPools, createMysteryBoxPool, updateMysteryBoxPool, deleteMysteryBoxPool,
   addMysteryBoxPrize, updateMysteryBoxPrize, deleteMysteryBoxPrize, getMysteryBoxStats,

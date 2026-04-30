@@ -65,7 +65,7 @@
                 <div class="card-body">
                   <div class="card-row">
                     <span class="card-label">价格</span>
-                    <span style="color: #18a058; font-weight: 600;">¥{{ pkg.price.toFixed(2) }}</span>
+                    <span style="color: #18a058; font-weight: 600;">{{ formatCurrency(pkg.price) }}</span>
                   </div>
                   <div class="card-row">
                     <span class="card-label">有效期</span>
@@ -187,6 +187,7 @@ import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naiv
 import { AddOutline, SearchOutline } from '@vicons/ionicons5'
 import { listAdminPackages, createPackage, updatePackage, deletePackage } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
@@ -250,7 +251,7 @@ const columns = [
     render: (row) => h(
       'span',
       { style: 'color: #18a058; font-weight: 600' },
-      `¥${row.price.toFixed(2)}`
+      formatCurrency(row.price)
     )
   },
   {

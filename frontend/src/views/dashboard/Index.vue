@@ -22,7 +22,7 @@
             </div>
             <div class="stat-info">
               <span class="stat-label">账户余额</span>
-              <span class="stat-value">¥{{ info.balance?.toFixed(2) || '0.00' }}</span>
+              <span class="stat-value">{{ formatCurrency(info.balance) }}</span>
             </div>
             <n-button type="primary" size="small" @click="$router.push('/recharge')">
               充值
@@ -68,6 +68,18 @@
                 <div class="sub-stat"><span class="sub-stat-label">状态</span><n-tag :type="subscription.is_active ? 'success' : 'error'" size="small" :bordered="false">{{ subscription.is_active ? '使用中' : '未激活' }}</n-tag></div>
               </div>
               <div class="sub-urls">
+                <div class="sub-url-row shadowrocket-qr-row" v-if="shadowrocketQrData">
+                  <div class="shadowrocket-qr-card">
+                    <div class="shadowrocket-qr-header">
+                      <div>
+                        <div class="shadowrocket-qr-title">Shadowrocket 扫码订阅</div>
+                        <div class="shadowrocket-qr-desc">打开 Shadowrocket 扫描即可直接添加订阅</div>
+                      </div>
+                      <n-button size="tiny" type="primary" @click="oneClickImport('shadowrocket')">一键导入</n-button>
+                    </div>
+                    <canvas ref="dashQrCanvas" class="shadowrocket-qr-canvas" />
+                  </div>
+                </div>
                 <div class="sub-url-row" v-if="subscription.token_clash_url">
                   <span class="sub-url-label">Clash</span>
                   <n-input :value="showSubUrls ? subscription.token_clash_url : maskUrl(subscription.token_clash_url)" readonly size="tiny" style="flex:1" />
@@ -181,7 +193,7 @@
                   <span class="order-time">{{ formatDate(o.created_at) }}</span>
                 </div>
                 <div class="order-right">
-                  <span class="order-amount">¥{{ o.final_amount }}</span>
+                  <span class="order-amount">{{ formatCurrency(o.final_amount ?? o.amount) }}</span>
                   <n-tag :type="orderStatusType(o.status)" size="small" :bordered="false">{{ orderStatusText(o.status) }}</n-tag>
                 </div>
               </div>
@@ -193,12 +205,6 @@
     </div>
 
     <!-- QR Code Modal -->
-    <n-modal v-model:show="showQrCode" preset="card" title="Shadowrocket 二维码" style="max-width: 360px;">
-      <div style="text-align: center;">
-        <canvas ref="dashQrCanvas" style="max-width: 200px; border-radius: 8px;" />
-        <p style="margin-top: 10px; font-size: 13px; color: #999;">使用 Shadowrocket 扫描二维码即可添加订阅</p>
-      </div>
-    </n-modal>
   </div>
 </template>
 <script setup lang="ts">
@@ -207,13 +213,14 @@ import { useMessage } from 'naive-ui'
 import {
   WalletOutline, RibbonOutline, CartOutline, LinkOutline,
   ChatbubblesOutline, PeopleOutline, CopyOutline, CloudDownloadOutline,
-  DownloadOutline, QrCodeOutline, CalendarOutline, EyeOutline, EyeOffOutline,
+  DownloadOutline, CalendarOutline, EyeOutline, EyeOffOutline,
 } from '@vicons/ionicons5'
 import { getDashboardInfo, checkIn, getCheckInStatus } from '@/api/user'
 import { listPublicAnnouncements, getPublicConfig } from '@/api/common'
 import { listOrders } from '@/api/order'
 import { getSubscription } from '@/api/subscription'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { formatCurrency, formatAmount } from '@/utils/amount'
 
 const message = useMessage()
 
@@ -224,7 +231,6 @@ const recentOrders = ref<any[]>([])
 const announcementsLoading = ref(false)
 const ordersLoading = ref(false)
 const subscriptionLoading = ref(false)
-const showQrCode = ref(false)
 const dashQrCanvas = ref<HTMLCanvasElement | null>(null)
 const showSubUrls = ref(false)
 
@@ -241,7 +247,7 @@ async function handleCheckIn() {
   try {
     const res: any = await checkIn()
     const amt = Number(res.data.amount)
-    const amtStr = amt < 1 ? amt.toFixed(2) : amt.toString()
+    const amtStr = formatAmount(amt)
     message.success(`签到成功！获得 ${amtStr} 元奖励，已连续签到 ${res.data.consecutive_days} 天`)
     checkinStatus.value.checked_in_today = true
     checkinStatus.value.consecutive_days = res.data.consecutive_days
@@ -386,22 +392,21 @@ const remainingDaysType = computed(() => {
   return 'error'
 })
 
-// 本地生成 QR 码，不发送订阅 URL 到第三方服务
-const qrCodeData = computed(() => {
+const shadowrocketQrData = computed(() => {
   const url = subscription.value.token_url
   if (!url) return ''
-  const subName = info.value.site_name || '订阅'
-  return url + (url.includes('#') ? '' : `#${encodeURIComponent(subName)}`)
+  return `shadowrocket://add/${encodeURIComponent(url)}`
 })
 
-watch(showQrCode, async (val) => {
-  if (val && qrCodeData.value) {
-    await nextTick()
-    if (dashQrCanvas.value) {
-      const QRCode = (await import('qrcode')).default
-      QRCode.toCanvas(dashQrCanvas.value, qrCodeData.value, { width: 200, margin: 2 })
-    }
-  }
+watch(shadowrocketQrData, async (value) => {
+  await nextTick()
+  if (!dashQrCanvas.value) return
+  const canvas = dashQrCanvas.value
+  const ctx = canvas.getContext('2d')
+  ctx?.clearRect(0, 0, canvas.width, canvas.height)
+  if (!value) return
+  const QRCode = (await import('qrcode')).default
+  await QRCode.toCanvas(canvas, value, { width: 200, margin: 2 })
 })
 
 const orderStatusType = (status: string) => {
@@ -559,6 +564,12 @@ onUnmounted(() => {
 .sub-stat-val { font-size: 13px; font-weight: 600; }
 .sub-urls { display: flex; flex-direction: column; gap: 6px; }
 .sub-url-row { display: flex; align-items: center; gap: 6px; }
+.shadowrocket-qr-row { align-items: stretch; }
+.shadowrocket-qr-card { width: 100%; padding: 12px; border-radius: 10px; background: linear-gradient(135deg, #fff7ed 0%, #f5f3ff 100%); border: 1px solid #eadcff; }
+.shadowrocket-qr-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.shadowrocket-qr-title { font-size: 14px; font-weight: 600; color: #333; }
+.shadowrocket-qr-desc { margin-top: 4px; font-size: 12px; color: #666; }
+.shadowrocket-qr-canvas { display: block; margin: 0 auto; max-width: 200px; border-radius: 8px; background: #fff; }
 .sub-url-label { font-size: 12px; color: #666; min-width: 36px; font-weight: 500; }
 
 /* Quick Subscription */
@@ -609,5 +620,8 @@ onUnmounted(() => {
   .client-grid { grid-template-columns: repeat(2, 1fr); }
   .quick-actions-grid { grid-template-columns: repeat(2, 1fr); }
   .sub-stats-row { flex-wrap: wrap; }
+  .sub-url-row { flex-wrap: wrap; }
+  .shadowrocket-qr-header { flex-direction: column; align-items: stretch; }
+  .shadowrocket-qr-canvas { max-width: 180px; }
 }
 </style>

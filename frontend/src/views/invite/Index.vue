@@ -143,7 +143,7 @@
                 </div>
                 <div class="card-row">
                   <span class="label">奖励</span>
-                  <span class="value" style="color: #f0a020; font-weight: 500;">¥{{ invite.reward_amount.toFixed(2) }}</span>
+                  <span class="value" style="color: #f0a020; font-weight: 500;">{{ formatCurrency(invite.reward_amount) }}</span>
                 </div>
               </div>
             </div>
@@ -217,6 +217,7 @@ import { NButton, NSpace, NTag, NTime, useMessage, useDialog } from 'naive-ui'
 import { listInviteCodes, createInviteCode, getInviteStats, deleteInviteCode, getPublicConfig } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 interface InviteCode {
@@ -510,7 +511,7 @@ const recentColumns = [
     width: 120,
     resizable: true,
     render: (row: RecentInvite) => {
-      return h('span', `¥${(row.consumption_amount || 0).toFixed(2)}`)
+      return h('span', formatCurrency(row.consumption_amount || 0))
     }
   },
   {
@@ -534,7 +535,7 @@ const recentColumns = [
     width: 120,
     resizable: true,
     render: (row: RecentInvite) => {
-      return h('span', { style: 'color: #f0a020; font-weight: 500' }, `¥${(row.reward_amount || 0).toFixed(2)}`)
+      return h('span', { style: 'color: #f0a020; font-weight: 500' }, formatCurrency(row.reward_amount || 0))
     }
   }
 ]

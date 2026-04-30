@@ -209,9 +209,27 @@ func (g *StripeGateway) CreatePayment(orderNo string, amount float64, subject, r
 
 // VerifyCallback 验证回调签名
 func (g *StripeGateway) VerifyCallback(data map[string]interface{}) bool {
-	// Stripe webhook 验证在 handleStripeWebhook 中处理
-	// 这里返回 true，实际验证在回调处理函数中
-	return true
+	if g.config == nil {
+		config, err := GetStripeConfig()
+		if err != nil {
+			return false
+		}
+		g.config = config
+	}
+	if g.config == nil || g.config.WebhookSecret == "" {
+		return false
+	}
+
+	rawBody, ok := data["raw_body"].(string)
+	if !ok || rawBody == "" {
+		return false
+	}
+	sigHeader, ok := data["stripe_signature"].(string)
+	if !ok || sigHeader == "" {
+		return false
+	}
+
+	return StripeVerifyWebhook([]byte(rawBody), sigHeader, g.config.WebhookSecret)
 }
 
 // GetName 获取网关名称

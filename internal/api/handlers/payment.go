@@ -20,6 +20,367 @@ import (
 	"gorm.io/gorm"
 )
 
+type paymentTarget struct {
+	Order             *models.Order
+	Recharge          *models.RechargeRecord
+	PayAmount         float64
+	TransactionPrefix string
+	OrderNo           string
+	Subject           string
+	ReturnPath        string
+}
+
+type gatewayResponseExtras map[string]interface{}
+
+func createPaymentTransaction(db *gorm.DB, userID uint, paymentMethodID uint, target paymentTarget) (*models.PaymentTransaction, error) {
+	txID := fmt.Sprintf("%s%d%s", target.TransactionPrefix, time.Now().Unix(), utils.GenerateRandomString(8))
+	transaction := models.PaymentTransaction{
+		UserID:          userID,
+		PaymentMethodID: paymentMethodID,
+		Amount:          target.PayAmount,
+		Currency:        "CNY",
+		TransactionID:   &txID,
+		Status:          "pending",
+	}
+	if target.Order != nil {
+		transaction.OrderID = target.Order.ID
+	}
+	if target.Recharge != nil {
+		paymentData := fmt.Sprintf(`{"recharge_id":%d}`, target.Recharge.ID)
+		transaction.PaymentData = &paymentData
+	}
+	if err := db.Create(&transaction).Error; err != nil {
+		return nil, err
+	}
+	return &transaction, nil
+}
+
+func updateRechargePaymentInfo(db *gorm.DB, record *models.RechargeRecord, payType string, txID string) error {
+	if record == nil {
+		return nil
+	}
+	pmName := payType
+	return db.Model(record).Updates(map[string]interface{}{
+		"payment_method":         &pmName,
+		"payment_transaction_id": &txID,
+	}).Error
+}
+
+func storeRechargePaymentURL(db *gorm.DB, record *models.RechargeRecord, paymentURL string) error {
+	if record == nil {
+		return nil
+	}
+	return db.Model(record).Update("payment_url", paymentURL).Error
+}
+
+func buildPaymentSuccessURL(orderNo string) string {
+	siteURL := services.GetSiteURL()
+	if siteURL == "" {
+		return ""
+	}
+	return siteURL + "/payment/return?order_no=" + orderNo
+}
+
+func buildPaymentURLResult(payType, orderNo, transactionID string, amount float64, paymentURL string, extras gatewayResponseExtras) gin.H {
+	result := gin.H{
+		"message":        "支付创建成功",
+		"order_no":       orderNo,
+		"transaction_id": transactionID,
+		"amount":         amount,
+		"pay_type":       payType,
+	}
+	if paymentURL != "" {
+		result["payment_url"] = paymentURL
+	}
+	for k, v := range extras {
+		result[k] = v
+	}
+	return result
+}
+
+func createNonAlipayPayment(db *gorm.DB, payConfig models.PaymentConfig, target paymentTarget, transaction *models.PaymentTransaction) (gin.H, error) {
+	txID := safeTransactionID(transaction.TransactionID)
+
+	if payConfig.PayType == "epay" || payConfig.PayType == "wxpay" || payConfig.PayType == "qqpay" {
+		epayCfg, err := services.GetEpayConfig()
+		if err != nil {
+			return nil, fmt.Errorf("易支付网关未配置，请在系统设置中配置")
+		}
+		epayType := payConfig.PayType
+		if epayType == "epay" {
+			epayType = "alipay"
+		}
+		notifyURL, returnURL := services.BuildPaymentURLs("epay", target.OrderNo)
+		paymentURL, err := services.EpayCreateOrder(epayCfg, epayType, txID, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
+		if err != nil {
+			return nil, fmt.Errorf("创建支付订单失败: %w", err)
+		}
+		if err := storeRechargePaymentURL(db, target.Recharge, paymentURL); err != nil {
+			return nil, fmt.Errorf("保存支付链接失败: %w", err)
+		}
+		return buildPaymentURLResult(payConfig.PayType, target.OrderNo, txID, target.PayAmount, paymentURL, nil), nil
+	}
+
+	if payConfig.PayType == "codepay" || payConfig.PayType == "codepay_alipay" || payConfig.PayType == "codepay_wxpay" {
+		codepayCfg, err := services.GetCodepayConfig()
+		if err != nil {
+			return nil, fmt.Errorf("码支付网关未配置，请在系统设置中配置")
+		}
+		codepayType := "alipay"
+		if payConfig.PayType == "codepay_wxpay" {
+			codepayType = "wxpay"
+		}
+		notifyURL, returnURL := services.BuildPaymentURLs("codepay", target.OrderNo)
+		if codepayCfg.NotifyURL != "" || codepayCfg.ReturnURL != "" || codepayCfg.BaseURL != "" {
+			notifyURL, returnURL = services.CodepayBuildURLs(codepayCfg, target.OrderNo)
+		}
+		codepayResult, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
+		if err != nil {
+			return nil, fmt.Errorf("创建码支付订单失败: %w", err)
+		}
+		if err := storeRechargePaymentURL(db, target.Recharge, codepayResult.PaymentURL); err != nil {
+			return nil, fmt.Errorf("保存支付链接失败: %w", err)
+		}
+		return buildPaymentURLResult(payConfig.PayType, target.OrderNo, txID, target.PayAmount, codepayResult.PaymentURL, gatewayResponseExtras{"payment_mode": codepayResult.Mode}), nil
+	}
+
+	if payConfig.PayType == "stripe" {
+		stripeCfg, err := services.GetStripeConfig()
+		if err != nil {
+			return nil, fmt.Errorf("Stripe 未配置")
+		}
+		rate := 7.2
+		if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
+			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
+				rate = parsed
+			}
+		}
+		amountUSD := target.PayAmount / rate
+		amountCents := int64(amountUSD * 100)
+		if amountCents < 50 {
+			amountCents = 50
+		}
+		successURL := buildPaymentSuccessURL(target.OrderNo)
+		if successURL == "" {
+			return nil, fmt.Errorf("站点域名未配置，请检查 site_url")
+		}
+		cancelURL := services.GetSiteURL() + target.ReturnPath
+		_, checkoutURL, err := services.StripeCreateCheckoutSession(stripeCfg, txID, target.Subject, amountCents, "usd", successURL, cancelURL)
+		if err != nil {
+			return nil, fmt.Errorf("创建 Stripe 支付失败: %w", err)
+		}
+		if err := storeRechargePaymentURL(db, target.Recharge, checkoutURL); err != nil {
+			return nil, fmt.Errorf("保存支付链接失败: %w", err)
+		}
+		return buildPaymentURLResult("stripe", target.OrderNo, txID, target.PayAmount, checkoutURL, nil), nil
+	}
+
+	if payConfig.PayType == "crypto" {
+		cryptoCfg, err := services.GetCryptoConfig()
+		if err != nil {
+			return nil, fmt.Errorf("加密货币支付未配置")
+		}
+		rate := 7.2
+		if r := utils.GetSetting("pay_crypto_exchange_rate"); r != "" {
+			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
+				rate = parsed
+			}
+		}
+		amountUSDT := target.PayAmount / rate
+		return buildPaymentURLResult("crypto", target.OrderNo, txID, target.PayAmount, "", gatewayResponseExtras{
+			"message": "请转账到以下地址",
+			"crypto_info": gin.H{
+				"wallet_address": cryptoCfg.WalletAddress,
+				"network":        cryptoCfg.Network,
+				"currency":       cryptoCfg.Currency,
+				"amount_usdt":    fmt.Sprintf("%.2f", amountUSDT),
+			},
+		}), nil
+	}
+
+	return buildPaymentURLResult(payConfig.PayType, target.OrderNo, txID, target.PayAmount, "", nil), nil
+}
+
+func loadOrderPaymentTarget(db *gorm.DB, userID uint, orderID uint) (*paymentTarget, error) {
+	var order models.Order
+	if err := db.Where("id = ? AND user_id = ? AND status = ?", orderID, userID, "pending").First(&order).Error; err != nil {
+		return nil, err
+	}
+	payAmount := order.Amount
+	if order.FinalAmount != nil {
+		payAmount = *order.FinalAmount
+	}
+	var pkg models.Package
+	subject := "订单-" + order.OrderNo
+	if err := db.First(&pkg, order.PackageID).Error; err == nil {
+		subject = pkg.Name
+	}
+	return &paymentTarget{
+		Order:             &order,
+		PayAmount:         payAmount,
+		TransactionPrefix: "PAY",
+		OrderNo:           order.OrderNo,
+		Subject:           subject,
+		ReturnPath:        "/order",
+	}, nil
+}
+
+func loadRechargePaymentTarget(db *gorm.DB, userID uint, rechargeID uint) (*paymentTarget, error) {
+	var record models.RechargeRecord
+	if err := db.Where("id = ? AND user_id = ? AND status = ?", rechargeID, userID, "pending").First(&record).Error; err != nil {
+		return nil, err
+	}
+	return &paymentTarget{
+		Recharge:          &record,
+		PayAmount:         record.Amount,
+		TransactionPrefix: "RCH",
+		OrderNo:           record.OrderNo,
+		Subject:           "充值-" + record.OrderNo,
+		ReturnPath:        "/recharge",
+	}, nil
+}
+
+func handleFormGatewayNotify(c *gin.Context, db *gorm.DB, callbackType string, configLoader func() (string, error), verify func(map[string]string, string) bool, paymentMethod string, statusResolver func(map[string]string) string) {
+	utils.LogCallback("========== 开始处理%s回调 ==========", paymentMethod)
+	utils.LogCallback("Method: %s, URL: %s, IP: %s", c.Request.Method, c.Request.URL.String(), utils.GetRealClientIP(c))
+
+	params := make(map[string]string)
+	if c.Request.Method == "GET" {
+		for k, v := range c.Request.URL.Query() {
+			if len(v) > 0 {
+				params[k] = v[0]
+			}
+		}
+	} else {
+		if err := c.Request.ParseForm(); err != nil {
+			utils.SysError("payment", fmt.Sprintf("%s回调解析表单失败: %v", paymentMethod, err))
+			c.String(400, "fail")
+			return
+		}
+		for k, v := range c.Request.PostForm {
+			if len(v) > 0 {
+				params[k] = v[0]
+			}
+		}
+	}
+
+	secretKey, err := configLoader()
+	if err != nil {
+		c.String(400, "fail")
+		return
+	}
+	if !verify(params, secretKey) {
+		utils.SysError("payment", fmt.Sprintf("%s回调签名验证失败", paymentMethod))
+		c.String(400, "sign error")
+		return
+	}
+
+	tradeStatus := statusResolver(params)
+	utils.LogCallback("[%s] trade_status=%s out_trade_no=%s trade_no=%s money=%s", paymentMethod, tradeStatus, params["out_trade_no"], params["trade_no"], params["money"])
+	if tradeStatus != "TRADE_SUCCESS" {
+		utils.LogCallback("[%s] 交易状态非成功，忽略回调", paymentMethod)
+		c.String(200, "success")
+		return
+	}
+
+	outTradeNo := params["out_trade_no"]
+	tradeNo := params["trade_no"]
+	callbackMoney := params["money"]
+	if models.IsNonceProcessed(db, outTradeNo, callbackType) {
+		utils.SysError("payment", fmt.Sprintf("%s回调重放攻击检测: %s", paymentMethod, outTradeNo))
+		c.String(200, "success")
+		return
+	}
+
+	rawJSON, _ := json.Marshal(params)
+	rawStr := string(rawJSON)
+	var transaction models.PaymentTransaction
+	if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err != nil {
+		callback := models.PaymentCallback{CallbackType: callbackType, CallbackData: rawStr, RawRequest: &rawStr, Processed: false}
+		if err := db.Create(&callback).Error; err != nil {
+			utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+		}
+		c.String(200, "success")
+		return
+	}
+
+	callback := models.PaymentCallback{
+		PaymentTransactionID: transaction.ID,
+		CallbackType:         callbackType,
+		CallbackData:         rawStr,
+		RawRequest:           &rawStr,
+		Processed:            true,
+	}
+
+	if transaction.Status == "pending" {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			var txn models.PaymentTransaction
+			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
+				return err
+			}
+			if callbackMoney == "" {
+				utils.SysError("payment", fmt.Sprintf("%s回调缺少金额字段: %s", paymentMethod, outTradeNo))
+				return fmt.Errorf("回调数据缺少金额字段")
+			}
+			utils.LogCallback("[%s] 金额校验: expected=%.2f actual=%s out_trade_no=%s", paymentMethod, txn.Amount, callbackMoney, outTradeNo)
+			if !amountsMatch(txn.Amount, callbackMoney) {
+				expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
+				utils.SysError("payment", fmt.Sprintf("%s金额不匹配: 订单 %s, 期望 %s, 实际 %s", paymentMethod, outTradeNo, expectedAmount, callbackMoney))
+				return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, callbackMoney)
+			}
+			if err := models.RecordNonce(tx, outTradeNo, callbackType, tradeNo); err != nil {
+				return fmt.Errorf("记录 nonce 失败: %w", err)
+			}
+			callbackJSON := rawStr
+			updates := map[string]interface{}{"status": "paid", "callback_data": &callbackJSON}
+			if tradeNo != "" {
+				updates["external_transaction_id"] = &tradeNo
+			}
+			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
+				return err
+			}
+			utils.LogCallback("[%s] 支付事务已标记为 paid: out_trade_no=%s trade_no=%s", paymentMethod, outTradeNo, tradeNo)
+			switch getPaymentBusinessKind(&txn) {
+			case "recharge":
+				if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
+					return err
+				}
+			case "order":
+				if err := handleGatewayOrderCallback(tx, &txn, paymentMethod); err != nil {
+					return err
+				}
+			default:
+				return fmt.Errorf("无法识别支付业务类型")
+			}
+			return nil
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "金额不匹配") {
+				s := err.Error()
+				callback.ProcessingResult = &s
+				callback.Processed = false
+				if err := db.Create(&callback).Error; err != nil {
+					utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+				}
+				c.String(200, "success")
+				return
+			}
+			utils.LogCallback("[%s] ⚠️ 回调已处理（重复），忽略: out_trade_no=%s", paymentMethod, outTradeNo)
+		} else {
+			result := "success"
+			callback.ProcessingResult = &result
+			utils.LogCallback("[%s] ✅ 回调处理成功: out_trade_no=%s trade_no=%s", paymentMethod, outTradeNo, tradeNo)
+		}
+	} else {
+		utils.LogCallback("[%s] 幂等命中，支付事务已是 %s: out_trade_no=%s", paymentMethod, transaction.Status, outTradeNo)
+	}
+
+	if err := db.Create(&callback).Error; err != nil {
+		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
+	}
+	c.String(200, "success")
+}
+
 func amountsMatch(expected float64, callbackAmount string) bool {
 	if callbackAmount == "" {
 		return false
@@ -172,270 +533,87 @@ func CreatePayment(c *gin.Context) {
 		userID, req.OrderID, req.PaymentMethodID, req.IsMobile)
 
 	db := database.GetDB()
-	var order models.Order
-	if err := db.Where("id = ? AND user_id = ? AND status = ?", req.OrderID, userID, "pending").First(&order).Error; err != nil {
+	target, err := loadOrderPaymentTarget(db, userID, req.OrderID)
+	if err != nil {
 		utils.LogError("[CreatePayment] 订单不存在或状态不正确 - order_id=%d, user_id=%d, error=%v", req.OrderID, userID, err)
 		utils.NotFound(c, "订单不存在或状态不正确")
 		return
 	}
-
+	order := target.Order
 	utils.LogPayment("[CreatePayment] 找到订单 - order_no=%s, package_id=%d, amount=%.2f",
-		order.OrderNo, order.PackageID, order.Amount)
+		order.OrderNo, order.PackageID, target.PayAmount)
 
-	// Verify payment method exists
 	var payConfig models.PaymentConfig
 	if err := db.Where("id = ? AND status = ?", req.PaymentMethodID, 1).First(&payConfig).Error; err != nil {
 		utils.NotFound(c, "支付方式不存在或未启用")
 		return
 	}
 
-	// Calculate payment amount
-	payAmount := order.Amount
-	if order.FinalAmount != nil {
-		payAmount = *order.FinalAmount
-	}
-
-	// Create payment transaction
-	txID := fmt.Sprintf("PAY%d%s", time.Now().Unix(), utils.GenerateRandomString(8))
-	transaction := models.PaymentTransaction{
-		OrderID:         order.ID,
-		UserID:          userID,
-		PaymentMethodID: req.PaymentMethodID,
-		Amount:          payAmount,
-		Currency:        "CNY",
-		TransactionID:   &txID,
-		Status:          "pending",
-	}
-	if err := db.Create(&transaction).Error; err != nil {
+	transaction, err := createPaymentTransaction(db, userID, req.PaymentMethodID, *target)
+	if err != nil {
 		utils.InternalError(c, "创建支付交易失败")
 		return
 	}
 
-	// If this is an EasyPay payment type, call the EasyPay gateway or direct Alipay
-	if payConfig.PayType == "epay" || payConfig.PayType == "alipay" || payConfig.PayType == "wxpay" || payConfig.PayType == "qqpay" {
-		// Get package name for the order description
-		var pkg models.Package
-		orderName := "订单-" + order.OrderNo
-		if err := db.First(&pkg, order.PackageID).Error; err == nil {
-			orderName = pkg.Name
-		}
-
-		// Try direct Alipay first if pay_type is alipay and direct keys are configured
-		if payConfig.PayType == "alipay" {
-			if services.IsDirectAlipayConfigured() {
-				alipayCfg, err := services.GetAlipayConfig()
-				if err == nil {
-					notifyURL, returnURL := services.BuildPaymentURLs("alipay", order.OrderNo)
-					if alipayCfg.IsProduction && (notifyURL == "" || returnURL == "") {
-						utils.BadRequest(c, "支付宝生产环境支付地址配置无效，请检查支付公网域名配置")
-						return
-					}
-					var paymentURL string
-					// 关键修复：使用 transaction.TransactionID (txID) 作为 out_trade_no
-					// 这样回调时可以通过 out_trade_no 直接找到 payment_transaction
-					outTradeNo := *transaction.TransactionID
-					utils.LogPayment("[CreatePayment] 使用 txID 作为 out_trade_no: %s (order_no: %s)", outTradeNo, order.OrderNo)
-					if req.IsMobile {
-						// Use WAP payment for mobile
-						paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
-					} else {
-						// Use QR code payment for desktop
-						paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
-					}
-					if err == nil {
-						// 更新订单的 payment_transaction_id，统一保存交易号字符串
-						ptxID := outTradeNo
-						if err := db.Model(&order).Update("payment_transaction_id", &ptxID).Error; err != nil {
-							utils.InternalError(c, "更新订单支付信息失败")
-							return
-						}
-						utils.LogPayment("[CreatePayment] ✅ 支付宝订单创建成功 - txID=%s, order_no=%s, order_id=%d", outTradeNo, order.OrderNo, order.ID)
-						utils.Success(c, gin.H{
-							"message":        "支付创建成功",
-							"order_no":       order.OrderNo,
-							"transaction_id": outTradeNo,
-							"amount":         payAmount,
-							"pay_type":       "alipay",
-							"payment_url":    paymentURL,
-						})
-						return
-					}
-					utils.LogError("[payment] 直接支付宝失败: %v", err)
-					utils.BadRequest(c, "支付宝直连创建失败: "+err.Error())
+	if payConfig.PayType == "alipay" {
+		if services.IsDirectAlipayConfigured() {
+			alipayCfg, err := services.GetAlipayConfig()
+			if err == nil {
+				notifyURL, returnURL := services.BuildPaymentURLs("alipay", order.OrderNo)
+				if alipayCfg.IsProduction && (notifyURL == "" || returnURL == "") {
+					utils.BadRequest(c, "支付宝生产环境支付地址配置无效，请检查支付公网域名配置")
 					return
 				}
+				outTradeNo := safeTransactionID(transaction.TransactionID)
+				utils.LogPayment("[CreatePayment] 使用 txID 作为 out_trade_no: %s (order_no: %s)", outTradeNo, order.OrderNo)
+				var paymentURL string
+				if req.IsMobile {
+					paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, outTradeNo, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
+				} else {
+					paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
+				}
+				if err == nil {
+					ptxID := outTradeNo
+					if err := db.Model(order).Update("payment_transaction_id", &ptxID).Error; err != nil {
+						utils.InternalError(c, "更新订单支付信息失败")
+						return
+					}
+					utils.LogPayment("[CreatePayment] ✅ 支付宝订单创建成功 - txID=%s, order_no=%s, order_id=%d", outTradeNo, order.OrderNo, order.ID)
+					utils.Success(c, buildPaymentURLResult("alipay", order.OrderNo, outTradeNo, target.PayAmount, paymentURL, nil))
+					return
+				}
+				utils.LogError("[payment] 直接支付宝失败: %v", err)
+				utils.BadRequest(c, "支付宝直连创建失败: "+err.Error())
+				return
 			}
 		}
 
-		// Fall back to epay gateway
 		epayCfg, err := services.GetEpayConfig()
 		if err != nil {
-			// Neither direct Alipay nor epay is available
-			if payConfig.PayType == "alipay" {
-				utils.BadRequest(c, "支付宝配置不完整，请检查 AppID、私钥等配置")
-			} else {
-				utils.BadRequest(c, "易支付网关未配置，请在系统设置中配置")
-			}
+			utils.BadRequest(c, "支付宝配置不完整，请检查 AppID、私钥等配置")
 			return
 		}
-
-		// Determine the epay pay type
-		epayType := payConfig.PayType
-		if epayType == "epay" {
-			epayType = "alipay" // default to alipay
-		}
-
 		notifyURL, returnURL := services.BuildPaymentURLs("epay", order.OrderNo)
-
-		paymentURL, err := services.EpayCreateOrder(epayCfg, epayType, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
+		paymentURL, err := services.EpayCreateOrder(epayCfg, "alipay", safeTransactionID(transaction.TransactionID), target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
 		if err != nil {
 			utils.InternalError(c, "创建支付订单失败: "+err.Error())
 			return
 		}
-
-		utils.Success(c, gin.H{
-			"message":        "支付创建成功",
-			"order_no":       order.OrderNo,
-			"transaction_id": txID,
-			"amount":         payAmount,
-			"pay_type":       payConfig.PayType,
-			"payment_url":    paymentURL,
-		})
+		utils.Success(c, buildPaymentURLResult("alipay", order.OrderNo, safeTransactionID(transaction.TransactionID), target.PayAmount, paymentURL, nil))
 		return
 	}
 
-	// Stripe payment
-	if payConfig.PayType == "stripe" {
-		stripeCfg, err := services.GetStripeConfig()
-		if err != nil {
-			utils.BadRequest(c, "Stripe 未配置")
+	result, err := createNonAlipayPayment(db, payConfig, *target, transaction)
+	if err != nil {
+		message := err.Error()
+		if strings.Contains(message, "未配置") {
+			utils.BadRequest(c, message)
 			return
 		}
-
-		var pkg models.Package
-		orderName := "订单-" + order.OrderNo
-		if err := db.First(&pkg, order.PackageID).Error; err == nil {
-			orderName = pkg.Name
-		}
-
-		// Read exchange rate (CNY to USD)
-		rate := 7.2
-		if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
-			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
-				rate = parsed
-			}
-		}
-		amountUSD := payAmount / rate
-		amountCents := int64(amountUSD * 100)
-		if amountCents < 50 {
-			amountCents = 50 // Stripe minimum is $0.50
-		}
-
-		siteURL := services.GetSiteURL()
-		if siteURL == "" {
-			utils.BadRequest(c, "站点域名未配置，请检查 site_url")
-			return
-		}
-		successURL := siteURL + "/payment/return?order_no=" + order.OrderNo
-		cancelURL := siteURL + "/order"
-
-		_, checkoutURL, err := services.StripeCreateCheckoutSession(stripeCfg, txID, orderName, amountCents, "usd", successURL, cancelURL)
-		if err != nil {
-			utils.InternalError(c, "创建 Stripe 支付失败: "+err.Error())
-			return
-		}
-
-		utils.Success(c, gin.H{
-			"message":        "支付创建成功",
-			"order_no":       order.OrderNo,
-			"transaction_id": txID,
-			"amount":         payAmount,
-			"pay_type":       "stripe",
-			"payment_url":    checkoutURL,
-		})
+		utils.InternalError(c, message)
 		return
 	}
-
-	// CodePay payment (codepay_alipay / codepay_wxpay / codepay)
-	if payConfig.PayType == "codepay" || payConfig.PayType == "codepay_alipay" || payConfig.PayType == "codepay_wxpay" {
-		codepayCfg, err := services.GetCodepayConfig()
-		if err != nil {
-			utils.BadRequest(c, "码支付网关未配置，请在系统设置中配置")
-			return
-		}
-
-		var pkg models.Package
-		orderName := "订单-" + order.OrderNo
-		if err := db.First(&pkg, order.PackageID).Error; err == nil {
-			orderName = pkg.Name
-		}
-
-		codepayType := "alipay"
-		if payConfig.PayType == "codepay_wxpay" {
-			codepayType = "wxpay"
-		}
-
-		notifyURL, returnURL := services.BuildPaymentURLs("codepay", order.OrderNo)
-		if codepayCfg.NotifyURL != "" || codepayCfg.ReturnURL != "" || codepayCfg.BaseURL != "" {
-			notifyURL, returnURL = services.CodepayBuildURLs(codepayCfg, order.OrderNo)
-		}
-		codepayResult, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", payAmount), notifyURL, returnURL)
-		if err != nil {
-			utils.InternalError(c, "创建码支付订单失败: "+err.Error())
-			return
-		}
-
-		utils.Success(c, gin.H{
-			"message":        "支付创建成功",
-			"order_no":       order.OrderNo,
-			"transaction_id": txID,
-			"amount":         payAmount,
-			"pay_type":       payConfig.PayType,
-			"payment_url":    codepayResult.PaymentURL,
-			"payment_mode":   codepayResult.Mode,
-		})
-		return
-	}
-
-	// Crypto payment
-	if payConfig.PayType == "crypto" {
-		cryptoCfg, err := services.GetCryptoConfig()
-		if err != nil {
-			utils.BadRequest(c, "加密货币支付未配置")
-			return
-		}
-
-		rate := 7.2
-		if r := utils.GetSetting("pay_crypto_exchange_rate"); r != "" {
-			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
-				rate = parsed
-			}
-		}
-		amountUSDT := payAmount / rate
-
-		utils.Success(c, gin.H{
-			"message":        "请转账到以下地址",
-			"order_no":       order.OrderNo,
-			"transaction_id": txID,
-			"amount":         payAmount,
-			"pay_type":       "crypto",
-			"crypto_info": gin.H{
-				"wallet_address": cryptoCfg.WalletAddress,
-				"network":        cryptoCfg.Network,
-				"currency":       cryptoCfg.Currency,
-				"amount_usdt":    fmt.Sprintf("%.2f", amountUSDT),
-			},
-		})
-		return
-	}
-
-	utils.Success(c, gin.H{
-		"message":        "支付创建成功",
-		"order_no":       order.OrderNo,
-		"transaction_id": txID,
-		"amount":         payAmount,
-		"pay_type":       payConfig.PayType,
-	})
+	utils.Success(c, result)
 }
 
 func CreateRechargePayment(c *gin.Context) {
@@ -450,275 +628,94 @@ func CreateRechargePayment(c *gin.Context) {
 	}
 	userID := c.GetUint("user_id")
 	db := database.GetDB()
-
-	// Find pending recharge record owned by user
-	var record models.RechargeRecord
-	if err := db.Where("id = ? AND user_id = ? AND status = ?", req.RechargeID, userID, "pending").First(&record).Error; err != nil {
+	target, err := loadRechargePaymentTarget(db, userID, req.RechargeID)
+	if err != nil {
 		utils.NotFound(c, "充值记录不存在或状态不正确")
 		return
 	}
+	record := target.Recharge
 
-	// Verify payment method
 	var payConfig models.PaymentConfig
 	if err := db.Where("id = ? AND status = ?", req.PaymentMethodID, 1).First(&payConfig).Error; err != nil {
 		utils.NotFound(c, "支付方式不存在或未启用")
 		return
 	}
 
-	// Create payment transaction (OrderID=0 for recharge, store recharge ID in PaymentData)
-	txID := fmt.Sprintf("RCH%d%s", time.Now().Unix(), utils.GenerateRandomString(8))
-	paymentData := fmt.Sprintf(`{"recharge_id":%d}`, record.ID)
-	transaction := models.PaymentTransaction{
-		OrderID:         0,
-		UserID:          userID,
-		PaymentMethodID: req.PaymentMethodID,
-		Amount:          record.Amount,
-		Currency:        "CNY",
-		TransactionID:   &txID,
-		Status:          "pending",
-		PaymentData:     &paymentData,
-	}
-	if err := db.Create(&transaction).Error; err != nil {
+	transaction, err := createPaymentTransaction(db, userID, req.PaymentMethodID, *target)
+	if err != nil {
 		utils.InternalError(c, "创建支付交易失败")
 		return
 	}
-
-	// Update recharge record with payment info
-	pmName := payConfig.PayType
-	if err := db.Model(&record).Updates(map[string]interface{}{
-		"payment_method":         &pmName,
-		"payment_transaction_id": &txID,
-	}).Error; err != nil {
+	txID := safeTransactionID(transaction.TransactionID)
+	if err := updateRechargePaymentInfo(db, record, payConfig.PayType, txID); err != nil {
 		utils.InternalError(c, "更新充值记录失败")
 		return
 	}
 
-	// Handle epay-type payments
-	if payConfig.PayType == "epay" || payConfig.PayType == "alipay" || payConfig.PayType == "wxpay" || payConfig.PayType == "qqpay" {
-		orderName := "充值-" + record.OrderNo
-
-		// Try direct Alipay first
-		if payConfig.PayType == "alipay" {
-			if services.IsDirectAlipayConfigured() {
-				alipayCfg, err := services.GetAlipayConfig()
-				if err == nil {
-					notifyURL, returnURL := services.BuildPaymentURLs("alipay", record.OrderNo)
-					if alipayCfg.IsProduction && (notifyURL == "" || returnURL == "") {
-						utils.BadRequest(c, "支付宝生产环境支付地址配置无效，请检查支付公网域名配置")
-						return
-					}
-					var paymentURL string
-					// 使用 txID 作为 out_trade_no，这样回调时可以通过 out_trade_no 找到 payment_transaction
-					outTradeNo := txID
-					utils.LogPayment("[CreateRechargePayment] 使用 txID 作为 out_trade_no: %s (order_no: %s)", outTradeNo, record.OrderNo)
-					if req.IsMobile {
-						// Use WAP payment for mobile
-						paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
-					} else {
-						// Use QR code payment for desktop
-						paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
-					}
-					if err == nil {
-						// 更新充值记录，关联支付事务ID和支付URL
-						if err := db.Model(&record).Updates(map[string]interface{}{
-							"payment_url":            &paymentURL,
-							"payment_transaction_id": &txID,
-						}).Error; err != nil {
-							utils.InternalError(c, "更新充值支付信息失败")
-							return
-						}
-						utils.LogPayment("[CreateRechargePayment] ✅ 充值支付宝订单创建成功 - txID=%s, order_no=%s", outTradeNo, record.OrderNo)
-						utils.Success(c, gin.H{
-							"message":        "支付创建成功",
-							"order_no":       record.OrderNo,
-							"transaction_id": txID,
-							"amount":         record.Amount,
-							"pay_type":       "alipay",
-							"payment_url":    paymentURL,
-						})
-						return
-					}
-					utils.LogError("[payment] 充值直接支付宝失败: %v", err)
-					utils.BadRequest(c, "支付宝直连创建失败: "+err.Error())
+	if payConfig.PayType == "alipay" {
+		if services.IsDirectAlipayConfigured() {
+			alipayCfg, err := services.GetAlipayConfig()
+			if err == nil {
+				notifyURL, returnURL := services.BuildPaymentURLs("alipay", record.OrderNo)
+				if alipayCfg.IsProduction && (notifyURL == "" || returnURL == "") {
+					utils.BadRequest(c, "支付宝生产环境支付地址配置无效，请检查支付公网域名配置")
 					return
 				}
+				utils.LogPayment("[CreateRechargePayment] 使用 txID 作为 out_trade_no: %s (order_no: %s)", txID, record.OrderNo)
+				var paymentURL string
+				if req.IsMobile {
+					paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, txID, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
+				} else {
+					paymentURL, err = services.AlipayCreateOrder(alipayCfg, txID, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
+				}
+				if err == nil {
+					if err := db.Model(record).Updates(map[string]interface{}{
+						"payment_url":            &paymentURL,
+						"payment_transaction_id": &txID,
+					}).Error; err != nil {
+						utils.InternalError(c, "更新充值支付信息失败")
+						return
+					}
+					utils.LogPayment("[CreateRechargePayment] ✅ 充值支付宝订单创建成功 - txID=%s, order_no=%s", txID, record.OrderNo)
+					utils.Success(c, buildPaymentURLResult("alipay", record.OrderNo, txID, target.PayAmount, paymentURL, nil))
+					return
+				}
+				utils.LogError("[payment] 充值直接支付宝失败: %v", err)
+				utils.BadRequest(c, "支付宝直连创建失败: "+err.Error())
+				return
 			}
 		}
 
-		// Fall back to epay gateway
 		epayCfg, err := services.GetEpayConfig()
 		if err != nil {
-			if payConfig.PayType == "alipay" {
-				utils.BadRequest(c, "支付宝配置不完整，请检查 AppID、私钥等配置")
-			} else {
-				utils.BadRequest(c, "易支付网关未配置，请在系统设置中配置")
-			}
+			utils.BadRequest(c, "支付宝配置不完整，请检查 AppID、私钥等配置")
 			return
 		}
-
-		epayType := payConfig.PayType
-		if epayType == "epay" {
-			epayType = "alipay"
-		}
-
 		notifyURL, returnURL := services.BuildPaymentURLs("epay", record.OrderNo)
-
-		paymentURL, err := services.EpayCreateOrder(epayCfg, epayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
+		paymentURL, err := services.EpayCreateOrder(epayCfg, "alipay", txID, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
 		if err != nil {
 			utils.InternalError(c, "创建支付订单失败: "+err.Error())
 			return
 		}
-
-		// Store payment URL on the recharge record
-		if err := db.Model(&record).Update("payment_url", paymentURL).Error; err != nil {
+		if err := storeRechargePaymentURL(db, record, paymentURL); err != nil {
 			utils.InternalError(c, "保存支付链接失败")
 			return
 		}
-
-		utils.Success(c, gin.H{
-			"message":        "支付创建成功",
-			"order_no":       record.OrderNo,
-			"transaction_id": txID,
-			"amount":         record.Amount,
-			"pay_type":       payConfig.PayType,
-			"payment_url":    paymentURL,
-		})
+		utils.Success(c, buildPaymentURLResult("alipay", record.OrderNo, txID, target.PayAmount, paymentURL, nil))
 		return
 	}
 
-	// CodePay recharge payment
-	if payConfig.PayType == "codepay" || payConfig.PayType == "codepay_alipay" || payConfig.PayType == "codepay_wxpay" {
-		codepayCfg, err := services.GetCodepayConfig()
-		if err != nil {
-			utils.BadRequest(c, "码支付网关未配置，请在系统设置中配置")
+	result, err := createNonAlipayPayment(db, payConfig, *target, transaction)
+	if err != nil {
+		message := err.Error()
+		if strings.Contains(message, "未配置") {
+			utils.BadRequest(c, message)
 			return
 		}
-
-		orderName := "充值-" + record.OrderNo
-		codepayType := "alipay"
-		if payConfig.PayType == "codepay_wxpay" {
-			codepayType = "wxpay"
-		}
-
-		notifyURL, returnURL := services.BuildPaymentURLs("codepay", record.OrderNo)
-		if codepayCfg.NotifyURL != "" || codepayCfg.ReturnURL != "" || codepayCfg.BaseURL != "" {
-			notifyURL, returnURL = services.CodepayBuildURLs(codepayCfg, record.OrderNo)
-		}
-
-		codepayResult, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
-		if err != nil {
-			utils.InternalError(c, "创建码支付订单失败: "+err.Error())
-			return
-		}
-
-		if err := db.Model(&record).Update("payment_url", codepayResult.PaymentURL).Error; err != nil {
-			utils.InternalError(c, "保存支付链接失败")
-			return
-		}
-
-		utils.Success(c, gin.H{
-			"message":        "支付创建成功",
-			"order_no":       record.OrderNo,
-			"transaction_id": txID,
-			"amount":         record.Amount,
-			"pay_type":       payConfig.PayType,
-			"payment_url":    codepayResult.PaymentURL,
-			"payment_mode":   codepayResult.Mode,
-		})
+		utils.InternalError(c, message)
 		return
 	}
-
-	// Stripe recharge payment
-	if payConfig.PayType == "stripe" {
-		stripeCfg, err := services.GetStripeConfig()
-		if err != nil {
-			utils.BadRequest(c, "Stripe 未配置")
-			return
-		}
-
-		orderName := "充值-" + record.OrderNo
-
-		rate := 7.2
-		if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
-			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
-				rate = parsed
-			}
-		}
-		amountUSD := record.Amount / rate
-		amountCents := int64(amountUSD * 100)
-		if amountCents < 50 {
-			amountCents = 50
-		}
-
-		siteURL := services.GetSiteURL()
-		if siteURL == "" {
-			utils.BadRequest(c, "站点域名未配置，请检查 site_url")
-			return
-		}
-		successURL := siteURL + "/payment/return?order_no=" + record.OrderNo
-		cancelURL := siteURL + "/recharge"
-
-		_, checkoutURL, err := services.StripeCreateCheckoutSession(stripeCfg, txID, orderName, amountCents, "usd", successURL, cancelURL)
-		if err != nil {
-			utils.InternalError(c, "创建 Stripe 支付失败: "+err.Error())
-			return
-		}
-
-		if err := db.Model(&record).Update("payment_url", &checkoutURL).Error; err != nil {
-			utils.InternalError(c, "保存支付链接失败")
-			return
-		}
-
-		utils.Success(c, gin.H{
-			"message":        "支付创建成功",
-			"order_no":       record.OrderNo,
-			"transaction_id": txID,
-			"amount":         record.Amount,
-			"pay_type":       "stripe",
-			"payment_url":    checkoutURL,
-		})
-		return
-	}
-
-	// Crypto recharge payment
-	if payConfig.PayType == "crypto" {
-		cryptoCfg, err := services.GetCryptoConfig()
-		if err != nil {
-			utils.BadRequest(c, "加密货币支付未配置")
-			return
-		}
-
-		rate := 7.2
-		if r := utils.GetSetting("pay_crypto_exchange_rate"); r != "" {
-			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
-				rate = parsed
-			}
-		}
-		amountUSDT := record.Amount / rate
-
-		utils.Success(c, gin.H{
-			"message":        "请转账到以下地址",
-			"order_no":       record.OrderNo,
-			"transaction_id": txID,
-			"amount":         record.Amount,
-			"pay_type":       "crypto",
-			"crypto_info": gin.H{
-				"wallet_address": cryptoCfg.WalletAddress,
-				"network":        cryptoCfg.Network,
-				"currency":       cryptoCfg.Currency,
-				"amount_usdt":    fmt.Sprintf("%.2f", amountUSDT),
-			},
-		})
-		return
-	}
-
-	utils.Success(c, gin.H{
-		"message":        "支付创建成功",
-		"order_no":       record.OrderNo,
-		"transaction_id": txID,
-		"amount":         record.Amount,
-		"pay_type":       payConfig.PayType,
-	})
+	utils.Success(c, result)
 }
 
 func GetPaymentStatus(c *gin.Context) {
@@ -1019,177 +1016,15 @@ func PaymentNotify(c *gin.Context) {
 }
 
 func handleEpayNotify(c *gin.Context, db *gorm.DB) {
-	utils.LogCallback("========== 开始处理易支付回调 ==========")
-	utils.LogCallback("Method: %s, URL: %s, IP: %s", c.Request.Method, c.Request.URL.String(), utils.GetRealClientIP(c))
-	// EasyPay sends params via GET query or POST form
-	params := make(map[string]string)
-	if c.Request.Method == "GET" {
-		for k, v := range c.Request.URL.Query() {
-			if len(v) > 0 {
-				params[k] = v[0]
-			}
-		}
-	} else {
-		if err := c.Request.ParseForm(); err != nil {
-			utils.SysError("payment", fmt.Sprintf("易支付回调解析表单失败: %v", err))
-			c.String(400, "fail")
-			return
-		}
-		for k, v := range c.Request.PostForm {
-			if len(v) > 0 {
-				params[k] = v[0]
-			}
-		}
-	}
-
-	// Get EasyPay config for signature verification
-	epayCfg, err := services.GetEpayConfig()
-	if err != nil {
-		c.String(400, "fail")
-		return
-	}
-
-	// Verify signature
-	if !services.EpayVerifySign(params, epayCfg.SecretKey) {
-		utils.SysError("payment", "易支付回调签名验证失败")
-		c.String(400, "sign error")
-		return
-	}
-
-	// Check trade status
-	tradeStatus := params["trade_status"]
-	utils.LogCallback("[Epay] trade_status=%s out_trade_no=%s trade_no=%s money=%s",
-		tradeStatus, params["out_trade_no"], params["trade_no"], params["money"])
-	if tradeStatus != "TRADE_SUCCESS" {
-		utils.LogCallback("[Epay] 交易状态非成功，忽略回调")
-		c.String(200, "success")
-		return
-	}
-
-	outTradeNo := params["out_trade_no"]
-	tradeNo := params["trade_no"]
-	callbackMoney := params["money"]
-
-	// 防重放攻击：检查 nonce
-	if models.IsNonceProcessed(db, outTradeNo, "epay") {
-		utils.SysError("payment", fmt.Sprintf("易支付回调重放攻击检测: %s", outTradeNo))
-		c.String(200, "success") // 返回成功避免重复回调
-		return
-	}
-
-	// Log raw callback
-	rawJSON, _ := json.Marshal(params)
-	rawStr := string(rawJSON)
-
-	// Find transaction
-	var transaction models.PaymentTransaction
-	if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err != nil {
-		// Log unmatched callback
-		callback := models.PaymentCallback{
-			CallbackType: "epay",
-			CallbackData: rawStr,
-			RawRequest:   &rawStr,
-			Processed:    false,
-		}
-		if err := db.Create(&callback).Error; err != nil {
-			utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
-		}
-		c.String(200, "success")
-		return
-	}
-
-	// Log callback
-	callback := models.PaymentCallback{
-		PaymentTransactionID: transaction.ID,
-		CallbackType:         "epay",
-		CallbackData:         rawStr,
-		RawRequest:           &rawStr,
-		Processed:            true,
-	}
-
-	if transaction.Status == "pending" {
-		err := db.Transaction(func(tx *gorm.DB) error {
-			// Re-fetch with status check inside transaction to prevent double-spend
-			var txn models.PaymentTransaction
-			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
-				return err // Already processed or not found
-			}
-
-			// 金额校验（数值比较，兼容 10 / 10.0 / 10.00）
-			if callbackMoney != "" {
-				utils.LogCallback("[Epay] 金额校验: expected=%.2f actual=%s out_trade_no=%s", txn.Amount, callbackMoney, outTradeNo)
-				if !amountsMatch(txn.Amount, callbackMoney) {
-					expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
-					utils.SysError("payment", fmt.Sprintf("易支付金额不匹配: 订单 %s, 期望 %s, 实际 %s", outTradeNo, expectedAmount, callbackMoney))
-					return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, callbackMoney)
-				}
-			} else {
-				utils.SysError("payment", fmt.Sprintf("易支付回调缺少金额字段: %s", outTradeNo))
-				return fmt.Errorf("回调数据缺少金额字段")
-			}
-
-			// 记录 nonce 防止重放
-			if err := models.RecordNonce(tx, outTradeNo, "epay", tradeNo); err != nil {
-				return fmt.Errorf("记录 nonce 失败: %w", err)
-			}
-
-			// Mark transaction as paid
-			callbackJSON := rawStr
-			updates := map[string]interface{}{
-				"status":        "paid",
-				"callback_data": &callbackJSON,
-			}
-			if tradeNo != "" {
-				updates["external_transaction_id"] = &tradeNo
-			}
-			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
-				return err
-			}
-			utils.LogCallback("[Epay] 支付事务已标记为 paid: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
-
-			// Determine if this is a recharge or order payment
-			switch getPaymentBusinessKind(&txn) {
-			case "recharge":
-				if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
-					return err
-				}
-			case "order":
-				if err := handleEpayOrderCallback(tx, &txn); err != nil {
-					return err
-				}
-			default:
-				return fmt.Errorf("无法识别支付业务类型")
-			}
-
-			return nil
-		})
+	handleFormGatewayNotify(c, db, "epay", func() (string, error) {
+		cfg, err := services.GetEpayConfig()
 		if err != nil {
-			// Check if it was an amount mismatch (not a duplicate)
-			if strings.Contains(err.Error(), "金额不匹配") {
-				s := err.Error()
-				callback.ProcessingResult = &s
-				callback.Processed = false
-				if err := db.Create(&callback).Error; err != nil {
-					utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
-				}
-				c.String(200, "success")
-				return
-			}
-			// Already processed (duplicate callback) - just log and return success
-			utils.LogCallback("[Epay] ⚠️  回调已处理（重复），忽略: out_trade_no=%s", outTradeNo)
-		} else {
-			result := "success"
-			callback.ProcessingResult = &result
-			utils.LogCallback("[Epay] ✅✅✅ 易支付回调处理成功: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
+			return "", err
 		}
-	} else {
-		utils.LogCallback("[Epay] 幂等命中，支付事务已是 %s: out_trade_no=%s", transaction.Status, outTradeNo)
-	}
-
-	if err := db.Create(&callback).Error; err != nil {
-		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
-	}
-	c.String(200, "success")
+		return cfg.SecretKey, nil
+	}, services.EpayVerifySign, "epay", func(params map[string]string) string {
+		return params["trade_status"]
+	})
 }
 
 func getPaymentBusinessKind(transaction *models.PaymentTransaction) string {
@@ -1214,172 +1049,19 @@ func getPaymentBusinessKind(transaction *models.PaymentTransaction) string {
 }
 
 func handleCodepayNotify(c *gin.Context, db *gorm.DB) {
-	utils.LogCallback("========== 开始处理码支付回调 ==========")
-	utils.LogCallback("Method: %s, URL: %s, IP: %s", c.Request.Method, c.Request.URL.String(), utils.GetRealClientIP(c))
-
-	// CodePay sends params via GET query or POST form (same as EasyPay)
-	params := make(map[string]string)
-	if c.Request.Method == "GET" {
-		for k, v := range c.Request.URL.Query() {
-			if len(v) > 0 {
-				params[k] = v[0]
-			}
-		}
-	} else {
-		if err := c.Request.ParseForm(); err != nil {
-			utils.SysError("payment", fmt.Sprintf("码支付回调解析表单失败: %v", err))
-			c.String(400, "fail")
-			return
-		}
-		for k, v := range c.Request.PostForm {
-			if len(v) > 0 {
-				params[k] = v[0]
-			}
-		}
-	}
-
-	// Get CodePay config for signature verification
-	codepayCfg, err := services.GetCodepayConfig()
-	if err != nil {
-		c.String(400, "fail")
-		return
-	}
-
-	// Verify signature
-	if !services.CodepayVerifySign(params, codepayCfg.SecretKey) {
-		utils.SysError("payment", "码支付回调签名验证失败")
-		c.String(400, "sign error")
-		return
-	}
-
-	// Check trade status
-	tradeStatus := params["trade_status"]
-	if tradeStatus == "" {
-		tradeStatus = params["status"]
-	}
-	utils.LogCallback("[Codepay] trade_status=%s out_trade_no=%s trade_no=%s money=%s",
-		tradeStatus, params["out_trade_no"], params["trade_no"], params["money"])
-	if tradeStatus != "TRADE_SUCCESS" {
-		utils.LogCallback("[Codepay] 交易状态非成功，忽略回调")
-		c.String(200, "success")
-		return
-	}
-
-	outTradeNo := params["out_trade_no"]
-	tradeNo := params["trade_no"]
-	callbackMoney := params["money"]
-
-	// 防重放攻击
-	if models.IsNonceProcessed(db, outTradeNo, "codepay") {
-		utils.SysError("payment", fmt.Sprintf("码支付回调重放攻击检测: %s", outTradeNo))
-		c.String(200, "success")
-		return
-	}
-
-	rawJSON, _ := json.Marshal(params)
-	rawStr := string(rawJSON)
-
-	// Find transaction
-	var transaction models.PaymentTransaction
-	if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err != nil {
-		callback := models.PaymentCallback{
-			CallbackType: "codepay",
-			CallbackData: rawStr,
-			RawRequest:   &rawStr,
-			Processed:    false,
-		}
-		if err := db.Create(&callback).Error; err != nil {
-			utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
-		}
-		c.String(200, "success")
-		return
-	}
-
-	callback := models.PaymentCallback{
-		PaymentTransactionID: transaction.ID,
-		CallbackType:         "codepay",
-		CallbackData:         rawStr,
-		RawRequest:           &rawStr,
-		Processed:            true,
-	}
-
-	if transaction.Status == "pending" {
-		err := db.Transaction(func(tx *gorm.DB) error {
-			var txn models.PaymentTransaction
-			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
-				return err
-			}
-
-			if callbackMoney != "" {
-				utils.LogCallback("[Codepay] 金额校验: expected=%.2f actual=%s out_trade_no=%s", txn.Amount, callbackMoney, outTradeNo)
-				if !amountsMatch(txn.Amount, callbackMoney) {
-					expectedAmount := fmt.Sprintf("%.2f", txn.Amount)
-					utils.SysError("payment", fmt.Sprintf("码支付金额不匹配: 订单 %s, 期望 %s, 实际 %s", outTradeNo, expectedAmount, callbackMoney))
-					return fmt.Errorf("金额不匹配: 期望 %s, 实际 %s", expectedAmount, callbackMoney)
-				}
-			} else {
-				utils.SysError("payment", fmt.Sprintf("码支付回调缺少金额字段: %s", outTradeNo))
-				return fmt.Errorf("回调数据缺少金额字段")
-			}
-
-			if err := models.RecordNonce(tx, outTradeNo, "codepay", tradeNo); err != nil {
-				return fmt.Errorf("记录 nonce 失败: %w", err)
-			}
-
-			callbackJSON := rawStr
-			updates := map[string]interface{}{
-				"status":        "paid",
-				"callback_data": &callbackJSON,
-			}
-			if tradeNo != "" {
-				updates["external_transaction_id"] = &tradeNo
-			}
-			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
-				return err
-			}
-			utils.LogCallback("[Codepay] 支付事务已标记为 paid: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
-
-			// Reuse shared business handlers while preserving CodePay payment method labeling
-			switch getPaymentBusinessKind(&txn) {
-			case "recharge":
-				if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
-					return err
-				}
-			case "order":
-				if err := handleGatewayOrderCallback(tx, &txn, "codepay"); err != nil {
-					return err
-				}
-			default:
-				return fmt.Errorf("无法识别支付业务类型")
-			}
-
-			return nil
-		})
+	handleFormGatewayNotify(c, db, "codepay", func() (string, error) {
+		cfg, err := services.GetCodepayConfig()
 		if err != nil {
-			if strings.Contains(err.Error(), "金额不匹配") {
-				s := err.Error()
-				callback.ProcessingResult = &s
-				callback.Processed = false
-				if err := db.Create(&callback).Error; err != nil {
-					utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
-				}
-				c.String(200, "success")
-				return
-			}
-			utils.LogCallback("[Codepay] ⚠️  回调已处理（重复），忽略: out_trade_no=%s", outTradeNo)
-		} else {
-			result := "success"
-			callback.ProcessingResult = &result
-			utils.LogCallback("[Codepay] ✅ 码支付回调处理成功: out_trade_no=%s trade_no=%s", outTradeNo, tradeNo)
+			return "", err
 		}
-	} else {
-		utils.LogCallback("[Codepay] 幂等命中，支付事务已是 %s: out_trade_no=%s", transaction.Status, outTradeNo)
-	}
-
-	if err := db.Create(&callback).Error; err != nil {
-		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
-	}
-	c.String(200, "success")
+		return cfg.SecretKey, nil
+	}, services.CodepayVerifySign, "codepay", func(params map[string]string) string {
+		tradeStatus := params["trade_status"]
+		if tradeStatus == "" {
+			tradeStatus = params["status"]
+		}
+		return tradeStatus
+	})
 }
 
 func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) error {
@@ -1784,74 +1466,84 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 		Processed:            true,
 	}
 
-	if transaction.Status == "pending" {
-		err := db.Transaction(func(tx *gorm.DB) error {
-			// Re-fetch with status check inside transaction to prevent double-spend
-			var txn models.PaymentTransaction
-			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
-				return err // Already processed or not found
-			}
+		if transaction.Status == "pending" {
+			err := db.Transaction(func(tx *gorm.DB) error {
+				var txn models.PaymentTransaction
+				if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
+					return err
+				}
 
-			// 金额校验: Stripe amount_total 单位为分，需严格匹配
-			if amountTotal, ok := obj["amount_total"].(float64); ok {
-				// 将数据库金额（元）转换为分，考虑汇率
-				rate := 7.2
-				if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
-					if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
-						rate = parsed
+				if amountTotal, ok := obj["amount_total"].(float64); ok {
+					rate := 7.2
+					if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
+						if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
+							rate = parsed
+						}
 					}
+					amountUSD := txn.Amount / rate
+					expectedCents := int64(math.Round(amountUSD * 100))
+					if expectedCents < 50 {
+						expectedCents = 50
+					}
+					actualCents := int64(amountTotal)
+
+					if math.Abs(float64(actualCents-expectedCents)) > 1 {
+						utils.SysError("payment", fmt.Sprintf("Stripe 金额不匹配: 订单 %s, 期望 %d 分, 实际 %d 分", txIDVal, expectedCents, actualCents))
+						return fmt.Errorf("金额不匹配: 期望 %d, 实际 %d (分)", expectedCents, actualCents)
+					}
+				} else {
+					utils.SysError("payment", fmt.Sprintf("Stripe 回调缺少金额字段: %s", txIDVal))
+					return fmt.Errorf("回调数据缺少金额字段")
 				}
-				amountUSD := txn.Amount / rate
-				expectedCents := int64(math.Round(amountUSD * 100))
-				actualCents := int64(amountTotal)
 
-				// 允许 1 分的误差（汇率精度问题）
-				if math.Abs(float64(actualCents-expectedCents)) > 1 {
-					utils.SysError("payment", fmt.Sprintf("Stripe 金额不匹配: 订单 %s, 期望 %d 分, 实际 %d 分", txIDVal, expectedCents, actualCents))
-					return fmt.Errorf("金额不匹配: 期望 %d, 实际 %d (分)", expectedCents, actualCents)
+				paymentIntent, _ := obj["payment_intent"].(string)
+				sessionID, _ := obj["id"].(string)
+				extTxID := paymentIntent
+				if extTxID == "" {
+					extTxID = sessionID
 				}
+				if err := models.RecordNonce(tx, txIDVal, "stripe", extTxID); err != nil {
+					return fmt.Errorf("记录 nonce 失败: %w", err)
+				}
+
+				callbackJSON := rawStr
+				updates := map[string]interface{}{
+					"status":        "paid",
+					"callback_data": &callbackJSON,
+				}
+				if extTxID != "" {
+					updates["external_transaction_id"] = &extTxID
+				}
+				if err := tx.Model(&txn).Updates(updates).Error; err != nil {
+					return err
+				}
+
+				switch getPaymentBusinessKind(&txn) {
+				case "recharge":
+					if err := handleStripeRechargeCallback(tx, &txn, txIDVal); err != nil {
+						return err
+					}
+				case "order":
+					if err := handleStripeOrderCallback(tx, &txn); err != nil {
+						return err
+					}
+				default:
+					return fmt.Errorf("无法识别支付业务类型")
+				}
+
+				return nil
+			})
+			if err != nil {
+				errMsg := err.Error()
+				callback.Processed = false
+				callback.ErrorMessage = &errMsg
+				callback.ProcessingResult = &errMsg
+				utils.LogError("[Stripe] ❌ 回调处理失败: txID=%s error=%v", txIDVal, err)
 			} else {
-				utils.SysError("payment", fmt.Sprintf("Stripe 回调缺少金额字段: %s", txIDVal))
-				return fmt.Errorf("回调数据缺少金额字段")
+				result := "success"
+				callback.ProcessingResult = &result
 			}
-
-			// 记录 nonce 防止重放
-			paymentIntent, _ := obj["payment_intent"].(string)
-			sessionID, _ := obj["id"].(string)
-			extTxID := paymentIntent
-			if extTxID == "" {
-				extTxID = sessionID
-			}
-			if err := models.RecordNonce(tx, txIDVal, "stripe", extTxID); err != nil {
-				return fmt.Errorf("记录 nonce 失败: %w", err)
-			}
-
-			callbackJSON := rawStr
-			updates := map[string]interface{}{
-				"status":        "paid",
-				"callback_data": &callbackJSON,
-			}
-			if extTxID != "" {
-				updates["external_transaction_id"] = &extTxID
-			}
-			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
-				return err
-			}
-
-			// Determine if this is a recharge or order payment
-			if strings.HasPrefix(txIDVal, "RCH") {
-				handleStripeRechargeCallback(tx, &txn, txIDVal)
-			} else {
-				handleStripeOrderCallback(tx, &txn)
-			}
-
-			return nil
-		})
-		if err == nil {
-			result := "success"
-			callback.ProcessingResult = &result
 		}
-	}
 
 	if err := db.Create(&callback).Error; err != nil {
 		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
@@ -1859,37 +1551,12 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 	c.String(200, "ok")
 }
 
-func handleStripeOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) {
-	err := db.Transaction(func(tx *gorm.DB) error {
-		var order models.Order
-		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
-			return err // Already processed or not found
-		}
-
-		now := time.Now()
-		pmName := "stripe"
-		txIDStr := fmt.Sprintf("%d", transaction.ID)
-		if err := tx.Model(&order).Updates(map[string]interface{}{
-			"status":                 "paid",
-			"payment_method_name":    &pmName,
-			"payment_time":           &now,
-			"payment_transaction_id": &txIDStr,
-		}).Error; err != nil {
-			return err
-		}
-		if err := services.ActivateSubscription(tx, &order, "stripe"); err != nil {
-			return fmt.Errorf("激活订阅失败: %w", err)
-		}
-		return nil
-	})
-	if err != nil {
-		utils.SysError("payment", fmt.Sprintf("Stripe订单回调处理失败: %v", err))
-	}
+func handleStripeOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) error {
+	return handleGatewayOrderCallback(db, transaction, "stripe")
 }
 
-func handleStripeRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) {
-	// Reuse the same recharge callback logic as epay
-	handleEpayRechargeCallback(db, transaction, txID)
+func handleStripeRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) error {
+	return handleEpayRechargeCallback(db, transaction, txID)
 }
 
 // PaymentReturn handles synchronous return from payment gateway (e.g., Alipay return_url)

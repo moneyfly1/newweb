@@ -104,22 +104,36 @@
         <div class="card">
           <div class="card-header"><span class="card-title">快速订阅</span></div>
           <div v-if="quickSubItems.length" class="quick-sub-grid">
-            <div v-for="item in quickSubItems" :key="item.name" class="quick-sub-item">
-              <span class="qs-icon">
-                <img
-                  v-if="canShowIcon(`qs:${item.name}`, item.iconUrl)"
-                  class="app-icon"
-                  :src="item.iconUrl"
-                  :alt="item.name"
-                  loading="lazy"
-                  @error="markIconFailed(`qs:${item.name}`)"
-                />
-                <span v-else>{{ item.icon }}</span>
-              </span>
-              <span class="qs-name">{{ item.name }}</span>
-              <div class="qs-actions">
-                <n-button size="tiny" @click="copyText(item.url, item.name)"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
-                <n-button v-if="item.importable" size="tiny" type="primary" @click="oneClickImport(item.client)"><template #icon><n-icon :component="CloudDownloadOutline" /></template></n-button>
+            <div
+              v-for="item in quickSubItems"
+              :key="item.name"
+              class="quick-sub-item"
+              :class="{ 'is-open': expandedQuickSub === item.name }"
+            >
+              <button class="qs-main" type="button" @click="toggleQuickSub(item.name)">
+                <span class="qs-icon">
+                  <img
+                    v-if="canShowIcon(`qs:${item.name}`, item.iconUrl)"
+                    class="app-icon"
+                    :src="item.iconUrl"
+                    :alt="item.name"
+                    loading="lazy"
+                    @error="markIconFailed(`qs:${item.name}`)"
+                  />
+                  <span v-else>{{ item.icon }}</span>
+                </span>
+                <span class="qs-name">{{ item.name }}</span>
+                <span class="qs-hint">点击选择操作</span>
+              </button>
+              <div v-if="expandedQuickSub === item.name" class="qs-actions">
+                <n-button size="small" @click="copyText(item.url, item.name)">
+                  <template #icon><n-icon :component="CopyOutline" /></template>
+                  复制订阅
+                </n-button>
+                <n-button v-if="item.importable" size="small" type="primary" @click="oneClickImport(item.client)">
+                  <template #icon><n-icon :component="CloudDownloadOutline" /></template>
+                  一键导入
+                </n-button>
               </div>
             </div>
           </div>
@@ -233,6 +247,7 @@ const ordersLoading = ref(false)
 const subscriptionLoading = ref(false)
 const dashQrCanvas = ref<HTMLCanvasElement | null>(null)
 const showSubUrls = ref(false)
+const expandedQuickSub = ref('')
 
 function maskUrl(url: string) {
   if (!url || url.length < 20) return '••••••••'
@@ -357,6 +372,10 @@ function canShowIcon(key: string, url?: string) {
   return !!url && !iconFailed.value[key]
 }
 
+function toggleQuickSub(name: string) {
+  expandedQuickSub.value = expandedQuickSub.value === name ? '' : name
+}
+
 const greetingText = computed(() => {
   const h = new Date().getHours()
   if (h < 6) return '夜深了'
@@ -396,6 +415,12 @@ const shadowrocketQrData = computed(() => {
   const url = subscription.value.token_url
   if (!url) return ''
   return `shadowrocket://add/${encodeURIComponent(url)}`
+})
+
+watch(quickSubItems, (items) => {
+  if (!items.some(item => item.name === expandedQuickSub.value)) {
+    expandedQuickSub.value = ''
+  }
 })
 
 watch(shadowrocketQrData, async (value) => {
@@ -465,7 +490,6 @@ const loadDashboardData = async () => {
 
 const handleVisibilityChange = () => {
   if (!document.hidden) {
-    // Page became visible, refresh data
     loadDashboardData().catch(() => {})
   }
 }
@@ -497,7 +521,6 @@ onMounted(async () => {
   ordersLoading.value = false
   if (checkinRes.status === 'fulfilled') { const res: any = checkinRes.value; if (res.data) checkinStatus.value = res.data }
 
-  // Listen for visibility changes to auto-refresh
   document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
@@ -539,12 +562,10 @@ onUnmounted(() => {
 .top-stat-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.35); }
 .top-stat-label { font-size: 12px; opacity: 0.9; }
 .top-stat-val { font-size: 15px; font-weight: 700; }
-/* Solid white buttons on gradient backgrounds */
 .gradient-btn { background: rgba(255,255,255,0.95) !important; color: #4a5fd7 !important; border: none !important; font-weight: 600 !important; }
 .gradient-btn:hover { background: #fff !important; }
 .gradient-btn:disabled { background: rgba(255,255,255,0.5) !important; color: rgba(74,95,215,0.6) !important; }
 .level-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 12px; color: white; font-weight: 600; font-size: 12px; }
-/* Tags on gradient background need solid styling */
 .top-bar :deep(.n-tag) { background: rgba(255,255,255,0.2) !important; color: white !important; font-weight: 600; }
 .top-bar :deep(.n-tag .n-tag__content) { color: white !important; }
 
@@ -573,11 +594,15 @@ onUnmounted(() => {
 .sub-url-label { font-size: 12px; color: #666; min-width: 36px; font-weight: 500; }
 
 /* Quick Subscription */
-.quick-sub-grid { display: flex; flex-direction: column; gap: 6px; }
-.quick-sub-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: #f8f8fa; }
-.qs-icon { font-size: 16px; }
-.qs-name { flex: 1; font-size: 13px; font-weight: 500; }
-.qs-actions { display: flex; gap: 4px; }
+.quick-sub-grid { display: flex; flex-direction: column; gap: 10px; }
+.quick-sub-item { border-radius: 10px; background: #f8f8fa; border: 1px solid transparent; transition: all 0.2s; }
+.quick-sub-item.is-open { background: #f6f8ff; border-color: #d8e0ff; }
+.qs-main { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; background: transparent; cursor: pointer; text-align: left; }
+.qs-main:hover { background: rgba(102,126,234,0.04); }
+.qs-icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.qs-name { flex: 1; font-size: 13px; font-weight: 600; color: #333; }
+.qs-hint { font-size: 12px; color: #999; flex-shrink: 0; }
+.qs-actions { display: flex; gap: 8px; padding: 0 12px 12px 50px; flex-wrap: wrap; }
 
 /* Client Downloads */
 .client-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
@@ -623,5 +648,8 @@ onUnmounted(() => {
   .sub-url-row { flex-wrap: wrap; }
   .shadowrocket-qr-header { flex-direction: column; align-items: stretch; }
   .shadowrocket-qr-canvas { max-width: 180px; }
+  .qs-main { align-items: center; }
+  .qs-hint { width: 100%; padding-left: 38px; }
+  .qs-actions { padding: 0 12px 12px 12px; }
 }
 </style>

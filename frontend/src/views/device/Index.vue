@@ -64,7 +64,7 @@
     <common-drawer
       v-model:show="showDeleteModal"
       title="确认删除"
-      :width="400"
+      :width="appStore.isMobile ? '100%' : 400"
       show-footer
       @confirm="handleConfirmDelete"
       @cancel="showDeleteModal = false"

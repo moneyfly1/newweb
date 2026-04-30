@@ -103,9 +103,23 @@
                         <n-form-item-gi label="同步返回地址" span="2"><n-input v-model:value="form.pay_alipay_return_url" placeholder="留空则使用支付公网域名自动生成 /api/v1/payment/success" /></n-form-item-gi>
                       </n-grid>
                     </n-collapse-item>
+                    <n-collapse-item title="码支付 (CodePay)" name="codepay">
+                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                        <n-form-item-gi label="启用状态"><n-switch v-model:value="form.pay_codepay_enabled" /></n-form-item-gi>
+                        <n-form-item-gi label="网关地址" span="2"><n-input v-model:value="form.pay_codepay_gateway" placeholder="https://mzf.akwl.net" /><template #feedback>填写官网地址，系统自动拼接 API 路径</template></n-form-item-gi>
+                        <n-form-item-gi label="商户ID"><n-input v-model:value="form.pay_codepay_merchant_id" /></n-form-item-gi>
+                        <n-form-item-gi label="商户密钥"><n-input v-model:value="form.pay_codepay_secret_key" type="password" show-password-on="click" /></n-form-item-gi>
+                        <n-form-item-gi label="支付基址" span="2"><n-input v-model:value="form.pay_codepay_base_url" placeholder="https://pay.example.com；留空则回退到支付公网域名" /></n-form-item-gi>
+                        <n-form-item-gi label="异步通知地址" span="2"><n-input v-model:value="form.pay_codepay_notify_url" placeholder="留空则按支付基址自动生成 /api/v1/payment/notify/codepay" /></n-form-item-gi>
+                        <n-form-item-gi label="同步返回地址" span="2"><n-input v-model:value="form.pay_codepay_return_url" placeholder="留空则按支付基址自动生成 /api/v1/payment/success" /></n-form-item-gi>
+                        <n-form-item-gi label="启用支付宝"><n-switch v-model:value="form.pay_codepay_alipay_enabled" /></n-form-item-gi>
+                        <n-form-item-gi label="启用微信支付"><n-switch v-model:value="form.pay_codepay_wxpay_enabled" /></n-form-item-gi>
+                      </n-grid>
+                    </n-collapse-item>
                     <n-collapse-item title="易支付 (Epay)" name="epay">
                       <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                        <n-form-item-gi label="网关地址" span="2"><n-input v-model:value="form.pay_epay_gateway" placeholder="https://epay.example.com" /></n-form-item-gi>
+                        <n-form-item-gi label="启用状态"><n-switch v-model:value="form.pay_epay_enabled" /></n-form-item-gi>
+                        <n-form-item-gi label="网关地址" span="2"><n-input v-model:value="form.pay_epay_gateway" placeholder="https://mzf.akwl.net/xpay/epay" /></n-form-item-gi>
                         <n-form-item-gi label="商户号"><n-input v-model:value="form.pay_epay_merchant_id" /></n-form-item-gi>
                         <n-form-item-gi label="商户密钥"><n-input v-model:value="form.pay_epay_secret_key" type="password" show-password-on="click" /></n-form-item-gi>
                       </n-grid>
@@ -120,19 +134,6 @@
                     </n-collapse-item>
                     <n-collapse-item title="内部余额支付" name="balance">
                       <n-form-item label="允许使用余额购买套餐"><n-switch v-model:value="form.pay_balance_enabled" /></n-form-item>
-                    </n-collapse-item>
-                    <n-collapse-item title="码支付 (CodePay)" name="codepay">
-                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                        <n-form-item-gi label="启用状态"><n-switch v-model:value="form.pay_codepay_enabled" /></n-form-item-gi>
-                        <n-form-item-gi label="网关地址" span="2"><n-input v-model:value="form.pay_codepay_gateway" placeholder="https://mzf.akwl.net" /><template #feedback>填写官网地址，系统自动拼接 API 路径</template></n-form-item-gi>
-                        <n-form-item-gi label="商户ID"><n-input v-model:value="form.pay_codepay_merchant_id" /></n-form-item-gi>
-                        <n-form-item-gi label="商户密钥"><n-input v-model:value="form.pay_codepay_secret_key" type="password" show-password-on="click" /></n-form-item-gi>
-                        <n-form-item-gi label="支付基址" span="2"><n-input v-model:value="form.pay_codepay_base_url" placeholder="https://pay.example.com；留空则回退到支付公网域名" /></n-form-item-gi>
-                        <n-form-item-gi label="异步通知地址" span="2"><n-input v-model:value="form.pay_codepay_notify_url" placeholder="留空则按支付基址自动生成 /api/v1/payment/notify/codepay" /></n-form-item-gi>
-                        <n-form-item-gi label="同步返回地址" span="2"><n-input v-model:value="form.pay_codepay_return_url" placeholder="留空则按支付基址自动生成 /api/v1/payment/success" /></n-form-item-gi>
-                        <n-form-item-gi label="启用支付宝"><n-switch v-model:value="form.pay_codepay_alipay_enabled" /></n-form-item-gi>
-                        <n-form-item-gi label="启用微信支付"><n-switch v-model:value="form.pay_codepay_wxpay_enabled" /></n-form-item-gi>
-                      </n-grid>
                     </n-collapse-item>
                   </n-collapse>
                 </div>
@@ -323,7 +324,7 @@ const form = ref<Record<string, any>>({
   smtp_host: '', smtp_port: 465, smtp_username: '', smtp_password: '', smtp_encryption: 'ssl', smtp_from_email: '',
   pay_alipay_enabled: false, pay_alipay_sandbox: false, pay_alipay_app_id: '', pay_alipay_private_key: '', pay_alipay_public_key: '',
   payment_public_base_url: '', pay_alipay_notify_url: '', pay_alipay_return_url: '',
-  pay_epay_gateway: '', pay_epay_merchant_id: '', pay_epay_secret_key: '',
+  pay_epay_enabled: false, pay_epay_gateway: '', pay_epay_merchant_id: '', pay_epay_secret_key: '',
   pay_codepay_enabled: false, pay_codepay_gateway: '', pay_codepay_merchant_id: '', pay_codepay_secret_key: '',
   pay_codepay_base_url: '', pay_codepay_notify_url: '', pay_codepay_return_url: '',
   pay_codepay_alipay_enabled: true, pay_codepay_wxpay_enabled: false,

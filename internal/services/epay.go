@@ -231,9 +231,32 @@ func (g *EpayGateway) CreatePaymentWithType(payType, orderNo string, amount floa
 
 // VerifyCallback 验证回调签名
 func (g *EpayGateway) VerifyCallback(data map[string]interface{}) bool {
-	// Epay 回调验证在 handleEpayNotify 中处理
-	// 这里返回 true，实际验证在回调处理函数中
-	return true
+	if g.config == nil {
+		config, err := GetEpayConfig()
+		if err != nil {
+			return false
+		}
+		g.config = config
+	}
+	if g.config == nil || g.config.SecretKey == "" {
+		return false
+	}
+
+	params := make(map[string]string, len(data))
+	for k, v := range data {
+		switch value := v.(type) {
+		case string:
+			params[k] = value
+		case fmt.Stringer:
+			params[k] = value.String()
+		case nil:
+			params[k] = ""
+		default:
+			params[k] = fmt.Sprintf("%v", value)
+		}
+	}
+
+	return EpayVerifySign(params, g.config.SecretKey)
 }
 
 // GetName 获取网关名称

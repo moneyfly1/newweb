@@ -306,8 +306,14 @@ func GetActivities(c *gin.Context) {
 
 func GetDashboardInfo(c *gin.Context) {
 	userID := c.MustGet("user_id").(uint)
-	user := c.MustGet("user").(*models.User)
 	db := database.GetDB()
+
+	var user models.User
+	if err := db.Select("id", "balance").First(&user, userID).Error; err != nil {
+		utils.InternalError(c, "获取仪表盘信息失败")
+		return
+	}
+
 	var sub models.Subscription
 	hasSub := db.Where("user_id = ?", userID).First(&sub).Error == nil
 	var orderCount int64

@@ -116,7 +116,7 @@
     <common-drawer
       v-model:show="showOrderPayDrawer"
       title="继续支付"
-      :width="500"
+      :width="appStore.isMobile ? '100%' : 500"
       show-footer
       :loading="paying"
       @confirm="handleOrderPay"
@@ -152,7 +152,7 @@
     <common-drawer
       v-model:show="showRechargePayDrawer"
       title="充值支付"
-      :width="500"
+      :width="appStore.isMobile ? '100%' : 500"
       show-footer
       :loading="rechargePaying"
       @confirm="handleRechargePay"
@@ -185,7 +185,7 @@
     <common-drawer
       v-model:show="showDetailDrawer"
       title="订单详情"
-      :width="560"
+      :width="appStore.isMobile ? '100%' : 560"
     >
       <n-descriptions :column="1" bordered v-if="detailOrder">
         <n-descriptions-item label="订单号">{{ detailOrder.order_no }}</n-descriptions-item>
@@ -216,7 +216,7 @@
     <common-drawer
       v-model:show="showQrDrawer"
       title="扫码支付"
-      :width="400"
+      :width="appStore.isMobile ? '100%' : 400"
       :mask-closable="false"
       show-footer
       :show-confirm="false"
@@ -236,7 +236,7 @@
     <common-drawer
       v-model:show="showMobilePayDrawer"
       title="手机支付"
-      :width="400"
+      :width="appStore.isMobile ? '100%' : 400"
       :mask-closable="false"
       show-footer
       :show-confirm="false"

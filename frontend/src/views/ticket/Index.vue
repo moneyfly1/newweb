@@ -63,7 +63,7 @@
     <common-drawer
       v-model:show="showCreateModal"
       title="新建工单"
-      :width="600"
+      :width="appStore.isMobile ? '100%' : 600"
       :mask-closable="false"
       show-footer
       @confirm="handleCreate"

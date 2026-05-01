@@ -6,7 +6,7 @@
 .hidden-input { display: none; }
 
 /* 文本样式 */
-.batch-selected-text { color: #666; }
+.batch-selected-text { color: var(--text-color-secondary, #666); }
 .tag-spacing { margin-left: 4px; }
 
 /* 间距 */
@@ -42,4 +42,4 @@
 
 /* 加载和空状态 */
 .loading-center { text-align: center; padding: 40px; }
-.empty-state { text-align: center; padding: 40px; color: #999; }
+.empty-state { text-align: center; padding: 40px; color: var(--text-color-secondary, #666); }

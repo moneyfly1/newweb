@@ -14,6 +14,11 @@ html, body, #app {
   height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-tap-highlight-color: transparent;
+  color: var(--text-color, #1f2937);
+}
+
+body {
+  background: var(--bg-page-color, #f2f3f5);
 }
 
 a {
@@ -29,6 +34,33 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* Global interaction feedback for list-like components */
+.n-list.n-list--hoverable .n-list-item:hover {
+  background: var(--list-hover-color, rgba(102, 126, 234, 0.12)) !important;
+}
+
+.n-list.n-list--clickable .n-list-item:active {
+  background: var(--list-active-color, rgba(102, 126, 234, 0.2)) !important;
+}
+
+.n-data-table .n-data-table-tr:hover .n-data-table-td {
+  background: var(--list-hover-color, rgba(102, 126, 234, 0.12)) !important;
+}
+
+.n-data-table .n-data-table-tr:active .n-data-table-td {
+  background: var(--list-active-color, rgba(102, 126, 234, 0.2)) !important;
+}
+
+.n-menu .n-menu-item-content.n-menu-item-content--selected::before,
+.n-menu .n-menu-item-content.n-menu-item-content--child-active::before {
+  box-shadow: inset 3px 0 0 var(--primary-color, #667eea);
+}
+
+.n-menu .n-menu-item-content.n-menu-item-content--selected .n-menu-item-content-header,
+.n-menu .n-menu-item-content.n-menu-item-content--child-active .n-menu-item-content-header {
+  font-weight: 600;
 }
 
 /* Mobile responsive utilities */

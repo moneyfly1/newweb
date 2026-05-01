@@ -50,7 +50,7 @@
                 <template #prefix><n-icon :component="LockClosedOutline" /></template>
               </n-input>
             </n-form-item>
-            <n-form-item path="invite_code">
+            <n-form-item v-if="inviteEnabled" path="invite_code">
               <n-input-group>
                 <n-input v-model:value="form.invite_code" :placeholder="inviteRequired ? '邀请码（必填）' : '邀请码（选填）'" size="large" style="flex: 1" @blur="autoValidateInvite">
                   <template #prefix><n-icon :component="GiftOutline" /></template>
@@ -58,10 +58,10 @@
                 <n-button size="large" :loading="validatingInvite" @click="handleValidateInvite" style="width: 80px">验证</n-button>
               </n-input-group>
             </n-form-item>
-            <n-alert v-if="inviteValid === true" type="success" :bordered="false" size="small" style="margin-bottom: 16px">
+            <n-alert v-if="inviteEnabled && inviteValid === true" type="success" :bordered="false" size="small" style="margin-bottom: 16px">
               邀请码有效{{ inviteReward > 0 ? `，注册后可获得 ¥${inviteReward} 奖励` : '' }}
             </n-alert>
-            <n-alert v-else-if="inviteValid === false" type="error" :bordered="false" size="small" style="margin-bottom: 16px">
+            <n-alert v-else-if="inviteEnabled && inviteValid === false" type="error" :bordered="false" size="small" style="margin-bottom: 16px">
               {{ inviteError }}
             </n-alert>
             <n-button type="primary" block size="large" :loading="loading" @click="handleRegister" style="border-radius: 8px; height: 44px;">
@@ -112,6 +112,7 @@ const inviteRequired = computed(() => {
   const v = siteConfig.value['register_invite_required']
   return v === 'true' || v === '1'
 })
+const inviteEnabled = computed(() => inviteRequired.value)
 
 const form = ref({ username: '', email: '', password: '', invite_code: '', verification_code: '' })
 const rules = computed(() => ({
@@ -172,6 +173,12 @@ async function handleRegister() {
 }
 
 const handleValidateInvite = async () => {
+  if (!inviteEnabled.value) {
+    inviteValid.value = null
+    inviteReward.value = 0
+    inviteError.value = ''
+    return
+  }
   const code = form.value.invite_code.trim()
   if (!code) { inviteValid.value = null; return }
   validatingInvite.value = true
@@ -190,6 +197,7 @@ const handleValidateInvite = async () => {
 }
 
 const autoValidateInvite = () => {
+  if (!inviteEnabled.value) return
   if (form.value.invite_code.trim() && inviteValid.value === null) {
     handleValidateInvite()
   }
@@ -204,7 +212,7 @@ onMounted(async () => {
   }
   // Read invite code from URL
   const code = route.query.code as string
-  if (code) {
+  if (code && inviteEnabled.value) {
     form.value.invite_code = code
     handleValidateInvite()
   }

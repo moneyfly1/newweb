@@ -250,9 +250,9 @@ function handleUserMenu(key: string) {
 }
 .mobile-tab {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; flex: 1; padding: 6px 0; cursor: pointer; color: #999; transition: color 0.2s;
+  gap: 2px; flex: 1; padding: 6px 0; cursor: pointer; color: var(--text-color-secondary, #666); transition: color 0.2s, background-color 0.2s;
 }
-.mobile-tab.active { color: #667eea; }
+.mobile-tab.active { color: var(--primary-color, #667eea); background: var(--primary-color-soft, rgba(102,126,234,0.08)); }
 .mobile-tab-label { font-size: 10px; line-height: 1; }
 
 /* Theme Picker */
@@ -260,7 +260,7 @@ function handleUserMenu(key: string) {
 .theme-picker-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   border-radius: 8px; cursor: pointer; border: 2px solid transparent;
-  transition: all 0.2s; background: rgba(0,0,0,0.04);
+  transition: all 0.2s; background: var(--primary-color-soft, rgba(102,126,234,0.08));
 }
 .theme-picker-item:hover { border-color: var(--primary-color, #667eea)66; }
 .theme-picker-item.active { border-color: var(--primary-color, #667eea); background: var(--primary-color, #667eea)11; }

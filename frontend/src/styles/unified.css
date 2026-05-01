@@ -21,6 +21,7 @@ html {
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   overflow: hidden;
+  border: 1px solid var(--border-color, #e5e7eb);
   transition: all 0.2s ease;
 }
 
@@ -34,6 +35,8 @@ html {
 
 .mobile-card.clickable:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border-color: var(--primary-color, #667eea);
+  background: var(--primary-color-soft, rgba(102, 126, 234, 0.08));
 }
 
 .card-header {
@@ -49,7 +52,7 @@ html {
 .card-title {
   font-weight: 600;
   font-size: 15px;
-  color: var(--n-text-color);
+  color: var(--text-color, var(--n-text-color));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -58,7 +61,7 @@ html {
 
 .card-subtitle {
   font-size: 13px;
-  color: var(--n-text-color-3);
+  color: var(--text-color-secondary, var(--n-text-color-3));
   margin-top: 2px;
 }
 
@@ -84,7 +87,7 @@ html {
 }
 
 .card-label {
-  color: var(--n-text-color-3);
+  color: var(--text-color-secondary, var(--n-text-color-3));
   flex-shrink: 0;
   min-width: 70px;
   font-size: 13px;
@@ -93,7 +96,7 @@ html {
 .card-value {
   text-align: right;
   word-break: break-word;
-  color: var(--n-text-color);
+  color: var(--text-color, var(--n-text-color));
   flex: 1;
   font-size: 14px;
 }
@@ -117,7 +120,7 @@ html {
   border-top: 1px solid var(--n-border-color);
   background: var(--n-color-target);
   font-size: 12px;
-  color: var(--n-text-color-3);
+  color: var(--text-color-secondary, var(--n-text-color-3));
 }
 
 /* ========== 管理后台列表统一样式 ========== */
@@ -144,7 +147,7 @@ html {
 
 .page-subtitle {
   margin: 4px 0 0;
-  color: var(--n-text-color-3);
+  color: var(--text-color-secondary, var(--n-text-color-3));
   font-size: 14px;
 }
 
@@ -196,12 +199,14 @@ html {
 .admin-page-shell :deep(.n-data-table-th) {
   font-weight: 600;
   background: var(--n-th-color);
+  color: var(--text-color, #1f2937);
   padding: 14px 16px;
 }
 
 .unified-admin-table :deep(.n-data-table-td),
 .admin-page-shell :deep(.n-data-table-td) {
   padding: 12px 16px;
+  color: var(--text-color, #1f2937);
 }
 
 .unified-admin-table :deep(.n-data-table-td__content),
@@ -212,7 +217,7 @@ html {
 
 .unified-admin-table :deep(.n-data-table-tr:hover),
 .admin-page-shell :deep(.n-data-table-tr:hover) {
-  background: var(--n-color-hover);
+  background: var(--list-hover-color, var(--n-color-hover));
 }
 
 .cell-block {
@@ -233,16 +238,16 @@ html {
 
 .cell-title {
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-color, #1f2937);
 }
 
 .cell-sub {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-color-secondary, #64748b);
 }
 
 .inline-icon {
-  color: #94a3b8;
+  color: var(--text-color-secondary, #94a3b8);
 }
 
 .left-text {

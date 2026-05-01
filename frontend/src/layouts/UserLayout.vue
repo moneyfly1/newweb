@@ -246,16 +246,25 @@ function returnToAdmin() {
 }
 .mobile-tab {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; flex: 1; padding: 6px 0; cursor: pointer; color: #999; transition: color 0.2s;
+  gap: 2px; flex: 1; padding: 6px 0; cursor: pointer; color: var(--text-color-secondary, #666); transition: color 0.2s, background-color 0.2s;
 }
-.mobile-tab.active { color: #667eea; }
+.mobile-tab.active { color: var(--primary-color, #667eea); background: var(--primary-color-soft, rgba(102,126,234,0.08)); }
 .mobile-tab-label { font-size: 10px; line-height: 1; }
 
 /* Mobile More Menu */
 .mobile-more-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 12px; padding: 8px 0; }
 .mobile-more-item { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; }
-.mobile-more-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.04); color: #667eea; }
-.mobile-more-label { font-size: 12px; color: #666; }
+.mobile-more-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-color-soft, rgba(102,126,234,0.08));
+  color: var(--primary-color, #667eea);
+}
+.mobile-more-label { font-size: 12px; color: var(--text-color, #333); }
 
 /* Mobile Theme Section */
 .mobile-theme-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color, #e8e8e8); }
@@ -274,7 +283,7 @@ function returnToAdmin() {
 .theme-picker-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   border-radius: 8px; cursor: pointer; border: 2px solid transparent;
-  transition: all 0.2s; background: rgba(0,0,0,0.04);
+  transition: all 0.2s; background: var(--primary-color-soft, rgba(102,126,234,0.08));
 }
 .theme-picker-item:hover { border-color: var(--primary-color, #667eea)66; }
 .theme-picker-item.active { border-color: var(--primary-color, #667eea); background: var(--primary-color, #667eea)11; }

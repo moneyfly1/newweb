@@ -62,7 +62,8 @@
                 <div class="sub-user-info">
                   <div class="sub-avatar">{{ (row.username || row.user_email || 'U').charAt(0).toUpperCase() }}</div>
                   <div class="sub-user-meta">
-                    <div class="sub-user-name">{{ row.username || row.user_email || '未知' }}</div>
+                    <div class="sub-user-name">{{ row.username || '未知' }}</div>
+                    <div class="sub-user-email" v-if="row.user_email">{{ row.user_email }}</div>
                     <div class="sub-user-id">ID: {{ row.id }} · {{ row.package_name || '无套餐' }}</div>
                   </div>
                 </div>
@@ -406,9 +407,10 @@ const columns = [
   { type: 'selection' },
   { title: 'ID', key: 'id', width: 60, sorter: (a, b) => a.id - b.id, resizable: true },
   {
-    title: '用户', key: 'user_email', width: 160, resizable: true,
+    title: '用户', key: 'user_email', width: 180, resizable: true,
     render: (row) => h('div', {}, [
-      h('div', { style: 'font-weight:500;font-size:13px' }, row.username || row.user_email || '未知'),
+      h('div', { style: 'font-weight:500;font-size:13px;line-height:1.4' }, row.username || '未知'),
+      row.user_email ? h('div', { style: 'font-size:11px;color:#999;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, row.user_email) : null,
       h(NButton, { size: 'tiny', type: 'success', style: 'margin-top:4px', onClick: () => handleViewDetail(row) }, { default: () => '详情' })
     ])
   },
@@ -652,6 +654,7 @@ onMounted(() => fetchData())
 .sub-avatar { width: 36px; height: 36px; border-radius: 50%; background: #667eea; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; flex-shrink: 0; }
 .sub-user-meta { flex: 1; min-width: 0; }
 .sub-user-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-color, #333); }
+.sub-user-email { font-size: 11px; color: var(--text-color-secondary, #999); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
 .sub-user-id { font-size: 12px; color: var(--text-color-secondary, #999); margin-top: 2px; }
 .sub-section { padding: 10px 14px; border-bottom: 1px solid var(--border-color, #f5f5f5); }
 .section-expired { background: rgba(224, 48, 80, 0.06); }

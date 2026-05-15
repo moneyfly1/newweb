@@ -26,84 +26,72 @@ export interface ThemeOption {
 }
 
 const themeConfigs: Record<string, ThemeConfig> = {
-  light: {
-    primary: '#667eea', success: '#18a058', warning: '#f0a020', danger: '#e03050', info: '#909399',
-    bg: '#ffffff', bgPage: '#f2f3f5', text: '#1f2937', textSecondary: '#4b5563', border: '#dcdfe6',
-    sidebarBg: '#f8f9fa', sidebarText: '#1f2937', sidebarHover: '#e9ecef', sidebarActive: '#667eea',
+  indigo: {
+    primary: '#4f46e5', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#6b7280',
+    bg: '#ffffff', bgPage: '#f8fafc', text: '#0f172a', textSecondary: '#64748b', border: '#e2e8f0',
+    sidebarBg: '#f1f5f9', sidebarText: '#334155', sidebarHover: '#e2e8f0', sidebarActive: '#4f46e5',
   },
-  dark: {
-    primary: '#667eea', success: '#63e2b7', warning: '#f2c97d', danger: '#e88080', info: '#909399',
-    bg: '#1a1a1a', bgPage: '#141414', text: '#E5EAF3', textSecondary: '#CFD3DC', border: '#4C4D4F',
-    sidebarBg: '#1f1f1f', sidebarText: '#E5EAF3', sidebarHover: '#2a2a2a', sidebarActive: '#667eea',
+  sky: {
+    primary: '#0284c7', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#64748b',
+    bg: '#ffffff', bgPage: '#f8fafc', text: '#0f172a', textSecondary: '#475569', border: '#e0f2fe',
+    sidebarBg: '#f0f9ff', sidebarText: '#0c4a6e', sidebarHover: '#e0f2fe', sidebarActive: '#0284c7',
   },
-  blue: {
-    primary: '#1890ff', success: '#52c41a', warning: '#faad14', danger: '#ff4d4f', info: '#8c8c8c',
-    bg: '#f0f2f5', bgPage: '#e6f7ff', text: '#1f2937', textSecondary: '#4b5563', border: '#d9d9d9',
-    sidebarBg: '#e6f7ff', sidebarText: '#1f2937', sidebarHover: '#bae7ff', sidebarActive: '#1890ff',
+  teal: {
+    primary: '#0f766e', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#64748b',
+    bg: '#ffffff', bgPage: '#f8fdfb', text: '#0f172a', textSecondary: '#475569', border: '#ccfbf1',
+    sidebarBg: '#f0fdfa', sidebarText: '#134e4a', sidebarHover: '#ccfbf1', sidebarActive: '#0f766e',
   },
-  green: {
-    primary: '#52c41a', success: '#52c41a', warning: '#faad14', danger: '#ff4d4f', info: '#8c8c8c',
-    bg: '#f6ffed', bgPage: '#f0f9ff', text: '#1f2937', textSecondary: '#4b5563', border: '#b7eb8f',
-    sidebarBg: '#f6ffed', sidebarText: '#1f2937', sidebarHover: '#d9f7be', sidebarActive: '#52c41a',
+  mint: {
+    primary: '#059669', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#64748b',
+    bg: '#ffffff', bgPage: '#fafdfa', text: '#0f172a', textSecondary: '#475569', border: '#d1fae5',
+    sidebarBg: '#f5fdf8', sidebarText: '#14532d', sidebarHover: '#d1fae5', sidebarActive: '#059669',
   },
-  purple: {
-    primary: '#722ed1', success: '#52c41a', warning: '#faad14', danger: '#ff4d4f', info: '#8c8c8c',
-    bg: '#f9f0ff', bgPage: '#f0f0ff', text: '#1f2937', textSecondary: '#4b5563', border: '#d3adf7',
-    sidebarBg: '#f9f0ff', sidebarText: '#1f2937', sidebarHover: '#efdbff', sidebarActive: '#722ed1',
+  amber: {
+    primary: '#b45309', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#78716c',
+    bg: '#ffffff', bgPage: '#fefefe', text: '#1c1917', textSecondary: '#78716c', border: '#fef3c7',
+    sidebarBg: '#fffbeb', sidebarText: '#78350f', sidebarHover: '#fef3c7', sidebarActive: '#b45309',
   },
-  orange: {
-    primary: '#fa8c16', success: '#52c41a', warning: '#faad14', danger: '#ff4d4f', info: '#8c8c8c',
-    bg: '#fff7e6', bgPage: '#fffbe6', text: '#1f2937', textSecondary: '#4b5563', border: '#ffd591',
-    sidebarBg: '#fff7e6', sidebarText: '#1f2937', sidebarHover: '#ffe7ba', sidebarActive: '#fa8c16',
+  rose: {
+    primary: '#be185d', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#6b7280',
+    bg: '#ffffff', bgPage: '#fdf8fa', text: '#1a0f14', textSecondary: '#6b5a62', border: '#fce7f3',
+    sidebarBg: '#fdf2f8', sidebarText: '#831843', sidebarHover: '#fce7f3', sidebarActive: '#be185d',
   },
-  red: {
-    primary: '#f5222d', success: '#52c41a', warning: '#faad14', danger: '#ff4d4f', info: '#8c8c8c',
-    bg: '#fff1f0', bgPage: '#fff0f0', text: '#1f2937', textSecondary: '#4b5563', border: '#ffccc7',
-    sidebarBg: '#fff1f0', sidebarText: '#1f2937', sidebarHover: '#ffd4d0', sidebarActive: '#f5222d',
+  slate: {
+    primary: '#374151', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#6b7280',
+    bg: '#ffffff', bgPage: '#f9fafb', text: '#111827', textSecondary: '#6b7280', border: '#e5e7eb',
+    sidebarBg: '#f3f4f6', sidebarText: '#374151', sidebarHover: '#e5e7eb', sidebarActive: '#374151',
   },
-  cyan: {
-    primary: '#13c2c2', success: '#52c41a', warning: '#faad14', danger: '#ff4d4f', info: '#8c8c8c',
-    bg: '#e6fffb', bgPage: '#e0f7ff', text: '#1f2937', textSecondary: '#4b5563', border: '#87e8de',
-    sidebarBg: '#e6fffb', sidebarText: '#1f2937', sidebarHover: '#b5f5ec', sidebarActive: '#13c2c2',
-  },
-  luck: {
-    primary: '#FFD700', success: '#32CD32', warning: '#FFA500', danger: '#FF6347', info: '#9370DB',
-    bg: '#FFFEF0', bgPage: '#FFFACD', text: '#2C2416', textSecondary: '#5C4A3A', border: '#FFD700',
-    sidebarBg: '#FFFEF0', sidebarText: '#2C2416', sidebarHover: '#FFF8DC', sidebarActive: '#FFD700',
-  },
-  aurora: {
-    primary: '#7B68EE', success: '#00CED1', warning: '#FF69B4', danger: '#FF1493', info: '#9370DB',
-    bg: '#0F0C1D', bgPage: '#1A1625', text: '#E6E6FA', textSecondary: '#CDB4DB', border: '#4B0082',
-    sidebarBg: '#1A1625', sidebarText: '#E6E6FA', sidebarHover: '#2A1F3D', sidebarActive: '#7B68EE',
+  midnight: {
+    primary: '#a78bfa', success: '#34d399', warning: '#fbbf24', danger: '#f87171', info: '#9ca3af',
+    bg: '#1a1a2e', bgPage: '#12121f', text: '#e2e8f0', textSecondary: '#94a3b8', border: '#2a2a40',
+    sidebarBg: '#12121f', sidebarText: '#c4b5fd', sidebarHover: '#1e1e35', sidebarActive: '#a78bfa',
   },
 }
 
 const availableThemes: ThemeOption[] = [
-  { value: 'light', label: '浅色', color: '#667eea' },
-  { value: 'dark', label: '深色', color: '#1a1a1a' },
-  { value: 'blue', label: '蓝色', color: '#1890ff' },
-  { value: 'green', label: '绿色', color: '#52c41a' },
-  { value: 'purple', label: '紫色', color: '#722ed1' },
-  { value: 'orange', label: '橙色', color: '#fa8c16' },
-  { value: 'red', label: '红色', color: '#f5222d' },
-  { value: 'cyan', label: '青色', color: '#13c2c2' },
-  { value: 'luck', label: 'Luck', color: '#FFD700' },
-  { value: 'aurora', label: 'Aurora', color: '#7B68EE' },
-  { value: 'auto', label: '跟随系统', color: '#909399' },
+  { value: 'indigo', label: '靛蓝', color: '#4f46e5' },
+  { value: 'sky', label: '天空', color: '#0284c7' },
+  { value: 'teal', label: '青碧', color: '#0f766e' },
+  { value: 'mint', label: '薄荷', color: '#059669' },
+  { value: 'amber', label: '琥珀', color: '#b45309' },
+  { value: 'rose', label: '玫瑰', color: '#be185d' },
+  { value: 'slate', label: '岩灰', color: '#374151' },
+  { value: 'midnight', label: '午夜', color: '#a78bfa' },
+  { value: 'auto', label: '跟随系统', color: '#6b7280' },
 ]
 
-const darkThemes = new Set(['dark', 'aurora'])
+const darkThemes = new Set(['midnight'])
 
 function resolveTheme(theme: string): string {
   if (theme === 'auto') {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'midnight' : 'indigo'
   }
   return theme
 }
 
 function getThemeConfig(theme: string): ThemeConfig {
   const resolved = resolveTheme(theme)
-  return themeConfigs[resolved] || themeConfigs.light
+  return themeConfigs[resolved] || themeConfigs.indigo
 }
 
 function withAlpha(color: string, alpha: number): string {
@@ -147,6 +135,12 @@ function buildNaiveOverrides(config: ThemeConfig): GlobalThemeOverrides {
       placeholderColorDisabled: withAlpha(config.textSecondary, 0.52),
       borderColor: config.border,
       dividerColor: config.border,
+      borderRadius: '8px',
+      borderRadiusSmall: '6px',
+      fontSizeSmall: '13px',
+      fontSizeMedium: '14px',
+      fontSizeLarge: '15px',
+      fontWeightStrong: '600',
     },
     Menu: {
       color: config.sidebarBg,
@@ -185,12 +179,14 @@ function buildNaiveOverrides(config: ThemeConfig): GlobalThemeOverrides {
       tdTextColor: config.text,
       thTextColor: config.text,
       thIconColorActive: config.primary,
+      borderRadius: '10px',
     },
     List: {
       textColor: config.text,
       color: config.bg,
       colorHover: primaryHover,
       borderColor: config.border,
+      borderRadius: '10px',
     },
     Card: {
       color: config.bg,
@@ -199,6 +195,8 @@ function buildNaiveOverrides(config: ThemeConfig): GlobalThemeOverrides {
       titleTextColor: config.text,
       borderColor: config.border,
       actionColor: primarySoft,
+      borderRadius: '12px',
+      paddingMedium: '20px',
     },
     Thing: {
       titleTextColor: config.text,
@@ -210,6 +208,17 @@ function buildNaiveOverrides(config: ThemeConfig): GlobalThemeOverrides {
       tabTextColorHoverLine: config.text,
       tabTextColorActiveLine: config.text,
       paneTextColor: config.text,
+    },
+    Tag: {
+      borderRadius: '6px',
+    },
+    Button: {
+      borderRadiusSmall: '6px',
+      borderRadiusMedium: '8px',
+      borderRadiusLarge: '10px',
+    },
+    Input: {
+      borderRadius: '8px',
     },
   }
 }
@@ -236,6 +245,9 @@ function applyCSSVariables(config: ThemeConfig) {
     '--sidebar-text': config.sidebarText,
     '--sidebar-hover': config.sidebarHover,
     '--sidebar-active': config.sidebarActive,
+    '--radius-sm': '6px',
+    '--radius-md': '8px',
+    '--radius-lg': '12px',
   }
   for (const [k, v] of Object.entries(vars)) {
     root.style.setProperty(k, v)
@@ -249,6 +261,7 @@ export const useAppStore = defineStore('app', () => {
   const sidebarCollapsed = ref(false)
   const isMobile = ref(false)
   const mobileMenuOpen = ref(false)
+  const viewMode = ref<'table' | 'grid'>((localStorage.getItem('cboard-view-mode') as 'table' | 'grid') || 'table')
 
   const isDark = computed(() => {
     const resolved = resolveTheme(currentTheme.value)
@@ -271,6 +284,15 @@ export const useAppStore = defineStore('app', () => {
     setTheme(isDark.value ? 'light' : 'dark')
   }
 
+  function setViewMode(mode: 'table' | 'grid') {
+    viewMode.value = mode
+    localStorage.setItem('cboard-view-mode', mode)
+  }
+
+  function toggleViewMode() {
+    setViewMode(viewMode.value === 'table' ? 'grid' : 'table')
+  }
+
   function checkMobile() {
     isMobile.value = window.innerWidth < 768
     if (isMobile.value) sidebarCollapsed.value = true
@@ -288,7 +310,6 @@ export const useAppStore = defineStore('app', () => {
       resizeTimer = setTimeout(() => checkMobile(), 150)
     }
     window.addEventListener('resize', resizeHandler)
-    // Listen for system theme changes when in auto mode
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     mediaHandler = () => {
       if (currentTheme.value === 'auto') {
@@ -312,9 +333,10 @@ export const useAppStore = defineStore('app', () => {
   function closeMobileMenu() { mobileMenuOpen.value = false }
 
   return {
-    currentTheme, isDark, sidebarCollapsed, isMobile, mobileMenuOpen,
+    currentTheme, isDark, sidebarCollapsed, isMobile, mobileMenuOpen, viewMode,
     themeOverrides, availableThemes,
     setTheme, toggleTheme, toggleSidebar, toggleMobileMenu, closeMobileMenu,
+    setViewMode, toggleViewMode,
     initTheme, initApp, cleanup, checkMobile,
   }
 })

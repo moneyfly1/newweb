@@ -10,8 +10,8 @@ type Notification struct {
 	Title     string     `gorm:"type:varchar(255)" json:"title"`
 	Content   string     `gorm:"type:text" json:"content"`
 	Type      string     `gorm:"type:varchar(50);default:'system'" json:"type"`
-	IsRead    bool       `gorm:"default:false" json:"is_read"`
-	IsActive  bool       `gorm:"default:true" json:"is_active"`
+	IsRead    bool       `gorm:"default:false;index" json:"is_read"`
+	IsActive  bool       `gorm:"default:true;index" json:"is_active"`
 	CreatedAt time.Time  `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 	ReadAt    *time.Time `json:"read_at"`

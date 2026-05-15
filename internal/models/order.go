@@ -15,7 +15,7 @@ type Order struct {
 	PaymentMethodName    *string    `gorm:"type:varchar(100)" json:"payment_method_name"`
 	PaymentTime          *time.Time `gorm:"index;index:idx_status_payment,priority:2" json:"payment_time"`
 	PaymentTransactionID *string    `gorm:"type:varchar(100)" json:"payment_transaction_id"`
-	ExpireTime           *time.Time `json:"expire_time"`
+	ExpireTime           *time.Time `gorm:"index" json:"expire_time"`
 	CouponID             *int64     `gorm:"index" json:"coupon_id"`
 	DiscountAmount       *float64   `gorm:"type:decimal(10,2);default:0" json:"discount_amount"`
 	FinalAmount          *float64   `gorm:"type:decimal(10,2)" json:"final_amount"`
@@ -38,7 +38,7 @@ type Package struct {
 	DeviceLimit  int       `gorm:"default:3" json:"device_limit"`
 	Features     *string   `gorm:"type:text" json:"features"`
 	SortOrder    int       `gorm:"default:1" json:"sort_order"`
-	IsActive     bool      `gorm:"default:true" json:"is_active"`
+	IsActive     bool      `gorm:"default:true;index" json:"is_active"`
 	IsFeatured   bool      `gorm:"default:false" json:"is_featured"`
 	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`

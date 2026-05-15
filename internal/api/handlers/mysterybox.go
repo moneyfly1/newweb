@@ -232,6 +232,10 @@ func ListMysteryBoxPools(c *gin.Context) {
 	now := time.Now()
 	var pools []models.MysteryBoxPool
 	db.Where("is_active = ?", true).Order("sort_order ASC, id ASC").Preload("Prizes").Find(&pools)
+	var userLevel models.UserLevel
+	if user.UserLevelID != nil {
+		db.First(&userLevel, *user.UserLevelID)
+	}
 	var result []models.MysteryBoxPool
 	for _, pool := range pools {
 		if pool.StartTime != nil && now.Before(*pool.StartTime) {
@@ -240,14 +244,8 @@ func ListMysteryBoxPools(c *gin.Context) {
 		if pool.EndTime != nil && now.After(*pool.EndTime) {
 			continue
 		}
-		if pool.MinLevel != nil {
-			var userLevel models.UserLevel
-			if user.UserLevelID != nil {
-				db.First(&userLevel, *user.UserLevelID)
-			}
-			if userLevel.LevelOrder < int(*pool.MinLevel) {
-				continue
-			}
+		if pool.MinLevel != nil && userLevel.LevelOrder < int(*pool.MinLevel) {
+			continue
 		}
 		result = append(result, pool)
 	}

@@ -105,37 +105,16 @@ func CreateOrder(c *gin.Context) {
 	var couponID *int64
 	var validatedCoupon *models.Coupon
 	if req.CouponCode != "" {
-		var coupon models.Coupon
-		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
-			now := time.Now()
-			if now.After(coupon.ValidFrom) && now.Before(coupon.ValidUntil) {
-				if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
-					utils.BadRequest(c, "优惠券已被领完")
-					return
-				}
-				var usageCount int64
-				db.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_id = ?", coupon.ID, userID).Count(&usageCount)
-				if int(usageCount) >= coupon.MaxUsesPerUser {
-					utils.BadRequest(c, "您已达到该优惠券的使用上限")
-					return
-				}
-				switch coupon.Type {
-				case "discount":
-					discountAmount = math.Round(amount*coupon.DiscountValue) / 100
-				case "fixed":
-					discountAmount = coupon.DiscountValue
-				}
-				if coupon.MaxDiscount != nil && discountAmount > *coupon.MaxDiscount {
-					discountAmount = *coupon.MaxDiscount
-				}
-				if discountAmount > amount {
-					discountAmount = amount
-				}
-				discountAmount = math.Round(discountAmount*100) / 100
-				cid := int64(coupon.ID)
-				couponID = &cid
-				validatedCoupon = &coupon
-			}
+		result := ValidateAndApplyCoupon(req.CouponCode, userID, amount, req.PackageID)
+		if result.Error != "" {
+			utils.BadRequest(c, result.Error)
+			return
+		}
+		if result.Coupon != nil {
+			discountAmount = result.DiscountAmount
+			cid := int64(result.Coupon.ID)
+			couponID = &cid
+			validatedCoupon = result.Coupon
 		}
 	}
 	finalAmount := amount - discountAmount
@@ -563,36 +542,16 @@ func CreateCustomOrder(c *gin.Context) {
 	var couponDiscount float64
 	var couponID *int64
 	if req.CouponCode != "" {
-		var coupon models.Coupon
-		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
-			now := time.Now()
-			if now.After(coupon.ValidFrom) && now.Before(coupon.ValidUntil) {
-				if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
-					utils.BadRequest(c, "优惠券已被领完")
-					return
-				}
-				var usageCount int64
-				db.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_id = ?", coupon.ID, userID).Count(&usageCount)
-				if int(usageCount) >= coupon.MaxUsesPerUser {
-					utils.BadRequest(c, "您已达到该优惠券的使用上限")
-					return
-				}
-				switch coupon.Type {
-				case "discount":
-					couponDiscount = math.Round(finalPrice*coupon.DiscountValue) / 100
-				case "fixed":
-					couponDiscount = coupon.DiscountValue
-				}
-				if coupon.MaxDiscount != nil && couponDiscount > *coupon.MaxDiscount {
-					couponDiscount = *coupon.MaxDiscount
-				}
-				if couponDiscount > finalPrice {
-					couponDiscount = finalPrice
-				}
-				couponDiscount = math.Round(couponDiscount*100) / 100
-				cid := int64(coupon.ID)
-				couponID = &cid
-			}
+		// 自定义套餐没有固定 PackageID，传 0 跳过套餐限制检查
+		result := ValidateAndApplyCoupon(req.CouponCode, userID, finalPrice, 0)
+		if result.Error != "" {
+			utils.BadRequest(c, result.Error)
+			return
+		}
+		if result.Coupon != nil {
+			couponDiscount = result.DiscountAmount
+			cid := int64(result.Coupon.ID)
+			couponID = &cid
 		}
 	}
 	finalPrice = finalPrice - couponDiscount
@@ -627,12 +586,36 @@ func CreateCustomOrder(c *gin.Context) {
 		return
 	}
 	if couponID != nil {
-		if err := db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount}).Error; err != nil {
+		// 使用事务保护优惠券使用 + 订单创建
+		tx := db.Begin()
+		if tx.Error != nil {
+			utils.InternalError(c, "创建事务失败")
+			return
+		}
+		// 行锁防止并发超量
+		var lockCoupon models.Coupon
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lockCoupon, *couponID).Error; err != nil {
+			tx.Rollback()
+			utils.InternalError(c, "锁定优惠券失败")
+			return
+		}
+		if lockCoupon.TotalQuantity != nil && lockCoupon.UsedQuantity >= int(*lockCoupon.TotalQuantity) {
+			tx.Rollback()
+			utils.BadRequest(c, "优惠券已被领完")
+			return
+		}
+		if err := tx.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount}).Error; err != nil {
+			tx.Rollback()
 			utils.InternalError(c, "记录优惠券使用失败")
 			return
 		}
-		if err := db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1")).Error; err != nil {
+		if err := tx.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1")).Error; err != nil {
+			tx.Rollback()
 			utils.InternalError(c, "更新优惠券使用次数失败")
+			return
+		}
+		if err := tx.Commit().Error; err != nil {
+			utils.InternalError(c, "优惠券事务提交失败")
 			return
 		}
 	}
@@ -760,35 +743,16 @@ func CreateUpgradeOrder(c *gin.Context) {
 	var couponDiscount float64
 	var couponID *int64
 	if req.CouponCode != "" {
-		var coupon models.Coupon
-		if err := db.Where("code = ? AND status = ?", req.CouponCode, "active").First(&coupon).Error; err == nil {
-			if time.Now().After(coupon.ValidFrom) && time.Now().Before(coupon.ValidUntil) {
-				if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
-					utils.BadRequest(c, "优惠券已被领完")
-					return
-				}
-				var usageCount int64
-				db.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_id = ?", coupon.ID, userID).Count(&usageCount)
-				if int(usageCount) >= coupon.MaxUsesPerUser {
-					utils.BadRequest(c, "您已达到该优惠券的使用上限")
-					return
-				}
-				switch coupon.Type {
-				case "discount":
-					couponDiscount = math.Round(basePrice*coupon.DiscountValue) / 100
-				case "fixed":
-					couponDiscount = coupon.DiscountValue
-				}
-				if coupon.MaxDiscount != nil && couponDiscount > *coupon.MaxDiscount {
-					couponDiscount = *coupon.MaxDiscount
-				}
-				if couponDiscount > basePrice {
-					couponDiscount = basePrice
-				}
-				couponDiscount = math.Round(couponDiscount*100) / 100
-				cid := int64(coupon.ID)
-				couponID = &cid
-			}
+		// 升级订单没有固定 PackageID，传 0 跳过套餐限制检查
+		result := ValidateAndApplyCoupon(req.CouponCode, userID, basePrice, 0)
+		if result.Error != "" {
+			utils.BadRequest(c, result.Error)
+			return
+		}
+		if result.Coupon != nil {
+			couponDiscount = result.DiscountAmount
+			cid := int64(result.Coupon.ID)
+			couponID = &cid
 		}
 	}
 	finalPrice := basePrice - couponDiscount
@@ -826,12 +790,36 @@ func CreateUpgradeOrder(c *gin.Context) {
 		return
 	}
 	if couponID != nil {
-		if err := db.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount}).Error; err != nil {
+		// 使用事务保护优惠券使用 + 订单创建
+		tx := db.Begin()
+		if tx.Error != nil {
+			utils.InternalError(c, "创建事务失败")
+			return
+		}
+		// 行锁防止并发超量
+		var lockCoupon models.Coupon
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lockCoupon, *couponID).Error; err != nil {
+			tx.Rollback()
+			utils.InternalError(c, "锁定优惠券失败")
+			return
+		}
+		if lockCoupon.TotalQuantity != nil && lockCoupon.UsedQuantity >= int(*lockCoupon.TotalQuantity) {
+			tx.Rollback()
+			utils.BadRequest(c, "优惠券已被领完")
+			return
+		}
+		if err := tx.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount}).Error; err != nil {
+			tx.Rollback()
 			utils.InternalError(c, "记录优惠券使用失败")
 			return
 		}
-		if err := db.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1")).Error; err != nil {
+		if err := tx.Model(&models.Coupon{}).Where("id = ?", *couponID).UpdateColumn("used_quantity", gorm.Expr("used_quantity + 1")).Error; err != nil {
+			tx.Rollback()
 			utils.InternalError(c, "更新优惠券使用次数失败")
+			return
+		}
+		if err := tx.Commit().Error; err != nil {
+			utils.InternalError(c, "优惠券事务提交失败")
 			return
 		}
 	}

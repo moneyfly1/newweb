@@ -1,5 +1,6 @@
 <template>
   <div style="height: 100%">
+  <a href="#main-content" class="skip-to-content">跳到主内容</a>
   <!-- Desktop Layout -->
   <n-layout has-sider style="height: 100%" v-if="!appStore.isMobile">
     <n-layout-sider bordered :collapsed="appStore.sidebarCollapsed" collapse-mode="width" :collapsed-width="64" :width="220" show-trigger @collapse="appStore.sidebarCollapsed = true" @expand="appStore.sidebarCollapsed = false">
@@ -14,7 +15,7 @@
         <div style="font-size: 16px; font-weight: 500;">{{ currentTitle }}</div>
         <n-space align="center">
           <n-badge :value="unreadCount" :max="99">
-            <n-button quaternary circle @click="router.push('/tickets')">
+            <n-button quaternary circle @click="router.push('/tickets')" aria-label="工单通知">
               <template #icon><n-icon><notifications-outline /></n-icon></template>
             </n-button>
           </n-badge>
@@ -29,7 +30,7 @@
         <span>正在以用户身份浏览 · 点击返回管理后台</span>
       </div>
       <n-layout-content content-style="padding: 24px;" :native-scrollbar="false">
-        <router-view />
+        <div id="main-content" tabindex="-1"><router-view /></div>
       </n-layout-content>
     </n-layout>
   </n-layout>
@@ -40,11 +41,11 @@
       <span class="mobile-logo">CBoard</span>
       <div class="mobile-header-right">
         <n-badge :value="unreadCount" :max="99" :offset="[-4, 4]">
-          <n-button quaternary circle size="small" @click="router.push('/tickets')">
+          <n-button quaternary circle size="small" @click="router.push('/tickets')" aria-label="工单通知">
             <template #icon><n-icon :size="20"><notifications-outline /></n-icon></template>
           </n-button>
         </n-badge>
-        <n-button quaternary circle size="small" @click="showMobileMore = true">
+        <n-button quaternary circle size="small" @click="showMobileMore = true" aria-label="更多功能">
           <template #icon><n-icon :size="20"><ellipsis-horizontal-outline /></n-icon></template>
         </n-button>
       </div>
@@ -54,8 +55,8 @@
       <n-icon :size="16"><shield-outline /></n-icon>
       <span>正在以用户身份浏览 · 点击返回管理后台</span>
     </div>
-    <n-layout-content content-style="padding: 12px 14px; padding-bottom: 72px;" :native-scrollbar="false">
-      <router-view />
+    <n-layout-content content-style="padding: 16px; padding-bottom: 80px;" :native-scrollbar="false">
+      <div id="main-content" tabindex="-1"><router-view /></div>
     </n-layout-content>
     <div class="mobile-tabbar">
       <div v-for="tab in mobileTabs" :key="tab.key" class="mobile-tab" :class="{ active: activeKey === tab.key }" @click="handleMenuClick(tab.key)">
@@ -249,7 +250,7 @@ function returnToAdmin() {
   gap: 2px; flex: 1; padding: 6px 0; cursor: pointer; color: var(--text-color-secondary, #666); transition: color 0.2s, background-color 0.2s;
 }
 .mobile-tab.active { color: var(--primary-color, #667eea); background: var(--primary-color-soft, rgba(102,126,234,0.08)); }
-.mobile-tab-label { font-size: 10px; line-height: 1; }
+.mobile-tab-label { font-size: 12px; line-height: 1; }
 
 /* Mobile More Menu */
 .mobile-more-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 12px; padding: 8px 0; }
@@ -281,13 +282,13 @@ function returnToAdmin() {
 /* Desktop Theme Picker Drawer */
 .theme-picker-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .theme-picker-item {
-  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 56px;
   border-radius: 8px; cursor: pointer; border: 2px solid transparent;
   transition: all 0.2s; background: var(--primary-color-soft, rgba(102,126,234,0.08));
 }
 .theme-picker-item:hover { border-color: var(--primary-color, #667eea)66; }
 .theme-picker-item.active { border-color: var(--primary-color, #667eea); background: var(--primary-color, #667eea)11; }
-.theme-picker-color { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
+.theme-picker-color { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
 .theme-picker-label { font-size: 13px; }
 
 /* Admin Return Banner */

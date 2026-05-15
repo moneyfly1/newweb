@@ -23,7 +23,7 @@
 .mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 
 /* 操作按钮网格 */
-.action-btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.action-btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 
 /* 移动端卡片列表 */
 .mobile-card-list { display: flex; flex-direction: column; gap: 12px; }

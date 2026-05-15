@@ -1,5 +1,6 @@
 <template>
   <div style="height: 100%">
+  <a href="#main-content" class="skip-to-content">跳到主内容</a>
   <!-- Desktop Layout -->
   <n-layout has-sider style="height: 100%" v-if="!appStore.isMobile">
     <n-layout-sider bordered :collapsed="appStore.sidebarCollapsed" collapse-mode="width" :collapsed-width="64" :width="220" show-trigger @collapse="appStore.sidebarCollapsed = true" @expand="appStore.sidebarCollapsed = false">
@@ -31,25 +32,25 @@
         </n-space>
       </n-layout-header>
       <n-layout-content content-style="padding: 24px;" :native-scrollbar="false">
-        <router-view />
+        <div id="main-content" tabindex="-1"><router-view /></div>
       </n-layout-content>
     </n-layout>
   </n-layout>
   <!-- Mobile Layout -->
   <n-layout style="height: 100%" v-else>
     <n-layout-header bordered class="mobile-header">
-      <n-button quaternary circle size="small" @click="showDrawer = true">
+      <n-button quaternary circle size="small" @click="showDrawer = true" aria-label="打开导航菜单">
         <template #icon><n-icon :size="22"><menu-outline /></n-icon></template>
       </n-button>
       <span class="mobile-title">管理后台</span>
       <n-dropdown trigger="click" :options="mobileMenuOptions" @select="handleMobileUserMenu">
-        <n-button quaternary circle size="small">
+        <n-button quaternary circle size="small" aria-label="更多操作">
           <template #icon><n-icon :size="20"><ellipsis-vertical /></n-icon></template>
         </n-button>
       </n-dropdown>
     </n-layout-header>
-    <n-layout-content content-style="padding: 12px 14px; padding-bottom: 72px;" :native-scrollbar="false">
-      <router-view />
+    <n-layout-content content-style="padding: 16px; padding-bottom: 80px;" :native-scrollbar="false">
+      <div id="main-content" tabindex="-1"><router-view /></div>
     </n-layout-content>
     <div class="mobile-tabbar">
       <div v-for="tab in mobileTabs" :key="tab.key" class="mobile-tab" :class="{ active: activeKey === tab.key }" @click="handleMenuClick(tab.key)">
@@ -253,17 +254,17 @@ function handleUserMenu(key: string) {
   gap: 2px; flex: 1; padding: 6px 0; cursor: pointer; color: var(--text-color-secondary, #666); transition: color 0.2s, background-color 0.2s;
 }
 .mobile-tab.active { color: var(--primary-color, #667eea); background: var(--primary-color-soft, rgba(102,126,234,0.08)); }
-.mobile-tab-label { font-size: 10px; line-height: 1; }
+.mobile-tab-label { font-size: 12px; line-height: 1; }
 
 /* Theme Picker */
 .theme-picker-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .theme-picker-item {
-  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 56px;
   border-radius: 8px; cursor: pointer; border: 2px solid transparent;
   transition: all 0.2s; background: var(--primary-color-soft, rgba(102,126,234,0.08));
 }
 .theme-picker-item:hover { border-color: var(--primary-color, #667eea)66; }
 .theme-picker-item.active { border-color: var(--primary-color, #667eea); background: var(--primary-color, #667eea)11; }
-.theme-picker-color { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
+.theme-picker-color { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
 .theme-picker-label { font-size: 13px; }
 </style>

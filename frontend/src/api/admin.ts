@@ -147,6 +147,7 @@ export const listBackups = () => request.get('/admin/backup')
 export const getUploadStatus = (taskId: string) => request.get(`/admin/backup/upload-status/${taskId}`)
 export const testGitHubConnection = (data?: any) => request.post('/admin/backup/test-github', data)
 export const updateGeoIPFiles = () => request.post('/admin/settings/update-geoip')
+export const cleanOldLogs = () => request.post('/admin/settings/clean-logs')
 export const backfillLocations = () => request.post('/admin/settings/backfill-locations')
 
 // Node Import & Test

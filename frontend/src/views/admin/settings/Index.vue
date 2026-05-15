@@ -128,6 +128,7 @@
                       <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
                         <n-form-item-gi label="启用状态"><n-switch v-model:value="form.pay_stripe_enabled" /></n-form-item-gi>
                         <n-form-item-gi label="汇率 (1 USD = ? CNY)"><n-input-number v-model:value="form.pay_stripe_exchange_rate" :precision="2" style="width:100%" /></n-form-item-gi>
+                        <n-form-item-gi label="Publishable Key" span="2"><n-input v-model:value="form.pay_stripe_publishable_key" /></n-form-item-gi>
                         <n-form-item-gi label="Secret Key" span="2"><n-input v-model:value="form.pay_stripe_secret_key" type="password" show-password-on="click" /></n-form-item-gi>
                         <n-form-item-gi label="Webhook Secret" span="2"><n-input v-model:value="form.pay_stripe_webhook_secret" type="password" show-password-on="click" /></n-form-item-gi>
                       </n-grid>
@@ -229,6 +230,17 @@
                     <n-form-item-gi label="GitHub Token" span="2"><n-input v-model:value="form.backup_github_token" type="password" show-password-on="click" placeholder="ghp_xxxxxxxxxxxx" /></n-form-item-gi>
                   </n-grid>
                   <n-divider />
+                  <n-h3 prefix="bar">日志清理</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="日志保留天数">
+                      <n-input-number v-model:value="form.log_retention_days" :min="1" :max="3650" style="width:100%" />
+                      <template #feedback>超过此天数的日志将在每日自动清理任务中被删除</template>
+                    </n-form-item-gi>
+                  </n-grid>
+                  <n-button type="warning" :loading="cleaningLogs" @click="handleCleanOldLogs" style="margin-top: 8px;">
+                    立即清理旧日志
+                  </n-button>
+                  <n-divider />
                   <n-h3 prefix="bar">数据维护</n-h3>
                   <n-space>
                     <n-button type="primary" :loading="backupCreating" @click="handleCreateBackup">创建数据库备份</n-button>
@@ -285,7 +297,7 @@ import {
   MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline,
   FunnelOutline
 } from '@vicons/ionicons5'
-import { getSettings, updateSettings, sendTestEmail, testTelegram, testBark, createBackup, listBackups, updateGeoIPFiles, getProtocolFilter, updateProtocolFilter } from '@/api/admin'
+import { getSettings, updateSettings, sendTestEmail, testTelegram, testBark, createBackup, listBackups, updateGeoIPFiles, cleanOldLogs, getProtocolFilter, updateProtocolFilter } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -297,6 +309,7 @@ const saving = ref(false)
 const sendingTest = ref(false)
 const testingBark = ref(false)
 const backupCreating = ref(false)
+const cleaningLogs = ref(false)
 const testEmail = ref('')
 
 const menuOptions = [
@@ -328,7 +341,7 @@ const form = ref<Record<string, any>>({
   pay_codepay_enabled: false, pay_codepay_gateway: '', pay_codepay_merchant_id: '', pay_codepay_secret_key: '',
   pay_codepay_base_url: '', pay_codepay_notify_url: '', pay_codepay_return_url: '',
   pay_codepay_alipay_enabled: true, pay_codepay_wxpay_enabled: false,
-  pay_stripe_enabled: false, pay_stripe_secret_key: '', pay_stripe_webhook_secret: '', pay_stripe_exchange_rate: 7.2,
+  pay_stripe_enabled: false, pay_stripe_publishable_key: '', pay_stripe_secret_key: '', pay_stripe_webhook_secret: '', pay_stripe_exchange_rate: 7.2,
   pay_balance_enabled: true,
   notify_email_enabled: false, notify_admin_email: '',
   notify_telegram_enabled: false, notify_telegram_bot_token: '', notify_telegram_chat_id: '',
@@ -340,6 +353,7 @@ const form = ref<Record<string, any>>({
   user_notify_expired: true, user_notify_reset: true, user_notify_account_status: true,
   user_notify_unpaid_order: true,
   max_login_attempts: 5, login_lockout_minutes: 30, ip_whitelist: '',
+  log_retention_days: 90,
   backup_github_enabled: false, backup_github_token: '', backup_github_repo: '',
   checkin_enabled: true, checkin_min_reward: 10, checkin_max_reward: 50
 })
@@ -487,6 +501,24 @@ const handleCreateBackup = async () => {
     await createBackup()
     message.success('数据库备份已生成在服务器 backups 目录')
   } finally { backupCreating.value = false }
+}
+
+const handleCleanOldLogs = async () => {
+  if (!form.value.log_retention_days || form.value.log_retention_days < 1) {
+    message.warning('请先设置有效的日志保留天数')
+    return
+  }
+  cleaningLogs.value = true
+  try {
+    // Save the retention setting first
+    await updateSettings({ log_retention_days: form.value.log_retention_days })
+    const res = await cleanOldLogs()
+    if (res.data && res.data.total_deleted !== undefined) {
+      message.success(`清理完成：共删除 ${res.data.total_deleted} 条 ${res.data.retention_days} 天前的日志记录`)
+    } else {
+      message.success('日志清理完成')
+    }
+  } finally { cleaningLogs.value = false }
 }
 
 const handleUpdateGeoIP = async () => {

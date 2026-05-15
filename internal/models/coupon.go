@@ -28,7 +28,7 @@ type Coupon struct {
 	TotalQuantity      *int64    `json:"total_quantity"`
 	UsedQuantity       int       `gorm:"default:0" json:"used_quantity"`
 	MaxUsesPerUser     int       `gorm:"default:1" json:"max_uses_per_user"`
-	Status             string    `gorm:"type:varchar(20);default:'active'" json:"status"`
+	Status             string    `gorm:"type:varchar(20);default:'active';index" json:"status"`
 	ApplicablePackages string    `gorm:"type:text" json:"applicable_packages"`
 	CreatedBy          *int64    `gorm:"index" json:"created_by"`
 	CreatedAt          time.Time `gorm:"autoCreateTime" json:"created_at"`

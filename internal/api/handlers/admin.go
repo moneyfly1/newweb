@@ -3190,6 +3190,67 @@ func AdminTestGitHubConnection(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "GitHub 连接测试成功"})
 }
 
+func AdminCleanOldLogs(c *gin.Context) {
+	retentionDays := utils.GetIntSetting("log_retention_days", 90)
+	if retentionDays <= 0 {
+		utils.BadRequest(c, "日志保留天数未配置或无效")
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	db := database.GetDB()
+	type result struct {
+		Table   string `json:"table"`
+		Deleted int64  `json:"deleted"`
+	}
+	results := make([]result, 0)
+	totalDeleted := int64(0)
+
+	logTables := []struct {
+		model interface{}
+		name  string
+	}{
+		{&models.AuditLog{}, "audit_logs"},
+		{&models.RegistrationLog{}, "registration_logs"},
+		{&models.SubscriptionLog{}, "subscription_logs"},
+		{&models.BalanceLog{}, "balance_logs"},
+		{&models.CommissionLog{}, "commission_logs"},
+		{&models.SystemLog{}, "system_logs"},
+		{&models.OrderLog{}, "order_logs"},
+		{&models.PaymentLog{}, "payment_logs"},
+		{&models.CouponLog{}, "coupon_logs"},
+		{&models.NodeLog{}, "node_logs"},
+		{&models.UserActionLog{}, "user_action_logs"},
+		{&models.AdminActionLog{}, "admin_action_logs"},
+		{&models.DeviceLog{}, "device_logs"},
+		{&models.TicketLog{}, "ticket_logs"},
+		{&models.InviteLog{}, "invite_logs"},
+		{&models.ConfigChangeLog{}, "config_change_logs"},
+		{&models.SecurityLog{}, "security_logs"},
+		{&models.APILog{}, "api_logs"},
+		{&models.DatabaseLog{}, "database_logs"},
+		{&models.EmailLog{}, "email_logs"},
+		{&models.NotificationLog{}, "notification_logs"},
+		{&models.LoginHistory{}, "login_history"},
+		{&models.UserActivity{}, "user_activities"},
+		{&models.LoginAttempt{}, "login_attempts"},
+		{&models.VerificationAttempt{}, "verification_attempts"},
+	}
+
+	for _, t := range logTables {
+		r := db.Where("created_at < ?", cutoff).Delete(t.model)
+		results = append(results, result{Table: t.name, Deleted: r.RowsAffected})
+		totalDeleted += r.RowsAffected
+	}
+
+	utils.CreateAuditLog(c, "clean_logs", "logs", 0, fmt.Sprintf("清理 %d 天前的日志，共删除 %d 条记录", retentionDays, totalDeleted))
+	utils.Success(c, gin.H{
+		"retention_days": retentionDays,
+		"cutoff":         cutoff.Format("2006-01-02 15:04:05"),
+		"total_deleted":  totalDeleted,
+		"details":        results,
+	})
+}
+
 func AdminBackfillLocations(c *gin.Context) {
 	db := database.GetDB()
 	backfilled := map[string]int64{}

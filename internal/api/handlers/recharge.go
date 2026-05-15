@@ -81,8 +81,12 @@ func CreateRecharge(c *gin.Context) {
 							notifyURL, returnURL := services.BuildPaymentURLs("alipay", record.OrderNo)
 							paymentURL, err := services.AlipayCreateOrder(alipayCfg, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
 							if err == nil {
-								_ = db.Model(&record).Update("payment_url", &paymentURL).Error
-								_ = db.First(&record, record.ID).Error
+								if err := db.Model(&record).Update("payment_url", &paymentURL).Error; err != nil {
+									utils.LogError("[Recharge] 保存支付宝支付链接失败: %v", err)
+								}
+								if err := db.First(&record, record.ID).Error; err != nil {
+									utils.LogError("[Recharge] 重新查询充值记录失败: %v", err)
+								}
 								utils.Success(c, gin.H{
 									"record":         record,
 									"transaction_id": txID,
@@ -102,8 +106,12 @@ func CreateRecharge(c *gin.Context) {
 						notifyURL, returnURL := services.BuildPaymentURLs("epay", record.OrderNo)
 						paymentURL, err := services.EpayCreateOrder(epayCfg, epayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
 						if err == nil {
-							_ = db.Model(&record).Update("payment_url", &paymentURL).Error
-							_ = db.First(&record, record.ID).Error
+							if err := db.Model(&record).Update("payment_url", &paymentURL).Error; err != nil {
+								utils.LogError("[Recharge] 保存支付链接失败: %v", err)
+							}
+							if err := db.First(&record, record.ID).Error; err != nil {
+								utils.LogError("[Recharge] 重新查询充值记录失败: %v", err)
+							}
 							utils.Success(c, gin.H{
 								"record":         record,
 								"transaction_id": txID,
@@ -128,8 +136,12 @@ func CreateRecharge(c *gin.Context) {
 						}
 						codepayResult, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, orderName, fmt.Sprintf("%.2f", record.Amount), notifyURL, returnURL)
 						if err == nil {
-							_ = db.Model(&record).Update("payment_url", codepayResult.PaymentURL).Error
-							_ = db.First(&record, record.ID).Error
+							if err := db.Model(&record).Update("payment_url", codepayResult.PaymentURL).Error; err != nil {
+								utils.LogError("[Recharge] 保存码支付链接失败: %v", err)
+							}
+							if err := db.First(&record, record.ID).Error; err != nil {
+								utils.LogError("[Recharge] 重新查询充值记录失败: %v", err)
+							}
 							utils.Success(c, gin.H{
 								"record":         record,
 								"transaction_id": txID,
@@ -164,7 +176,9 @@ func GetRechargeStatus(c *gin.Context) {
 				if _, _, err := tryCompensateAlipayPayment(db, &transaction, "recharge_status_poll"); err != nil {
 					utils.LogError("[Recharge] 状态轮询补偿失败: tx_id=%s error=%v", *record.PaymentTransactionID, err)
 				}
-				_ = db.Where("id = ? AND user_id = ?", id, userID).First(&record).Error
+				if err := db.Where("id = ? AND user_id = ?", id, userID).First(&record).Error; err != nil {
+				utils.LogError("[Recharge] 重新查询充值记录失败: id=%s err=%v", id, err)
+			}
 			}
 		}
 	}

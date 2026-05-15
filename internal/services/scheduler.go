@@ -3,6 +3,9 @@ package services
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,6 +54,8 @@ func (s *Scheduler) Start() {
 	s.startLoop("CleanCodes", 2*time.Hour, cleanExpiredCodesTask)
 	s.startLoop("CancelExpiredOrders", 2*time.Hour, cancelExpiredOrdersTask)
 	s.startLoop("CleanPaymentNonces", 12*time.Hour, cleanPaymentNoncesTask)
+	s.startLoop("CleanExpiredTokens", 6*time.Hour, cleanExpiredTokensTask)
+	s.startLoop("CleanOldLogs", 24*time.Hour, cleanOldLogsTask)
 }
 
 // Stop gracefully shuts down all background loops.
@@ -293,5 +298,110 @@ func sendUnpaidOrderRemindersTask() {
 	if len(orders) > 0 {
 		log.Printf("[Scheduler] 未付款订单提醒: %d 条", len(orders))
 		utils.SysInfo("scheduler", fmt.Sprintf("未付款订单提醒: %d 条", len(orders)))
+	}
+}
+
+// cleanExpiredTokensTask removes expired JWT tokens from the blacklist.
+func cleanExpiredTokensTask() {
+	db := database.GetDB()
+	result := db.Where("expires_at < ?", time.Now()).Delete(&models.TokenBlacklist{})
+	if result.RowsAffected > 0 {
+		log.Printf("[Scheduler] 已清理 %d 条过期令牌", result.RowsAffected)
+	}
+}
+
+// cleanOldLogsTask removes log records older than the configured retention period.
+func cleanOldLogsTask() {
+	retentionDays := utils.GetIntSetting("log_retention_days", 90)
+	if retentionDays <= 0 {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	db := database.GetDB()
+	totalDeleted := int64(0)
+
+	logTables := []struct {
+		model interface{}
+		name  string
+	}{
+		{&models.AuditLog{}, "audit_logs"},
+		{&models.RegistrationLog{}, "registration_logs"},
+		{&models.SubscriptionLog{}, "subscription_logs"},
+		{&models.BalanceLog{}, "balance_logs"},
+		{&models.CommissionLog{}, "commission_logs"},
+		{&models.SystemLog{}, "system_logs"},
+		{&models.OrderLog{}, "order_logs"},
+		{&models.PaymentLog{}, "payment_logs"},
+		{&models.CouponLog{}, "coupon_logs"},
+		{&models.NodeLog{}, "node_logs"},
+		{&models.UserActionLog{}, "user_action_logs"},
+		{&models.AdminActionLog{}, "admin_action_logs"},
+		{&models.DeviceLog{}, "device_logs"},
+		{&models.TicketLog{}, "ticket_logs"},
+		{&models.InviteLog{}, "invite_logs"},
+		{&models.ConfigChangeLog{}, "config_change_logs"},
+		{&models.SecurityLog{}, "security_logs"},
+		{&models.APILog{}, "api_logs"},
+		{&models.DatabaseLog{}, "database_logs"},
+		{&models.EmailLog{}, "email_logs"},
+		{&models.NotificationLog{}, "notification_logs"},
+		{&models.LoginHistory{}, "login_history"},
+		{&models.UserActivity{}, "user_activities"},
+		{&models.LoginAttempt{}, "login_attempts"},
+		{&models.VerificationAttempt{}, "verification_attempts"},
+	}
+
+	for _, t := range logTables {
+		result := db.Where("created_at < ?", cutoff).Delete(t.model)
+		if result.Error != nil {
+			log.Printf("[Scheduler] 清理 %s 失败: %v", t.name, result.Error)
+			continue
+		}
+		if result.RowsAffected > 0 {
+			totalDeleted += result.RowsAffected
+		}
+	}
+
+	// Also clean old file-based logs
+	cleanOldLogFiles(retentionDays)
+
+	if totalDeleted > 0 {
+		log.Printf("[Scheduler] 日志清理完成: 共删除 %d 条 %d 天前的记录", totalDeleted, retentionDays)
+		utils.SysInfo("scheduler", fmt.Sprintf("日志清理完成: 共删除 %d 条 %d 天前的记录", totalDeleted, retentionDays))
+	}
+}
+
+// cleanOldLogFiles removes app log files older than the given number of days.
+func cleanOldLogFiles(retentionDays int) {
+	logDir := "logs"
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	deleted := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// Match app-YYYY-MM-DD.log pattern
+		if !strings.HasPrefix(name, "app-") || !strings.HasSuffix(name, ".log") {
+			continue
+		}
+		dateStr := strings.TrimSuffix(strings.TrimPrefix(name, "app-"), ".log")
+		fileDate, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			continue
+		}
+		if fileDate.Before(cutoff) {
+			filePath := filepath.Join(logDir, name)
+			if err := os.Remove(filePath); err == nil {
+				deleted++
+			}
+		}
+	}
+	if deleted > 0 {
+		log.Printf("[Scheduler] 已清理 %d 个过期日志文件", deleted)
 	}
 }

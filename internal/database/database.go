@@ -244,7 +244,6 @@ func AutoMigrate() error {
 		// 系统配置
 		&models.SystemConfig{},
 		&models.Announcement{},
-		&models.ThemeConfig{},
 
 		// 审计与安全
 		&models.AuditLog{},

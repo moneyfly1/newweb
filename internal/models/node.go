@@ -5,8 +5,8 @@ import "time"
 type Node struct {
 	ID            uint       `gorm:"primaryKey" json:"id"`
 	Name          string     `gorm:"type:varchar(100)" json:"name"`
-	Region        string     `gorm:"type:varchar(50)" json:"region"`
-	Type          string     `gorm:"type:varchar(20)" json:"type"`
+	Region        string     `gorm:"type:varchar(50);index" json:"region"`
+	Type          string     `gorm:"type:varchar(20);index" json:"type"`
 	Status        string     `gorm:"type:varchar(20);default:'offline';index" json:"status"`
 	Load          float64    `gorm:"default:0" json:"load"`
 	Speed         float64    `gorm:"default:0" json:"speed"`
@@ -37,7 +37,7 @@ type CustomNode struct {
 	Port             int        `gorm:"default:443" json:"port"`
 	Config           string     `gorm:"type:text" json:"config"`
 	Status           string     `gorm:"type:varchar(20);default:'inactive'" json:"status"`
-	IsActive         bool       `gorm:"default:true" json:"is_active"`
+	IsActive         bool       `gorm:"default:true;index" json:"is_active"`
 	Latency          int        `gorm:"default:0" json:"latency"`
 	LastTest         *time.Time `json:"last_test"`
 	ExpireTime       *time.Time `json:"expire_time"`

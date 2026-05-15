@@ -15,7 +15,7 @@ type PaymentTransaction struct {
 	Currency              string    `gorm:"type:varchar(10);default:'CNY'" json:"currency"`
 	TransactionID         *string   `gorm:"type:varchar(100);uniqueIndex" json:"transaction_id"`
 	ExternalTransactionID *string   `gorm:"type:varchar(100)" json:"external_transaction_id"`
-	Status                string    `gorm:"type:varchar(20);default:'pending'" json:"status"`
+	Status                string    `gorm:"type:varchar(20);default:'pending';index" json:"status"`
 	PaymentData           *string   `gorm:"type:json" json:"payment_data"`
 	CallbackData          *string   `gorm:"type:json" json:"callback_data"`
 	CreatedAt             time.Time `gorm:"autoCreateTime" json:"created_at"`

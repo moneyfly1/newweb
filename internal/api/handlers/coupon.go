@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -9,6 +12,85 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// CouponValidationResult holds the result of coupon validation.
+type CouponValidationResult struct {
+	Coupon         *models.Coupon
+	DiscountAmount float64
+	Error          string
+}
+
+// ValidateAndApplyCoupon validates a coupon and calculates the discount.
+// It checks: existence, status, date range, quantity, per-user usage,
+// min amount, applicable packages, and calculates discount based on type.
+func ValidateAndApplyCoupon(code string, userID uint, orderAmount float64, packageID uint) *CouponValidationResult {
+	if code == "" {
+		return nil
+	}
+
+	db := database.GetDB()
+	var coupon models.Coupon
+	if err := db.Where("code = ? AND status = ?", code, "active").First(&coupon).Error; err != nil {
+		return &CouponValidationResult{Error: "优惠券不存在或已失效"}
+	}
+
+	now := time.Now()
+	if now.Before(coupon.ValidFrom) || now.After(coupon.ValidUntil) {
+		return &CouponValidationResult{Error: "优惠券不在有效期内"}
+	}
+
+	if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
+		return &CouponValidationResult{Error: "优惠券已被领完"}
+	}
+
+	var usageCount int64
+	db.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_id = ?", coupon.ID, userID).Count(&usageCount)
+	if int(usageCount) >= coupon.MaxUsesPerUser {
+		return &CouponValidationResult{Error: "您已达到该优惠券的使用上限"}
+	}
+
+	if coupon.MinAmount != nil && orderAmount < *coupon.MinAmount {
+		return &CouponValidationResult{Error: fmt.Sprintf("订单金额需满 %.2f 元才可使用此优惠券", *coupon.MinAmount)}
+	}
+
+	if coupon.ApplicablePackages != "" && packageID > 0 {
+		allowed := strings.Split(coupon.ApplicablePackages, ",")
+		pkgStr := fmt.Sprintf("%d", packageID)
+		matched := false
+		for _, a := range allowed {
+			if strings.TrimSpace(a) == pkgStr {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return &CouponValidationResult{Error: "此优惠券不适用于该套餐"}
+		}
+	}
+
+	var discountAmount float64
+	switch coupon.Type {
+	case "discount":
+		discountAmount = math.Round(orderAmount*coupon.DiscountValue) / 100
+	case "fixed":
+		discountAmount = coupon.DiscountValue
+	case "free_days":
+		discountAmount = 0
+	}
+
+	if coupon.MaxDiscount != nil && discountAmount > *coupon.MaxDiscount {
+		discountAmount = *coupon.MaxDiscount
+	}
+	if discountAmount > orderAmount {
+		discountAmount = orderAmount
+	}
+	discountAmount = math.Round(discountAmount*100) / 100
+
+	return &CouponValidationResult{
+		Coupon:         &coupon,
+		DiscountAmount: discountAmount,
+	}
+}
 
 // VerifyCoupon checks whether a coupon code is valid and returns discount info.
 func VerifyCoupon(c *gin.Context) {

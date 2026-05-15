@@ -27,7 +27,7 @@ type Ticket struct {
 	Title         string     `gorm:"type:varchar(200)" json:"title"`
 	Content       string     `gorm:"type:text" json:"content"`
 	Type          string     `gorm:"type:varchar(20);default:'other'" json:"type"`
-	Status        string     `gorm:"type:varchar(20);default:'pending'" json:"status"`
+	Status        string     `gorm:"type:varchar(20);default:'pending';index" json:"status"`
 	Priority      string     `gorm:"type:varchar(20);default:'normal'" json:"priority"`
 	AssignedTo    *int64     `gorm:"index" json:"assigned_to"`
 	AdminNotes    *string    `gorm:"type:text" json:"admin_notes"`

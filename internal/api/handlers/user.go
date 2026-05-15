@@ -82,7 +82,7 @@ func UpdateCurrentUser(c *gin.Context) {
 		updates["avatar"] = &req.Avatar
 	}
 	if req.Theme != "" {
-		allowedThemes := map[string]bool{"light": true, "dark": true, "auto": true}
+		allowedThemes := map[string]bool{"indigo": true, "sky": true, "teal": true, "mint": true, "amber": true, "rose": true, "slate": true, "midnight": true, "auto": true}
 		if !allowedThemes[req.Theme] {
 			utils.BadRequest(c, "不支持的主题")
 			return
@@ -159,7 +159,7 @@ func UpdatePreferences(c *gin.Context) {
 	}
 	updates := map[string]interface{}{}
 	if req.Theme != "" {
-		allowedThemes := map[string]bool{"light": true, "dark": true, "auto": true}
+		allowedThemes := map[string]bool{"indigo": true, "sky": true, "teal": true, "mint": true, "amber": true, "rose": true, "slate": true, "midnight": true, "auto": true}
 		if !allowedThemes[req.Theme] {
 			utils.BadRequest(c, "不支持的主题")
 			return

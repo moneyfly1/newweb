@@ -42,18 +42,18 @@ const themeConfigs: Record<string, ThemeConfig> = {
     sidebarBg: '#f0fdfa', sidebarText: '#134e4a', sidebarHover: '#ccfbf1', sidebarActive: '#0f766e',
   },
   mint: {
-    primary: '#059669', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#64748b',
+    primary: '#0d948d', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#64748b',
     bg: '#ffffff', bgPage: '#fafdfa', text: '#0f172a', textSecondary: '#475569', border: '#d1fae5',
-    sidebarBg: '#f5fdf8', sidebarText: '#14532d', sidebarHover: '#d1fae5', sidebarActive: '#059669',
+    sidebarBg: '#f5fdf8', sidebarText: '#14532d', sidebarHover: '#d1fae5', sidebarActive: '#0d948d',
   },
   amber: {
     primary: '#b45309', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#78716c',
-    bg: '#ffffff', bgPage: '#fefefe', text: '#1c1917', textSecondary: '#78716c', border: '#fef3c7',
+    bg: '#ffffff', bgPage: '#fefefe', text: '#1c1917', textSecondary: '#625D56', border: '#fef3c7',
     sidebarBg: '#fffbeb', sidebarText: '#78350f', sidebarHover: '#fef3c7', sidebarActive: '#b45309',
   },
   rose: {
     primary: '#be185d', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#6b7280',
-    bg: '#ffffff', bgPage: '#fdf8fa', text: '#1a0f14', textSecondary: '#6b5a62', border: '#fce7f3',
+    bg: '#ffffff', bgPage: '#fdf8fa', text: '#1a0f14', textSecondary: '#574750', border: '#fce7f3',
     sidebarBg: '#fdf2f8', sidebarText: '#831843', sidebarHover: '#fce7f3', sidebarActive: '#be185d',
   },
   slate: {
@@ -63,7 +63,7 @@ const themeConfigs: Record<string, ThemeConfig> = {
   },
   midnight: {
     primary: '#a78bfa', success: '#34d399', warning: '#fbbf24', danger: '#f87171', info: '#9ca3af',
-    bg: '#1a1a2e', bgPage: '#12121f', text: '#e2e8f0', textSecondary: '#94a3b8', border: '#2a2a40',
+    bg: '#1a1a2e', bgPage: '#12121f', text: '#e2e8f0', textSecondary: '#94a3b8', border: '#4a4a68',
     sidebarBg: '#12121f', sidebarText: '#c4b5fd', sidebarHover: '#1e1e35', sidebarActive: '#a78bfa',
   },
 }
@@ -72,7 +72,7 @@ const availableThemes: ThemeOption[] = [
   { value: 'indigo', label: '靛蓝', color: '#4f46e5' },
   { value: 'sky', label: '天空', color: '#0284c7' },
   { value: 'teal', label: '青碧', color: '#0f766e' },
-  { value: 'mint', label: '薄荷', color: '#059669' },
+  { value: 'mint', label: '薄荷', color: '#0d948d' },
   { value: 'amber', label: '琥珀', color: '#b45309' },
   { value: 'rose', label: '玫瑰', color: '#be185d' },
   { value: 'slate', label: '岩灰', color: '#374151' },
@@ -257,7 +257,7 @@ function applyCSSVariables(config: ThemeConfig) {
 }
 
 export const useAppStore = defineStore('app', () => {
-  const currentTheme = ref(localStorage.getItem('cboard-theme') || 'light')
+  const currentTheme = ref(localStorage.getItem('cboard-theme') || 'indigo')
   const sidebarCollapsed = ref(false)
   const isMobile = ref(false)
   const mobileMenuOpen = ref(false)
@@ -281,7 +281,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   function toggleTheme() {
-    setTheme(isDark.value ? 'light' : 'dark')
+    setTheme(isDark.value ? 'indigo' : 'midnight')
   }
 
   function setViewMode(mode: 'table' | 'grid') {

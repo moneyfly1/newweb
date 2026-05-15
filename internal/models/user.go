@@ -12,7 +12,7 @@ type User struct {
 	IsAdmin                     bool       `gorm:"default:false" json:"is_admin"`
 	Nickname                    *string    `gorm:"type:varchar(50)" json:"nickname"`
 	Avatar                      *string    `gorm:"type:varchar(255)" json:"avatar"`
-	Theme                       string     `gorm:"type:varchar(20);default:'light'" json:"theme"`
+	Theme                       string     `gorm:"type:varchar(20);default:'indigo'" json:"theme"`
 	Language                    string     `gorm:"type:varchar(10);default:'zh-CN'" json:"language"`
 	Timezone                    string     `gorm:"type:varchar(50);default:'Asia/Shanghai'" json:"timezone"`
 	EmailNotifications          bool       `gorm:"default:true;index" json:"email_notifications"`

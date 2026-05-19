@@ -56,6 +56,7 @@ func (s *Scheduler) Start() {
 	s.startLoop("CleanPaymentNonces", 12*time.Hour, cleanPaymentNoncesTask)
 	s.startLoop("CleanExpiredTokens", 6*time.Hour, cleanExpiredTokensTask)
 	s.startLoop("CleanOldLogs", 24*time.Hour, cleanOldLogsTask)
+	s.startLoop("AutoBackup", 30*time.Minute, autoBackupTask)
 }
 
 // Stop gracefully shuts down all background loops.
@@ -404,4 +405,56 @@ func cleanOldLogFiles(retentionDays int) {
 	if deleted > 0 {
 		log.Printf("[Scheduler] 已清理 %d 个过期日志文件", deleted)
 	}
+}
+
+var lastAutoBackupDate string
+
+// autoBackupTask checks if auto backup is enabled and if it's time to run.
+func autoBackupTask() {
+	if !utils.IsBoolSetting("backup_auto_enabled") {
+		return
+	}
+
+	settings := utils.GetSettings("backup_auto_time")
+	autoTime := settings["backup_auto_time"]
+	if autoTime == "" {
+		autoTime = "03:00"
+	}
+
+	now := time.Now()
+	today := now.Format("2006-01-02")
+
+	if lastAutoBackupDate == today {
+		return
+	}
+
+	parts := strings.SplitN(autoTime, ":", 2)
+	if len(parts) != 2 {
+		return
+	}
+	hour := 3
+	minute := 0
+	fmt.Sscanf(parts[0], "%d", &hour)
+	fmt.Sscanf(parts[1], "%d", &minute)
+
+	targetTime := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+	if now.Before(targetTime) || now.After(targetTime.Add(35*time.Minute)) {
+		return
+	}
+
+	log.Printf("[AutoBackup] 开始自动备份...")
+	utils.SysInfo("backup", "自动备份任务开始执行")
+
+	result, err := PerformBackup()
+	if err != nil {
+		log.Printf("[AutoBackup] 自动备份失败: %v", err)
+		utils.SysError("backup", "自动备份失败", err.Error())
+		return
+	}
+
+	lastAutoBackupDate = today
+	log.Printf("[AutoBackup] 自动备份完成: %s (%.2f MB)", result.Filename, float64(result.ZipSize)/1024/1024)
+	utils.SysInfo("backup", fmt.Sprintf("自动备份完成: %s (%.2f MB)", result.Filename, float64(result.ZipSize)/1024/1024))
+
+	go UploadBackupToGitHub(result.ZipPath)
 }

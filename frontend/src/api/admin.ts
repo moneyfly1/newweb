@@ -144,6 +144,9 @@ export const clearConfigUpdateLogs = () => request.post('/admin/config-update/lo
 // Backup
 export const createBackup = () => request.post('/admin/backup')
 export const listBackups = () => request.get('/admin/backup')
+export const restoreBackup = (data: { path: string }) => request.post('/admin/backup/restore', data)
+export const listGitHubBackups = () => request.get('/admin/backup/github')
+export const restoreGitHubBackup = (data: { path: string, download_url: string }) => request.post('/admin/backup/restore-github', data)
 export const getUploadStatus = (taskId: string) => request.get(`/admin/backup/upload-status/${taskId}`)
 export const testGitHubConnection = (data?: any) => request.post('/admin/backup/test-github', data)
 export const updateGeoIPFiles = () => request.post('/admin/settings/update-geoip')

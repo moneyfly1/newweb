@@ -263,11 +263,12 @@ func (c *GitClient) UploadBackupWithProgress(filePath string, progressCallback f
 		progressCallback(50, "正在检查远程文件...")
 	}
 
-	// Generate remote path: backups/YYYY-MM-DD/{filename}
+	// Generate remote path: backups/YYYY/MM/{filename}
 	now := time.Now()
-	dateFolder := now.Format("2006-01-02")
+	yearFolder := now.Format("2006")
+	monthFolder := now.Format("01")
 	fileName := filepath.Base(filePath)
-	remotePath := fmt.Sprintf("backups/%s/%s", dateFolder, fileName)
+	remotePath := fmt.Sprintf("backups/%s/%s/%s", yearFolder, monthFolder, fileName)
 
 	existingSHA, err := c.getFileSHA(remotePath)
 	if err != nil {
@@ -432,6 +433,146 @@ func (c *GitClient) UploadBackupWithProgress(filePath string, progressCallback f
 	}
 
 	return nil
+}
+
+// RemoteBackupInfo represents a backup file stored in the remote repo.
+type RemoteBackupInfo struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Size        int64  `json:"size"`
+	DownloadURL string `json:"download_url"`
+}
+
+// ListBackups lists backup files from the remote repo under backups/YYYY/MM/.
+func (c *GitClient) ListBackups() ([]RemoteBackupInfo, error) {
+	years, err := c.listDir("backups")
+	if err != nil {
+		return nil, fmt.Errorf("读取备份目录失败: %w", err)
+	}
+
+	var results []RemoteBackupInfo
+	for _, year := range years {
+		if year.entryType != "dir" {
+			continue
+		}
+		months, err := c.listDir(year.path)
+		if err != nil {
+			continue
+		}
+		for _, month := range months {
+			if month.entryType != "dir" {
+				continue
+			}
+			files, err := c.listDir(month.path)
+			if err != nil {
+				continue
+			}
+			for _, f := range files {
+				if f.entryType != "file" {
+					continue
+				}
+				if !strings.HasSuffix(f.name, ".zip") {
+					continue
+				}
+				results = append(results, RemoteBackupInfo{
+					Name:        f.name,
+					Path:        f.path,
+					Size:        f.size,
+					DownloadURL: f.downloadURL,
+				})
+			}
+		}
+	}
+	return results, nil
+}
+
+type dirEntry struct {
+	name        string
+	path        string
+	entryType   string
+	size        int64
+	downloadURL string
+}
+
+func (c *GitClient) listDir(dirPath string) ([]dirEntry, error) {
+	apiURL := c.getAPIURL("/contents/" + dirPath)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", c.getAuthHeader())
+	if c.Platform == PlatformGitHub {
+		req.Header.Set("Accept", "application/vnd.github.v3+json")
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	var items []struct {
+		Name        string `json:"name"`
+		Path        string `json:"path"`
+		Type        string `json:"type"`
+		Size        int64  `json:"size"`
+		DownloadURL string `json:"download_url"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+		return nil, err
+	}
+
+	var entries []dirEntry
+	for _, item := range items {
+		entries = append(entries, dirEntry{
+			name:        item.Name,
+			path:        item.Path,
+			entryType:   item.Type,
+			size:        item.Size,
+			downloadURL: item.DownloadURL,
+		})
+	}
+	return entries, nil
+}
+
+// DownloadFile downloads a file from a URL and saves it to localPath.
+func (c *GitClient) DownloadFile(downloadURL, localPath string) error {
+	dir := filepath.Dir(localPath)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("创建目录失败: %w", err)
+	}
+
+	req, err := http.NewRequest("GET", downloadURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", c.getAuthHeader())
+
+	client := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("下载失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("下载失败: HTTP %d", resp.StatusCode)
+	}
+
+	out, err := os.Create(localPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
 }
 
 func validateUploadFilePath(filePath string) error {

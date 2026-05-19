@@ -425,6 +425,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		// 备份
 		admin.POST("/backup", middleware.CSRFProtection(), handlers.AdminCreateBackup)
 		admin.GET("/backup", handlers.AdminListBackups)
+		admin.POST("/backup/restore", middleware.CSRFProtection(), handlers.AdminRestoreBackup)
+		admin.GET("/backup/github", handlers.AdminListGitHubBackups)
+		admin.POST("/backup/restore-github", middleware.CSRFProtection(), handlers.AdminRestoreGitHubBackup)
 		admin.GET("/backup/upload-status/:taskId", handlers.AdminGetUploadStatus)
 		admin.POST("/backup/test-github", middleware.CSRFProtection(), handlers.AdminTestGitHubConnection)
 

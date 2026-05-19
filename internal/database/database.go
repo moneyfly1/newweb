@@ -22,12 +22,16 @@ import (
 // DB 全局数据库实例
 var DB *gorm.DB
 
+// storedCfg holds the config for reopening the database at runtime.
+var storedCfg *config.Config
+
 // InitDatabase 根据配置初始化数据库连接
 // 支持 sqlite、mysql、postgres 三种数据库类型
 func InitDatabase(cfg *config.Config) error {
 	if cfg == nil {
 		return fmt.Errorf("配置不能为空")
 	}
+	storedCfg = cfg
 
 	dialector, err := buildDialector(cfg)
 	if err != nil {
@@ -360,4 +364,24 @@ func Close() {
 	if sqlDB, err := DB.DB(); err == nil {
 		_ = sqlDB.Close()
 	}
+}
+
+// CheckpointWAL flushes the SQLite WAL file into the main database file.
+func CheckpointWAL() error {
+	if DB == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+	if DB.Dialector.Name() != "sqlite" {
+		return nil
+	}
+	return DB.Exec("PRAGMA wal_checkpoint(TRUNCATE)").Error
+}
+
+// ReopenDB closes the current connection and reopens using the stored config.
+func ReopenDB() error {
+	if storedCfg == nil {
+		return fmt.Errorf("无法重新打开数据库: 未保存配置")
+	}
+	Close()
+	return InitDatabase(storedCfg)
 }

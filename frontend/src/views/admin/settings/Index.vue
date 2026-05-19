@@ -223,13 +223,6 @@
                     </n-form-item-gi>
                   </n-grid>
                   <n-divider />
-                  <n-h3 prefix="bar">GitHub 自动备份</n-h3>
-                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                    <n-form-item-gi label="启用 GitHub 备份"><n-switch v-model:value="form.backup_github_enabled" /></n-form-item-gi>
-                    <n-form-item-gi label="仓库地址"><n-input v-model:value="form.backup_github_repo" placeholder="owner/repo" /></n-form-item-gi>
-                    <n-form-item-gi label="GitHub Token" span="2"><n-input v-model:value="form.backup_github_token" type="password" show-password-on="click" placeholder="ghp_xxxxxxxxxxxx" /></n-form-item-gi>
-                  </n-grid>
-                  <n-divider />
                   <n-h3 prefix="bar">日志清理</n-h3>
                   <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
                     <n-form-item-gi label="日志保留天数">
@@ -243,8 +236,87 @@
                   <n-divider />
                   <n-h3 prefix="bar">数据维护</n-h3>
                   <n-space>
-                    <n-button type="primary" :loading="backupCreating" @click="handleCreateBackup">创建数据库备份</n-button>
                     <n-button secondary @click="handleUpdateGeoIP">更新 GeoIP 数据库</n-button>
+                  </n-space>
+                </div>
+
+                <!-- 备份恢复 -->
+                <div v-else-if="activeTab === 'backup'" key="backup">
+                  <n-h3 prefix="bar">数据备份</n-h3>
+                  <n-space style="margin-bottom: 20px;">
+                    <n-button type="primary" :loading="backupCreating" @click="handleCreateBackup">创建数据库备份</n-button>
+                  </n-space>
+
+                  <n-h3 prefix="bar">GitHub 远程备份</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="启用 GitHub 备份"><n-switch v-model:value="form.backup_github_enabled" /></n-form-item-gi>
+                    <n-form-item-gi label="仓库地址"><n-input v-model:value="form.backup_github_repo" placeholder="owner/repo" /></n-form-item-gi>
+                    <n-form-item-gi label="GitHub Token" span="2"><n-input v-model:value="form.backup_github_token" type="password" show-password-on="click" placeholder="ghp_xxxxxxxxxxxx" /></n-form-item-gi>
+                  </n-grid>
+                  <n-divider />
+
+                  <n-h3 prefix="bar">定时自动备份</n-h3>
+                  <n-text depth="3" style="display: block; margin-bottom: 16px; font-size: 13px;">
+                    开启后系统将在每天指定时间自动创建数据库备份，备份文件按年月归档存放（如 backups/2026/05/）
+                  </n-text>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="启用定时备份"><n-switch v-model:value="form.backup_auto_enabled" /></n-form-item-gi>
+                    <n-form-item-gi label="每日备份时间">
+                      <n-time-picker v-model:formatted-value="form.backup_auto_time" format="HH:mm" :disabled="!form.backup_auto_enabled" style="width: 100%" />
+                    </n-form-item-gi>
+                  </n-grid>
+                  <n-divider />
+
+                  <n-h3 prefix="bar">备份恢复</n-h3>
+                  <n-alert type="warning" style="margin-bottom: 16px;">
+                    恢复操作会用备份文件替换当前数据库。系统会在恢复前自动创建安全备份，但请谨慎操作。
+                  </n-alert>
+                  <n-space vertical :size="16">
+                    <n-radio-group :value="restoreSource" @update:value="handleSwitchSource">
+                      <n-radio-button value="local">本地备份</n-radio-button>
+                      <n-radio-button value="github" :disabled="!form.backup_github_enabled">GitHub 备份</n-radio-button>
+                    </n-radio-group>
+                    <n-alert v-if="restoreSource === 'github' && !form.backup_github_enabled" type="info">
+                      请先在上方启用并配置 GitHub 远程备份后使用此功能。
+                    </n-alert>
+                    <n-space align="center" v-if="restoreSource !== 'github' || form.backup_github_enabled">
+                      <n-select v-model:value="filterYear" :options="availableYears" placeholder="选择年份" clearable style="width: 130px" @update:value="filterMonth = null" />
+                      <n-select v-model:value="filterMonth" :options="availableMonths" placeholder="选择月份" clearable style="width: 130px" />
+                      <n-button quaternary size="small" @click="handleRefreshList">
+                        <template #icon><n-icon><refresh-outline /></n-icon></template>
+                        刷新
+                      </n-button>
+                      <n-text depth="3" style="font-size: 13px;">
+                        共 {{ filteredBackupList.length }} 个备份文件
+                      </n-text>
+                    </n-space>
+                    <n-spin :show="backupListLoading || githubBackupListLoading" v-if="restoreSource !== 'github' || form.backup_github_enabled">
+                      <n-table :bordered="false" :single-line="false" size="small" v-if="filteredBackupList.length > 0">
+                        <thead>
+                          <tr>
+                            <th>文件名</th>
+                            <th>归档目录</th>
+                            <th>大小</th>
+                            <th v-if="restoreSource === 'local'">备份时间</th>
+                            <th style="width: 100px">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="item in filteredBackupList" :key="item.rel_path">
+                            <td>{{ item.name || item.filename }}</td>
+                            <td><n-tag size="small" :bordered="false" :type="restoreSource === 'github' ? 'success' : 'info'">{{ item.folder }}</n-tag></td>
+                            <td>{{ formatSize(item.size) }}</td>
+                            <td v-if="restoreSource === 'local'">{{ formatDate(item.created_at) }}</td>
+                            <td>
+                              <n-button size="small" type="warning" :loading="restoringPath === item.rel_path" :disabled="restoringPath !== '' && restoringPath !== item.rel_path" @click="handleRestore(item)">
+                                恢复
+                              </n-button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </n-table>
+                      <n-empty v-else description="当前筛选条件下暂无备份文件" style="padding: 40px 0" />
+                    </n-spin>
                   </n-space>
                 </div>
 
@@ -290,18 +362,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useMessage } from 'naive-ui'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useMessage, useDialog } from 'naive-ui'
 import {
   SaveOutline, SettingsOutline, RocketOutline, CardOutline,
   MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline,
-  FunnelOutline
+  FunnelOutline, CloudDownloadOutline
 } from '@vicons/ionicons5'
-import { getSettings, updateSettings, sendTestEmail, testTelegram, testBark, createBackup, listBackups, updateGeoIPFiles, cleanOldLogs, getProtocolFilter, updateProtocolFilter } from '@/api/admin'
+import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, cleanOldLogs, getProtocolFilter, updateProtocolFilter } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
 const message = useMessage()
+const dialog = useDialog()
 
 const activeTab = ref('basic')
 const loading = ref(false)
@@ -311,6 +384,53 @@ const testingBark = ref(false)
 const backupCreating = ref(false)
 const cleaningLogs = ref(false)
 const testEmail = ref('')
+const backupList = ref<any[]>([])
+const backupListLoading = ref(false)
+const restoringPath = ref('')
+const restoreSource = ref<'local' | 'github'>('local')
+const githubBackupList = ref<any[]>([])
+const githubBackupListLoading = ref(false)
+const filterYear = ref<string | null>(null)
+const filterMonth = ref<string | null>(null)
+
+const activeBackupList = computed(() => {
+  if (restoreSource.value === 'github') {
+    return githubBackupList.value.map(b => {
+      const rel = (b.path as string).replace(/^backups\//, '')
+      return { ...b, rel_path: rel, folder: rel.replace('/' + b.name, '') }
+    })
+  }
+  return backupList.value.map(b => ({ ...b, rel_path: b.path, folder: (b.path as string).replace('/' + b.filename, '') }))
+})
+
+const availableYears = computed(() => {
+  const years = new Set<string>()
+  for (const b of activeBackupList.value) {
+    const parts = (b.rel_path as string).split('/')
+    if (parts.length >= 2) years.add(parts[0])
+  }
+  return Array.from(years).sort().reverse().map(y => ({ label: y + ' 年', value: y }))
+})
+
+const availableMonths = computed(() => {
+  const months = new Set<string>()
+  for (const b of activeBackupList.value) {
+    const parts = (b.rel_path as string).split('/')
+    if (parts.length >= 2 && (!filterYear.value || parts[0] === filterYear.value)) {
+      months.add(parts[1])
+    }
+  }
+  return Array.from(months).sort().reverse().map(m => ({ label: m + ' 月', value: m }))
+})
+
+const filteredBackupList = computed(() => {
+  return activeBackupList.value.filter(b => {
+    const parts = (b.rel_path as string).split('/')
+    if (filterYear.value && parts[0] !== filterYear.value) return false
+    if (filterMonth.value && parts[1] !== filterMonth.value) return false
+    return true
+  })
+})
 
 const menuOptions = [
   { label: '基础设置', key: 'basic', icon: SettingsOutline },
@@ -319,6 +439,7 @@ const menuOptions = [
   { label: '邮件服务', key: 'email', icon: MailOutline },
   { label: '通知监控', key: 'notify', icon: NotificationsOutline },
   { label: '安全维护', key: 'security', icon: ShieldCheckmarkOutline },
+  { label: '备份恢复', key: 'backup', icon: CloudDownloadOutline },
   { label: '协议过滤', key: 'protocol', icon: FunnelOutline },
 ]
 
@@ -355,6 +476,7 @@ const form = ref<Record<string, any>>({
   max_login_attempts: 5, login_lockout_minutes: 30, ip_whitelist: '',
   log_retention_days: 90,
   backup_github_enabled: false, backup_github_token: '', backup_github_repo: '',
+  backup_auto_enabled: false, backup_auto_time: '03:00',
   checkin_enabled: true, checkin_min_reward: 10, checkin_max_reward: 50
 })
 
@@ -500,7 +622,105 @@ const handleCreateBackup = async () => {
   try {
     await createBackup()
     message.success('数据库备份已生成在服务器 backups 目录')
+    await loadBackupList()
   } finally { backupCreating.value = false }
+}
+
+const loadBackupList = async () => {
+  backupListLoading.value = true
+  try {
+    const res = await listBackups()
+    if (res.code === 0 && res.data) {
+      backupList.value = res.data
+      if (restoreSource.value === 'local' && !filterYear.value && res.data.length > 0) {
+        const firstPath = (res.data[0].path as string).split('/')
+        if (firstPath.length >= 2) {
+          filterYear.value = firstPath[0]
+          filterMonth.value = firstPath[1]
+        }
+      }
+    }
+  } finally { backupListLoading.value = false }
+}
+
+const loadGitHubBackupList = async () => {
+  githubBackupListLoading.value = true
+  try {
+    const res = await listGitHubBackups()
+    if (res.code === 0 && res.data) {
+      githubBackupList.value = res.data
+      if (!filterYear.value && res.data.length > 0) {
+        const rel = (res.data[0].path as string).replace(/^backups\//, '')
+        const parts = rel.split('/')
+        if (parts.length >= 2) {
+          filterYear.value = parts[0]
+          filterMonth.value = parts[1]
+        }
+      }
+    }
+  } catch (e: any) {
+    message.error(e.response?.data?.message || '获取 GitHub 备份列表失败')
+  } finally { githubBackupListLoading.value = false }
+}
+
+const handleSwitchSource = (source: 'local' | 'github') => {
+  restoreSource.value = source
+  filterYear.value = null
+  filterMonth.value = null
+  if (source === 'local') {
+    loadBackupList()
+  } else {
+    loadGitHubBackupList()
+  }
+}
+
+const handleRefreshList = () => {
+  if (restoreSource.value === 'local') {
+    loadBackupList()
+  } else {
+    loadGitHubBackupList()
+  }
+}
+
+const handleRestore = (item: any) => {
+  const isGitHub = restoreSource.value === 'github'
+  const displayName = item.name || item.filename
+  dialog.warning({
+    title: '确认恢复数据库',
+    content: `即将用${isGitHub ? ' GitHub 上的' : ''}备份文件「${displayName}」替换当前数据库。系统将在恢复前自动创建安全备份。此操作不可撤销，是否继续？`,
+    positiveText: '确认恢复',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      restoringPath.value = item.rel_path
+      try {
+        let res: any
+        if (isGitHub) {
+          res = await restoreGitHubBackup({ path: item.path, download_url: item.download_url })
+        } else {
+          res = await restoreBackup({ path: item.path })
+        }
+        if (res.code === 0) {
+          message.success(`数据库恢复成功！恢复前安全备份: ${res.data.safety_backup}`)
+          handleRefreshList()
+        }
+      } catch (e: any) {
+        message.error(e.response?.data?.message || '恢复失败')
+      } finally {
+        restoringPath.value = ''
+      }
+    }
+  })
+}
+
+const formatSize = (bytes: number) => {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(2) + ' MB'
+}
+
+const formatDate = (dateStr: string) => {
+  const d = new Date(dateStr)
+  return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 const handleCleanOldLogs = async () => {
@@ -529,6 +749,10 @@ const handleUpdateGeoIP = async () => {
 }
 
 onMounted(() => { loadSettings(); loadProtocolFilter() })
+
+watch(activeTab, (tab) => {
+  if (tab === 'backup') loadBackupList()
+})
 </script>
 
 <style scoped>

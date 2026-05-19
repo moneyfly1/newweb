@@ -2949,77 +2949,18 @@ func AdminMonitoring(c *gin.Context) {
 }
 
 func AdminCreateBackup(c *gin.Context) {
-	backupDir := "backups"
-	if err := os.MkdirAll(backupDir, 0750); err != nil {
-		utils.InternalError(c, "创建备份目录失败: "+err.Error())
-		return
-	}
-
-	// Find the SQLite database file
-	srcPath := "cboard.db"
-	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-		utils.InternalError(c, "数据库文件不存在，仅支持 SQLite 备份")
-		return
-	}
-
-	timestamp := time.Now().Format("20060102_150405")
-	dbBackupPath := filepath.Join(backupDir, fmt.Sprintf("cboard_backup_%s.db", timestamp))
-
-	// Copy database file
-	src, err := os.Open(srcPath)
+	result, err := services.PerformBackup()
 	if err != nil {
-		utils.InternalError(c, "打开数据库失败: "+err.Error())
-		return
-	}
-	defer src.Close()
-
-	// #nosec G304 -- dbBackupPath is server-generated under fixed backups directory.
-	dst, err := os.Create(dbBackupPath)
-	if err != nil {
-		utils.InternalError(c, "创建备份文件失败: "+err.Error())
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, src); err != nil {
-		utils.InternalError(c, "备份失败: "+err.Error())
+		utils.InternalError(c, err.Error())
 		return
 	}
 
-	// Create ZIP file containing db + .env
-	zipPath := filepath.Join(backupDir, fmt.Sprintf("cboard_backup_%s.zip", timestamp))
-	// #nosec G304 -- zipPath is server-generated under fixed backups directory.
-	zipFile, err := os.Create(zipPath)
-	if err != nil {
-		utils.InternalError(c, "创建ZIP文件失败: "+err.Error())
-		return
-	}
-	zipWriter := zip.NewWriter(zipFile)
-
-	// Add database to ZIP
-	if err := addFileToZip(zipWriter, dbBackupPath, filepath.Base(dbBackupPath)); err != nil {
-		utils.InternalError(c, "添加数据库到ZIP失败: "+err.Error())
-		return
-	}
-
-	// 注意：不备份 .env 文件以防止敏感信息泄露（数据库密码、API密钥、支付密钥等）
-	// 如需备份配置，请使用加密存储或单独的安全备份方案
-
-	if err := zipWriter.Close(); err != nil {
-		utils.InternalError(c, "关闭ZIP写入失败: "+err.Error())
-		return
-	}
-	if err := zipFile.Close(); err != nil {
-		utils.InternalError(c, "关闭ZIP文件失败: "+err.Error())
-		return
-	}
-
-	info, _ := os.Stat(dbBackupPath)
+	zipPath := result.ZipPath
 	zipInfo, _ := os.Stat(zipPath)
 
 	response := gin.H{
-		"filename":   filepath.Base(dbBackupPath),
-		"size":       info.Size(),
+		"filename":   result.Filename,
+		"size":       result.Size,
 		"created_at": time.Now(),
 	}
 
@@ -3102,40 +3043,179 @@ func AdminListBackups(c *gin.Context) {
 		return
 	}
 
-	entries, err := os.ReadDir(backupDir)
-	if err != nil {
-		utils.Success(c, []interface{}{})
-		return
-	}
-
 	type BackupInfo struct {
 		Filename  string    `json:"filename"`
+		Path      string    `json:"path"`
 		Size      int64     `json:"size"`
 		CreatedAt time.Time `json:"created_at"`
 	}
 
 	var backups []BackupInfo
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".db") {
-			continue
+	_ = filepath.Walk(backupDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
 		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
+		if !strings.HasSuffix(info.Name(), ".db") {
+			return nil
 		}
+		relPath, _ := filepath.Rel(backupDir, path)
 		backups = append(backups, BackupInfo{
-			Filename:  entry.Name(),
+			Filename:  info.Name(),
+			Path:      relPath,
 			Size:      info.Size(),
 			CreatedAt: info.ModTime(),
 		})
-	}
+		return nil
+	})
 
-	// Sort by newest first
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].CreatedAt.After(backups[j].CreatedAt)
 	})
 
 	utils.Success(c, backups)
+}
+
+func AdminRestoreBackup(c *gin.Context) {
+	var req struct {
+		Path string `json:"path" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请指定备份文件路径")
+		return
+	}
+
+	safetyName, err := services.RestoreBackup(req.Path)
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+
+	utils.CreateAuditLog(c, "restore_backup", "backup", 0, fmt.Sprintf("恢复数据库: %s", req.Path))
+	utils.Success(c, gin.H{
+		"message":       "数据库恢复成功",
+		"safety_backup": safetyName,
+	})
+}
+
+func AdminListGitHubBackups(c *gin.Context) {
+	settings := utils.GetSettings("backup_github_enabled", "backup_github_token", "backup_github_repo")
+	if settings["backup_github_enabled"] != "true" && settings["backup_github_enabled"] != "1" {
+		utils.BadRequest(c, "GitHub 备份未启用")
+		return
+	}
+	token := settings["backup_github_token"]
+	repo := settings["backup_github_repo"]
+	if token == "" || repo == "" {
+		utils.BadRequest(c, "GitHub Token 或仓库地址未配置")
+		return
+	}
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		utils.BadRequest(c, "仓库地址格式错误，应为 owner/repo")
+		return
+	}
+
+	client := git.NewClient(git.PlatformGitHub, token, parts[0], parts[1])
+	backups, err := client.ListBackups()
+	if err != nil {
+		utils.InternalError(c, "获取 GitHub 备份列表失败: "+err.Error())
+		return
+	}
+	utils.Success(c, backups)
+}
+
+func AdminRestoreGitHubBackup(c *gin.Context) {
+	var req struct {
+		Path        string `json:"path" binding:"required"`
+		DownloadURL string `json:"download_url" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	settings := utils.GetSettings("backup_github_token", "backup_github_repo")
+	token := settings["backup_github_token"]
+	repo := settings["backup_github_repo"]
+	if token == "" || repo == "" {
+		utils.BadRequest(c, "GitHub 未配置")
+		return
+	}
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		utils.BadRequest(c, "仓库地址格式错误")
+		return
+	}
+
+	client := git.NewClient(git.PlatformGitHub, token, parts[0], parts[1])
+
+	localZip := filepath.Join("backups", "_github_download", filepath.Base(req.Path))
+	if err := client.DownloadFile(req.DownloadURL, localZip); err != nil {
+		utils.InternalError(c, "下载备份文件失败: "+err.Error())
+		return
+	}
+	defer os.Remove(localZip)
+
+	dbPath, err := extractDBFromZip(localZip)
+	if err != nil {
+		utils.InternalError(c, "解压备份文件失败: "+err.Error())
+		return
+	}
+
+	relPath, _ := filepath.Rel("backups", dbPath)
+	safetyName, err := services.RestoreBackup(relPath)
+	if err != nil {
+		utils.InternalError(c, err.Error())
+		return
+	}
+
+	os.Remove(dbPath)
+
+	utils.CreateAuditLog(c, "restore_github_backup", "backup", 0, fmt.Sprintf("从 GitHub 恢复: %s", req.Path))
+	utils.Success(c, gin.H{
+		"message":       "从 GitHub 备份恢复成功",
+		"safety_backup": safetyName,
+	})
+}
+
+func extractDBFromZip(zipPath string) (string, error) {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		if !strings.HasSuffix(f.Name, ".db") {
+			continue
+		}
+		if strings.Contains(f.Name, "..") || strings.Contains(f.Name, "/") {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return "", err
+		}
+
+		outPath := filepath.Join("backups", "_github_download", f.Name)
+		if err := os.MkdirAll(filepath.Dir(outPath), 0750); err != nil {
+			rc.Close()
+			return "", err
+		}
+		out, err := os.Create(outPath)
+		if err != nil {
+			rc.Close()
+			return "", err
+		}
+		_, err = io.Copy(out, rc)
+		rc.Close()
+		out.Close()
+		if err != nil {
+			return "", err
+		}
+		return outPath, nil
+	}
+	return "", fmt.Errorf("ZIP 中未找到 .db 文件")
 }
 
 func AdminGetUploadStatus(c *gin.Context) {

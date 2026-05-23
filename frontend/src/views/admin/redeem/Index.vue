@@ -76,7 +76,7 @@
           :item-count="pagination.itemCount"
           :page-sizes="pagination.pageSizes"
           show-size-picker
-          style="margin-top: 16px; justify-content: center"
+          style="margin-top: 16px; justify-content: flex-end"
           @update:page="loadCodes"
           @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; loadCodes() }"
         />
@@ -200,10 +200,10 @@ const formData = reactive({
 
 const pagination = reactive({
   page: 1,
-  pageSize: 20,
+  pageSize: 10,
   itemCount: 0,
   showSizePicker: true,
-  pageSizes: [20, 50, 100],
+  pageSizes: [10, 20, 50, 100],
   onChange: (page: number) => {
     pagination.page = page
     loadCodes()

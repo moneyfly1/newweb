@@ -54,7 +54,7 @@
           v-model:page="pagination.page"
           :item-count="pagination.itemCount"
           :page-size="pagination.pageSize"
-          style="margin-top: 16px; justify-content: center;"
+          style="margin-top: 16px; justify-content: flex-end"
           @update:page="(p) => { pagination.page = p; loadTickets() }"
         />
       </div>

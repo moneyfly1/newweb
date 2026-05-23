@@ -137,7 +137,7 @@ const lastPool = ref<any>(null)
 const loadingHistory = ref(false)
 const historyData = ref<any[]>([])
 const historyPagination = reactive({
-  page: 1, pageSize: 20, itemCount: 0, showSizePicker: true, pageSizes: [20, 50, 100],
+  page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100],
 })
 
 const prizeTagType = (type: string) => {

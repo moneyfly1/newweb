@@ -87,6 +87,7 @@
           :page-count="totalPages"
           :page-sizes="[10, 20, 50, 100]"
           show-size-picker
+          style="margin-top: 16px; justify-content: flex-end"
           @update:page="handlePageChange"
           @update:page-size="handlePageSizeChange"
         />
@@ -198,7 +199,7 @@ const dialog = useDialog()
 const loading = ref(false)
 const packages = ref([])
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 const totalPages = ref(0)
 const searchQuery = ref('')
 const checkedRowKeys = ref([])

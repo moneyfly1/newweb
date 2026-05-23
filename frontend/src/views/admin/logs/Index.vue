@@ -36,7 +36,7 @@
               :item-count="auditPagination.itemCount"
               :page-sizes="auditPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: center"
+              style="margin-top: 16px; justify-content: flex-end"
             />
           </template>
         </n-tab-pane>
@@ -75,7 +75,7 @@
               :item-count="loginPagination.itemCount"
               :page-sizes="loginPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: center"
+              style="margin-top: 16px; justify-content: flex-end"
             />
           </template>
         </n-tab-pane>
@@ -112,7 +112,7 @@
               :item-count="registrationPagination.itemCount"
               :page-sizes="registrationPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: center"
+              style="margin-top: 16px; justify-content: flex-end"
             />
           </template>
         </n-tab-pane>
@@ -149,7 +149,7 @@
               :item-count="subscriptionPagination.itemCount"
               :page-sizes="subscriptionPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: center"
+              style="margin-top: 16px; justify-content: flex-end"
             />
           </template>
         </n-tab-pane>
@@ -188,7 +188,7 @@
               :item-count="balancePagination.itemCount"
               :page-sizes="balancePagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: center"
+              style="margin-top: 16px; justify-content: flex-end"
             />
           </template>
         </n-tab-pane>
@@ -226,7 +226,7 @@
               :item-count="commissionPagination.itemCount"
               :page-sizes="commissionPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: center"
+              style="margin-top: 16px; justify-content: flex-end"
             />
           </template>
         </n-tab-pane>
@@ -267,7 +267,7 @@
               :item-count="systemPagination.itemCount"
               :page-sizes="systemPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: center"
+              style="margin-top: 16px; justify-content: flex-end"
             />
           </template>
         </n-tab-pane>
@@ -632,7 +632,7 @@ const moduleOptions = [
 ]
 const systemPagination = reactive({
   page: 1,
-  pageSize: 20,
+  pageSize: 10,
   itemCount: 0,
   showSizePicker: true,
   pageSizes: [10, 20, 50],

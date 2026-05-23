@@ -84,6 +84,18 @@
         <n-alert v-if="users.length === 0 && !loading" type="info" title="暂无异常用户">
           当前没有检测到异常用户
         </n-alert>
+
+        <n-pagination
+          v-if="totalUsers > pageSize"
+          v-model:page="currentPage"
+          v-model:page-size="pageSize"
+          :item-count="totalUsers"
+          :page-sizes="[10, 20, 50]"
+          show-size-picker
+          style="margin-top: 16px; justify-content: flex-end"
+          @update:page="handlePageChange"
+          @update:page-size="handlePageSizeChange"
+        />
       </n-space>
     </n-card>
   </div>
@@ -105,6 +117,9 @@ const appStore = useAppStore()
 const loading = ref(false)
 const users = ref([])
 const typeFilter = ref(null)
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalUsers = ref(0)
 
 const typeOptions = [
   { label: '全部', value: null },
@@ -177,10 +192,14 @@ const fetchAbnormalUsers = async () => {
   loading.value = true
   try {
     const params = {
+      page: currentPage.value,
+      page_size: pageSize.value,
       type: typeFilter.value || undefined
     }
     const response = await getAbnormalUsers(params)
-    users.value = response.data.users || []
+    const data = response.data
+    users.value = data.users || data.items || []
+    totalUsers.value = data.total || 0
   } catch (error) {
     message.error('获取异常用户列表失败：' + (error.message || '未知错误'))
   } finally {
@@ -189,6 +208,18 @@ const fetchAbnormalUsers = async () => {
 }
 
 const handleSearch = () => {
+  currentPage.value = 1
+  fetchAbnormalUsers()
+}
+
+const handlePageChange = (page) => {
+  currentPage.value = page
+  fetchAbnormalUsers()
+}
+
+const handlePageSizeChange = (size) => {
+  pageSize.value = size
+  currentPage.value = 1
   fetchAbnormalUsers()
 }
 

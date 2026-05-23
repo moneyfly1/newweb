@@ -156,33 +156,22 @@
           <n-empty v-else description="暂无数据" />
         </n-card>
 
-        <!-- Region Stats (preserved from original) -->
+        <!-- Region Stats -->
         <n-card title="用户地区分布" :bordered="false">
+          <template #header-extra>
+            <n-button size="tiny" text @click="showAllRegions = !showAllRegions">
+              {{ showAllRegions ? '收起' : `查看全部 (${regionStats.length})` }}
+            </n-button>
+          </template>
           <n-spin :show="regionLoading">
-            <div v-if="regionStats.length > 0">
-              <div class="region-header">
-                <span class="region-rank">#</span>
-                <span class="region-col">国家</span>
-                <span class="region-col">省份</span>
-                <span class="region-col">城市</span>
-                <span class="region-count">用户数</span>
-              </div>
-              <div v-for="(item, index) in regionStats" :key="index" class="region-item">
-                <div class="region-info">
-                  <span class="region-rank">{{ index + 1 }}</span>
-                  <span class="region-col">{{ item.country || '-' }}</span>
-                  <span class="region-col">{{ item.province || '-' }}</span>
-                  <span class="region-col">{{ item.city || '-' }}</span>
-                  <span class="region-count">{{ item.count }} 人</span>
-                </div>
-                <n-progress
-                  type="line"
-                  :percentage="Math.round((item.count / maxRegionCount) * 100)"
-                  :show-indicator="false"
-                  :height="8"
-                  :border-radius="4"
-                  :color="getColor(index)"
-                />
+            <div v-if="regionStats.length > 0" class="region-list-compact" :class="{ expanded: showAllRegions }">
+              <div v-for="(item, index) in displayRegions" :key="index" class="region-row-compact">
+                <span class="region-rank-sm">{{ index + 1 }}</span>
+                <span class="region-detail">{{ item.country || '-' }} · {{ item.province || '-' }} · {{ item.city || '-' }}</span>
+                <span class="region-bar-wrap">
+                  <span class="region-bar" :style="{ width: Math.round((item.count / maxRegionCount) * 100) + '%', background: getColor(index) }"></span>
+                </span>
+                <span class="region-count-sm">{{ item.count }}</span>
               </div>
             </div>
             <n-empty v-else description="暂无地区数据" style="padding: 40px 0" />
@@ -205,6 +194,7 @@ const message = useMessage()
 const loading = ref(false)
 const exporting = ref(false)
 const regionLoading = ref(false)
+const showAllRegions = ref(false)
 const period = ref('month')
 const dateRange = ref<[number, number] | null>(null)
 
@@ -248,6 +238,10 @@ const maxPaymentAmount = computed(() => {
 const maxRegionCount = computed(() => {
   if (regionStats.value.length === 0) return 1
   return regionStats.value[0]?.count || 1
+})
+const displayRegions = computed(() => {
+  if (showAllRegions.value) return regionStats.value
+  return regionStats.value.slice(0, 10)
 })
 
 const barWidth = (val: number, max: number) => max > 0 ? Math.max((val / max) * 100, val > 0 ? 2 : 0) : 0
@@ -359,19 +353,21 @@ onMounted(() => { loadFinancialReport() })
 .method-info { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px; }
 .method-name { font-weight: 500; }
 .method-detail { color: #999; font-size: 13px; }
-.region-header {
-  display: flex; align-items: center; margin-bottom: 8px; font-size: 13px;
-  color: #999; font-weight: 500; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0;
+.region-list-compact { max-height: 320px; overflow-y: auto; }
+.region-list-compact.expanded { max-height: none; }
+.region-row-compact {
+  display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f8f8f8;
+  font-size: 13px;
 }
-.region-item { margin-bottom: 12px; }
-.region-info { display: flex; align-items: center; margin-bottom: 4px; font-size: 14px; }
-.region-rank {
-  width: 24px; height: 24px; border-radius: 50%; background: #f0f0f0;
+.region-rank-sm {
+  width: 20px; height: 20px; border-radius: 50%; background: #f0f0f0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 600; margin-right: 8px; color: #666; flex-shrink: 0;
+  font-size: 11px; font-weight: 600; color: #666; flex-shrink: 0;
 }
-.region-col { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.region-count { color: #999; font-size: 13px; width: 70px; text-align: right; flex-shrink: 0; }
+.region-detail { flex: 0 0 180px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; }
+.region-bar-wrap { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; min-width: 40px; }
+.region-bar { height: 8px; border-radius: 4px; display: block; transition: width 0.3s; }
+.region-count-sm { width: 40px; text-align: right; font-weight: 600; color: #333; flex-shrink: 0; font-size: 13px; }
 @media (max-width: 767px) {
   .stats-container { padding: 8px; }
   .filters-toolbar { flex-direction: column; align-items: stretch !important; gap: 12px; }
@@ -391,10 +387,11 @@ onMounted(() => { loadFinancialReport() })
   .chart-orders { width: auto; font-size: 12px; text-align: right; }
   .bar { height: 16px; }
   .chart-legend { flex-wrap: wrap; }
-  .method-info,
-  .region-info { flex-wrap: wrap; align-items: flex-start; }
   .method-info { flex-direction: column; gap: 2px; }
   .method-detail { font-size: 12px; }
+  .region-detail { flex: 0 0 120px; font-size: 12px; }
+  .region-row-compact { gap: 4px; padding: 4px 0; }
+  .region-rank-sm { width: 16px; height: 16px; font-size: 10px; }
   .mobile-stat-list { display: flex; flex-direction: column; gap: 10px; }
   .mobile-stat-item { padding: 12px; border: 1px solid #e8e8e8; border-radius: 10px; background: #fff; }
   .mobile-stat-main { font-size: 14px; font-weight: 600; color: #333; }

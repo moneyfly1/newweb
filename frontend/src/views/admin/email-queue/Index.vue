@@ -138,6 +138,7 @@
           :page-count="totalPages"
           :page-sizes="[10, 20, 50, 100]"
           show-size-picker
+          style="margin-top: 16px; justify-content: flex-end"
           @update:page="handlePageChange"
           @update:page-size="handlePageSizeChange"
         />
@@ -213,7 +214,7 @@ const emails = ref([])
 const checkedRowKeys = ref([])
 const statusFilter = ref('all')
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 const totalPages = ref(0)
 const totalCount = ref(0)
 const showDetail = ref(false)

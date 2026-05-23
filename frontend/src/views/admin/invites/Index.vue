@@ -88,7 +88,7 @@
                 </div>
               </n-spin>
             </template>
-            <n-pagination v-model:page="codePage" :page-count="codeTotalPages" style="margin-top:16px" @update:page="fetchCodes" />
+            <n-pagination v-model:page="codePage" :page-count="codeTotalPages" style="margin-top: 16px; justify-content: flex-end" @update:page="fetchCodes" />
           </n-tab-pane>
 
           <n-tab-pane name="relations" tab="邀请记录">
@@ -112,7 +112,7 @@
                 </div>
               </n-spin>
             </template>
-            <n-pagination v-model:page="relPage" :page-count="relTotalPages" style="margin-top:16px" @update:page="fetchRelations" />
+            <n-pagination v-model:page="relPage" :page-count="relTotalPages" style="margin-top: 16px; justify-content: flex-end" @update:page="fetchRelations" />
           </n-tab-pane>
         </n-tabs>
       </n-space>

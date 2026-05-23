@@ -11,28 +11,9 @@
             <template #icon><n-icon><PlayOutline /></n-icon></template>
             立即执行采集
           </n-button>
-          <n-button type="warning" secondary :disabled="!status.running" @click="handleStop">
-            <template #icon><n-icon><StopOutline /></n-icon></template>
-            停止
-          </n-button>
-          <n-button @click="fetchStatus" secondary>
-            <template #icon><n-icon><RefreshOutline /></n-icon></template>
-            刷新状态
-          </n-button>
         </n-space>
       </div>
     </div>
-
-    <n-card title="运行状态" :bordered="false" class="admin-main-card">
-      <n-space>
-        <n-tag :type="status.running ? 'success' : 'default'">
-          {{ status.running ? '运行中' : '已停止' }}
-        </n-tag>
-        <n-tag :type="status.scheduled ? 'info' : 'default'">
-          {{ status.scheduled ? '定时任务已启用' : '定时任务未启用' }}
-        </n-tag>
-      </n-space>
-    </n-card>
 
     <n-card title="更新配置" style="margin-top: 16px">
       <n-form :label-placement="appStore.isMobile ? 'top' : 'left'" :label-width="appStore.isMobile ? 'auto' : '120'">
@@ -131,14 +112,12 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { useMessage } from 'naive-ui'
-import { RefreshOutline, PlayOutline, StopOutline, ReorderThreeOutline } from '@vicons/ionicons5'
+import { RefreshOutline, PlayOutline, ReorderThreeOutline } from '@vicons/ionicons5'
 import Sortable from 'sortablejs'
 import {
-  getConfigUpdateStatus,
   getConfigUpdateConfig,
   saveConfigUpdateConfig,
   startConfigUpdate,
-  stopConfigUpdate,
   getConfigUpdateLogs,
   clearConfigUpdateLogs
 } from '@/api/admin'
@@ -153,16 +132,8 @@ const starting = ref(false)
 const saving = ref(false)
 let pollTimer = null
 
-const status = reactive({ running: false, scheduled: false })
 const config = reactive({ urls: [], keywords: [], enabled: false, interval: 60 })
 const logs = ref([])
-
-const fetchStatus = async () => {
-  try {
-    const res = await getConfigUpdateStatus()
-    Object.assign(status, res.data)
-  } catch {}
-}
 
 const fetchConfig = async () => {
   try {
@@ -187,7 +158,6 @@ const handleSaveConfig = async () => {
   try {
     await saveConfigUpdateConfig(config)
     message.success('配置已保存')
-    fetchStatus()
   } catch (error) {
     message.error(error.message || '保存配置失败')
   } finally {
@@ -214,7 +184,6 @@ const handleStart = async () => {
     let fastPollCount = 0
     const fastPollInterval = setInterval(async () => {
       await fetchLogs()
-      await fetchStatus()
       fastPollCount++
       if (fastPollCount >= 10) {
         clearInterval(fastPollInterval)
@@ -225,16 +194,6 @@ const handleStart = async () => {
     message.error(error.message || '启动失败')
   } finally {
     starting.value = false
-  }
-}
-
-const handleStop = async () => {
-  try {
-    await stopConfigUpdate()
-    message.success('更新任务已停止')
-    fetchStatus()
-  } catch (error) {
-    message.error(error.message || '停止失败')
   }
 }
 
@@ -252,7 +211,6 @@ const startPolling = () => {
   stopPolling()
   pollTimer = setInterval(() => {
     fetchLogs()
-    fetchStatus()
   }, 3000)
 }
 
@@ -264,7 +222,6 @@ const stopPolling = () => {
 }
 
 onMounted(() => {
-  fetchStatus()
   fetchConfig()
   fetchLogs()
   startPolling()

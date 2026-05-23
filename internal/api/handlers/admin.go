@@ -1528,6 +1528,7 @@ func AdminImportNodes(c *gin.Context) {
 	}
 
 	cache.ClearAllSubscriptionCache()
+	utils.CreateAuditLog(c, "import_nodes", "node", 0, "从链接导入节点")
 	utils.Success(c, gin.H{
 		"total":   len(nodes),
 		"success": successCount,
@@ -1565,6 +1566,7 @@ func AdminTestNode(c *gin.Context) {
 		return
 	}
 
+	utils.CreateAuditLog(c, "test_node", "node", node.ID, "测试节点延迟")
 	utils.Success(c, gin.H{
 		"node_id":   node.ID,
 		"name":      node.Name,
@@ -1637,6 +1639,7 @@ func AdminCreateCustomNode(c *gin.Context) {
 		utils.InternalError(c, "创建专线节点失败")
 		return
 	}
+	utils.CreateAuditLog(c, "create_custom_node", "custom_node", node.ID, fmt.Sprintf("创建专线节点: %s", node.Name))
 	cache.ClearAllSubscriptionCache()
 	utils.Success(c, node)
 }
@@ -1677,6 +1680,7 @@ func AdminUpdateCustomNode(c *gin.Context) {
 		utils.InternalError(c, "更新专线节点失败")
 		return
 	}
+	utils.CreateAuditLog(c, "update_custom_node", "custom_node", node.ID, fmt.Sprintf("更新专线节点: %s", node.Name))
 	cache.ClearAllSubscriptionCache()
 	utils.Success(c, node)
 }
@@ -1697,6 +1701,7 @@ func AdminDeleteCustomNode(c *gin.Context) {
 		utils.InternalError(c, "删除专线节点失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_custom_node", "custom_node", uint(id), fmt.Sprintf("删除专线节点 ID: %d", id))
 	cache.ClearAllSubscriptionCache()
 	utils.SuccessMessage(c, "专线节点已删除")
 }
@@ -1860,6 +1865,7 @@ func AdminImportCustomNodeLinks(c *gin.Context) {
 	result := db.CreateInBatches(customNodes, 100)
 	successCount := int(result.RowsAffected)
 
+	utils.CreateAuditLog(c, "import_custom_node_links", "custom_node", 0, "导入专线节点链接")
 	cache.ClearAllSubscriptionCache()
 	utils.Success(c, gin.H{
 		"total":   len(nodes),
@@ -1887,6 +1893,7 @@ func AdminBatchDeleteCustomNodes(c *gin.Context) {
 		return
 	}
 	result := db.Where("id IN ?", req.IDs).Delete(&models.CustomNode{})
+	utils.CreateAuditLog(c, "batch_delete_custom_nodes", "custom_node", 0, "批量删除专线节点")
 	cache.ClearAllSubscriptionCache()
 	utils.Success(c, gin.H{
 		"deleted": result.RowsAffected,
@@ -2068,6 +2075,7 @@ func AdminUpdateUserNotes(c *gin.Context) {
 		utils.InternalError(c, "更新备注失败")
 		return
 	}
+	utils.CreateAuditLog(c, "update_user_notes", "user", uint(userID), "更新用户备注")
 	utils.SuccessMessage(c, "备注已更新")
 }
 
@@ -2328,6 +2336,7 @@ func AdminCreateCoupon(c *gin.Context) {
 		utils.InternalError(c, "创建优惠券失败")
 		return
 	}
+	utils.CreateAuditLog(c, "create_coupon", "coupon", coupon.ID, fmt.Sprintf("创建优惠券: %s", coupon.Code))
 	utils.Success(c, coupon)
 }
 
@@ -2369,6 +2378,7 @@ func AdminUpdateCoupon(c *gin.Context) {
 		return
 	}
 	db.First(&coupon, id)
+	utils.CreateAuditLog(c, "update_coupon", "coupon", uint(id), fmt.Sprintf("更新优惠券: %s", coupon.Code))
 	utils.Success(c, coupon)
 }
 
@@ -2382,6 +2392,7 @@ func AdminDeleteCoupon(c *gin.Context) {
 		utils.InternalError(c, "删除优惠券失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_coupon", "coupon", uint(id), fmt.Sprintf("删除优惠券 ID: %d", id))
 	utils.SuccessMessage(c, "优惠券已删除")
 }
 
@@ -2460,6 +2471,7 @@ func AdminUpdateTicket(c *gin.Context) {
 		utils.InternalError(c, "更新工单失败")
 		return
 	}
+	utils.CreateAuditLog(c, "update_ticket", "ticket", uint(id), fmt.Sprintf("更新工单 ID: %d", id))
 	utils.Success(c, ticket)
 }
 
@@ -2487,6 +2499,7 @@ func AdminReplyTicket(c *gin.Context) {
 		utils.InternalError(c, "更新工单状态失败")
 		return
 	}
+	utils.CreateAuditLog(c, "reply_ticket", "ticket", uint(id), fmt.Sprintf("回复工单 ID: %d", id))
 	utils.Success(c, reply)
 }
 
@@ -2525,6 +2538,7 @@ func AdminCreateUserLevel(c *gin.Context) {
 		utils.InternalError(c, "创建用户等级失败")
 		return
 	}
+	utils.CreateAuditLog(c, "create_user_level", "user_level", level.ID, fmt.Sprintf("创建用户等级: %s", level.LevelName))
 	utils.Success(c, level)
 }
 
@@ -2563,6 +2577,7 @@ func AdminUpdateUserLevel(c *gin.Context) {
 		utils.InternalError(c, "更新用户等级失败")
 		return
 	}
+	utils.CreateAuditLog(c, "update_user_level", "user_level", uint(id), fmt.Sprintf("更新用户等级: %s", level.LevelName))
 	utils.Success(c, level)
 }
 
@@ -2576,6 +2591,7 @@ func AdminDeleteUserLevel(c *gin.Context) {
 		utils.InternalError(c, "删除用户等级失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_user_level", "user_level", uint(id), fmt.Sprintf("删除用户等级 ID: %d", id))
 	utils.SuccessMessage(c, "等级已删除")
 }
 
@@ -2637,6 +2653,7 @@ func AdminCreateRedeemCodes(c *gin.Context) {
 	for i, rc := range codes {
 		codeStrings[i] = rc.Code
 	}
+	utils.CreateAuditLog(c, "create_redeem_codes", "redeem_code", 0, "批量生成兑换码")
 	utils.Success(c, gin.H{"codes": codeStrings})
 }
 
@@ -2650,6 +2667,7 @@ func AdminDeleteRedeemCode(c *gin.Context) {
 		utils.InternalError(c, "删除卡密失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_redeem_code", "redeem_code", uint(id), fmt.Sprintf("删除兑换码 ID: %d", id))
 	utils.SuccessMessage(c, "卡密已删除")
 }
 
@@ -2680,6 +2698,7 @@ func AdminRetryEmail(c *gin.Context) {
 		utils.InternalError(c, "重试邮件失败")
 		return
 	}
+	utils.CreateAuditLog(c, "retry_email", "email_queue", uint(id), fmt.Sprintf("重试发送邮件 ID: %d", id))
 	utils.SuccessMessage(c, "已重新加入队列")
 }
 
@@ -2693,6 +2712,7 @@ func AdminDeleteEmail(c *gin.Context) {
 		utils.InternalError(c, "删除失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_email", "email_queue", uint(id), fmt.Sprintf("删除邮件队列 ID: %d", id))
 	utils.SuccessMessage(c, "邮件记录已删除")
 }
 
@@ -2758,6 +2778,7 @@ func AdminCreateAnnouncement(c *gin.Context) {
 		utils.InternalError(c, "创建公告失败")
 		return
 	}
+	utils.CreateAuditLog(c, "create_announcement", "announcement", ann.ID, fmt.Sprintf("创建公告: %s", ann.Title))
 	utils.Success(c, ann)
 }
 
@@ -2794,6 +2815,7 @@ func AdminUpdateAnnouncement(c *gin.Context) {
 		utils.InternalError(c, "更新公告失败")
 		return
 	}
+	utils.CreateAuditLog(c, "update_announcement", "announcement", uint(id), fmt.Sprintf("更新公告: %s", ann.Title))
 	utils.Success(c, ann)
 }
 
@@ -2807,6 +2829,7 @@ func AdminDeleteAnnouncement(c *gin.Context) {
 		utils.InternalError(c, "删除公告失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_announcement", "announcement", uint(id), fmt.Sprintf("删除公告 ID: %d", id))
 	utils.SuccessMessage(c, "公告已删除")
 }
 
@@ -3012,6 +3035,7 @@ func AdminCreateBackup(c *gin.Context) {
 		}
 	}
 
+	utils.CreateAuditLog(c, "create_backup", "backup", 0, fmt.Sprintf("创建备份: %s", result.Filename))
 	utils.Success(c, response)
 }
 
@@ -3267,6 +3291,7 @@ func AdminTestGitHubConnection(c *gin.Context) {
 		utils.BadRequest(c, "GitHub 连接测试失败: "+err.Error())
 		return
 	}
+	utils.CreateAuditLog(c, "test_github", "backup", 0, "测试GitHub连接")
 	utils.Success(c, gin.H{"message": "GitHub 连接测试成功"})
 }
 
@@ -3368,6 +3393,7 @@ func AdminBackfillLocations(c *gin.Context) {
 		}
 	}
 
+	utils.CreateAuditLog(c, "backfill_locations", "settings", 0, "回填IP位置信息")
 	utils.Success(c, gin.H{
 		"backfilled": backfilled,
 		"message":    "历史地区数据回填完成",
@@ -3450,6 +3476,7 @@ func AdminUpdateGeoIP(c *gin.Context) {
 		}
 	}
 
+	utils.CreateAuditLog(c, "update_geoip", "settings", 0, "更新GeoIP数据库")
 	utils.Success(c, gin.H{
 		"updated": updated,
 		"message": "GeoIP 数据更新成功",
@@ -3605,6 +3632,7 @@ func AdminSendTestEmail(c *gin.Context) {
 		utils.InternalError(c, "发送失败: "+err.Error())
 		return
 	}
+	utils.CreateAuditLog(c, "send_test_email", "settings", 0, "发送测试邮件")
 	utils.SuccessMessage(c, "测试邮件已发送至 "+req.Email)
 }
 
@@ -3613,6 +3641,7 @@ func AdminTestTelegram(c *gin.Context) {
 		utils.InternalError(c, "发送失败: "+err.Error())
 		return
 	}
+	utils.CreateAuditLog(c, "test_telegram", "settings", 0, "测试Telegram通知")
 	utils.SuccessMessage(c, "Telegram 测试消息已发送")
 }
 
@@ -3621,6 +3650,7 @@ func AdminTestBark(c *gin.Context) {
 		utils.InternalError(c, "发送失败: "+err.Error())
 		return
 	}
+	utils.CreateAuditLog(c, "test_bark", "settings", 0, "测试Bark通知")
 	utils.SuccessMessage(c, "Bark 测试消息已发送")
 }
 
@@ -3729,6 +3759,7 @@ func AdminSendSubscriptionEmail(c *gin.Context) {
 		"expire_time": sub.ExpireTime.Format("2006-01-02 15:04"),
 	})
 	go services.QueueEmail(user.Email, subject, body, "subscription")
+	utils.CreateAuditLog(c, "send_subscription_email", "subscription", sub.ID, fmt.Sprintf("向用户发送订阅邮件: %s", user.Email))
 	utils.SuccessMessage(c, "订阅信息已发送至 "+user.Email)
 }
 
@@ -4476,6 +4507,7 @@ func AdminExportUsersCSV(c *gin.Context) {
 	}
 
 	filename := fmt.Sprintf("users_%s.csv", time.Now().Format("2006-01-02"))
+	utils.CreateAuditLog(c, "export_users_csv", "user", 0, "导出用户CSV")
 	c.Status(200)
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))

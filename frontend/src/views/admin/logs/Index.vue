@@ -11,6 +11,8 @@
               :loading="auditLoading"
               :pagination="auditPagination"
               :bordered="false"
+              :scroll-x="1100"
+              :single-line="false"
               @update:sorter="handleAuditSorterChange"
             />
           </template>
@@ -23,10 +25,10 @@
                 <div class="card-body">
                   <div class="card-row"><span class="card-label">管理员ID:</span><span>{{ item.user_id }}</span></div>
                   <div class="card-row"><span class="card-label">操作:</span><span>{{ item.action_type }}</span></div>
-                  <div class="card-row"><span class="card-label">目标类型:</span><span>{{ item.resource_type }}</span></div>
-                  <div class="card-row"><span class="card-label">目标ID:</span><span>{{ item.resource_id }}</span></div>
-                  <div class="card-row"><span class="card-label">IP地址:</span><span>{{ item.ip_address }}</span></div>
-                  <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at }}</span></div>
+                  <div class="card-row"><span class="card-label">描述:</span><span>{{ item.action_description }}</span></div>
+                  <div class="card-row"><span class="card-label">目标:</span><span>{{ item.resource_type }} #{{ item.resource_id }}</span></div>
+                  <div class="card-row"><span class="card-label">IP:</span><span>{{ item.ip_address }}</span></div>
+                  <div class="card-row"><span class="card-label">时间:</span><span>{{ item.created_at }}</span></div>
                 </div>
               </div>
             </div>
@@ -318,13 +320,14 @@ const auditPagination = reactive({
 })
 
 const auditColumns: DataTableColumns = [
-  { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
-  { title: '管理员ID', key: 'user_id', width: 100, resizable: true },
-  { title: '操作', key: 'action_type', width: 150, resizable: true },
-  { title: '目标类型', key: 'resource_type', width: 120, resizable: true },
-  { title: '目标ID', key: 'resource_id', width: 100, resizable: true },
-  { title: 'IP地址', key: 'ip_address', width: 140, resizable: true },
-  { title: '创建时间', key: 'created_at', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
+  { title: 'ID', key: 'id', width: 70, resizable: true, sorter: 'default' },
+  { title: '管理员ID', key: 'user_id', width: 90, resizable: true },
+  { title: '操作类型', key: 'action_type', width: 170, resizable: true },
+  { title: '目标类型', key: 'resource_type', width: 110, resizable: true },
+  { title: '目标ID', key: 'resource_id', width: 80, resizable: true },
+  { title: '描述', key: 'action_description', width: 240, resizable: true, ellipsis: { tooltip: true } },
+  { title: 'IP', key: 'ip_address', width: 130, resizable: true },
+  { title: '时间', key: 'created_at', width: 170, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
 ]
 
 // Login logs

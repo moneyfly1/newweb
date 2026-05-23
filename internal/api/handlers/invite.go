@@ -81,6 +81,7 @@ func AdminDeleteInviteCode(c *gin.Context) {
 		utils.InternalError(c, "删除失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_invite_code", "invite_code", 0, fmt.Sprintf("删除邀请码 ID: %s", id))
 	utils.SuccessMessage(c, "邀请码已删除")
 }
 
@@ -101,6 +102,7 @@ func AdminToggleInviteCode(c *gin.Context) {
 	if !code.IsActive {
 		msg = "已禁用"
 	}
+	utils.CreateAuditLog(c, "toggle_invite_code", "invite_code", code.ID, fmt.Sprintf("切换邀请码状态 ID: %d", code.ID))
 	utils.SuccessMessage(c, "邀请码"+msg)
 }
 

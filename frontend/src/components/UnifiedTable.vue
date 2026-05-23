@@ -49,7 +49,7 @@
         :item-count="totalCount"
         :page-sizes="pageSizes"
         show-size-picker
-        style="margin-top: 16px; justify-content: center"
+        style="margin-top: 16px; justify-content: flex-end"
         @update:page="handlePageChange"
         @update:page-size="handlePageSizeChange"
       />

@@ -125,7 +125,7 @@
           :columns="columns"
           :data="tableData"
           :loading="loading"
-          :pagination="pagination"
+          :pagination="false"
           :bordered="false"
           :single-line="false"
           :row-key="(row: any) => row.id"
@@ -133,8 +133,6 @@
           class="unified-admin-table"
           @update:checked-row-keys="handleCheck"
           @update:sorter="handleSorterChange"
-          @update:page="(p: number) => { pagination.page = p; fetchData() }"
-          @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
         />
       </template>
 
@@ -208,8 +206,9 @@
         v-model:page="pagination.page"
         v-model:page-size="pagination.pageSize"
         :page-count="Math.ceil(pagination.itemCount / pagination.pageSize)"
-        :page-sizes="[20, 50, 100]"
+        :page-sizes="[10, 20, 50, 100]"
         show-size-picker
+        style="margin-top: 16px; justify-content: flex-end"
         @update:page="(p: number) => { pagination.page = p; fetchData() }"
         @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
       />
@@ -220,6 +219,7 @@
         v-model:page="pagination.page"
         :page-count="Math.ceil(pagination.itemCount / pagination.pageSize)"
         size="small"
+        style="margin-top: 16px; justify-content: flex-end"
         @update:page="(p: number) => { pagination.page = p; fetchData() }"
       />
     </n-card>
@@ -297,7 +297,7 @@ const regionOptions = computed(() => {
 })
 
 const sortState = ref({ sort: 'order_index', order: 'asc' })
-const pagination = reactive({ page: 1, pageSize: 20, itemCount: 0, showSizePicker: true, pageSizes: [20, 50, 100] })
+const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
 
 const formData = reactive({ name: '', region: '', is_active: true, order_index: 0, description: '' })
 const rules = { name: { required: true, message: '请输入节点名称' } }

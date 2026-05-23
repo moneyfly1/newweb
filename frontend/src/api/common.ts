@@ -13,7 +13,7 @@ export const verifyCoupon = (data: { code: string; package_id: number }) =>
 export const getMyCoupons = () => request.get('/coupons/my')
 export const listInviteCodes = (params?: any) => request.get('/invites', { params })
 export const createInviteCode = (data: any) => request.post('/invites', data)
-export const getInviteStats = () => request.get('/invites/stats')
+export const getInviteStats = (params?: any) => request.get('/invites/stats', { params })
 export const getMyCodes = () => request.get('/invites/my-codes')
 export const validateInviteCode = (code: string) => request.get(`/invites/validate/${code}`)
 export const redeemCode = (data: { code: string }) => request.post('/redeem', data)

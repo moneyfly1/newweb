@@ -201,7 +201,7 @@
             :item-count="pagination.itemCount"
             :page-sizes="pagination.pageSizes"
             :show-size-picker="pagination.showSizePicker"
-            style="margin-top: 16px"
+            style="margin-top: 16px; justify-content: flex-end"
             @update:page="() => fetchOrders()"
             @update:page-size="() => { pagination.page = 1; fetchOrders() }"
           />
@@ -281,7 +281,7 @@ const orders = ref<any[]>([])
 const orderStats = ref<any>({})
 const searchQuery = ref((route.query.order_no as string) || '')
 const statusFilter = ref(null)
-const pagination = reactive({ page: 1, pageSize: 20, itemCount: 0, showSizePicker: true, pageSizes: [20, 50, 100] })
+const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
 const checkedRowKeys = ref<number[]>([])
 
 const showDetailDrawer = ref(false)

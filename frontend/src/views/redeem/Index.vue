@@ -29,6 +29,17 @@
           </div>
         </div>
       </template>
+      <n-pagination
+        v-if="totalHistory > pageSize"
+        v-model:page="currentPage"
+        v-model:page-size="pageSize"
+        :item-count="totalHistory"
+        :page-sizes="[10, 20, 50]"
+        show-size-picker
+        style="margin-top: 16px; justify-content: flex-end"
+        @update:page="handlePageChange"
+        @update:page-size="handlePageSizeChange"
+      />
     </n-card>
   </div>
 </template>
@@ -48,6 +59,9 @@ const submitting = ref(false)
 const result = ref<{ type: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null)
 const history = ref<any[]>([])
 const loadingHistory = ref(false)
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalHistory = ref(0)
 
 const columns = [
   { title: '兑换码', key: 'code' },
@@ -93,13 +107,31 @@ const handleRedeem = async () => {
 const loadHistory = async () => {
   loadingHistory.value = true
   try {
-    const res: any = await getRedeemHistory()
-    history.value = res.data?.items || res.data || []
+    const res: any = await getRedeemHistory({ page: currentPage.value, page_size: pageSize.value })
+    const data = res.data
+    if (Array.isArray(data)) {
+      history.value = data
+      totalHistory.value = data.length
+    } else {
+      history.value = data?.items || []
+      totalHistory.value = data?.total || 0
+    }
   } catch (e: any) {
     message.error(e.message || '加载兑换记录失败')
   } finally {
     loadingHistory.value = false
   }
+}
+
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  loadHistory()
+}
+
+const handlePageSizeChange = (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1
+  loadHistory()
 }
 
 onMounted(() => {

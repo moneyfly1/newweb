@@ -149,8 +149,8 @@
               </div>
             </div>
           </div>
-          <div class="pagination-center">
-            <n-pagination v-model:page="pagination.page" :page-count="Math.ceil((pagination.itemCount||0)/(pagination.pageSize||20))" @update:page="(p) => { pagination.page = p; fetchData() }" />
+          <div class="pagination-wrap">
+            <n-pagination v-model:page="pagination.page" :page-count="Math.ceil((pagination.itemCount||0)/(pagination.pageSize||10))" @update:page="(p) => { pagination.page = p; fetchData() }" />
           </div>
         </n-spin>
       </template>
@@ -273,7 +273,7 @@ const searchQuery = ref('')
 const statusFilter = ref(null)
 const tableData = ref([])
 const sortState = ref({ sort: 'id', order: 'desc' })
-const pagination = ref({ page: 1, pageSize: 20, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
+const pagination = ref({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
 const showDetailDrawer = ref(false)
 const showQRModal = ref(false)
 const showSingleQRModal = ref(false)

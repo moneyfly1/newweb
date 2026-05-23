@@ -128,7 +128,7 @@
           :item-count="pagination.itemCount"
           :page-sizes="pagination.pageSizes"
           show-size-picker
-          style="margin-top: 16px; justify-content: center"
+          style="margin-top: 16px; justify-content: flex-end"
           @update:page="fetchData"
           @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
         />

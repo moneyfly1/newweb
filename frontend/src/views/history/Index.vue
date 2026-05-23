@@ -66,7 +66,7 @@
             v-model:page="pagination.page"
             :item-count="pagination.itemCount"
             :page-size="pagination.pageSize"
-            style="margin-top: 16px; justify-content: center;"
+            style="margin-top: 16px; justify-content: flex-end"
             @update:page="(p: number) => { pagination.page = p; loadHistory() }"
           />
         </div>

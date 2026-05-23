@@ -56,6 +56,7 @@ func AdminCreateMysteryBoxPool(c *gin.Context) {
 		utils.InternalError(c, "创建奖池失败")
 		return
 	}
+	utils.CreateAuditLog(c, "create_mystery_box_pool", "mystery_box_pool", pool.ID, fmt.Sprintf("创建盲盒奖池: %s", pool.Name))
 	utils.Success(c, pool)
 }
 
@@ -88,6 +89,7 @@ func AdminUpdateMysteryBoxPool(c *gin.Context) {
 		return
 	}
 	db.Preload("Prizes").First(&pool, id)
+	utils.CreateAuditLog(c, "update_mystery_box_pool", "mystery_box_pool", pool.ID, fmt.Sprintf("更新盲盒奖池: %s", pool.Name))
 	utils.Success(c, pool)
 }
 
@@ -108,6 +110,7 @@ func AdminDeleteMysteryBoxPool(c *gin.Context) {
 		utils.InternalError(c, "删除奖池失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_mystery_box_pool", "mystery_box_pool", uint(id), fmt.Sprintf("删除盲盒奖池 ID: %d", id))
 	utils.SuccessMessage(c, "删除成功")
 }
 
@@ -147,6 +150,7 @@ func AdminAddPrize(c *gin.Context) {
 		utils.InternalError(c, "添加奖品失败")
 		return
 	}
+	utils.CreateAuditLog(c, "add_prize", "mystery_box_prize", prize.ID, fmt.Sprintf("添加盲盒奖品: %s", prize.Name))
 	utils.Success(c, prize)
 }
 
@@ -177,6 +181,7 @@ func AdminUpdatePrize(c *gin.Context) {
 		return
 	}
 	db.First(&prize, id)
+	utils.CreateAuditLog(c, "update_prize", "mystery_box_prize", prize.ID, fmt.Sprintf("更新盲盒奖品: %s", prize.Name))
 	utils.Success(c, prize)
 }
 
@@ -191,6 +196,7 @@ func AdminDeletePrize(c *gin.Context) {
 		utils.InternalError(c, "删除奖品失败")
 		return
 	}
+	utils.CreateAuditLog(c, "delete_prize", "mystery_box_prize", uint(id), fmt.Sprintf("删除盲盒奖品 ID: %d", id))
 	utils.SuccessMessage(c, "删除成功")
 }
 

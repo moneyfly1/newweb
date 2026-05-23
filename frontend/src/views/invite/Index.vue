@@ -114,6 +114,17 @@
             </div>
           </template>
         </n-spin>
+        <n-pagination
+          v-if="codeTotal > codePageSize"
+          v-model:page="codePage"
+          v-model:page-size="codePageSize"
+          :item-count="codeTotal"
+          :page-sizes="[10, 20, 50]"
+          show-size-picker
+          style="margin-top: 16px; justify-content: flex-end"
+          @update:page="(p: number) => { codePage = p; fetchInviteCodes() }"
+          @update:page-size="(s: number) => { codePageSize = s; codePage = 1; fetchInviteCodes() }"
+        />
       </n-card>
 
       <!-- 最近邀请记录 -->
@@ -149,6 +160,17 @@
             </div>
           </template>
         </n-spin>
+        <n-pagination
+          v-if="recentTotal > recentPageSize"
+          v-model:page="recentPage"
+          v-model:page-size="recentPageSize"
+          :item-count="recentTotal"
+          :page-sizes="[10, 20, 50]"
+          show-size-picker
+          style="margin-top: 16px; justify-content: flex-end"
+          @update:page="(p: number) => { recentPage = p; fetchStats() }"
+          @update:page-size="(s: number) => { recentPageSize = s; recentPage = 1; fetchStats() }"
+        />
       </n-card>
     </n-space>
 
@@ -260,6 +282,12 @@ const creating = ref(false)
 const showCreateModal = ref(false)
 const inviteCodes = ref<InviteCode[]>([])
 const recentInvites = ref<RecentInvite[]>([])
+const codePage = ref(1)
+const codePageSize = ref(10)
+const codeTotal = ref(0)
+const recentPage = ref(1)
+const recentPageSize = ref(10)
+const recentTotal = ref(0)
 const stats = ref<Stats>({
   total_invites: 0,
   registered_invites: 0,
@@ -543,8 +571,15 @@ const recentColumns = [
 const fetchInviteCodes = async () => {
   loading.value = true
   try {
-    const res = await listInviteCodes()
-    inviteCodes.value = res.data || []
+    const res = await listInviteCodes({ page: codePage.value, page_size: codePageSize.value })
+    const data = res.data
+    if (Array.isArray(data)) {
+      inviteCodes.value = data
+      codeTotal.value = data.length
+    } else {
+      inviteCodes.value = data?.items || []
+      codeTotal.value = data?.total || 0
+    }
   } catch (error: any) {
     message.error(error.message || '获取邀请码列表失败')
   } finally {
@@ -555,7 +590,7 @@ const fetchInviteCodes = async () => {
 const fetchStats = async () => {
   loadingRecent.value = true
   try {
-    const res = await getInviteStats()
+    const res = await getInviteStats({ page: recentPage.value, page_size: recentPageSize.value })
     if (res.data) {
       stats.value = {
         total_invites: res.data.total_invites || 0,
@@ -565,6 +600,7 @@ const fetchStats = async () => {
         recent_invites: res.data.recent_invites || []
       }
       recentInvites.value = res.data.recent_invites || []
+      recentTotal.value = res.data.total || res.data.recent_invites?.length || 0
     }
   } catch {
     // silently ignore

@@ -58,6 +58,18 @@
           </div>
         </div>
       </template>
+
+      <n-pagination
+        v-if="totalLevels > pageSize"
+        v-model:page="currentPage"
+        v-model:page-size="pageSize"
+        :item-count="totalLevels"
+        :page-sizes="[10, 20, 50]"
+        show-size-picker
+        style="margin-top: 16px; justify-content: flex-end"
+        @update:page="handlePageChange"
+        @update:page-size="handlePageSizeChange"
+      />
     </n-card>
 
     <common-drawer
@@ -147,6 +159,9 @@ const checkedRowKeys = ref<any[]>([])
 const showDrawer = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalLevels = ref(0)
 
 const formData = reactive({
   id: 0,
@@ -220,13 +235,31 @@ const columns = [
 const loadLevels = async () => {
   loading.value = true
   try {
-    const res = await listUserLevels()
-    levels.value = res.data.items || res.data || []
+    const res = await listUserLevels({ page: currentPage.value, page_size: pageSize.value })
+    const data = res.data
+    if (Array.isArray(data)) {
+      levels.value = data
+      totalLevels.value = data.length
+    } else {
+      levels.value = data.items || []
+      totalLevels.value = data.total || 0
+    }
   } catch (error: any) {
     message.error(error.message || '加载等级列表失败')
   } finally {
     loading.value = false
   }
+}
+
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  loadLevels()
+}
+
+const handlePageSizeChange = (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1
+  loadLevels()
 }
 
 const resetForm = () => {

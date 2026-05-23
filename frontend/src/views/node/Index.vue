@@ -97,6 +97,18 @@
         </template>
       </n-spin>
     </div>
+    <!-- Pagination -->
+    <n-pagination
+      v-if="totalNodes > pageSize"
+      v-model:page="currentPage"
+      v-model:page-size="pageSize"
+      :item-count="totalNodes"
+      :page-sizes="[20, 50, 100]"
+      show-size-picker
+      style="margin-top: 16px; justify-content: flex-end"
+      @update:page="handlePageChange"
+      @update:page-size="handlePageSizeChange"
+    />
     <!-- Mobile Cards -->
     <div class="mobile-cards">
       <n-spin :show="loading">
@@ -166,6 +178,9 @@ const filterRegion = ref<string | null>(null)
 const filterProtocol = ref<string | null>(null)
 const testingNodes = ref<Record<number, boolean>>({})
 const testResults = ref<Record<number, string>>({})
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalNodes = ref(0)
 
 const stats = computed(() => {
   const all = nodes.value
@@ -265,8 +280,9 @@ const handleTestNode = async (node: Node) => {
 const fetchNodes = async () => {
   loading.value = true
   try {
-    const res = await listNodes({ page_size: 100 })
+    const res = await listNodes({ page: currentPage.value, page_size: pageSize.value })
     const items = res.data?.items || res.data || []
+    totalNodes.value = res.data?.total || items.length
     nodes.value = items.map((n: any) => ({
       id: n.id,
       name: n.name,
@@ -280,6 +296,17 @@ const fetchNodes = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  fetchNodes()
+}
+
+const handlePageSizeChange = (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1
+  fetchNodes()
 }
 
 onMounted(() => { fetchNodes() })

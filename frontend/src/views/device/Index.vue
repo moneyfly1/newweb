@@ -24,6 +24,7 @@
             :data="devices"
             :bordered="false"
             :single-line="false"
+            :pagination="false"
           />
           <!-- Mobile card list -->
           <div v-else class="mobile-card-list">
@@ -59,6 +60,17 @@
           </div>
         </template>
       </n-spin>
+      <n-pagination
+        v-if="totalDevices > pageSize"
+        v-model:page="currentPage"
+        v-model:page-size="pageSize"
+        :item-count="totalDevices"
+        :page-sizes="[10, 20, 50]"
+        show-size-picker
+        style="margin-top: 16px; justify-content: flex-end"
+        @update:page="handlePageChange"
+        @update:page-size="handlePageSizeChange"
+      />
     </n-card>
 
     <common-drawer
@@ -106,6 +118,9 @@ const loading = ref(false)
 const devices = ref<Device[]>([])
 const showDeleteModal = ref(false)
 const deleteDeviceId = ref<number | null>(null)
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalDevices = ref(0)
 
 const parseDeviceName = (userAgent: string): string => {
   // 使用统一的设备解析函数
@@ -200,13 +215,31 @@ const columns = [
 const fetchDevices = async () => {
   loading.value = true
   try {
-    const res = await getSubscriptionDevices()
-    devices.value = res.data || []
+    const res = await getSubscriptionDevices({ page: currentPage.value, page_size: pageSize.value })
+    const data = res.data
+    if (Array.isArray(data)) {
+      devices.value = data
+      totalDevices.value = data.length
+    } else {
+      devices.value = data?.items || []
+      totalDevices.value = data?.total || 0
+    }
   } catch (error: any) {
     message.error(error.message || '获取设备列表失败')
   } finally {
     loading.value = false
   }
+}
+
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  fetchDevices()
+}
+
+const handlePageSizeChange = (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1
+  fetchDevices()
 }
 
 const handleDelete = (id: number) => {

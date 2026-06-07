@@ -305,7 +305,7 @@ const getRowUniversalUrl = (row) => {
   if (row?.universal_url) return row.universal_url
   if (row?.subscription_url && typeof window !== 'undefined') {
     const base = window.location.origin.replace(/\/$/, '')
-    return `${base}/api/v1/sub/${row.subscription_url}`
+    return `${base}/api/v1/client/subscribe?token=${row.subscription_url}`
   }
   return ''
 }
@@ -313,7 +313,7 @@ const getRowClashUrl = (row) => {
   if (row?.clash_url) return row.clash_url
   if (row?.subscription_url && typeof window !== 'undefined') {
     const base = window.location.origin.replace(/\/$/, '')
-    return `${base}/api/v1/sub/clash/${row.subscription_url}`
+    return `${base}/api/v1/client/subscribe?token=${row.subscription_url}&type=clash`
   }
   return ''
 }

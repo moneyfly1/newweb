@@ -414,7 +414,7 @@ const remainingDaysType = computed(() => {
 const shadowrocketQrData = computed(() => {
   const url = subscription.value.token_url
   if (!url) return ''
-  return `shadowrocket://add/${encodeURIComponent(url)}`
+  return 'sub://' + btoa(url)
 })
 
 watch(quickSubItems, (items) => {

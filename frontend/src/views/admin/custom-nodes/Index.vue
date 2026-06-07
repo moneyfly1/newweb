@@ -238,8 +238,23 @@
             placeholder="不设置则跟随订阅到期时间"
           />
         </n-form-item>
+        <n-form-item label="显示模式">
+          <n-switch v-model:value="assignDedicatedOnly">
+            <template #checked>
+              只显示专线节点
+            </template>
+            <template #unchecked>
+              显示全部节点
+            </template>
+          </n-switch>
+        </n-form-item>
         <n-alert type="info" style="margin-top: 12px">
-          设置独立到期时间后，用户订阅将只显示专线节点，且不受设备数量限制。
+          <template v-if="assignDedicatedOnly">
+            开启后，用户订阅将<b>只显示专线节点</b>，且不受设备数量限制。适合独享专线用户。
+          </template>
+          <template v-else>
+            关闭时，专线节点将<b>附加到公共节点列表</b>中，用户可同时使用专线和公共节点。
+          </template>
         </n-alert>
       </n-form>
     </common-drawer>
@@ -338,6 +353,7 @@ const assignNodeId = ref(null)
 const assignNodeIds = ref([])
 const assignUserIds = ref([])
 const assignExpiresAt = ref(null)
+const assignDedicatedOnly = ref(false)
 const userOptions = ref([])
 const showImportDrawer = ref(false)
 const showLinkModal = ref(false)
@@ -630,6 +646,8 @@ const handleAssign = (row) => {
   assignNodeId.value = row.id
   assignNodeIds.value = [row.id]
   assignUserIds.value = []
+  assignExpiresAt.value = null
+  assignDedicatedOnly.value = false
   showAssignDrawer.value = true
   if (userOptions.value.length === 0) {
     fetchUsers()
@@ -641,6 +659,8 @@ const handleBatchAssign = () => {
   assignNodeId.value = null
   assignNodeIds.value = [...checkedRowKeys.value]
   assignUserIds.value = []
+  assignExpiresAt.value = null
+  assignDedicatedOnly.value = false
   showAssignDrawer.value = true
   if (userOptions.value.length === 0) {
     fetchUsers()
@@ -665,14 +685,16 @@ const handleAssignSubmit = async () => {
     if (assignNodeIds.value.length === 1) {
       await assignCustomNode(assignNodeIds.value[0], {
         user_ids: assignUserIds.value,
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        dedicated_only: assignDedicatedOnly.value
       })
       message.success('分配节点成功')
     } else {
       const res = await batchAssignCustomNodes({
         ids: assignNodeIds.value,
         user_ids: assignUserIds.value,
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        dedicated_only: assignDedicatedOnly.value
       })
       const successCount = res.data?.success || 0
       const totalCount = res.data?.total || assignNodeIds.value.length

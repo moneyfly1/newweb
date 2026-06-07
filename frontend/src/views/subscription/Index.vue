@@ -642,7 +642,7 @@ const showQrCode = async (url: string, label: string, mode: 'shadowrocket' | 'ra
   qrHint.value = mode === 'shadowrocket'
     ? '请直接使用 Shadowrocket 扫描二维码，一键添加订阅'
     : '使用客户端扫描二维码导入订阅'
-  const qrValue = mode === 'shadowrocket' ? `shadowrocket://add/${encodeURIComponent(url)}` : url
+  const qrValue = mode === 'shadowrocket' ? 'sub://' + btoa(url) : url
   showQrModal.value = true
   await nextTick()
   if (qrCanvas.value) {

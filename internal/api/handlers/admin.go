@@ -1716,6 +1716,7 @@ func AdminAssignCustomNode(c *gin.Context) {
 		UserIDs       []uint     `json:"user_ids" binding:"required"`
 		ExpiresAt     *time.Time `json:"expires_at"`
 		DedicatedOnly bool       `json:"dedicated_only"`
+		LimitDevices  bool       `json:"limit_devices"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -1725,7 +1726,7 @@ func AdminAssignCustomNode(c *gin.Context) {
 		utils.BadRequest(c, "请选择要分配的用户")
 		return
 	}
-	if err := replaceCustomNodeAssignments(database.GetDB(), uint(id), req.UserIDs, req.ExpiresAt, req.DedicatedOnly); err != nil {
+	if err := replaceCustomNodeAssignments(database.GetDB(), uint(id), req.UserIDs, req.ExpiresAt, req.DedicatedOnly, req.LimitDevices); err != nil {
 		utils.InternalError(c, err.Error())
 		return
 	}
@@ -1740,6 +1741,7 @@ func AdminBatchAssignCustomNodes(c *gin.Context) {
 		UserIDs       []uint     `json:"user_ids" binding:"required"`
 		ExpiresAt     *time.Time `json:"expires_at"`
 		DedicatedOnly bool       `json:"dedicated_only"`
+		LimitDevices  bool       `json:"limit_devices"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -1760,7 +1762,7 @@ func AdminBatchAssignCustomNodes(c *gin.Context) {
 	successCount := 0
 
 	for _, nodeID := range uniqueNodeIDs {
-		if err := replaceCustomNodeAssignments(db, nodeID, uniqueUserIDs, req.ExpiresAt, req.DedicatedOnly); err == nil {
+		if err := replaceCustomNodeAssignments(db, nodeID, uniqueUserIDs, req.ExpiresAt, req.DedicatedOnly, req.LimitDevices); err == nil {
 			successCount++
 		}
 	}
@@ -1779,7 +1781,7 @@ func AdminBatchAssignCustomNodes(c *gin.Context) {
 	})
 }
 
-func replaceCustomNodeAssignments(db *gorm.DB, nodeID uint, userIDs []uint, expiresAt *time.Time, dedicatedOnly bool) error {
+func replaceCustomNodeAssignments(db *gorm.DB, nodeID uint, userIDs []uint, expiresAt *time.Time, dedicatedOnly bool, limitDevices bool) error {
 	var node models.CustomNode
 	if err := db.First(&node, nodeID).Error; err != nil {
 		return fmt.Errorf("专线节点不存在")
@@ -1795,7 +1797,10 @@ func replaceCustomNodeAssignments(db *gorm.DB, nodeID uint, userIDs []uint, expi
 		}
 		assignments := make([]models.UserCustomNode, 0, len(uniqueUserIDs))
 		for _, uid := range uniqueUserIDs {
-			assignments = append(assignments, models.UserCustomNode{UserID: uid, CustomNodeID: nodeID, ExpiresAt: expiresAt, DedicatedOnly: dedicatedOnly})
+			assignments = append(assignments, models.UserCustomNode{
+				UserID: uid, CustomNodeID: nodeID,
+				ExpiresAt: expiresAt, DedicatedOnly: dedicatedOnly, LimitDevices: limitDevices,
+			})
 		}
 		if err := tx.CreateInBatches(assignments, 100).Error; err != nil {
 			return fmt.Errorf("分配专线节点失败")

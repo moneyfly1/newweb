@@ -53,7 +53,8 @@ type subscriptionContext struct {
 	CurrentDevices    int
 	DeviceLimit       int
 	ClientInfo        *services.ClientInfo
-	HasDedicatedOnly bool // 用户有"只显示专线"标记，订阅只含专线节点且不受设备数限制
+	HasDedicatedOnly    bool // 用户有"只显示专线"标记，订阅只含专线节点
+	HasUnlimitedDevices bool // 用户有不限制设备标记，跳过设备数量限制
 }
 
 // getSubscriptionSiteConfig reads site URL and support contact from system_configs
@@ -201,7 +202,7 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 	// Browser requests: allow access but don't count as device
 	if clientInfo.IsBrowser {
-		customNodes, hasDedicated := fetchUserCustomNodes(db, sub.UserID, sub.ExpireTime)
+		customNodes, hasDedicated, _ := fetchUserCustomNodes(db, sub.UserID, sub.ExpireTime)
 		var nodes []models.Node
 		if hasDedicated {
 			nodes = customNodes
@@ -218,8 +219,8 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	// Device fingerprint tracking using feature-based hash
 	ip := utils.GetRealClientIP(c)
 
-	// 检查专线节点：确定节点列表和是否"只显示专线"模式
-	customNodes, hasDedicated := fetchUserCustomNodes(db, sub.UserID, sub.ExpireTime)
+	// 检查专线节点：确定节点列表、"只显示专线"模式、以及是否不限制设备
+	customNodes, hasDedicated, hasUnlimited := fetchUserCustomNodes(db, sub.UserID, sub.ExpireTime)
 	if hasDedicated {
 		ctx.HasDedicatedOnly = true
 		ctx.Nodes = customNodes
@@ -228,9 +229,11 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		db.Where("is_active = ? AND status = ?", true, "online").Order("order_index ASC").Find(&publicNodes)
 		ctx.Nodes = append(customNodes, publicNodes...)
 	}
+	ctx.HasUnlimitedDevices = hasUnlimited
 	ctx.Status = subStatusOK
 
-	// 设备追踪：所有非浏览器客户端都应记录设备（专线模式仅跳过设备数限制，不跳过设备记录）
+	// 设备追踪：所有非浏览器客户端都应记录设备
+	// 专线"不限制设备"模式仅跳过设备数限制，不跳过设备记录
 	fingerprint := services.GenerateDeviceFingerprint(ua, ip)
 
 	var device models.Device
@@ -296,8 +299,8 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 				return err
 			}
 
-			// 专线模式跳过设备数限制，但仍记录设备
-			if !hasDedicated && lockedSub.CurrentDevices >= lockedSub.DeviceLimit {
+			// "不限制设备"模式跳过设备数限制，但仍记录设备
+			if !hasUnlimited && lockedSub.CurrentDevices >= lockedSub.DeviceLimit {
 				return errDeviceLimitReached
 			}
 
@@ -370,21 +373,23 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 // fetchUserCustomNodes returns custom nodes assigned to a user, converted to models.Node format.
 // subExpireTime is the user's subscription expiry, used for FollowUserExpire nodes.
-// hasDedicatedOnly is true if any assignment has DedicatedOnly set — subscription will only include dedicated nodes and skip device limits.
-func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) (nodes []models.Node, hasDedicatedOnly bool) {
+// hasDedicatedOnly: any valid node has DedicatedOnly set → subscription only shows dedicated nodes.
+// hasUnlimitedDevices: any valid node has LimitDevices=false → skip device limit.
+func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) (nodes []models.Node, hasDedicatedOnly bool, hasUnlimitedDevices bool) {
 	type customNodeWithExpiry struct {
 		models.CustomNode
-		AssignExpiresAt  *time.Time `gorm:"column:assign_expires_at"`
-		AssignDedicated  bool       `gorm:"column:assign_dedicated_only"`
+		AssignExpiresAt    *time.Time `gorm:"column:assign_expires_at"`
+		AssignDedicated    bool       `gorm:"column:assign_dedicated_only"`
+		AssignLimitDevices bool       `gorm:"column:assign_limit_devices"`
 	}
 	var rows []customNodeWithExpiry
 	db.Model(&models.CustomNode{}).
-		Select("custom_nodes.*, user_custom_nodes.expires_at AS assign_expires_at, user_custom_nodes.dedicated_only AS assign_dedicated_only").
+		Select("custom_nodes.*, user_custom_nodes.expires_at AS assign_expires_at, user_custom_nodes.dedicated_only AS assign_dedicated_only, user_custom_nodes.limit_devices AS assign_limit_devices").
 		Joins("JOIN user_custom_nodes ON user_custom_nodes.custom_node_id = custom_nodes.id").
 		Where("user_custom_nodes.user_id = ? AND custom_nodes.is_active = ?", userID, true).
 		Scan(&rows)
 	if len(rows) == 0 {
-		return nil, false
+		return nil, false, false
 	}
 
 	now := time.Now()
@@ -404,9 +409,12 @@ func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) (no
 			}
 		}
 
-		// 节点通过过期检查后才计入"只显示专线"标记
+		// 节点通过过期检查后才计入标记
 		if row.AssignDedicated {
 			hasDedicatedOnly = true
+		}
+		if !row.AssignLimitDevices {
+			hasUnlimitedDevices = true // 任一节点未限制设备 → 全局不限制
 		}
 		config := row.Config
 		displayName := row.DisplayName
@@ -421,7 +429,7 @@ func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) (no
 			IsActive: true,
 		})
 	}
-	return nodes, hasDedicatedOnly
+	return nodes, hasDedicatedOnly, hasUnlimitedDevices
 }
 
 func buildDeviceName(info *services.ClientInfo) string {

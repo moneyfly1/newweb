@@ -248,12 +248,28 @@
             </template>
           </n-switch>
         </n-form-item>
+        <n-form-item label="限制设备数量">
+          <n-switch v-model:value="assignLimitDevices">
+            <template #checked>
+              跟随系统限制
+            </template>
+            <template #unchecked>
+              不限制设备数量
+            </template>
+          </n-switch>
+        </n-form-item>
         <n-alert type="info" style="margin-top: 12px">
-          <template v-if="assignDedicatedOnly">
-            开启后，用户订阅将<b>只显示专线节点</b>，且不受设备数量限制。适合独享专线用户。
+          <template v-if="assignDedicatedOnly && !assignLimitDevices">
+            用户订阅<b>只显示专线节点</b>，且<b>不限制设备数量</b>。适合独享专线 VIP 用户。
+          </template>
+          <template v-else-if="assignDedicatedOnly && assignLimitDevices">
+            用户订阅<b>只显示专线节点</b>，设备数量<b>跟随系统限制</b>。
+          </template>
+          <template v-else-if="!assignDedicatedOnly && !assignLimitDevices">
+            专线节点<b>附加到公共节点列表</b>中，且<b>不限制设备数量</b>。
           </template>
           <template v-else>
-            关闭时，专线节点将<b>附加到公共节点列表</b>中，用户可同时使用专线和公共节点。
+            专线节点<b>附加到公共节点列表</b>中，设备数量<b>跟随系统限制</b>。
           </template>
         </n-alert>
       </n-form>
@@ -354,6 +370,7 @@ const assignNodeIds = ref([])
 const assignUserIds = ref([])
 const assignExpiresAt = ref(null)
 const assignDedicatedOnly = ref(false)
+const assignLimitDevices = ref(false)
 const userOptions = ref([])
 const showImportDrawer = ref(false)
 const showLinkModal = ref(false)
@@ -648,6 +665,7 @@ const handleAssign = (row) => {
   assignUserIds.value = []
   assignExpiresAt.value = null
   assignDedicatedOnly.value = false
+  assignLimitDevices.value = false
   showAssignDrawer.value = true
   if (userOptions.value.length === 0) {
     fetchUsers()
@@ -661,6 +679,7 @@ const handleBatchAssign = () => {
   assignUserIds.value = []
   assignExpiresAt.value = null
   assignDedicatedOnly.value = false
+  assignLimitDevices.value = false
   showAssignDrawer.value = true
   if (userOptions.value.length === 0) {
     fetchUsers()
@@ -686,7 +705,8 @@ const handleAssignSubmit = async () => {
       await assignCustomNode(assignNodeIds.value[0], {
         user_ids: assignUserIds.value,
         expires_at: expiresAt,
-        dedicated_only: assignDedicatedOnly.value
+        dedicated_only: assignDedicatedOnly.value,
+        limit_devices: assignLimitDevices.value
       })
       message.success('分配节点成功')
     } else {
@@ -694,7 +714,8 @@ const handleAssignSubmit = async () => {
         ids: assignNodeIds.value,
         user_ids: assignUserIds.value,
         expires_at: expiresAt,
-        dedicated_only: assignDedicatedOnly.value
+        dedicated_only: assignDedicatedOnly.value,
+        limit_devices: assignLimitDevices.value
       })
       const successCount = res.data?.success || 0
       const totalCount = res.data?.total || assignNodeIds.value.length

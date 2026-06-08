@@ -48,7 +48,7 @@ func ListNodes(c *gin.Context) {
 		if hasActiveSub {
 			var sub models.Subscription
 			if err := db.Where("user_id = ? AND status = ?", userID, "active").First(&sub).Error; err == nil {
-				customNodes, isDedicatedOnly = fetchUserCustomNodes(db, userID, sub.ExpireTime)
+				customNodes, isDedicatedOnly, _ = fetchUserCustomNodes(db, userID, sub.ExpireTime)
 			}
 		}
 	}
@@ -146,7 +146,7 @@ func GetNodeStats(c *gin.Context) {
 	if userID > 0 {
 		var sub models.Subscription
 		if err := db.Where("user_id = ? AND status = ?", userID, "active").First(&sub).Error; err == nil {
-			customNodes, _ := fetchUserCustomNodes(db, userID, sub.ExpireTime)
+			customNodes, _, _ := fetchUserCustomNodes(db, userID, sub.ExpireTime)
 			allNodes = append(allNodes, customNodes...)
 		}
 	}

@@ -47,7 +47,7 @@
         <n-select v-model:value="filterProtocol" :options="protocolOptions" placeholder="筛选协议" clearable style="width: 140px;" />
         <n-button size="small" :loading="loading" @click="fetchNodes">刷新</n-button>
       </n-space>
-      <span class="filter-result-count">共 {{ filteredNodes.length }} 个节点</span>
+      <span class="filter-result-count">共 {{ totalNodes }} 个节点</span>
     </div>
     <!-- Desktop Table -->
     <div class="desktop-table">
@@ -181,15 +181,19 @@ const testResults = ref<Record<number, string>>({})
 const currentPage = ref(1)
 const pageSize = ref(10)
 const totalNodes = ref(0)
+const backendStats = ref({ total: 0, online: 0, regions: 0 })
 
 const stats = computed(() => {
   const all = nodes.value
-  const onlineNodes = all.filter(n => n.status === 'online')
   const latencies = all.filter(n => n.latency && n.latency > 0).map(n => n.latency!)
   const avgLat = latencies.length > 0
     ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null
-  const regions = new Set(all.map(n => n.region).filter(Boolean)).size
-  return { total: all.length, online: onlineNodes.length, avgLatency: avgLat !== null ? `${avgLat}ms` : '-', regions }
+  return {
+    total: backendStats.value.total,
+    online: backendStats.value.online,
+    avgLatency: avgLat !== null ? `${avgLat}ms` : '-',
+    regions: backendStats.value.regions,
+  }
 })
 
 const regionOptions = computed(() => {
@@ -281,8 +285,10 @@ const fetchNodes = async () => {
   loading.value = true
   try {
     const res = await listNodes({ page: currentPage.value, page_size: pageSize.value })
-    const items = res.data?.items || res.data || []
-    totalNodes.value = res.data?.total || items.length
+    const data = res.data || {}
+    const items = data.items || data || []
+    totalNodes.value = data.total || items.length
+    backendStats.value = data.stats || { total: totalNodes.value, online: 0, regions: 0 }
     nodes.value = items.map((n: any) => ({
       id: n.id,
       name: n.name,

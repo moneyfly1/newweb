@@ -19,38 +19,85 @@ import (
 )
 
 // ListNodes returns paginated active nodes.
-// If the request carries a valid auth token (user_id > 0), extra fields are included.
+// If the user has assigned custom/dedicated nodes, they are included in the list.
+// Stats in the response reflect the global totals, not just the current page.
 func ListNodes(c *gin.Context) {
 	db := database.GetDB()
 	p := utils.GetPagination(c)
+	userID := c.GetUint("user_id")
 
-	var total int64
-	query := db.Model(&models.Node{}).Where("is_active = ?", true)
-
-	// optional filters
+	// --- Fetch public nodes ---
+	var totalPublic int64
+	pubQuery := db.Model(&models.Node{}).Where("is_active = ?", true)
 	if region := c.Query("region"); region != "" {
-		query = query.Where("region = ?", region)
+		pubQuery = pubQuery.Where("region = ?", region)
 	}
 	if status := c.Query("status"); status != "" {
-		query = query.Where("status = ?", status)
+		pubQuery = pubQuery.Where("status = ?", status)
 	}
+	pubQuery.Count(&totalPublic)
 
-	query.Count(&total)
-
-	var nodes []models.Node
-	query.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&nodes)
-
-	// Only show node configs to users with an active subscription
-	userID := c.GetUint("user_id")
-	showConfig := false
+	// --- Fetch user custom nodes (if authenticated and has subscription) ---
+	var customNodes []models.Node
+	var hasActiveSub bool
+	var isDedicatedOnly bool
 	if userID > 0 {
 		var activeSub int64
 		db.Model(&models.Subscription{}).Where("user_id = ? AND status = ?", userID, "active").Count(&activeSub)
-		showConfig = activeSub > 0
+		hasActiveSub = activeSub > 0
+		if hasActiveSub {
+			var sub models.Subscription
+			if err := db.Where("user_id = ? AND status = ?", userID, "active").First(&sub).Error; err == nil {
+				customNodes, isDedicatedOnly = fetchUserCustomNodes(db, userID, sub.ExpireTime)
+			}
+		}
 	}
-	if !showConfig {
-		for i := range nodes {
-			nodes[i].Config = nil
+
+	// --- Determine full node list and stats ---
+	var allNodes []models.Node
+	if isDedicatedOnly {
+		// Dedicated-only mode: only custom nodes, no public nodes
+		allNodes = customNodes
+	} else {
+		// Normal mode: custom nodes first, then public nodes
+		var allPublic []models.Node
+		db.Model(&models.Node{}).Where("is_active = ?", true).Order("order_index ASC").Find(&allPublic)
+		allNodes = append(customNodes, allPublic...)
+	}
+
+	// Compute global stats from full node list
+	totalAll := int64(len(allNodes))
+	var onlineCount int64
+	regionSet := make(map[string]struct{})
+	for _, n := range allNodes {
+		if n.Status == "online" {
+			onlineCount++
+		}
+		if n.Region != "" {
+			regionSet[n.Region] = struct{}{}
+		}
+	}
+
+	// --- Paginate the combined list ---
+	offset := p.Offset()
+	limit := p.PageSize
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset >= len(allNodes) {
+		allNodes = nil
+	} else {
+		end := offset + limit
+		if end > len(allNodes) {
+			end = len(allNodes)
+		}
+		allNodes = allNodes[offset:end]
+	}
+
+	// --- Strip configs from unauthenticated users ---
+	if !hasActiveSub {
+		for i := range allNodes {
+			allNodes[i].Config = nil
 		}
 	}
 
@@ -59,15 +106,26 @@ func ListNodes(c *gin.Context) {
 		models.Node
 		Protocol string `json:"protocol"`
 	}
-	result := make([]NodeResponse, len(nodes))
-	for i, n := range nodes {
+	result := make([]NodeResponse, len(allNodes))
+	for i, n := range allNodes {
 		result[i] = NodeResponse{Node: n, Protocol: n.Type}
 	}
 
-	utils.SuccessPage(c, result, total, p.Page, p.PageSize)
+	utils.Success(c, gin.H{
+		"items":     result,
+		"total":     totalAll,
+		"page":      p.Page,
+		"page_size": p.PageSize,
+		"stats": gin.H{
+			"total":   totalAll,
+			"online":  onlineCount,
+			"regions": int64(len(regionSet)),
+		},
+	})
 }
 
 // GetNodeStats returns node counts grouped by status and region.
+// Includes both public and user-specific custom nodes.
 func GetNodeStats(c *gin.Context) {
 	db := database.GetDB()
 
@@ -80,13 +138,40 @@ func GetNodeStats(c *gin.Context) {
 		Count  int64  `json:"count"`
 	}
 
-	var byStatus []StatusCount
-	db.Model(&models.Node{}).Where("is_active = ?", true).
-		Select("status, count(*) as count").Group("status").Scan(&byStatus)
+	// Gather all nodes (public + user custom)
+	var allNodes []models.Node
+	db.Model(&models.Node{}).Where("is_active = ?", true).Find(&allNodes)
 
-	var byRegion []RegionCount
-	db.Model(&models.Node{}).Where("is_active = ?", true).
-		Select("region, count(*) as count").Group("region").Scan(&byRegion)
+	userID := c.GetUint("user_id")
+	if userID > 0 {
+		var sub models.Subscription
+		if err := db.Where("user_id = ? AND status = ?", userID, "active").First(&sub).Error; err == nil {
+			customNodes, _ := fetchUserCustomNodes(db, userID, sub.ExpireTime)
+			allNodes = append(allNodes, customNodes...)
+		}
+	}
+
+	// Aggregate by status
+	statusMap := make(map[string]int64)
+	for _, n := range allNodes {
+		statusMap[n.Status]++
+	}
+	byStatus := make([]StatusCount, 0, len(statusMap))
+	for s, c := range statusMap {
+		byStatus = append(byStatus, StatusCount{Status: s, Count: c})
+	}
+
+	// Aggregate by region
+	regionMap := make(map[string]int64)
+	for _, n := range allNodes {
+		if n.Region != "" {
+			regionMap[n.Region]++
+		}
+	}
+	byRegion := make([]RegionCount, 0, len(regionMap))
+	for r, c := range regionMap {
+		byRegion = append(byRegion, RegionCount{Region: r, Count: c})
+	}
 
 	utils.Success(c, gin.H{"by_status": byStatus, "by_region": byRegion})
 }

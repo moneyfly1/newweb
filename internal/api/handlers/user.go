@@ -322,12 +322,31 @@ func GetDashboardInfo(c *gin.Context) {
 	if hasSub {
 		db.Model(&models.Device{}).Where("subscription_id = ? AND is_active = ?", sub.ID, true).Count(&deviceCount)
 	}
+	// Compute node stats (public + user custom nodes)
+	var nodeTotal, nodeOnline int64
+	if hasSub {
+		var customNodes []models.Node
+		customNodes, _ = fetchUserCustomNodes(db, userID, sub.ExpireTime)
+		// Public nodes
+		var publicOnline int64
+		db.Model(&models.Node{}).Where("is_active = ?", true).Count(&nodeTotal)
+		db.Model(&models.Node{}).Where("is_active = ? AND status = ?", true, "online").Count(&publicOnline)
+		nodeTotal += int64(len(customNodes))
+		nodeOnline = publicOnline
+		for _, cn := range customNodes {
+			if cn.Status == "online" {
+				nodeOnline++
+			}
+		}
+	}
 	utils.Success(c, gin.H{
 		"balance":          user.Balance,
 		"has_subscription": hasSub,
 		"subscription":     sub,
 		"order_count":      orderCount,
 		"device_count":     deviceCount,
+		"node_total":       nodeTotal,
+		"node_online":      nodeOnline,
 	})
 }
 

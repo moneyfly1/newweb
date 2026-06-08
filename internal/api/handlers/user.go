@@ -326,7 +326,7 @@ func GetDashboardInfo(c *gin.Context) {
 	var nodeTotal, nodeOnline int64
 	if hasSub {
 		var customNodes []models.Node
-		customNodes, _ = fetchUserCustomNodes(db, userID, sub.ExpireTime)
+		customNodes, _, _ = fetchUserCustomNodes(db, userID, sub.ExpireTime)
 		// Public nodes
 		var publicOnline int64
 		db.Model(&models.Node{}).Where("is_active = ?", true).Count(&nodeTotal)

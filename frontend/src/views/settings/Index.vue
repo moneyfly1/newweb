@@ -125,7 +125,7 @@
       <n-tab-pane name="login-history" tab="登录历史">
         <n-card :bordered="false">
           <!-- Desktop table -->
-          <n-data-table v-if="!appStore.isMobile" :columns="historyColumns" :data="loginHistory" :loading="loadingHistory" :pagination="{ pageSize: 10 }" />
+          <n-data-table v-if="!appStore.isMobile" :columns="historyColumns" :data="loginHistory" :loading="loadingHistory" :pagination="false" />
           <!-- Mobile card list -->
           <div v-else>
             <n-spin :show="loadingHistory">
@@ -158,6 +158,17 @@
               </div>
             </n-spin>
           </div>
+          <n-pagination
+            v-if="historyTotal > historyPageSize"
+            v-model:page="historyPage"
+            v-model:page-size="historyPageSize"
+            :item-count="historyTotal"
+            :page-sizes="[10, 20, 50]"
+            show-size-picker
+            style="margin-top: 16px; justify-content: flex-end"
+            @update:page="handleHistoryPageChange"
+            @update:page-size="handleHistoryPageSizeChange"
+          />
         </n-card>
       </n-tab-pane>
     </n-tabs>
@@ -183,6 +194,9 @@ const pwFormRef = ref<FormInst | null>(null)
 const savingProfile = ref(false)
 const savingPw = ref(false)
 const loadingHistory = ref(false)
+const historyPage = ref(1)
+const historyPageSize = ref(10)
+const historyTotal = ref(0)
 
 const profileForm = ref({
   username: userStore.userInfo?.username || '',
@@ -270,6 +284,27 @@ async function handleUnbindTelegram() {
   }
 }
 
+async function loadHistoryData() {
+  loadingHistory.value = true
+  try {
+    const res: any = await getLoginHistory({ page: historyPage.value, page_size: historyPageSize.value })
+    loginHistory.value = res.data?.items || []
+    historyTotal.value = res.data?.total || 0
+  } catch (e: any) { message.error(getErrorMessage(e, '加载登录历史失败')) }
+  finally { loadingHistory.value = false }
+}
+
+function handleHistoryPageChange(page: number) {
+  historyPage.value = page
+  loadHistoryData()
+}
+
+function handleHistoryPageSizeChange(size: number) {
+  historyPageSize.value = size
+  historyPage.value = 1
+  loadHistoryData()
+}
+
 function loadTelegramBindWidget() {
   if (!telegramBindWidgetRef.value || !telegramBotUsername.value) return
   ;(window as any).onTelegramBind = async (user: any) => {
@@ -306,8 +341,9 @@ onMounted(async () => {
   } catch { /* 隐私设置加载失败静默忽略 */ }
   loadingHistory.value = true
   try {
-    const res: any = await getLoginHistory()
+    const res: any = await getLoginHistory({ page: historyPage.value, page_size: historyPageSize.value })
     loginHistory.value = res.data?.items || []
+    historyTotal.value = res.data?.total || 0
   } catch (e: any) { message.error(getErrorMessage(e, '加载登录历史失败')) }
   finally { loadingHistory.value = false }
   // Load Telegram config

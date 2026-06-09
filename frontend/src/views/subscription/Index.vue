@@ -176,7 +176,7 @@
         <div class="device-card">
           <div class="card-header">
             <h3 class="card-title">我的设备</h3>
-            <span class="card-subtitle">{{ devices.length }}/{{ subscription.device_limit }} 台设备</span>
+            <span class="card-subtitle">{{ deviceTotal }}/{{ subscription.device_limit }} 台设备</span>
           </div>
           <!-- Desktop Table -->
           <n-data-table
@@ -206,6 +206,17 @@
               </div>
             </div>
           </div>
+          <n-pagination
+            v-if="deviceTotal > devicePageSize"
+            v-model:page="devicePage"
+            v-model:page-size="devicePageSize"
+            :item-count="deviceTotal"
+            :page-sizes="[10, 20, 50]"
+            show-size-picker
+            style="margin-top: 16px; justify-content: flex-end"
+            @update:page="handleDevicePageChange"
+            @update:page-size="handleDevicePageSizeChange"
+          />
         </div>
       </template>
     </n-spin>
@@ -400,6 +411,9 @@ const router = useRouter()
 
 const subscription = ref<any>(null)
 const devices = ref<any[]>([])
+const devicePage = ref(1)
+const devicePageSize = ref(10)
+const deviceTotal = ref(0)
 const deviceColumns = [
   { title: '设备名称', key: 'device_name', width: 150 },
   { title: '客户端', key: 'software_name', width: 120, render: (row: any) => row.software_name || '未知' },
@@ -748,13 +762,20 @@ const loadData = async () => {
         if (e?.response?.status === 404) return { data: null }
         throw e
       }),
-      getSubscriptionDevices().catch((e: any) => {
-        if (e?.response?.status === 404) return { data: [] }
+      getSubscriptionDevices({ page: devicePage.value, page_size: devicePageSize.value }).catch((e: any) => {
+        if (e?.response?.status === 404) return { data: { items: [], total: 0 } }
         throw e
       }),
     ])
     subscription.value = subRes.data
-    devices.value = devRes.data || []
+    const devData = devRes.data
+    if (Array.isArray(devData)) {
+      devices.value = devData
+      deviceTotal.value = devData.length
+    } else {
+      devices.value = devData?.items || []
+      deviceTotal.value = devData?.total || 0
+    }
     await Promise.all([balanceP, pmP])
   } catch (e: any) {
     if (e?.response?.status !== 404) message.error(getErrorMessage(e, '加载数据失败'))
@@ -762,7 +783,7 @@ const loadData = async () => {
 }
 
 // Auto-show upgrade modal when devices near limit
-watch(() => devices.value.length, (count) => {
+watch(() => deviceTotal.value, (count) => {
   if (!subscription.value) return
   const limit = subscription.value.device_limit || 0
   if (limit > 0 && count >= limit - 1) {
@@ -788,6 +809,17 @@ const handleSendEmail = async () => {
   try { await sendSubscriptionEmail(); message.success('订阅信息已发送到您的邮箱') }
   catch (e: any) { message.error(getErrorMessage(e, '发送失败')) }
   finally { sendingEmail.value = false }
+}
+
+const handleDevicePageChange = (page: number) => {
+  devicePage.value = page
+  loadData()
+}
+
+const handleDevicePageSizeChange = (size: number) => {
+  devicePageSize.value = size
+  devicePage.value = 1
+  loadData()
 }
 
 const handleCalcUpgrade = async () => {

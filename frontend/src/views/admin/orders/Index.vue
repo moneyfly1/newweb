@@ -230,6 +230,20 @@
           <n-descriptions-item label="关联用户">ID: {{ currentOrder.user_id }}</n-descriptions-item>
           <n-descriptions-item label="订单类型">{{ currentOrder.order_type_text || '套餐订单' }}</n-descriptions-item>
           <n-descriptions-item label="订单内容">{{ currentOrder.order_summary || currentOrder.package_name || '-' }}</n-descriptions-item>
+          <n-descriptions-item v-if="currentOrder.order_type === 'subscription_upgrade' && currentOrder.current_device_limit != null" label="设备上限变更">
+            <span style="color: #999; text-decoration: line-through;">{{ currentOrder.current_device_limit }} 台</span>
+            <span style="margin: 0 6px; color: #667eea;">→</span>
+            <span style="color: #18a058; font-weight: 600;">{{ currentOrder.new_device_limit }} 台</span>
+          </n-descriptions-item>
+          <n-descriptions-item v-if="currentOrder.order_type === 'subscription_upgrade' && currentOrder.current_expire_time" label="到期时间变更">
+            <div>
+              <span style="color: #999; text-decoration: line-through; font-size: 13px;">{{ currentOrder.current_expire_time }}</span>
+            </div>
+            <div>
+              <span style="margin: 0 6px; color: #667eea;">→</span>
+              <span style="color: #18a058; font-weight: 600; font-size: 13px;">{{ currentOrder.new_expire_time }}</span>
+            </div>
+          </n-descriptions-item>
           <n-descriptions-item label="原始金额">{{ formatCurrency(currentOrder.amount) }}</n-descriptions-item>
           <n-descriptions-item label="优惠抵扣" v-if="currentOrder.discount_amount > 0">
             - {{ formatCurrency(currentOrder.discount_amount) }}

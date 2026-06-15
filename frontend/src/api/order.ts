@@ -30,6 +30,9 @@ export const calcUpgradePrice = (data: { add_devices: number; extend_months?: nu
   request.post<{
     price_per_device_year: number
     current_device_limit: number
+    current_expire_time: string
+    new_device_limit: number
+    new_expire_time: string
     remaining_days: number
     add_devices: number
     extend_months: number

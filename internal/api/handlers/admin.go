@@ -18,12 +18,12 @@ import (
 	"sync"
 	"time"
 
+	"cboard/v2/internal/cache"
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
 	"cboard/v2/internal/services/git"
 	"cboard/v2/internal/utils"
-	"cboard/v2/internal/cache"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -210,14 +210,36 @@ func AdminStats(c *gin.Context) {
 	wg.Add(9)
 
 	go func() { runQuery(func() error { return db.Model(&models.User{}).Count(&userCount).Error }) }()
-	go func() { runQuery(func() error { return db.Model(&models.User{}).Where("is_active = ?", true).Count(&activeUserCount).Error }) }()
+	go func() {
+		runQuery(func() error {
+			return db.Model(&models.User{}).Where("is_active = ?", true).Count(&activeUserCount).Error
+		})
+	}()
 	go func() { runQuery(func() error { return db.Model(&models.Order{}).Count(&orderCount).Error }) }()
-	go func() { runQuery(func() error { return db.Model(&models.Order{}).Where("status = ?", "paid").Count(&paidOrderCount).Error }) }()
+	go func() {
+		runQuery(func() error {
+			return db.Model(&models.Order{}).Where("status = ?", "paid").Count(&paidOrderCount).Error
+		})
+	}()
 	go func() { runQuery(func() error { return db.Model(&models.Subscription{}).Count(&subCount).Error }) }()
-	go func() { runQuery(func() error { return db.Model(&models.Subscription{}).Where("is_active = ? AND expire_time > ?", true, now).Count(&activeSubCount).Error }) }()
-	go func() { runQuery(func() error { return db.Model(&models.Node{}).Where("is_active = ?", true).Count(&nodeCount).Error }) }()
-	go func() { runQuery(func() error { return db.Model(&models.Order{}).Where("status = ?", "paid").Select("COALESCE(SUM(amount), 0)").Scan(&totalRevenue).Error }) }()
-	go func() { runQuery(func() error { return db.Model(&models.User{}).Where("DATE(created_at) = ?", today).Count(&newUsersToday).Error }) }()
+	go func() {
+		runQuery(func() error {
+			return db.Model(&models.Subscription{}).Where("is_active = ? AND expire_time > ?", true, now).Count(&activeSubCount).Error
+		})
+	}()
+	go func() {
+		runQuery(func() error { return db.Model(&models.Node{}).Where("is_active = ?", true).Count(&nodeCount).Error })
+	}()
+	go func() {
+		runQuery(func() error {
+			return db.Model(&models.Order{}).Where("status = ?", "paid").Select("COALESCE(SUM(amount), 0)").Scan(&totalRevenue).Error
+		})
+	}()
+	go func() {
+		runQuery(func() error {
+			return db.Model(&models.User{}).Where("DATE(created_at) = ?", today).Count(&newUsersToday).Error
+		})
+	}()
 
 	wg.Wait()
 	close(errCh)
@@ -259,8 +281,14 @@ func AdminListUsers(c *gin.Context) {
 			var resetUserIDs, subUserIDs []uint
 			var swg sync.WaitGroup
 			swg.Add(2)
-			go func() { defer swg.Done(); db.Model(&models.SubscriptionReset{}).Where("old_subscription_url LIKE ? OR new_subscription_url LIKE ?", like, like).Distinct().Pluck("user_id", &resetUserIDs) }()
-			go func() { defer swg.Done(); db.Model(&models.Subscription{}).Where("subscription_url LIKE ?", like).Pluck("user_id", &subUserIDs) }()
+			go func() {
+				defer swg.Done()
+				db.Model(&models.SubscriptionReset{}).Where("old_subscription_url LIKE ? OR new_subscription_url LIKE ?", like, like).Distinct().Pluck("user_id", &resetUserIDs)
+			}()
+			go func() {
+				defer swg.Done()
+				db.Model(&models.Subscription{}).Where("subscription_url LIKE ?", like).Pluck("user_id", &subUserIDs)
+			}()
 			swg.Wait()
 			allIDs := append(resetUserIDs, subUserIDs...)
 			if len(allIDs) > 0 {
@@ -288,9 +316,9 @@ func AdminListUsers(c *gin.Context) {
 	// Enrich with level name and subscription fields needed by the edit dialog
 	type UserItem struct {
 		models.User
-		LevelName  string     `json:"level_name"`
-		ExpireTime *time.Time `json:"expire_time"`
-		DeviceLimit int       `json:"device_limit"`
+		LevelName   string     `json:"level_name"`
+		ExpireTime  *time.Time `json:"expire_time"`
+		DeviceLimit int        `json:"device_limit"`
 	}
 	items := make([]UserItem, 0, len(users))
 	// Pre-load all levels
@@ -357,11 +385,23 @@ func AdminGetUser(c *gin.Context) {
 	var wg sync.WaitGroup
 	wg.Add(6)
 	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&orders) }()
-	go func() { defer wg.Done(); db.Where("subscription_id = ?", subscription.ID).Order("last_access DESC").Limit(50).Find(&devices) }()
+	go func() {
+		defer wg.Done()
+		db.Where("subscription_id = ?", subscription.ID).Order("last_access DESC").Limit(50).Find(&devices)
+	}()
 	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&resets) }()
-	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&balanceLogs) }()
-	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("login_time DESC").Limit(20).Find(&loginHistory) }()
-	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&rechargeRecords) }()
+	go func() {
+		defer wg.Done()
+		db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&balanceLogs)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Where("user_id = ?", id).Order("login_time DESC").Limit(20).Find(&loginHistory)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&rechargeRecords)
+	}()
 	wg.Wait()
 
 	// Build subscription URLs
@@ -906,6 +946,10 @@ func AdminListOrders(c *gin.Context) {
 		Months               *int       `json:"months,omitempty"`
 		AddDevices           *int       `json:"add_devices,omitempty"`
 		ExtendMonths         *int       `json:"extend_months,omitempty"`
+		CurrentDeviceLimit   *int       `json:"current_device_limit,omitempty"`
+		NewDeviceLimit       *int       `json:"new_device_limit,omitempty"`
+		CurrentExpireTime    *string    `json:"current_expire_time,omitempty"`
+		NewExpireTime        *string    `json:"new_expire_time,omitempty"`
 		BalanceAmount        *float64   `json:"balance_amount,omitempty"`
 	}
 
@@ -1040,6 +1084,22 @@ func AdminListOrders(c *gin.Context) {
 					if item.AddDevices != nil && item.ExtendMonths != nil && *item.ExtendMonths > 0 {
 						item.OrderSummary = fmt.Sprintf("+%d设备 / 续期%d个月", *item.AddDevices, *item.ExtendMonths)
 						item.PackageName = item.OrderSummary
+					}
+					if v, ok := extra["current_device_limit"].(float64); ok {
+						cd := int(v)
+						item.CurrentDeviceLimit = &cd
+					}
+					if v, ok := extra["new_device_limit"].(float64); ok {
+						nd := int(v)
+						item.NewDeviceLimit = &nd
+					}
+					if v, ok := extra["current_expire_time"].(string); ok {
+						s := formatUpgradeTime(v)
+						item.CurrentExpireTime = &s
+					}
+					if v, ok := extra["new_expire_time"].(string); ok {
+						s := formatUpgradeTime(v)
+						item.NewExpireTime = &s
 					}
 				}
 			}
@@ -2113,11 +2173,26 @@ func AdminGetSubscription(c *gin.Context) {
 	wg.Add(7)
 	go func() { defer wg.Done(); db.Where("subscription_id = ?", sub.ID).Find(&devices) }()
 	go func() { defer wg.Done(); db.First(&user, sub.UserID) }()
-	go func() { defer wg.Done(); db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&orders) }()
-	go func() { defer wg.Done(); db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&balanceLogs) }()
-	go func() { defer wg.Done(); db.Where("user_id = ?", sub.UserID).Order("login_time DESC").Limit(20).Find(&loginHistory) }()
-	go func() { defer wg.Done(); db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&resets) }()
-	go func() { defer wg.Done(); db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&rechargeRecords) }()
+	go func() {
+		defer wg.Done()
+		db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&orders)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&balanceLogs)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Where("user_id = ?", sub.UserID).Order("login_time DESC").Limit(20).Find(&loginHistory)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&resets)
+	}()
+	go func() {
+		defer wg.Done()
+		db.Where("user_id = ?", sub.UserID).Order("created_at DESC").Limit(20).Find(&rechargeRecords)
+	}()
 	wg.Wait()
 
 	result := gin.H{
@@ -3411,12 +3486,12 @@ func AdminBackfillLocations(c *gin.Context) {
 
 func AdminUpdateGeoIP(c *gin.Context) {
 	resources := map[string]string{
-		"geoip.dat":              "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
-		"geosite.dat":            "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
-		"geoip.metadb":           "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb",
+		"geoip.dat":             "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
+		"geosite.dat":           "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
+		"geoip.metadb":          "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb",
 		"GeoLite2-City.mmdb.gz": "https://github.com/wp-statistics/GeoLite2-City/raw/master/GeoLite2-City.mmdb.gz",
-		"ip2region_v4.xdb":       "https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region_v4.xdb",
-		"ip2region_v6.xdb":       "https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region_v6.xdb",
+		"ip2region_v4.xdb":      "https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region_v4.xdb",
+		"ip2region_v6.xdb":      "https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region_v6.xdb",
 	}
 
 	if err := os.MkdirAll(filepath.Join("uploads", "config"), 0750); err != nil {
@@ -3494,7 +3569,7 @@ func AdminCreateUser(c *gin.Context) {
 	var req struct {
 		Username    string     `json:"username" binding:"required,min=3,max=50"`
 		Email       string     `json:"email" binding:"required,email"`
-		Password    string     `json:"password" binding:"required,min=6"`
+		Password    string     `json:"password" binding:"required"`
 		Balance     float64    `json:"balance"`
 		IsAdmin     bool       `json:"is_admin"`
 		IsActive    bool       `json:"is_active"`
@@ -3596,7 +3671,7 @@ func AdminResetUserPassword(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Password string `json:"password" binding:"required,min=6"`
+		Password string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")

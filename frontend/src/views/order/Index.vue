@@ -190,6 +190,26 @@
       <n-descriptions :column="1" bordered v-if="detailOrder">
         <n-descriptions-item label="订单号">{{ detailOrder.order_no }}</n-descriptions-item>
         <n-descriptions-item label="套餐名称">{{ detailOrder.package_name }}</n-descriptions-item>
+        <n-descriptions-item v-if="detailOrder.order_type === 'subscription_upgrade'" label="增加设备">
+          <span style="color: #18a058; font-weight: 600;">+{{ detailOrder.add_devices }} 台</span>
+        </n-descriptions-item>
+        <n-descriptions-item v-if="detailOrder.order_type === 'subscription_upgrade' && detailOrder.extend_months > 0" label="续期时长">
+          {{ detailOrder.extend_months }} 个月
+        </n-descriptions-item>
+        <n-descriptions-item v-if="detailOrder.order_type === 'subscription_upgrade' && detailOrder.current_device_limit != null" label="设备上限">
+          <span style="color: #999; text-decoration: line-through;">{{ detailOrder.current_device_limit }} 台</span>
+          <span style="margin: 0 6px; color: #667eea;">→</span>
+          <span style="color: #18a058; font-weight: 600;">{{ detailOrder.new_device_limit }} 台</span>
+        </n-descriptions-item>
+        <n-descriptions-item v-if="detailOrder.order_type === 'subscription_upgrade' && detailOrder.current_expire_time" label="到期时间">
+          <div>
+            <span style="color: #999; text-decoration: line-through; font-size: 13px;">{{ detailOrder.current_expire_time }}</span>
+          </div>
+          <div>
+            <span style="margin: 0 6px; color: #667eea;">→</span>
+            <span style="color: #18a058; font-weight: 600; font-size: 13px;">{{ detailOrder.new_expire_time }}</span>
+          </div>
+        </n-descriptions-item>
         <n-descriptions-item label="原价">¥{{ detailOrder.amount }}</n-descriptions-item>
         <n-descriptions-item label="优惠金额">¥{{ detailOrder.discount_amount || '0.00' }}</n-descriptions-item>
         <n-descriptions-item label="实付金额">

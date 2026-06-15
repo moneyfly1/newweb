@@ -17,6 +17,17 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// formatUpgradeTime 将订单 ExtraData 中存储的 RFC3339 时间转换为可读格式，解析失败时原样返回
+func formatUpgradeTime(s string) string {
+	if s == "" {
+		return ""
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.Format("2006-01-02 15:04:05")
+	}
+	return s
+}
+
 func ListOrders(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	p := utils.GetPagination(c)
@@ -33,6 +44,14 @@ func ListOrders(c *gin.Context) {
 	type OrderItem struct {
 		models.Order
 		PackageName string `json:"package_name"`
+		// 升级订单专属：升级前 → 升级后 的设备数与到期时间
+		OrderType      string  `json:"order_type,omitempty"`
+		AddDevices     *int    `json:"add_devices,omitempty"`
+		ExtendMonths   *int    `json:"extend_months,omitempty"`
+		CurrentDevices *int    `json:"current_device_limit,omitempty"`
+		NewDeviceLimit *int    `json:"new_device_limit,omitempty"`
+		CurrentExpire  *string `json:"current_expire_time,omitempty"`
+		NewExpire      *string `json:"new_expire_time,omitempty"`
 	}
 	items := make([]OrderItem, 0, len(orders))
 
@@ -69,6 +88,27 @@ func ListOrders(c *gin.Context) {
 					item.PackageName = fmt.Sprintf("订阅升级: +%d设备", int(addDevices))
 					if int(extendMonths) > 0 {
 						item.PackageName = fmt.Sprintf("订阅升级: +%d设备, 续期%d月", int(addDevices), int(extendMonths))
+					}
+					item.OrderType = "subscription_upgrade"
+					ad := int(addDevices)
+					item.AddDevices = &ad
+					em := int(extendMonths)
+					item.ExtendMonths = &em
+					if v, ok := extra["current_device_limit"].(float64); ok {
+						cd := int(v)
+						item.CurrentDevices = &cd
+					}
+					if v, ok := extra["new_device_limit"].(float64); ok {
+						nd := int(v)
+						item.NewDeviceLimit = &nd
+					}
+					if v, ok := extra["current_expire_time"].(string); ok {
+						s := formatUpgradeTime(v)
+						item.CurrentExpire = &s
+					}
+					if v, ok := extra["new_expire_time"].(string); ok {
+						s := formatUpgradeTime(v)
+						item.NewExpire = &s
 					}
 				}
 			}
@@ -464,6 +504,21 @@ func GetOrderStatus(c *gin.Context) {
 				if int(extendMonths) > 0 {
 					result["package_name"] = fmt.Sprintf("订阅升级: +%d设备, 续期%d月", int(addDevices), int(extendMonths))
 				}
+				result["order_type"] = "subscription_upgrade"
+				result["add_devices"] = int(addDevices)
+				result["extend_months"] = int(extendMonths)
+				if v, ok := extra["current_device_limit"].(float64); ok {
+					result["current_device_limit"] = int(v)
+				}
+				if v, ok := extra["new_device_limit"].(float64); ok {
+					result["new_device_limit"] = int(v)
+				}
+				if v, ok := extra["current_expire_time"].(string); ok {
+					result["current_expire_time"] = formatUpgradeTime(v)
+				}
+				if v, ok := extra["new_expire_time"].(string); ok {
+					result["new_expire_time"] = formatUpgradeTime(v)
+				}
 			}
 		}
 	} else {
@@ -655,12 +710,15 @@ func CalcUpgradePrice(c *gin.Context) {
 	}
 	// Remove restriction of multiples of 5
 
-	pricePerDeviceYear := utils.GetFloatSetting("custom_package_price_per_device_year", 40)
 	now := time.Now()
-	remainingDays := 0.0
-	if sub.ExpireTime.After(now) {
-		remainingDays = math.Max(0, sub.ExpireTime.Sub(now).Hours()/24)
+	// 订阅已到期不允许升级，必须先续费或重新购买套餐
+	if !sub.ExpireTime.After(now) || !sub.IsActive || sub.Status == "expired" {
+		utils.BadRequest(c, "订阅已到期，无法升级。请先续费或购买套餐后再升级设备")
+		return
 	}
+
+	pricePerDeviceYear := utils.GetFloatSetting("custom_package_price_per_device_year", 40)
+	remainingDays := math.Max(0, sub.ExpireTime.Sub(now).Hours()/24)
 
 	currentDevices := sub.DeviceLimit
 	currentExpire := sub.ExpireTime
@@ -680,10 +738,19 @@ func CalcUpgradePrice(c *gin.Context) {
 	total := feeExtend + feeNewDevices
 	total = math.Round(total*100) / 100
 
+	// 升级后的设备上限与到期时间（用于前端展示「升级前 → 升级后」）
+	newDeviceLimit := currentDevices + req.AddDevices
+	newExpire := currentExpire
+	if req.ExtendMonths > 0 {
+		newExpire = newExpire.AddDate(0, req.ExtendMonths, 0)
+	}
+
 	utils.Success(c, gin.H{
 		"price_per_device_year": pricePerDeviceYear,
 		"current_device_limit":  currentDevices,
 		"current_expire_time":   currentExpire.Format("2006-01-02 15:04:05"),
+		"new_device_limit":      newDeviceLimit,
+		"new_expire_time":       newExpire.Format("2006-01-02 15:04:05"),
 		"remaining_days":        int(math.Ceil(remainingDays)),
 		"add_devices":           req.AddDevices,
 		"extend_months":         req.ExtendMonths,
@@ -721,12 +788,15 @@ func CreateUpgradeOrder(c *gin.Context) {
 		return
 	}
 
-	pricePerDeviceYear := utils.GetFloatSetting("custom_package_price_per_device_year", 40)
 	now := time.Now()
-	remainingDays := 0.0
-	if sub.ExpireTime.After(now) {
-		remainingDays = math.Max(0, sub.ExpireTime.Sub(now).Hours()/24)
+	// 订阅已到期不允许升级，必须先续费或重新购买套餐
+	if !sub.ExpireTime.After(now) || !sub.IsActive || sub.Status == "expired" {
+		utils.BadRequest(c, "订阅已到期，无法升级。请先续费或购买套餐后再升级设备")
+		return
 	}
+
+	pricePerDeviceYear := utils.GetFloatSetting("custom_package_price_per_device_year", 40)
+	remainingDays := math.Max(0, sub.ExpireTime.Sub(now).Hours()/24)
 
 	var feeExtend float64
 	if req.ExtendMonths > 0 {
@@ -768,6 +838,14 @@ func CreateUpgradeOrder(c *gin.Context) {
 		"extend_months":        req.ExtendMonths,
 		"current_device_limit": sub.DeviceLimit,
 		"current_expire_time":  sub.ExpireTime.Format(time.RFC3339),
+		"new_device_limit":     sub.DeviceLimit + req.AddDevices,
+		"new_expire_time": func() string {
+			ne := sub.ExpireTime
+			if req.ExtendMonths > 0 {
+				ne = ne.AddDate(0, req.ExtendMonths, 0)
+			}
+			return ne.Format(time.RFC3339)
+		}(),
 	})
 	extraStr := string(extraData)
 

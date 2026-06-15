@@ -20,7 +20,16 @@
               </div>
               <h1 class="package-title">{{ subscription.package_name || '当前套餐' }}</h1>
             </div>
-            <n-button type="primary" size="medium" @click="showUpgradeModal = true">
+            <n-tooltip v-if="isExpired" trigger="hover">
+              <template #trigger>
+                <n-button type="primary" size="medium" disabled>
+                  <template #icon><n-icon :component="ArrowUpCircleOutline" /></template>
+                  升级套餐
+                </n-button>
+              </template>
+              订阅已到期，请先续费或购买套餐后再升级设备
+            </n-tooltip>
+            <n-button v-else type="primary" size="medium" @click="openUpgradeModal">
               <template #icon><n-icon :component="ArrowUpCircleOutline" /></template>
               升级套餐
             </n-button>
@@ -250,6 +259,16 @@
           <n-descriptions-item label="升级内容">
             增加 {{ upgradeAddDevices }} 台设备<span v-if="upgradeExtendMonths > 0">，续期 {{ upgradeExtendMonths }} 月</span>
           </n-descriptions-item>
+          <n-descriptions-item label="设备上限">
+            <span class="up-before">{{ subscription?.device_limit || 0 }} 台</span>
+            <n-icon :component="ArrowForwardOutline" class="up-arrow" />
+            <span class="up-after">{{ previewDeviceLimit }} 台</span>
+          </n-descriptions-item>
+          <n-descriptions-item label="到期时间">
+            <span class="up-before">{{ formatDateShort(subscription?.expire_time) }}</span>
+            <n-icon :component="ArrowForwardOutline" class="up-arrow" />
+            <span class="up-after">{{ formatDateShort(previewExpireTime) }}</span>
+          </n-descriptions-item>
           <n-descriptions-item label="应付金额">
             <span style="color: #18a058; font-size: 20px; font-weight: bold;">{{ formatCurrency(upgradeOrderInfo?.final_amount ?? upgradeOrderInfo?.amount ?? 0) }}</span>
           </n-descriptions-item>
@@ -337,12 +356,48 @@
     <!-- Upgrade Drawer -->
     <common-drawer v-model:show="showUpgradeModal" title="升级订阅" :width="480">
       <n-form class="drawer-section upgrade-form" label-placement="left" label-width="auto" :disabled="upgradeSubmitting" size="medium">
+        <!-- 当前订阅概览 -->
+        <div class="upgrade-current">
+          <div class="uc-item">
+            <span class="uc-label">当前设备上限</span>
+            <span class="uc-value">{{ subscription?.device_limit || 0 }} 台</span>
+          </div>
+          <div class="uc-item">
+            <span class="uc-label">当前到期时间</span>
+            <span class="uc-value">{{ formatDate(subscription?.expire_time) }}</span>
+          </div>
+          <div class="uc-item">
+            <span class="uc-label">剩余天数</span>
+            <span class="uc-value">{{ remainingDays }} 天</span>
+          </div>
+        </div>
         <n-form-item label="增加设备数">
           <n-input-number v-model:value="upgradeAddDevices" :min="1" :max="50" :step="1" style="width: 100%;" />
         </n-form-item>
         <n-form-item label="续期月数">
           <n-input-number v-model:value="upgradeExtendMonths" :min="0" :max="120" style="width: 100%;" />
         </n-form-item>
+
+        <!-- 升级前 → 升级后 预览 -->
+        <div class="upgrade-preview">
+          <div class="up-row">
+            <span class="up-label">设备上限</span>
+            <span class="up-change">
+              <span class="up-before">{{ subscription?.device_limit || 0 }} 台</span>
+              <n-icon :component="ArrowForwardOutline" class="up-arrow" />
+              <span class="up-after">{{ previewDeviceLimit }} 台</span>
+            </span>
+          </div>
+          <div class="up-row">
+            <span class="up-label">到期时间</span>
+            <span class="up-change">
+              <span class="up-before">{{ formatDateShort(subscription?.expire_time) }}</span>
+              <n-icon :component="ArrowForwardOutline" class="up-arrow" />
+              <span class="up-after">{{ formatDateShort(previewExpireTime) }}</span>
+            </span>
+          </div>
+        </div>
+
         <div v-if="upgradeResult" class="upgrade-result">
           <n-descriptions :column="1" bordered size="small">
             <n-descriptions-item label="新增设备费用">{{ formatCurrency(upgradeResult.fee_new_devices) }}</n-descriptions-item>
@@ -370,8 +425,16 @@
         <n-descriptions v-if="upgradeSuccessInfo" :column="1" bordered>
           <n-descriptions-item label="增加设备数">+{{ upgradeSuccessInfo.addDevices }} 台</n-descriptions-item>
           <n-descriptions-item label="续期时长">{{ upgradeSuccessInfo.extendMonths > 0 ? `${upgradeSuccessInfo.extendMonths} 个月` : '未续期' }}</n-descriptions-item>
-          <n-descriptions-item label="升级后设备上限">{{ upgradeSuccessInfo.deviceLimit }} 台</n-descriptions-item>
-          <n-descriptions-item label="升级后到期时间">{{ formatDate(upgradeSuccessInfo.expireTime) }}</n-descriptions-item>
+          <n-descriptions-item label="设备上限">
+            <span class="up-before">{{ upgradeSuccessInfo.beforeDeviceLimit }} 台</span>
+            <n-icon :component="ArrowForwardOutline" class="up-arrow" />
+            <span class="up-after">{{ upgradeSuccessInfo.deviceLimit }} 台</span>
+          </n-descriptions-item>
+          <n-descriptions-item label="到期时间">
+            <span class="up-before">{{ formatDateShort(upgradeSuccessInfo.beforeExpireTime) }}</span>
+            <n-icon :component="ArrowForwardOutline" class="up-arrow" />
+            <span class="up-after">{{ formatDateShort(upgradeSuccessInfo.expireTime) }}</span>
+          </n-descriptions-item>
           <n-descriptions-item label="本次支付金额">{{ formatCurrency(upgradeSuccessInfo.amount) }}</n-descriptions-item>
         </n-descriptions>
       </n-space>
@@ -386,7 +449,8 @@ import {
   CopyOutline, TimeOutline, PhonePortraitOutline, TrashOutline,
   RefreshOutline, SwapHorizontalOutline, MailOutline,
   CheckmarkCircle, CloseCircle, AlertCircle, QrCodeOutline,
-  ArrowUpCircleOutline, WalletOutline, CalendarOutline, EyeOutline, EyeOffOutline
+  ArrowUpCircleOutline, WalletOutline, CalendarOutline, EyeOutline, EyeOffOutline,
+  ArrowForwardOutline
 } from '@vicons/ionicons5'
 import {
   getSubscription, getSubscriptionDevices, deleteDevice,
@@ -438,7 +502,9 @@ const selectedFormat = ref('clash')
 const showUpgradeModal = ref(false)
 
 const showUpgradeSuccess = ref(false)
-const upgradeSuccessInfo = ref<{ addDevices: number; extendMonths: number; deviceLimit: number; expireTime: string; amount: number } | null>(null)
+const upgradeSuccessInfo = ref<{ addDevices: number; extendMonths: number; deviceLimit: number; expireTime: string; amount: number; beforeDeviceLimit: number; beforeExpireTime: string } | null>(null)
+// 升级前的订阅快照（在发起支付前捕获，用于支付成功后展示「升级前 → 升级后」）
+const upgradeSnapshot = ref<{ deviceLimit: number; expireTime: string } | null>(null)
 const showQrModal = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const qrTitle = ref('')
@@ -591,11 +657,43 @@ const remainingDays = computed(() => {
 
 const canConvert = computed(() => remainingDays.value > 0)
 
+// 订阅是否已到期（到期则禁止升级设备）
+const isExpired = computed(() => {
+  if (!subscription.value) return true
+  if (subscription.value.status === 'expired' || subscription.value.is_active === false) return true
+  return new Date(subscription.value.expire_time).getTime() <= Date.now()
+})
+
+// 升级后预览：设备上限
+const previewDeviceLimit = computed(() => (subscription.value?.device_limit || 0) + (upgradeAddDevices.value || 0))
+// 升级后预览：到期时间（按续期月数推算）
+const previewExpireTime = computed(() => {
+  if (!subscription.value?.expire_time) return ''
+  const d = new Date(subscription.value.expire_time)
+  const months = upgradeExtendMonths.value || 0
+  if (months > 0) d.setMonth(d.getMonth() + months)
+  return d.toISOString()
+})
+
+const openUpgradeModal = () => {
+  if (isExpired.value) {
+    message.warning('订阅已到期，请先续费或购买套餐后再升级设备')
+    return
+  }
+  upgradeResult.value = null
+  showUpgradeModal.value = true
+}
+
 const formatDate = (dateStr: string) => {
   if (!dateStr) return 'N/A'
   return new Date(dateStr).toLocaleString('zh-CN', {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
   })
+}
+// 简短日期（仅年月日），用于「升级前 → 升级后」紧凑展示
+const formatDateShort = (dateStr: string) => {
+  if (!dateStr) return 'N/A'
+  return new Date(dateStr).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 const formatDateTime = (dateStr: string) => {
   if (!dateStr) return '-'
@@ -712,6 +810,8 @@ const buildUpgradeSuccessInfo = () => {
     extendMonths: upgradeExtendMonths.value,
     deviceLimit: subscription.value?.device_limit || 0,
     expireTime: subscription.value?.expire_time || '',
+    beforeDeviceLimit: upgradeSnapshot.value?.deviceLimit ?? Math.max(0, (subscription.value?.device_limit || 0) - upgradeAddDevices.value),
+    beforeExpireTime: upgradeSnapshot.value?.expireTime || '',
     amount: upgradeResult.value?.total || upgradeOrderInfo.value?.final_amount || upgradeOrderInfo.value?.amount || 0,
   }
   showUpgradeSuccess.value = true
@@ -823,6 +923,7 @@ const handleDevicePageSizeChange = (size: number) => {
 }
 
 const handleCalcUpgrade = async () => {
+  if (isExpired.value) { message.error('订阅已到期，请先续费或购买套餐后再升级设备'); return }
   upgradeCalcLoading.value = true; upgradeResult.value = null
   try {
     const res: any = await calcUpgradePrice({ add_devices: upgradeAddDevices.value, extend_months: upgradeExtendMonths.value || 0 })
@@ -835,6 +936,12 @@ const handleCalcUpgrade = async () => {
 }
 const handleOpenUpgradePay = async () => {
   if (!upgradeResult.value || upgradeResult.value.total <= 0) { message.warning('请先计算金额'); return }
+  if (isExpired.value) { message.error('订阅已到期，无法升级'); return }
+  // 在跳转支付前捕获升级前的订阅状态，支付成功后用于「升级前 → 升级后」对比
+  upgradeSnapshot.value = {
+    deviceLimit: subscription.value?.device_limit || 0,
+    expireTime: subscription.value?.expire_time || '',
+  }
   upgradeSubmitting.value = true
   try {
     const res: any = await createUpgradeOrder({ add_devices: upgradeAddDevices.value, extend_months: upgradeExtendMonths.value || 0 })
@@ -972,6 +1079,20 @@ onUnmounted(() => { stopPayPolling() })
 
 /* Upgrade Result */
 .upgrade-result { margin-top: 12px; }
+/* Upgrade Current - 当前订阅概览（升级弹窗顶部） */
+.upgrade-current { display: flex; gap: 16px; margin-bottom: 16px; padding: 12px 14px; background: #f8f9fa; border-radius: 10px; border: 1px solid #eee; flex-wrap: wrap; }
+.uc-item { display: flex; flex-direction: column; gap: 2px; min-width: 80px; }
+.uc-label { font-size: 12px; color: #999; }
+.uc-value { font-size: 14px; font-weight: 600; color: #333; }
+/* Upgrade Preview - 升级前 → 升级后 */
+.upgrade-preview { margin-top: 12px; padding: 12px 14px; background: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%); border-radius: 10px; border: 1px solid #d1f2d9; }
+.up-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.up-row:last-child { margin-bottom: 0; }
+.up-label { font-size: 13px; color: #666; font-weight: 500; }
+.up-change { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.up-before { color: #999; text-decoration: line-through; }
+.up-after { color: #18a058; font-weight: 700; }
+.up-arrow { color: #667eea; font-size: 14px; flex-shrink: 0; }
 
 /* Two Column Layout */
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }

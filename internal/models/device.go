@@ -21,6 +21,7 @@ type Device struct {
 	DeviceModel       *string    `gorm:"type:varchar(100)" json:"device_model"`
 	DeviceBrand       *string    `gorm:"type:varchar(50)" json:"device_brand"`
 	SubscriptionType  *string    `gorm:"type:varchar(20);index" json:"subscription_type"`
+	Remark            *string    `gorm:"type:varchar(200)" json:"remark"`
 	IsActive          bool       `gorm:"default:true;index;index:idx_device_lookup,priority:3;index:idx_sub_active_access,priority:2" json:"is_active"`
 	IsAllowed         bool       `gorm:"default:true" json:"is_allowed"`
 	FirstSeen         *time.Time `json:"first_seen"`

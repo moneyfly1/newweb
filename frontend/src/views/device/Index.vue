@@ -50,6 +50,18 @@
                 <span class="value">{{ formatLocation(device.region) }}</span>
               </div>
               <div class="card-row">
+                <span class="label">备注</span>
+                <n-input
+                  :value="device.remark || ''"
+                  size="small"
+                  placeholder="添加备注..."
+                  style="max-width: 160px; text-align: right"
+                  @update:value="(val: string) => device.remark = val"
+                  @blur="saveRemark(device)"
+                  @keyup.enter="($event.target as HTMLInputElement)?.blur()"
+                />
+              </div>
+              <div class="card-row">
                 <span class="label">最后访问</span>
                 <span class="value">{{ device.last_access ? new Date(device.last_access).toLocaleString('zh-CN') : '-' }}</span>
               </div>
@@ -88,8 +100,8 @@
 
 <script setup lang="tsx">
 import { ref, h, onMounted } from 'vue'
-import { NButton, NTime, useMessage } from 'naive-ui'
-import { getSubscriptionDevices, deleteDevice } from '@/api/subscription'
+import { NButton, NTime, NInput, useMessage } from 'naive-ui'
+import { getSubscriptionDevices, deleteDevice, updateDeviceRemark } from '@/api/subscription'
 import { useAppStore } from '@/stores/app'
 import { parseDeviceInfo, formatLocation } from '@/utils/i18n'
 import CommonDrawer from '@/components/CommonDrawer.vue'
@@ -107,6 +119,7 @@ interface Device {
   user_agent: string
   ip_address: string
   region: string
+  remark: string
   device_fingerprint: string
   last_access: string
   created_at: string
@@ -134,6 +147,21 @@ const columns = [
     minWidth: 150,
     render: (row: Device) => {
       return h('span', row.device_name || row.software_name || '未知设备')
+    }
+  },
+  {
+    title: '备注',
+    key: 'remark',
+    width: 160,
+    render: (row: Device) => {
+      return h(NInput, {
+        value: row.remark || '',
+        size: 'small',
+        placeholder: '添加备注...',
+        onUpdateValue: (val: string) => { row.remark = val },
+        onBlur: () => saveRemark(row),
+        onKeyup: (e: KeyboardEvent) => { if (e.key === 'Enter') { (e.target as HTMLInputElement)?.blur() } }
+      })
     }
   },
   {
@@ -258,6 +286,15 @@ const handleConfirmDelete = async () => {
     message.error(error.message || '删除设备失败')
   } finally {
     deleteDeviceId.value = null
+  }
+}
+
+const saveRemark = async (row: Device) => {
+  try {
+    await updateDeviceRemark(row.id, row.remark || '')
+    message.success('备注已保存')
+  } catch (error: any) {
+    message.error(error.message || '保存备注失败')
   }
 }
 

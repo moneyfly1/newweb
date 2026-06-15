@@ -1037,6 +1037,49 @@ func DeleteSubscriptionDevice(c *gin.Context) {
 	utils.SuccessMessage(c, "设备已删除")
 }
 
+// UpdateDeviceRemark allows a user to set/update a remark on their device.
+func UpdateDeviceRemark(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	deviceID := c.Param("id")
+	db := database.GetDB()
+
+	var req struct {
+		Remark string `json:"remark"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	// 截断超长备注
+	if len(req.Remark) > 200 {
+		req.Remark = req.Remark[:200]
+	}
+
+	var sub models.Subscription
+	if err := db.Where("user_id = ?", userID).First(&sub).Error; err != nil {
+		utils.NotFound(c, "暂无订阅")
+		return
+	}
+
+	var device models.Device
+	if err := db.Where("id = ? AND subscription_id = ? AND is_active = ?", deviceID, sub.ID, true).First(&device).Error; err != nil {
+		utils.NotFound(c, "设备不存在")
+		return
+	}
+
+	remark := &req.Remark
+	if req.Remark == "" {
+		remark = nil
+	}
+	if err := db.Model(&device).Update("remark", remark).Error; err != nil {
+		utils.InternalError(c, "更新备注失败")
+		return
+	}
+
+	utils.SuccessMessage(c, "备注已更新")
+}
+
 // getEffectiveProtocolFilter returns per-subscription filter if set, else falls back to global.
 // filterType: "clash" or "universal"
 func getEffectiveProtocolFilter(sub *models.Subscription, filterType string) map[string]bool {

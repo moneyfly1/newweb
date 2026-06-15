@@ -127,6 +127,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			subs.POST("/convert-to-balance", handlers.ConvertToBalance)
 			subs.POST("/send-subscription-email", handlers.SendSubscriptionEmail)
 			subs.DELETE("/devices/:id", handlers.DeleteSubscriptionDevice)
+			subs.PUT("/devices/:id/remark", handlers.UpdateDeviceRemark)
 		}
 
 		// 订单

@@ -103,6 +103,23 @@
           </div>
 
           <div class="url-list">
+            <div class="protocol-exclude-panel">
+              <div class="protocol-exclude-head">
+                <div>
+                  <div class="protocol-exclude-title">协议排除</div>
+                  <div class="protocol-exclude-desc">生成订阅地址时临时排除不需要的节点协议</div>
+                </div>
+                <n-button v-if="excludedProtocols.length" size="tiny" quaternary @click="excludedProtocols = []">清空</n-button>
+              </div>
+              <n-checkbox-group v-model:value="excludedProtocols">
+                <n-space :size="[10, 8]" wrap>
+                  <n-checkbox v-for="protocol in protocolExcludeOptions" :key="protocol.value" :value="protocol.value">
+                    {{ protocol.label }}
+                  </n-checkbox>
+                </n-space>
+              </n-checkbox-group>
+            </div>
+
             <div class="url-item">
               <div class="url-header">
                 <span class="url-type">通用订阅</span>
@@ -146,6 +163,32 @@
                 </div>
               </div>
             </div>
+
+            <n-collapse v-if="moreSubscriptionUrls.length" class="more-subscription-collapse">
+              <n-collapse-item title="更多订阅地址" name="more-subscription-urls">
+                <div class="more-url-list">
+                  <div v-for="item in moreSubscriptionUrls" :key="item.type" class="url-item more-url-item">
+                    <div class="url-header">
+                      <span class="url-type">{{ item.name }}</span>
+                      <n-tag size="small" :bordered="false">{{ item.desc }}</n-tag>
+                    </div>
+                    <div class="url-actions">
+                      <n-input class="url-input" :value="showSubUrls ? item.url : maskUrl(item.url)" readonly size="small" />
+                      <div class="url-buttons">
+                        <n-button type="primary" size="small" @click="copyToClipboard(item.url, `${item.name} 订阅地址`)">
+                          <template #icon><n-icon :component="CopyOutline" /></template>
+                          复制
+                        </n-button>
+                        <n-button size="small" @click="showQrCode(item.url, `${item.name} 订阅`, item.type === 'shadowrocket' ? 'shadowrocket' : 'raw')">
+                          <template #icon><n-icon :component="QrCodeOutline" /></template>
+                          二维码
+                        </n-button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </n-collapse-item>
+            </n-collapse>
           </div>
         </div>
 
@@ -207,7 +250,7 @@
               </div>
               <div class="device-info-row">
                 <span class="device-label">位置</span>
-                <span class="device-value">{{ formatLocation(dev.location || dev.region || '') || '-' }}</span>
+                <span class="device-value">{{ formatCountryOnly(dev.location || dev.region) }}</span>
               </div>
               <div class="device-info-row">
                 <span class="device-label">最后在线</span>
@@ -464,7 +507,6 @@ import { safeRedirect } from '@/utils/security'
 import { getErrorMessage, silentCatch } from '@/utils/error'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
-import { formatLocation } from '@/utils/i18n'
 import { formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
@@ -485,12 +527,81 @@ const deviceColumns = [
   { title: '系统', key: 'os_name', width: 80, render: (row: any) => row.os_name || '未知' },
   { title: '设备型号', key: 'device_model', width: 150 },
   { title: '订阅类型', key: 'subscription_type', width: 100 },
-  { title: '地区', key: 'region', width: 120, render: (row: any) => formatLocation(row.region || '') || '-' },
+  { title: '地区', key: 'region', width: 120, render: (row: any) => formatCountryOnly(row.location || row.region) },
   { title: '最后访问', key: 'last_access', width: 150, render: (row: any) => formatDateTime(row.last_access) }
 ]
 const loading = ref(false)
 const showSubUrls = ref(false)
 const showResetModal = ref(false)
+const excludedProtocols = ref<string[]>([])
+const protocolExcludeOptions = [
+  { label: 'VMess', value: 'vmess' },
+  { label: 'VLESS', value: 'vless' },
+  { label: 'Trojan', value: 'trojan' },
+  { label: 'Shadowsocks', value: 'ss' },
+  { label: 'SSR', value: 'ssr' },
+  { label: 'Hysteria', value: 'hysteria' },
+  { label: 'Hysteria2', value: 'hysteria2' },
+  { label: 'TUIC', value: 'tuic' },
+  { label: 'AnyTLS', value: 'anytls' },
+  { label: 'SOCKS', value: 'socks' },
+  { label: 'SOCKS5', value: 'socks5' },
+  { label: 'HTTP', value: 'http' },
+  { label: 'WireGuard', value: 'wireguard' },
+]
+
+const countryNameMap: Record<string, string> = {
+  CN: '中国', HK: '中国香港', MO: '中国澳门', TW: '中国台湾',
+  US: '美国', JP: '日本', KR: '韩国', SG: '新加坡',
+  GB: '英国', UK: '英国', DE: '德国', FR: '法国',
+  CA: '加拿大', AU: '澳大利亚', RU: '俄罗斯', IN: '印度',
+  TH: '泰国', VN: '越南', MY: '马来西亚', PH: '菲律宾',
+  ID: '印度尼西亚', BR: '巴西', TR: '土耳其', NL: '荷兰',
+  ES: '西班牙', IT: '意大利', SE: '瑞典', CH: '瑞士',
+}
+const countryAliasMap: Record<string, string> = {
+  china: '中国', 'hong kong': '中国香港', macao: '中国澳门', macau: '中国澳门',
+  taiwan: '中国台湾', 'united states': '美国', usa: '美国',
+  'united kingdom': '英国', uk: '英国', japan: '日本',
+  korea: '韩国', 'south korea': '韩国', singapore: '新加坡',
+  germany: '德国', france: '法国', canada: '加拿大',
+  australia: '澳大利亚', russia: '俄罗斯', india: '印度',
+  thailand: '泰国', vietnam: '越南', malaysia: '马来西亚',
+  philippines: '菲律宾', indonesia: '印度尼西亚',
+}
+const countryDisplayNames = typeof Intl !== 'undefined' && Intl.DisplayNames
+  ? new Intl.DisplayNames(['zh-CN'], { type: 'region' })
+  : null
+
+const getCountryName = (value: any) => {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const code = text.toUpperCase()
+  if (/^[A-Z]{2}$/.test(code)) return countryNameMap[code] || countryDisplayNames?.of(code) || code
+  return countryAliasMap[text.toLowerCase()] || ''
+}
+
+const formatCountryOnly = (location: any) => {
+  if (!location) return '-'
+  let value = location
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return '-'
+    if (/^[{[]/.test(text)) {
+      try { value = JSON.parse(text) } catch { value = text }
+    }
+  }
+  if (typeof value === 'object') {
+    const code = value.country_code || value.countryCode || value.country_iso || value.countryISO || value.iso_code
+    const name = value.country_name || value.countryName || value.country || value.region || value.location
+    return getCountryName(code) || getCountryName(name) || name || '-'
+  }
+  const text = String(value).trim()
+  const direct = getCountryName(text)
+  if (direct) return direct
+  const firstSegment = text.split(/[,·|/]+/).filter(Boolean)[0]?.trim() || text
+  return getCountryName(firstSegment) || firstSegment || '-'
+}
 
 function maskUrl(url: string) {
   if (!url || url.length < 20) return '••••••••'
@@ -621,15 +732,53 @@ const formats = [
 ]
 
 // 通用订阅 URL（Shadowrocket / V2Ray / Hiddify 使用）
-const subscriptionUrl = computed(() => subscription.value?.token_url || '')
+const subscriptionUrl = computed(() => withExcludedProtocols(subscription.value?.token_url || ''))
 // Clash 订阅 URL
-const clashUrl = computed(() => subscription.value?.token_clash_url || '')
+const clashUrl = computed(() => withExcludedProtocols(subscription.value?.token_clash_url || buildTypedSubscriptionUrl(subscription.value?.token_url || '', 'clash')))
+
+const buildTypedSubscriptionUrl = (base: string, type: string) => {
+  if (!base || !type) return base || ''
+  if (['shadowrocket', 'v2ray', 'hiddify'].includes(type)) return base
+  try {
+    const url = new URL(base, window.location.origin)
+    url.searchParams.set('type', type)
+    return url.toString()
+  } catch {
+    const separator = base.includes('?') ? '&' : '?'
+    return `${base}${separator}type=${encodeURIComponent(type)}`
+  }
+}
+
+const withExcludedProtocols = (rawUrl: string) => {
+  if (!rawUrl) return ''
+  const exclude = excludedProtocols.value.join(',')
+  try {
+    const url = new URL(rawUrl, window.location.origin)
+    if (exclude) url.searchParams.set('exclude', exclude)
+    else url.searchParams.delete('exclude')
+    return url.toString()
+  } catch {
+    if (!exclude) return rawUrl.replace(/([?&])exclude=[^&]*&?/, '$1').replace(/[?&]$/, '')
+    const separator = rawUrl.includes('?') ? '&' : '?'
+    return `${rawUrl}${separator}exclude=${encodeURIComponent(exclude)}`
+  }
+}
+
+const getRawFormatUrl = (fmt: typeof formats[0]) => {
+  if (!subscription.value) return ''
+  return subscription.value[fmt.urlKey] || buildTypedSubscriptionUrl(subscription.value.token_url || subscription.value.token_clash_url || '', fmt.type)
+}
 
 // 根据格式定义获取对应 URL
 const getFormatUrl = (fmt: typeof formats[0]) => {
-  if (!subscription.value) return ''
-  return subscription.value[fmt.urlKey] || subscription.value.token_url || ''
+  return withExcludedProtocols(getRawFormatUrl(fmt))
 }
+
+const moreSubscriptionUrls = computed(() => formats
+  .filter(fmt => !['clash', 'v2ray'].includes(fmt.type))
+  .map(fmt => ({ ...fmt, url: getFormatUrl(fmt) }))
+  .filter(fmt => fmt.url)
+)
 
 const statusClass = computed(() => {
   if (!subscription.value) return 'inactive'

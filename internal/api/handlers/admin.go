@@ -431,6 +431,178 @@ func AdminGetUser(c *gin.Context) {
 	})
 }
 
+func AdminGetUserCustomNodes(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的用户ID")
+		return
+	}
+
+	db := database.GetDB()
+	var user models.User
+	if err := db.Select("id").First(&user, id).Error; err != nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+
+	var assignments []models.UserCustomNode
+	if err := db.Where("user_id = ?", id).Order("created_at DESC").Find(&assignments).Error; err != nil {
+		utils.InternalError(c, "获取用户专线分配失败")
+		return
+	}
+
+	nodeIDs := make([]uint, 0, len(assignments))
+	for _, assignment := range assignments {
+		nodeIDs = append(nodeIDs, assignment.CustomNodeID)
+	}
+
+	nodeMap := make(map[uint]models.CustomNode, len(nodeIDs))
+	if len(nodeIDs) > 0 {
+		var nodes []models.CustomNode
+		if err := db.Where("id IN ?", nodeIDs).Find(&nodes).Error; err != nil {
+			utils.InternalError(c, "获取专线节点失败")
+			return
+		}
+		for _, node := range nodes {
+			nodeMap[node.ID] = node
+		}
+	}
+
+	items := make([]gin.H, 0, len(assignments))
+	for _, assignment := range assignments {
+		node, ok := nodeMap[assignment.CustomNodeID]
+		if !ok {
+			continue
+		}
+		items = append(items, gin.H{
+			"id":             assignment.ID,
+			"user_id":        assignment.UserID,
+			"custom_node_id": assignment.CustomNodeID,
+			"expires_at":     assignment.ExpiresAt,
+			"dedicated_only": assignment.DedicatedOnly,
+			"limit_devices":  assignment.LimitDevices,
+			"created_at":     assignment.CreatedAt,
+			"updated_at":     assignment.UpdatedAt,
+			"node":           node,
+		})
+	}
+
+	utils.Success(c, gin.H{"items": items})
+}
+
+func AdminAssignCustomNodeToUser(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的用户ID")
+		return
+	}
+
+	var req struct {
+		CustomNodeID  uint       `json:"custom_node_id"`
+		CustomNodeIDs []uint     `json:"custom_node_ids"`
+		ExpiresAt     *time.Time `json:"expires_at"`
+		DedicatedOnly bool       `json:"dedicated_only"`
+		LimitDevices  bool       `json:"limit_devices"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	nodeIDs := append([]uint{}, req.CustomNodeIDs...)
+	if req.CustomNodeID > 0 {
+		nodeIDs = append(nodeIDs, req.CustomNodeID)
+	}
+	nodeIDs = uniqueUintSlice(nodeIDs)
+	if len(nodeIDs) == 0 {
+		utils.BadRequest(c, "请选择要分配的专线节点")
+		return
+	}
+
+	db := database.GetDB()
+	var user models.User
+	if err := db.Select("id").First(&user, id).Error; err != nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+
+	var existingNodeCount int64
+	if err := db.Model(&models.CustomNode{}).Where("id IN ?", nodeIDs).Count(&existingNodeCount).Error; err != nil {
+		utils.InternalError(c, "检查专线节点失败")
+		return
+	}
+	if existingNodeCount != int64(len(nodeIDs)) {
+		utils.BadRequest(c, "包含不存在的专线节点")
+		return
+	}
+
+	userID := uint(id)
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		for _, nodeID := range nodeIDs {
+			var assignment models.UserCustomNode
+			err := tx.Where("user_id = ? AND custom_node_id = ?", userID, nodeID).First(&assignment).Error
+			if err == nil {
+				if err := tx.Model(&assignment).Updates(map[string]interface{}{
+					"expires_at":     req.ExpiresAt,
+					"dedicated_only": req.DedicatedOnly,
+					"limit_devices":  req.LimitDevices,
+				}).Error; err != nil {
+					return err
+				}
+				continue
+			}
+			if err != gorm.ErrRecordNotFound {
+				return err
+			}
+			if err := tx.Create(&models.UserCustomNode{
+				UserID:        userID,
+				CustomNodeID:  nodeID,
+				ExpiresAt:     req.ExpiresAt,
+				DedicatedOnly: req.DedicatedOnly,
+				LimitDevices:  req.LimitDevices,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		utils.InternalError(c, "分配专线节点失败")
+		return
+	}
+
+	utils.CreateAuditLog(c, "assign_user_custom_node", "user", userID, fmt.Sprintf("给用户分配 %d 个专线节点", len(nodeIDs)))
+	cache.ClearAllSubscriptionCache()
+	utils.SuccessMessage(c, "分配成功")
+}
+
+func AdminUnassignCustomNodeFromUser(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的用户ID")
+		return
+	}
+	nodeID, err := strconv.ParseUint(c.Param("nodeId"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的专线节点ID")
+		return
+	}
+
+	db := database.GetDB()
+	result := db.Where("user_id = ? AND custom_node_id = ?", id, nodeID).Delete(&models.UserCustomNode{})
+	if result.Error != nil {
+		utils.InternalError(c, "解除专线分配失败")
+		return
+	}
+	if result.RowsAffected == 0 {
+		utils.NotFound(c, "专线分配不存在")
+		return
+	}
+
+	utils.CreateAuditLog(c, "unassign_user_custom_node", "user", uint(id), fmt.Sprintf("解除用户专线节点 ID: %d", nodeID))
+	cache.ClearAllSubscriptionCache()
+	utils.SuccessMessage(c, "已解除分配")
+}
+
 func AdminUpdateUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {

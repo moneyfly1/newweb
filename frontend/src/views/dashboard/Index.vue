@@ -68,6 +68,19 @@
                 <div class="sub-stat"><span class="sub-stat-label">状态</span><n-tag :type="subscription.is_active ? 'success' : 'error'" size="small" :bordered="false">{{ subscription.is_active ? '使用中' : '未激活' }}</n-tag></div>
               </div>
               <div class="sub-urls">
+                <div class="dash-protocol-exclude">
+                  <div class="dash-protocol-exclude-head">
+                    <span>协议排除</span>
+                    <n-button v-if="excludedProtocols.length" size="tiny" quaternary @click="excludedProtocols = []">清空</n-button>
+                  </div>
+                  <n-checkbox-group v-model:value="excludedProtocols">
+                    <n-space :size="[8, 6]" wrap>
+                      <n-checkbox v-for="protocol in protocolExcludeOptions" :key="protocol.value" :value="protocol.value">
+                        {{ protocol.label }}
+                      </n-checkbox>
+                    </n-space>
+                  </n-checkbox-group>
+                </div>
                 <div class="sub-url-row shadowrocket-qr-row" v-if="shadowrocketQrData">
                   <div class="shadowrocket-qr-card">
                     <div class="shadowrocket-qr-header">
@@ -82,16 +95,25 @@
                 </div>
                 <div class="sub-url-row" v-if="subscription.token_clash_url">
                   <span class="sub-url-label">Clash</span>
-                  <n-input :value="showSubUrls ? subscription.token_clash_url : maskUrl(subscription.token_clash_url)" readonly size="tiny" style="flex:1" />
+                  <n-input :value="showSubUrls ? clashSubscriptionUrl : maskUrl(clashSubscriptionUrl)" readonly size="tiny" style="flex:1" />
                   <n-button size="tiny" @click="showSubUrls = !showSubUrls"><template #icon><n-icon :component="showSubUrls ? EyeOffOutline : EyeOutline" /></template></n-button>
-                  <n-button size="tiny" @click="copyText(subscription.token_clash_url, 'Clash')"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
+                  <n-button size="tiny" @click="copyText(clashSubscriptionUrl, 'Clash')"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
                 </div>
                 <div class="sub-url-row" v-if="subscription.token_url">
                   <span class="sub-url-label">通用</span>
-                  <n-input :value="showSubUrls ? subscription.token_url : maskUrl(subscription.token_url)" readonly size="tiny" style="flex:1" />
+                  <n-input :value="showSubUrls ? universalSubscriptionUrl : maskUrl(universalSubscriptionUrl)" readonly size="tiny" style="flex:1" />
                   <n-button size="tiny" @click="showSubUrls = !showSubUrls"><template #icon><n-icon :component="showSubUrls ? EyeOffOutline : EyeOutline" /></template></n-button>
-                  <n-button size="tiny" @click="copyText(subscription.token_url, '通用')"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
+                  <n-button size="tiny" @click="copyText(universalSubscriptionUrl, '通用')"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
                 </div>
+                <n-collapse v-if="moreSubscriptionUrls.length" class="dash-more-subscriptions">
+                  <n-collapse-item title="更多订阅地址" name="more-subscriptions">
+                    <div v-for="item in moreSubscriptionUrls" :key="item.client" class="sub-url-row">
+                      <span class="sub-url-label">{{ item.name }}</span>
+                      <n-input :value="showSubUrls ? item.url : maskUrl(item.url)" readonly size="tiny" style="flex:1" />
+                      <n-button size="tiny" @click="copyText(item.url, item.name)"><template #icon><n-icon :component="CopyOutline" /></template></n-button>
+                    </div>
+                  </n-collapse-item>
+                </n-collapse>
               </div>
             </div>
             <n-empty v-else description="暂无订阅" size="small">
@@ -248,6 +270,22 @@ const subscriptionLoading = ref(false)
 const dashQrCanvas = ref<HTMLCanvasElement | null>(null)
 const showSubUrls = ref(false)
 const expandedQuickSub = ref('')
+const excludedProtocols = ref<string[]>([])
+const protocolExcludeOptions = [
+  { label: 'VMess', value: 'vmess' },
+  { label: 'VLESS', value: 'vless' },
+  { label: 'Trojan', value: 'trojan' },
+  { label: 'SS', value: 'ss' },
+  { label: 'SSR', value: 'ssr' },
+  { label: 'Hysteria', value: 'hysteria' },
+  { label: 'Hysteria2', value: 'hysteria2' },
+  { label: 'TUIC', value: 'tuic' },
+  { label: 'AnyTLS', value: 'anytls' },
+  { label: 'SOCKS', value: 'socks' },
+  { label: 'SOCKS5', value: 'socks5' },
+  { label: 'HTTP', value: 'http' },
+  { label: 'WireGuard', value: 'wireguard' },
+]
 
 function maskUrl(url: string) {
   if (!url || url.length < 20) return '••••••••'
@@ -318,51 +356,89 @@ const clientTabs = computed(() => [
   { name: 'linux', label: 'Linux', clients: linuxClients.value },
 ].filter(t => t.clients.length))
 
+function buildTypedSubscriptionUrl(base: string, type: string) {
+  if (!base || !type) return base || ''
+  if (['shadowrocket', 'v2ray', 'hiddify'].includes(type)) return base
+  try {
+    const url = new URL(base, window.location.origin)
+    url.searchParams.set('type', type)
+    return url.toString()
+  } catch {
+    const separator = base.includes('?') ? '&' : '?'
+    return `${base}${separator}type=${encodeURIComponent(type)}`
+  }
+}
+
+function withExcludedProtocols(rawUrl: string) {
+  if (!rawUrl) return ''
+  const exclude = excludedProtocols.value.join(',')
+  try {
+    const url = new URL(rawUrl, window.location.origin)
+    if (exclude) url.searchParams.set('exclude', exclude)
+    else url.searchParams.delete('exclude')
+    return url.toString()
+  } catch {
+    if (!exclude) return rawUrl
+    const separator = rawUrl.includes('?') ? '&' : '?'
+    return `${rawUrl}${separator}exclude=${encodeURIComponent(exclude)}`
+  }
+}
+
+function getSubscriptionUrl(key: string, type: string) {
+  const s = subscription.value || {}
+  const rawUrl = s[key] || buildTypedSubscriptionUrl(s.token_url || s.token_clash_url || '', type)
+  return withExcludedProtocols(rawUrl)
+}
+
+const universalSubscriptionUrl = computed(() => getSubscriptionUrl('token_url', ''))
+const clashSubscriptionUrl = computed(() => getSubscriptionUrl('token_clash_url', 'clash'))
+
 const quickSubItems = computed(() => {
-  const s = subscription.value
   return [
     {
       name: 'Clash / Meta', icon: '⚔️',
       iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png',
-      url: s.token_clash_url, client: 'clash', importable: true,
+      url: getSubscriptionUrl('token_clash_url', 'clash'), client: 'clash', importable: true,
     },
     {
       name: 'Stash', icon: '📦',
       iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/stash.png',
-      url: s.token_stash_url || s.token_clash_url, client: 'stash', importable: true,
+      url: getSubscriptionUrl('token_stash_url', 'stash'), client: 'stash', importable: true,
     },
     {
       name: 'Surge', icon: '🌊',
       iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/surge.png',
-      url: s.token_surge_url, client: 'surge', importable: true,
+      url: getSubscriptionUrl('token_surge_url', 'surge'), client: 'surge', importable: true,
     },
     {
       name: 'Loon', icon: '🎈',
       iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/loon.png',
-      url: s.token_loon_url, client: 'loon', importable: true,
+      url: getSubscriptionUrl('token_loon_url', 'loon'), client: 'loon', importable: true,
     },
     {
       name: 'QuantumultX', icon: '💠',
       iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/quantumultx.png',
-      url: s.token_quantumultx_url, client: 'quantumultx', importable: true,
+      url: getSubscriptionUrl('token_quantumultx_url', 'quantumultx'), client: 'quantumultx', importable: true,
     },
     {
       name: 'Shadowrocket', icon: '🔴',
       iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png',
-      url: s.token_url, client: 'shadowrocket', importable: true,
+      url: getSubscriptionUrl('token_shadowrocket_url', 'shadowrocket'), client: 'shadowrocket', importable: true,
     },
     {
       name: 'SingBox', icon: '📱',
       iconUrl: 'https://raw.githubusercontent.com/SagerNet/sing-box/testing/docs/assets/icon.svg',
-      url: s.token_singbox_url, client: 'singbox', importable: false,
+      url: getSubscriptionUrl('token_singbox_url', 'singbox'), client: 'singbox', importable: false,
     },
     {
       name: 'V2Ray / Hiddify', icon: '🚀',
       iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png',
-      url: s.token_url, client: 'v2ray', importable: false,
+      url: getSubscriptionUrl('token_v2ray_url', 'v2ray'), client: 'v2ray', importable: false,
     },
   ].filter(i => i.url)
 })
+
+const moreSubscriptionUrls = computed(() => quickSubItems.value.filter(item => !['clash', 'v2ray'].includes(item.client)))
 
 const iconFailed = ref<Record<string, boolean>>({})
 function markIconFailed(key: string) {
@@ -412,7 +488,7 @@ const remainingDaysType = computed(() => {
 })
 
 const shadowrocketQrData = computed(() => {
-  const url = subscription.value.token_url
+  const url = getSubscriptionUrl('token_shadowrocket_url', 'shadowrocket')
   if (!url) return ''
   return 'sub://' + btoa(url)
 })
@@ -450,24 +526,22 @@ async function copyText(text: string, label: string) {
   ok ? message.success(`${label}已复制到剪贴板`) : message.error('复制失败，请手动复制')
 }
 function oneClickImport(client: string) {
-  const s = subscription.value
   const subName = info.value.site_name || '订阅'
-  const getUrl = (key: string) => s[key] || s.token_url || ''
   switch (client) {
     case 'clash':
-      window.location.href = `clash://install-config?url=${encodeURIComponent(getUrl('token_clash_url'))}&name=${encodeURIComponent(subName)}`; break
+      window.location.href = `clash://install-config?url=${encodeURIComponent(getSubscriptionUrl('token_clash_url', 'clash'))}&name=${encodeURIComponent(subName)}`; break
     case 'stash':
-      window.location.href = `stash://install-config?url=${encodeURIComponent(getUrl('token_stash_url') || getUrl('token_clash_url'))}&name=${encodeURIComponent(subName)}`; break
+      window.location.href = `stash://install-config?url=${encodeURIComponent(getSubscriptionUrl('token_stash_url', 'stash'))}&name=${encodeURIComponent(subName)}`; break
     case 'surge':
-      window.location.href = `surge:///install-config?url=${encodeURIComponent(getUrl('token_surge_url'))}`; break
+      window.location.href = `surge:///install-config?url=${encodeURIComponent(getSubscriptionUrl('token_surge_url', 'surge'))}`; break
     case 'loon':
-      window.location.href = `loon://import/proxy?url=${encodeURIComponent(getUrl('token_loon_url'))}`; break
+      window.location.href = `loon://import/proxy?url=${encodeURIComponent(getSubscriptionUrl('token_loon_url', 'loon'))}`; break
     case 'quantumultx':
-      window.location.href = `quantumult-x:///add-resource?remote-resource=${encodeURIComponent(JSON.stringify({ server_remote: [getUrl('token_quantumultx_url')] }))}`; break
+      window.location.href = `quantumult-x:///add-resource?remote-resource=${encodeURIComponent(JSON.stringify({ server_remote: [getSubscriptionUrl('token_quantumultx_url', 'quantumultx')] }))}`; break
     case 'shadowrocket':
-      window.location.href = `shadowrocket://add/${encodeURIComponent(getUrl('token_url'))}`; break
+      window.location.href = `shadowrocket://add/${encodeURIComponent(getSubscriptionUrl('token_shadowrocket_url', 'shadowrocket'))}`; break
     default:
-      copyText(getUrl('token_url'), '订阅地址'); return
+      copyText(universalSubscriptionUrl.value, '订阅地址'); return
   }
   message.info(`正在打开 ${client} 客户端...`)
 }
@@ -585,6 +659,33 @@ onUnmounted(() => {
 .sub-stat-val { font-size: 13px; font-weight: 600; }
 .sub-urls { display: flex; flex-direction: column; gap: 6px; }
 .sub-url-row { display: flex; align-items: center; gap: 6px; }
+.dash-protocol-exclude {
+  padding: 8px 10px;
+  border: 1px solid #eef0f5;
+  border-radius: 8px;
+  background: #fafbff;
+}
+.dash-protocol-exclude-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+.dash-protocol-exclude :deep(.n-checkbox) {
+  font-size: 12px;
+}
+.dash-more-subscriptions {
+  margin-top: 2px;
+}
+.dash-more-subscriptions .sub-url-row {
+  margin-bottom: 6px;
+}
+.dash-more-subscriptions .sub-url-row:last-child {
+  margin-bottom: 0;
+}
 .shadowrocket-qr-row { align-items: stretch; }
 .shadowrocket-qr-card { width: 100%; padding: 12px; border-radius: 10px; background: linear-gradient(135deg, #fff7ed 0%, #f5f3ff 100%); border: 1px solid #eadcff; }
 .shadowrocket-qr-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }

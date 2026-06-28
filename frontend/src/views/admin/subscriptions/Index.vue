@@ -156,84 +156,7 @@
       </template>
     </n-card>
 
-    <!-- Detail Drawer -->
-    <n-drawer v-model:show="showDetailDrawer" :width="appStore.isMobile ? '100%' : 780" placement="right" closable>
-      <n-drawer-content :title="'用户详情 - ' + (detailData.username || detailData.user_email || '')" closable>
-        <n-descriptions bordered :column="appStore.isMobile ? 1 : 2" label-placement="left" size="small">
-          <n-descriptions-item label="ID">{{ detailData.user_id || detailData.id }}</n-descriptions-item>
-          <n-descriptions-item label="用户名">{{ detailData.username || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="邮箱">{{ detailData.user_email || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="余额">{{ formatCurrency(detailData.user_balance) }}</n-descriptions-item>
-          <n-descriptions-item label="状态">
-            <n-tag :type="detailData.user_is_active ? 'success' : 'error'" size="small">{{ detailData.user_is_active ? '激活' : '禁用' }}</n-tag>
-            <n-tag v-if="detailData.user_is_admin" type="warning" size="small" style="margin-left:4px">管理员</n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item label="等级">{{ detailData.user_level_name || '无' }}</n-descriptions-item>
-          <n-descriptions-item label="注册时间">{{ fmtDate(detailData.user_created_at) }}</n-descriptions-item>
-          <n-descriptions-item label="最后登录">{{ fmtDate(detailData.user_last_login) }}</n-descriptions-item>
-        </n-descriptions>
-
-        <n-divider>订阅信息</n-divider>
-        <n-descriptions bordered :column="appStore.isMobile ? 1 : 2" label-placement="left" size="small">
-          <n-descriptions-item label="套餐">{{ detailData.package_name || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="状态">
-            <n-tag :type="getStatusType(detailData.status)" size="small">{{ getStatusText(detailData.status) }}</n-tag>
-            <n-tag v-if="!detailData.is_active" type="error" size="small" style="margin-left:4px">已停用</n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item label="设备">{{ detailData.current_devices || 0 }} / {{ detailData.device_limit || 0 }}</n-descriptions-item>
-          <n-descriptions-item label="到期时间">{{ fmtDate(detailData.expire_time) }}</n-descriptions-item>
-        </n-descriptions>
-        <div v-if="detailData.universal_url" class="url-section">
-          <div class="url-row"><span class="url-label">通用</span><code class="url-text">{{ detailData.universal_url }}</code></div>
-          <div class="url-row"><span class="url-label">Clash</span><code class="url-text">{{ detailData.clash_url }}</code></div>
-        </div>
-
-        <n-tabs type="line" class="tabs-spacing" animated>
-          <n-tab-pane name="orders" tab="订单记录">
-            <n-data-table v-if="(detailData.recent_orders||[]).length" :columns="orderCols" :data="detailData.recent_orders" :bordered="false" size="small" :max-height="240" />
-            <n-empty v-else description="暂无订单" size="small" />
-          </n-tab-pane>
-          <n-tab-pane name="devices" tab="设备记录">
-            <n-data-table v-if="(detailData.devices||[]).length" :columns="deviceCols" :data="detailData.devices" :bordered="false" size="small" :max-height="240" />
-            <n-empty v-else description="暂无设备" size="small" />
-          </n-tab-pane>
-          <n-tab-pane name="logins" tab="登录历史">
-            <n-data-table v-if="(detailData.login_history||[]).length" :columns="loginCols" :data="detailData.login_history" :bordered="false" size="small" :max-height="240" />
-            <n-empty v-else description="暂无记录" size="small" />
-          </n-tab-pane>
-          <n-tab-pane name="resets" tab="重置记录">
-            <n-data-table v-if="(detailData.resets||[]).length" :columns="resetCols" :data="detailData.resets" :bordered="false" size="small" :max-height="240" :scroll-x="900" />
-            <n-empty v-else description="暂无记录" size="small" />
-          </n-tab-pane>
-          <n-tab-pane name="balance" tab="余额变动">
-            <n-data-table v-if="(detailData.balance_logs||[]).length" :columns="balanceCols" :data="detailData.balance_logs" :bordered="false" size="small" :max-height="240" />
-            <n-empty v-else description="暂无记录" size="small" />
-          </n-tab-pane>
-          <n-tab-pane name="recharge" tab="充值记录">
-            <n-data-table v-if="(detailData.recharge_records||[]).length" :columns="rechargeCols" :data="detailData.recharge_records" :bordered="false" size="small" :max-height="240" />
-            <n-empty v-else description="暂无记录" size="small" />
-          </n-tab-pane>
-        </n-tabs>
-      </n-drawer-content>
-    </n-drawer>
-
-    <!-- QR Code Modal (3 codes) -->
-    <n-modal v-model:show="showQRModal" title="订阅二维码" preset="card" :style="{ width: appStore.isMobile ? '95%' : '640px' }">
-      <div class="qr-grid" v-if="detailData.universal_url">
-        <div class="qr-item">
-          <div class="qr-title">Shadowrocket</div>
-          <canvas :ref="(el) => renderQR(el, getShadowrocketUrl(detailData.universal_url))"></canvas>
-        </div>
-        <div class="qr-item">
-          <div class="qr-title">通用订阅</div>
-          <canvas :ref="(el) => renderQR(el, detailData.universal_url)"></canvas>
-        </div>
-        <div class="qr-item">
-          <div class="qr-title">Clash</div>
-          <canvas :ref="(el) => renderQR(el, detailData.clash_url)"></canvas>
-        </div>
-      </div>
-    </n-modal>
+    <UserDetailDrawer ref="userDetailDrawerRef" />
 
     <!-- Single Shadowrocket QR Modal -->
     <n-modal v-model:show="showSingleQRModal" title="Shadowrocket 二维码" preset="card" :style="{ width: appStore.isMobile ? '85%' : '320px' }" @after-enter="renderSingleQRCode">
@@ -245,21 +168,20 @@
 </template>
 <script setup>
 import { ref, h, onMounted, nextTick } from 'vue'
-import { NButton, NTag, NSpace, NDatePicker, NInputNumber, NInput, NDataTable, NEmpty, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NDatePicker, NInputNumber, NInput, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, RefreshOutline, PersonOutline, MailOutline, PowerOutline, TrashOutline, CopyOutline, QrCodeOutline } from '@vicons/ionicons5'
 import QRCode from 'qrcode'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
-import { formatCurrency } from '@/utils/amount'
-import { formatLocation, parseDeviceInfo, translateLoginStatus } from '@/utils/i18n'
 import {
-  listAdminSubscriptions, getAdminSubscription, resetAdminSubscription,
+  listAdminSubscriptions, resetAdminSubscription,
   extendSubscription, updateSubscriptionDeviceLimit, sendSubscriptionEmail,
   setSubscriptionExpireTime, deleteUserFull, toggleUserActive, loginAsUser,
-  deleteUserDevice, updateUserNotes
+  updateUserNotes
 } from '@/api/admin'
+import UserDetailDrawer from '@/views/admin/users/components/UserDetailDrawer.vue'
 import '@/styles/admin-common.css'
 
 const message = useMessage()
@@ -274,11 +196,9 @@ const statusFilter = ref(null)
 const tableData = ref([])
 const sortState = ref({ sort: 'id', order: 'desc' })
 const pagination = ref({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
-const showDetailDrawer = ref(false)
-const showQRModal = ref(false)
 const showSingleQRModal = ref(false)
 const singleQRUrl = ref('')
-const detailData = ref({})
+const userDetailDrawerRef = ref(null)
 const checkedRowKeys = ref([])
 
 const statusOptions = [
@@ -322,7 +242,6 @@ const saveNotes = async (row) => {
   try { await updateUserNotes(row.user_id, row.user_notes || ''); message.success('备注已保存') }
   catch { message.error('保存备注失败') }
 }
-const renderQR = (el, text) => { if (el && text) nextTick(() => QRCode.toCanvas(el, text, { width: 180, margin: 1 })) }
 const singleQRCanvas = ref(null)
 const showSingleQR = (row) => {
   const url = getRowUniversalUrl(row)
@@ -338,70 +257,6 @@ const renderSingleQRCode = () => {
   })
 }
 
-const fmtDate = (d) => d ? new Date(d).toLocaleString('zh-CN') : '-'
-const subStatusType = (s) => ({ active: 'success', expiring: 'warning', expired: 'error' }[s] || 'default')
-const subStatusText = (s) => ({ active: '活跃', expiring: '即将到期', expired: '已过期', disabled: '已禁用' }[s] || s || '-')
-
-const handleDeleteDevice = (device) => {
-  dialog.warning({
-    title: '确认删除设备',
-    content: `确定要删除设备 ${device.device_name || device.software_name || '未知设备'} 吗？`,
-    positiveText: '删除', negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await deleteUserDevice(detailData.value.user_id, device.id)
-        message.success('设备已删除')
-        handleViewDetail({ id: detailData.value.id })
-      } catch (error) { message.error('删除设备失败') }
-    }
-  })
-}
-
-const orderCols = [
-  { title: '订单号', key: 'order_no', width: 180, ellipsis: { tooltip: true } },
-  { title: '金额', key: 'final_amount', width: 90, render: (r) => formatCurrency(r.final_amount ?? r.amount ?? 0) },
-  { title: '状态', key: 'status', width: 80 },
-  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
-]
-const deviceCols = [
-  { title: '设备名', key: 'device_name', ellipsis: { tooltip: true }, render: (r) => r.device_name || r.software_name || '未知设备' },
-  { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
-  { title: '地区', key: 'region', width: 150, render: (r) => formatLocation(r.region) },
-  { title: '最后活跃', key: 'last_access', width: 160, render: (r) => fmtDate(r.last_access || r.updated_at) },
-  {
-    title: '操作', key: 'actions', width: 80,
-    render: (r) => h(NButton, { size: 'small', type: 'error', secondary: true, onClick: () => handleDeleteDevice(r) }, { default: () => '删除' })
-  }
-]
-const loginCols = [
-  { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
-  { title: '位置', key: 'location', width: 150, render: (r) => formatLocation(r.location) },
-  { title: '设备', key: 'user_agent', width: 180, ellipsis: { tooltip: true }, render: (r) => parseDeviceInfo(r.user_agent) },
-  { title: '状态', key: 'login_status', width: 70, render: (r) => h(NTag, { type: r.login_status === 'success' ? 'success' : 'error', size: 'small' }, { default: () => translateLoginStatus(r.login_status) }) },
-  { title: '时间', key: 'login_time', width: 160, render: (r) => fmtDate(r.login_time) }
-]
-const resetCols = [
-  { title: '操作者', key: 'reset_by', width: 80, render: (r) => r.reset_by || '-' },
-  { title: '类型', key: 'reset_type', width: 80 },
-  { title: '原订阅地址', key: 'old_subscription_url', width: 180, ellipsis: { tooltip: true }, render: (r) => r.old_subscription_url || '-' },
-  { title: '新订阅地址', key: 'new_subscription_url', width: 180, ellipsis: { tooltip: true }, render: (r) => r.new_subscription_url || '-' },
-  { title: '设备(前/后)', key: 'devices', width: 90, render: (r) => `${r.device_count_before ?? 0} → ${r.device_count_after ?? 0}` },
-  { title: '原因', key: 'reason', ellipsis: { tooltip: true } },
-  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
-]
-const balanceCols = [
-  { title: '类型', key: 'change_type', width: 90 },
-  { title: '金额', key: 'amount', width: 90, render: (r) => formatCurrency(r.amount) },
-  { title: '变动后', key: 'balance_after', width: 90, render: (r) => formatCurrency(r.balance_after) },
-  { title: '说明', key: 'description', ellipsis: { tooltip: true }, render: (r) => r.description || '-' },
-  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
-]
-const rechargeCols = [
-  { title: '金额', key: 'amount', width: 90, render: (r) => formatCurrency(r.amount) },
-  { title: '方式', key: 'payment_method', width: 100 },
-  { title: '状态', key: 'status', width: 80 },
-  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
-]
 // Desktop table columns with INLINE controls
 const columns = [
   { type: 'selection' },
@@ -532,12 +387,8 @@ const inlineSetDevice = async (row, v) => {
   catch { message.error('更新失败') }
 }
 
-const handleViewDetail = async (row) => {
-  try {
-    const res = await getAdminSubscription(row.id)
-    detailData.value = res.data
-    showDetailDrawer.value = true
-  } catch { message.error('获取详情失败') }
+const handleViewDetail = (row) => {
+  userDetailDrawerRef.value?.open(row.user_id || row.id)
 }
 const handleLoginAs = async (row) => {
   try {
@@ -577,7 +428,7 @@ const handleSendEmail = async (row) => {
 }
 const handleDeleteUser = (row) => {
   dialog.error({ title: '确认删除', content: '永久删除该用户及所有数据，不可恢复！', positiveText: '删除', negativeText: '取消',
-    onPositiveClick: async () => { try { await deleteUserFull(row.user_id); message.success('已删除'); showDetailDrawer.value = false; fetchData() } catch { message.error('删除失败') } }
+    onPositiveClick: async () => { try { await deleteUserFull(row.user_id); message.success('已删除'); fetchData() } catch { message.error('删除失败') } }
   })
 }
 const handleClearDevices = (row) => {
@@ -671,15 +522,8 @@ onMounted(() => fetchData())
 .sub-action-item.is-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .sub-action-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
 .sub-action-item span { font-size: 11px; color: var(--text-color-secondary, #606266); }
-.qr-grid { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; }
-.qr-item { text-align: center; }
-.qr-title { font-weight: 600; margin-bottom: 8px; }
-.url-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.url-label { font-size: 12px; color: #666; min-width: 40px; }
-.url-text { font-size: 12px; word-break: break-all; color: #333; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
 @media (max-width: 767px) {
   .subscriptions-container { padding: 8px; }
-  .qr-grid { flex-direction: column; align-items: center; }
   /* 超小屏幕按钮网格适配 */
   .sub-btn-row { grid-template-columns: repeat(3, 1fr); }
   .sub-btn-row-5 { grid-template-columns: repeat(3, 1fr); }

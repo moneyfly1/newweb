@@ -37,22 +37,22 @@ const (
 var errDeviceLimitReached = errors.New("device limit reached")
 
 var (
-	configCache      map[string]string
-	configCacheMu    sync.RWMutex
-	configCacheTime  time.Time
-	configCacheTTL   = 10 * time.Minute
+	configCache     map[string]string
+	configCacheMu   sync.RWMutex
+	configCacheTime time.Time
+	configCacheTTL  = 10 * time.Minute
 )
 
 // subscriptionContext holds all info needed for subscription generation
 type subscriptionContext struct {
-	Sub               *models.Subscription
-	Nodes             []models.Node
-	Status            subscriptionStatus
-	SiteURL           string
-	SupportContact    string
-	CurrentDevices    int
-	DeviceLimit       int
-	ClientInfo        *services.ClientInfo
+	Sub                 *models.Subscription
+	Nodes               []models.Node
+	Status              subscriptionStatus
+	SiteURL             string
+	SupportContact      string
+	CurrentDevices      int
+	DeviceLimit         int
+	ClientInfo          *services.ClientInfo
 	HasDedicatedOnly    bool // 用户有"只显示专线"标记，订阅只含专线节点
 	HasUnlimitedDevices bool // 用户有不限制设备标记，跳过设备数量限制
 }
@@ -190,11 +190,11 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		r.SAdd(context.Background(), ipSetKey, clientIP)
 		r.Expire(context.Background(), ipSetKey, 48*time.Hour)
 		ipCount := r.SCard(context.Background(), ipSetKey).Val()
-		
+
 		// 如果单日超过 15 个不同的 IP，可能存在订阅泄露/合租贩卖
 		if ipCount > 15 {
 			utils.SysError("security_alert", fmt.Sprintf("【防滥用警报】订阅 ID: %d 疑似泄露！今日已被 %d 个不同IP拉取。", sub.ID, ipCount))
-			// 若需做到极度严格，可在此处拦截: 
+			// 若需做到极度严格，可在此处拦截:
 			// ctx.Status = subStatusDeviceOverLimit
 			// return ctx
 		}
@@ -234,7 +234,14 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 	// 设备追踪：所有非浏览器客户端都应记录设备
 	// 专线"不限制设备"模式仅跳过设备数限制，不跳过设备记录
+	appDeviceID := strings.TrimSpace(c.GetHeader("X-App-Device-Id"))
+	if appDeviceID == "" {
+		appDeviceID = strings.TrimSpace(c.Query("app_device_id"))
+	}
 	fingerprint := services.GenerateDeviceFingerprint(ua, ip)
+	if appDeviceID != "" {
+		fingerprint = services.GenerateDeviceFingerprint("MoneyFly-App-Device:"+appDeviceID, "")
+	}
 
 	var device models.Device
 	err := db.Where("subscription_id = ? AND device_fingerprint = ? AND is_active = ?", sub.ID, fingerprint, true).First(&device).Error
@@ -557,6 +564,7 @@ func generateSubscriptionName(ctx *subscriptionContext) string {
 // For explicit universal format, use /sub/:url
 func GetSubscription(c *gin.Context) {
 	ctx := buildSubscriptionContext(c)
+	excludedProtocols := parseExcludedProtocols(c.Query("exclude"))
 
 	// 支持 ?format= 和 ?type= 两种参数名（兼容不同客户端）
 	subType := c.Query("format")
@@ -587,6 +595,9 @@ func GetSubscription(c *gin.Context) {
 	r := database.GetRedis()
 	if ctx.Status == subStatusOK && ctx.Sub != nil && r != nil {
 		cacheKey = fmt.Sprintf("sub_payload:%d:%s", ctx.Sub.ID, subType)
+		if len(excludedProtocols) > 0 {
+			cacheKey = fmt.Sprintf("%s:exclude:%s", cacheKey, strings.Join(excludedProtocols, ","))
+		}
 		if cachedBody, err := r.Get(c.Request.Context(), cacheKey).Result(); err == nil && cachedBody != "" {
 			subscriptionName := generateSubscriptionName(ctx)
 			encodedName := url.QueryEscape(subscriptionName)
@@ -632,6 +643,9 @@ func GetSubscription(c *gin.Context) {
 		if ctx.ClientInfo != nil && isV2RayNClient(ctx.ClientInfo.SoftwareName) {
 			nodes = FilterNodesByProtocol(nodes, excludeProtocols(nodes, "socks", "socks5"))
 		}
+	}
+	if len(excludedProtocols) > 0 {
+		nodes = FilterNodesByProtocol(nodes, excludeProtocols(nodes, excludedProtocols...))
 	}
 
 	subscriptionName := generateSubscriptionName(ctx)
@@ -781,16 +795,16 @@ func buildClientSubscriptionURL(baseURL, token, typ string) string {
 
 func buildSubscriptionURLs(baseURL, token string) gin.H {
 	return gin.H{
-		"universal_url":   buildClientSubscriptionURL(baseURL, token, ""),
-		"clash_url":       buildClientSubscriptionURL(baseURL, token, "clash"),
-		"stash_url":       buildClientSubscriptionURL(baseURL, token, "stash"),
-		"surge_url":       buildClientSubscriptionURL(baseURL, token, "surge"),
-		"quantumultx_url": buildClientSubscriptionURL(baseURL, token, "quantumultx"),
-		"loon_url":        buildClientSubscriptionURL(baseURL, token, "loon"),
-		"singbox_url":     buildClientSubscriptionURL(baseURL, token, "singbox"),
+		"universal_url":    buildClientSubscriptionURL(baseURL, token, ""),
+		"clash_url":        buildClientSubscriptionURL(baseURL, token, "clash"),
+		"stash_url":        buildClientSubscriptionURL(baseURL, token, "stash"),
+		"surge_url":        buildClientSubscriptionURL(baseURL, token, "surge"),
+		"quantumultx_url":  buildClientSubscriptionURL(baseURL, token, "quantumultx"),
+		"loon_url":         buildClientSubscriptionURL(baseURL, token, "loon"),
+		"singbox_url":      buildClientSubscriptionURL(baseURL, token, "singbox"),
 		"shadowrocket_url": buildClientSubscriptionURL(baseURL, token, ""),
-		"v2ray_url":       buildClientSubscriptionURL(baseURL, token, ""),
-		"hiddify_url":     buildClientSubscriptionURL(baseURL, token, ""),
+		"v2ray_url":        buildClientSubscriptionURL(baseURL, token, ""),
+		"hiddify_url":      buildClientSubscriptionURL(baseURL, token, ""),
 	}
 }
 
@@ -815,35 +829,35 @@ func GetUserSubscription(c *gin.Context) {
 	}
 
 	result := gin.H{
-		"id":                    sub.ID,
-		"user_id":               sub.UserID,
-		"package_id":            sub.PackageID,
-		"package_name":          packageName,
-		"subscription_url":      sub.SubscriptionURL,
-		"token_url":             subscriptionURLs["universal_url"],
-		"token_clash_url":       subscriptionURLs["clash_url"],
-		"token_stash_url":       subscriptionURLs["stash_url"],
-		"token_surge_url":       subscriptionURLs["surge_url"],
-		"token_quantumultx_url": subscriptionURLs["quantumultx_url"],
-		"token_loon_url":        subscriptionURLs["loon_url"],
-		"token_singbox_url":     subscriptionURLs["singbox_url"],
+		"id":                     sub.ID,
+		"user_id":                sub.UserID,
+		"package_id":             sub.PackageID,
+		"package_name":           packageName,
+		"subscription_url":       sub.SubscriptionURL,
+		"token_url":              subscriptionURLs["universal_url"],
+		"token_clash_url":        subscriptionURLs["clash_url"],
+		"token_stash_url":        subscriptionURLs["stash_url"],
+		"token_surge_url":        subscriptionURLs["surge_url"],
+		"token_quantumultx_url":  subscriptionURLs["quantumultx_url"],
+		"token_loon_url":         subscriptionURLs["loon_url"],
+		"token_singbox_url":      subscriptionURLs["singbox_url"],
 		"token_shadowrocket_url": subscriptionURLs["shadowrocket_url"],
-		"token_v2ray_url":       subscriptionURLs["v2ray_url"],
-		"token_hiddify_url":     subscriptionURLs["hiddify_url"],
-		"device_limit":          sub.DeviceLimit,
-		"current_devices":       sub.CurrentDevices,
-		"universal_count":       sub.UniversalCount,
-		"clash_count":           sub.ClashCount,
-		"surge_count":           sub.SurgeCount,
-		"quanx_count":           sub.QuanXCount,
-		"shadowrocket_count":    sub.ShadowrocketCount,
-		"is_active":             sub.IsActive,
-		"status":                sub.Status,
-		"expire_time":           sub.ExpireTime,
-		"expire_at":             sub.ExpireTime.Format("2006-01-02"),
-		"days_remaining":        int(time.Until(sub.ExpireTime).Hours() / 24),
-		"created_at":            sub.CreatedAt,
-		"updated_at":            sub.UpdatedAt,
+		"token_v2ray_url":        subscriptionURLs["v2ray_url"],
+		"token_hiddify_url":      subscriptionURLs["hiddify_url"],
+		"device_limit":           sub.DeviceLimit,
+		"current_devices":        sub.CurrentDevices,
+		"universal_count":        sub.UniversalCount,
+		"clash_count":            sub.ClashCount,
+		"surge_count":            sub.SurgeCount,
+		"quanx_count":            sub.QuanXCount,
+		"shadowrocket_count":     sub.ShadowrocketCount,
+		"is_active":              sub.IsActive,
+		"status":                 sub.Status,
+		"expire_time":            sub.ExpireTime,
+		"expire_at":              sub.ExpireTime.Format("2006-01-02"),
+		"days_remaining":         int(time.Until(sub.ExpireTime).Hours() / 24),
+		"created_at":             sub.CreatedAt,
+		"updated_at":             sub.UpdatedAt,
 	}
 	utils.Success(c, result)
 }
@@ -1121,4 +1135,22 @@ func excludeProtocols(nodes []models.Node, excluded ...string) map[string]bool {
 		return nil
 	}
 	return allowed
+}
+
+func parseExcludedProtocols(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	protocols := make([]string, 0, len(parts))
+	seen := make(map[string]bool, len(parts))
+	for _, part := range parts {
+		protocol := strings.ToLower(strings.TrimSpace(part))
+		if protocol == "" || seen[protocol] {
+			continue
+		}
+		seen[protocol] = true
+		protocols = append(protocols, protocol)
+	}
+	return protocols
 }

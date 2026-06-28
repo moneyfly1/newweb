@@ -131,6 +131,9 @@ export const importCustomNodeLinks = (data: { links: string }) => request.post('
 export const batchDeleteCustomNodes = (data: { ids: number[] }) => request.post('/admin/custom-nodes/batch-delete', data)
 export const getCustomNodeLink = (id: number) => request.get(`/admin/custom-nodes/${id}/link`)
 export const getCustomNodeUsers = (id: number) => request.get(`/admin/custom-nodes/${id}/users`)
+export const getUserCustomNodes = (userId: number) => request.get(`/admin/users/${userId}/custom-nodes`)
+export const assignCustomNodeToUser = (userId: number, data: any) => request.post(`/admin/users/${userId}/custom-nodes`, data)
+export const unassignCustomNodeFromUser = (userId: number, nodeId: number) => request.delete(`/admin/users/${userId}/custom-nodes/${nodeId}`)
 
 // Config Update
 export const getConfigUpdateConfig = () => request.get('/admin/config-update/config')
@@ -185,4 +188,3 @@ export const testPaymentGateway = (type: string) => request.post(`/admin/payment
 export const getPaymentStats = (params?: any) => request.get('/admin/stats/payment', { params })
 export const getPaymentMethodComparison = (params?: any) => request.get('/admin/stats/payment/comparison', { params })
 export const getPaymentAnalysis = (params?: any) => request.get('/admin/stats/payment/analysis', { params })
-

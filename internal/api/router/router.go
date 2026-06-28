@@ -31,7 +31,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	// CORS
 	corsConfig := cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept", "X-CSRF-Token"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Accept", "X-CSRF-Token", "X-App-Device-Id"},
 		ExposeHeaders:    []string{"Content-Length", "Content-Disposition", "Subscription-Userinfo", "Profile-Title", "Subscription-Title", "Profile-Update-Interval"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
@@ -240,6 +240,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminUsers.GET("/:id", handlers.AdminGetUser)
 			adminUsers.PUT("/:id", handlers.AdminUpdateUser)
 			adminUsers.DELETE("/:id", handlers.AdminDeleteUser)
+			adminUsers.GET("/:id/custom-nodes", handlers.AdminGetUserCustomNodes)
+			adminUsers.POST("/:id/custom-nodes", handlers.AdminAssignCustomNodeToUser)
+			adminUsers.DELETE("/:id/custom-nodes/:nodeId", handlers.AdminUnassignCustomNodeFromUser)
 			adminUsers.POST("/:id/toggle-active", handlers.AdminToggleUserActive)
 			adminUsers.POST("/:id/reset-password", handlers.AdminResetUserPassword)
 			adminUsers.GET("/abnormal", handlers.AdminGetAbnormalUsers)

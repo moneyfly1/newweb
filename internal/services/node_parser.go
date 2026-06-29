@@ -3407,6 +3407,7 @@ func GenerateUniversalBase64(nodes []models.Node) string {
 }
 
 func writeClashProxy(sb *strings.Builder, m map[string]interface{}) {
+	m = normalizeClashProxyMap(m)
 	sb.WriteString("  - ")
 	// Write fields in a deterministic order
 	orderedKeys := []string{"name", "type", "server", "port", "uuid", "alterId", "cipher", "username", "password", "flow", "network", "tls", "servername", "sni", "client-fingerprint", "skip-cert-verify", "udp", "protocol", "protocol-param", "obfs", "obfs-param", "auth-str", "up", "down", "congestion-controller", "alpn"}
@@ -3450,6 +3451,31 @@ func writeClashProxy(sb *strings.Builder, m map[string]interface{}) {
 		writeYAMLInlineValue(sb, m[key])
 	}
 	sb.WriteString("}\n")
+}
+
+func normalizeClashProxyMap(m map[string]interface{}) map[string]interface{} {
+	if !shouldClashSkipCertVerify(m) {
+		return m
+	}
+	clone := make(map[string]interface{}, len(m)+1)
+	for k, v := range m {
+		clone[k] = v
+	}
+	clone["skip-cert-verify"] = true
+	return clone
+}
+
+func shouldClashSkipCertVerify(m map[string]interface{}) bool {
+	typ, _ := m["type"].(string)
+	switch typ {
+	case "vless", "vmess", "trojan", "hysteria", "hysteria2":
+		tls, _ := m["tls"].(bool)
+		return tls || typ == "trojan" || typ == "hysteria" || typ == "hysteria2"
+	case "tuic", "anytls":
+		return true
+	default:
+		return false
+	}
 }
 
 func writeYAMLInlineValue(sb *strings.Builder, val interface{}) {

@@ -3,6 +3,8 @@ package services
 import (
 	"strings"
 	"testing"
+
+	"cboard/v2/internal/models"
 )
 
 func TestParseSubscriptionContentSupportsClashYAML(t *testing.T) {
@@ -161,11 +163,30 @@ func TestWriteClashProxyDefaultsTLSToSkipCertVerify(t *testing.T) {
 	var sb strings.Builder
 	writeClashProxy(&sb, proxy)
 	out := sb.String()
+	wantPrefix := "  - {name: 日本01快橙, server: n1743918709.4u9ma.icu, port: 443, type: vless, uuid: 15884975-9b74-4502-b6a3-f69df7ec93d7, tls: true, tfo: false, skip-cert-verify: true, servername: n1743918709.4u9ma.icu, client-fingerprint: chrome, network: ws"
+	if !strings.HasPrefix(out, wantPrefix) {
+		t.Fatalf("expected Clash output to start like converter format:\nwant prefix: %s\ngot: %s", wantPrefix, out)
+	}
 	if !strings.Contains(out, "skip-cert-verify: true") {
 		t.Fatalf("expected skip-cert-verify true in Clash output, got: %s", out)
 	}
 	if !strings.Contains(out, "path: /15884975-9b74-4502-b6a3-f69df7ec93d7") {
 		t.Fatalf("expected full ws path in Clash output, got: %s", out)
+	}
+}
+
+func TestGenerateClashYAMLKeepsConverterLikeVLESSOrder(t *testing.T) {
+	link := "vless://15884975-9b74-4502-b6a3-f69df7ec93d7@n1743918709.4u9ma.icu:443?encryption=none&security=tls&sni=n1743918709.4u9ma.icu&fp=chrome&insecure=0&allowInsecure=0&type=ws&host=n1743918709.4u9ma.icu&path=%2F15884975-9b74-4502-b6a3-f69df7ec93d7#%E6%97%A5%E6%9C%AC01%E5%BF%AB%E6%A9%99"
+	nodes := []models.Node{{
+		Name:   "日本01快橙",
+		Type:   "vless",
+		Config: &link,
+	}}
+
+	out := GenerateClashYAML(nodes)
+	want := "- {name: 日本01快橙, server: n1743918709.4u9ma.icu, port: 443, type: vless, uuid: 15884975-9b74-4502-b6a3-f69df7ec93d7, tls: true, tfo: false, skip-cert-verify: true, servername: n1743918709.4u9ma.icu, client-fingerprint: chrome, network: ws"
+	if !strings.Contains(out, want) {
+		t.Fatalf("expected final Clash YAML to contain converter-like VLESS line:\nwant: %s\noutput:\n%s", want, out)
 	}
 }
 

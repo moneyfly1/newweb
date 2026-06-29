@@ -3410,7 +3410,7 @@ func writeClashProxy(sb *strings.Builder, m map[string]interface{}) {
 	m = normalizeClashProxyMap(m)
 	sb.WriteString("  - ")
 	// Write fields in a deterministic order
-	orderedKeys := []string{"name", "type", "server", "port", "uuid", "alterId", "cipher", "username", "password", "flow", "network", "tls", "servername", "sni", "client-fingerprint", "skip-cert-verify", "udp", "protocol", "protocol-param", "obfs", "obfs-param", "auth-str", "up", "down", "congestion-controller", "alpn"}
+	orderedKeys := []string{"name", "server", "port", "type", "uuid", "alterId", "cipher", "username", "password", "tls", "tfo", "flow", "skip-cert-verify", "servername", "sni", "client-fingerprint", "network", "udp", "protocol", "protocol-param", "obfs", "obfs-param", "auth-str", "up", "down", "congestion-controller", "alpn"}
 	written := make(map[string]bool)
 
 	first := true
@@ -3454,14 +3454,21 @@ func writeClashProxy(sb *strings.Builder, m map[string]interface{}) {
 }
 
 func normalizeClashProxyMap(m map[string]interface{}) map[string]interface{} {
-	if !shouldClashSkipCertVerify(m) {
+	needsSkipCertVerify := shouldClashSkipCertVerify(m)
+	needsTFO := shouldClashDisableTFO(m)
+	if !needsSkipCertVerify && !needsTFO {
 		return m
 	}
 	clone := make(map[string]interface{}, len(m)+1)
 	for k, v := range m {
 		clone[k] = v
 	}
-	clone["skip-cert-verify"] = true
+	if needsSkipCertVerify {
+		clone["skip-cert-verify"] = true
+	}
+	if needsTFO {
+		clone["tfo"] = false
+	}
 	return clone
 }
 
@@ -3472,6 +3479,20 @@ func shouldClashSkipCertVerify(m map[string]interface{}) bool {
 		tls, _ := m["tls"].(bool)
 		return tls || typ == "trojan" || typ == "hysteria" || typ == "hysteria2"
 	case "tuic", "anytls":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldClashDisableTFO(m map[string]interface{}) bool {
+	tls, _ := m["tls"].(bool)
+	if !tls {
+		return false
+	}
+	typ, _ := m["type"].(string)
+	switch typ {
+	case "vless", "vmess", "trojan":
 		return true
 	default:
 		return false

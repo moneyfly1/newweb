@@ -1,6 +1,7 @@
 package services
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -143,6 +144,28 @@ func TestSSRLinkToClashMapPreservesRemarksAndGroup(t *testing.T) {
 	}
 	if got := proxy["obfs-param"]; got != "27794-Sikeming001.download.microsoft.com" {
 		t.Fatalf("expected obfs-param to be preserved, got %v", got)
+	}
+}
+
+func TestWriteClashProxyDefaultsTLSToSkipCertVerify(t *testing.T) {
+	link := "vless://15884975-9b74-4502-b6a3-f69df7ec93d7@n1743918709.4u9ma.icu:443?encryption=none&security=tls&sni=n1743918709.4u9ma.icu&fp=chrome&insecure=0&allowInsecure=0&type=ws&host=n1743918709.4u9ma.icu&path=%2F15884975-9b74-4502-b6a3-f69df7ec93d7#%E6%97%A5%E6%9C%AC01%E5%BF%AB%E6%A9%99"
+
+	proxy, err := VlessLinkToClashMap(link, "日本01快橙")
+	if err != nil {
+		t.Fatalf("VlessLinkToClashMap returned error: %v", err)
+	}
+	if got, ok := proxy["skip-cert-verify"]; ok && got == true {
+		t.Fatal("parser should preserve source insecurity flag; Clash writer applies the default")
+	}
+
+	var sb strings.Builder
+	writeClashProxy(&sb, proxy)
+	out := sb.String()
+	if !strings.Contains(out, "skip-cert-verify: true") {
+		t.Fatalf("expected skip-cert-verify true in Clash output, got: %s", out)
+	}
+	if !strings.Contains(out, "path: /15884975-9b74-4502-b6a3-f69df7ec93d7") {
+		t.Fatalf("expected full ws path in Clash output, got: %s", out)
 	}
 }
 

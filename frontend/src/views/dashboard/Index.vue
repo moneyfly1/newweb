@@ -178,32 +178,6 @@
       </div>
       <!-- Right Column -->
       <div class="right-col">
-        <!-- Client Downloads -->
-        <div class="card" v-if="hasAnyClientUrl">
-          <div class="card-header"><span class="card-title">客户端下载</span></div>
-          <n-tabs type="segment" size="small" animated>
-            <n-tab-pane v-for="tab in clientTabs" :key="tab.name" :name="tab.name" :tab="tab.label">
-              <div class="client-grid">
-                <div v-for="c in tab.clients" :key="c.key" class="client-card" @click="openUrl(c.url)">
-                  <span class="client-icon">
-                    <img
-                      v-if="canShowIcon(`client:${c.key}`, c.iconUrl)"
-                      class="app-icon"
-                      :src="c.iconUrl"
-                      :alt="c.name"
-                      loading="lazy"
-                      @error="markIconFailed(`client:${c.key}`)"
-                    />
-                    <span v-else>{{ c.icon }}</span>
-                  </span>
-                  <span class="client-name">{{ c.name }}</span>
-                  <n-icon :component="DownloadOutline" size="14" color="#999" />
-                </div>
-              </div>
-            </n-tab-pane>
-          </n-tabs>
-        </div>
-
         <!-- Quick Actions -->
         <div class="card">
           <div class="card-header"><span class="card-title">快捷操作</span></div>
@@ -236,6 +210,37 @@
             </div>
             <n-empty v-else description="暂无订单" size="small" />
           </n-spin>
+        </div>
+
+        <!-- Client Downloads -->
+        <div class="card" v-if="hasAnyClientUrl">
+          <div class="card-header">
+            <span class="card-title">软件下载</span>
+            <n-tag v-if="currentClientTabLabel" size="small" type="info" :bordered="false">
+              {{ currentClientTabLabel }}
+            </n-tag>
+          </div>
+          <n-tabs v-model:value="activeClientTab" type="segment" size="small" animated>
+            <n-tab-pane v-for="tab in clientTabs" :key="tab.name" :name="tab.name" :tab="tab.label">
+              <div class="client-grid">
+                <button v-for="c in tab.clients" :key="c.key" class="client-card" type="button" @click="openUrl(c.url)">
+                  <span class="client-icon">
+                    <img
+                      v-if="canShowIcon(`client:${c.key}`, c.iconUrl)"
+                      class="app-icon"
+                      :src="c.iconUrl"
+                      :alt="c.name"
+                      loading="lazy"
+                      @error="markIconFailed(`client:${c.key}`)"
+                    />
+                    <span v-else>{{ c.icon }}</span>
+                  </span>
+                  <span class="client-name">{{ c.name }}</span>
+                  <n-icon :component="DownloadOutline" size="14" color="#999" />
+                </button>
+              </div>
+            </n-tab-pane>
+          </n-tabs>
         </div>
       </div>
     </div>
@@ -292,6 +297,7 @@ function maskUrl(url: string) {
   return url.substring(0, 20) + '••••••••' + url.substring(url.length - 6)
 }
 const clientConfig = ref<Record<string, string>>({})
+const activeClientTab = ref('windows')
 const checkinStatus = ref<any>({})
 const checkinLoading = ref(false)
 
@@ -348,13 +354,47 @@ const hasAnyClientUrl = computed(() =>
   windowsClients.value.length || androidClients.value.length || macClients.value.length || iosClients.value.length || linuxClients.value.length
 )
 
-const clientTabs = computed(() => [
+const detectedPlatform = computed(() => {
+  if (typeof navigator === 'undefined') return 'windows'
+  const ua = navigator.userAgent.toLowerCase()
+  const platform = navigator.platform?.toLowerCase() || ''
+  if (/iphone|ipad|ipod/.test(ua)) return 'ios'
+  if (/android/.test(ua)) return 'android'
+  if (platform.includes('mac')) return 'macos'
+  if (platform.includes('linux')) return 'linux'
+  return 'windows'
+})
+
+const clientTabSource = computed(() => [
   { name: 'windows', label: 'Windows', clients: windowsClients.value },
   { name: 'android', label: 'Android', clients: androidClients.value },
   { name: 'macos', label: 'macOS', clients: macClients.value },
   { name: 'ios', label: 'iOS', clients: iosClients.value },
   { name: 'linux', label: 'Linux', clients: linuxClients.value },
 ].filter(t => t.clients.length))
+
+const preferredClientTab = computed(() => {
+  if (clientTabSource.value.some(t => t.name === detectedPlatform.value)) return detectedPlatform.value
+  return clientTabSource.value[0]?.name || 'windows'
+})
+
+const clientTabs = computed(() => {
+  const preferred = preferredClientTab.value
+  return [...clientTabSource.value].sort((a, b) => {
+    if (a.name === preferred) return -1
+    if (b.name === preferred) return 1
+    return 0
+  })
+})
+
+const currentClientTabLabel = computed(() => {
+  const tab = clientTabSource.value.find(t => t.name === activeClientTab.value)
+  return tab ? `当前系统：${tab.label}` : ''
+})
+
+watch(preferredClientTab, (tab) => {
+  activeClientTab.value = tab
+}, { immediate: true })
 
 function buildTypedSubscriptionUrl(base: string, type: string) {
   if (!base || !type) return base || ''
@@ -706,10 +746,11 @@ onUnmounted(() => {
 .qs-actions { display: flex; gap: 8px; padding: 0 12px 12px 50px; flex-wrap: wrap; }
 
 /* Client Downloads */
-.client-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
-.client-card { display: flex; align-items: center; gap: 6px; padding: 8px; border-radius: 6px; background: #f8f8fa; cursor: pointer; transition: background 0.2s; }
-.client-card:hover { background: #eef0f5; }
-.client-icon { font-size: 16px; }
+.client-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.client-card { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: #f8f8fa; color: inherit; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+.client-card:hover { background: #eef0f5; border-color: #dfe4ee; }
+.client-card:focus-visible { outline: 2px solid rgba(102,126,234,0.45); outline-offset: 2px; }
+.client-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; font-size: 16px; flex-shrink: 0; }
 .client-name { flex: 1; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .app-icon { width: 18px; height: 18px; object-fit: contain; border-radius: 4px; }

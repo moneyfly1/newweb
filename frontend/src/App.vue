@@ -16,7 +16,7 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 import { zhCN, dateZhCN, darkTheme } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
-import { getSettings } from '@/api/admin'
+import { getPublicConfig } from '@/api/common'
 
 const appStore = useAppStore()
 const naiveTheme = computed(() => appStore.isDark ? darkTheme : null)
@@ -25,7 +25,7 @@ onMounted(() => {
   appStore.initTheme()
 
   // 动态设置网站标题、描述和图标（不阻塞渲染）
-  getSettings().then(res => {
+  getPublicConfig().then(res => {
     if (res.code === 0 && res.data) {
       const siteName = res.data.site_name || 'CBoard'
       const siteDesc = res.data.site_description || '高效流畅的管理面板'

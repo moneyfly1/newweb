@@ -43,7 +43,7 @@
           <n-button size="small" type="info" @click="handleBatchEmail">批量发送</n-button>
           <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
         </n-space>
-        <n-data-table remote class="unified-admin-table" :columns="columns" :data="tableData" :loading="loading" :pagination="pagination" :bordered="false" :single-line="false" :scroll-x="1500"
+        <n-data-table remote class="unified-admin-table" :columns="columns" :data="tableData" :loading="loading" :pagination="pagination" :bordered="false" :single-line="false" :scroll-x="1700"
           :row-key="(row) => row.id"
           :checked-row-keys="checkedRowKeys"
           @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
@@ -220,24 +220,12 @@ const getRemainingDaysColor = (t) => {
   if (diff <= 0) return '#e03050'; if (diff <= 3) return '#e03050'; if (diff <= 7) return '#f0a020'; return '#18a058'
 }
 const getShadowrocketUrl = (url) => 'sub://' + btoa(url)
-/** Effective subscription URL: from API or fallback from current origin + subscription_url token */
-const getRowUniversalUrl = (row) => {
-  if (row?.universal_url) return row.universal_url
-  if (row?.subscription_url && typeof window !== 'undefined') {
-    const base = window.location.origin.replace(/\/$/, '')
-    return `${base}/api/v1/client/subscribe?token=${row.subscription_url}`
-  }
-  return ''
+const getRowUniversalUrl = (row) => row?.universal_url || ''
+const getRowClashUrl = (row) => row?.clash_url || ''
+const copyText = async (text, label = '') => {
+  const ok = await clipboardCopy(text)
+  ok ? message.success(`${label || '内容'}已复制`) : message.error('复制失败')
 }
-const getRowClashUrl = (row) => {
-  if (row?.clash_url) return row.clash_url
-  if (row?.subscription_url && typeof window !== 'undefined') {
-    const base = window.location.origin.replace(/\/$/, '')
-    return `${base}/api/v1/client/subscribe?token=${row.subscription_url}&type=clash`
-  }
-  return ''
-}
-const copyText = async (text) => { const ok = await clipboardCopy(text); ok ? message.success('已复制') : message.error('复制失败') }
 const saveNotes = async (row) => {
   try { await updateUserNotes(row.user_id, row.user_notes || ''); message.success('备注已保存') }
   catch { message.error('保存备注失败') }
@@ -270,7 +258,7 @@ const columns = [
     ])
   },
   {
-    title: 'SR', key: 'qr', width: 50,
+    title: 'SR', key: 'qr', width: 50, resizable: true,
     render: (row) => getRowUniversalUrl(row) ? h(NButton, { size: 'tiny', quaternary: true, onClick: () => showSingleQR(row) }, { icon: () => h('span', { style: 'font-size:16px' }, '📱') }) : '-'
   },
   {
@@ -312,6 +300,28 @@ const columns = [
     })
   },
   {
+    title: '订阅地址', key: 'subscription_links', width: 150, resizable: true,
+    render: (row) => {
+      const universalUrl = getRowUniversalUrl(row)
+      const clashUrl = getRowClashUrl(row)
+      if (!universalUrl && !clashUrl) return '-'
+      return h('div', { class: 'subscription-link-actions' }, [
+        universalUrl ? h(NButton, {
+          size: 'small',
+          secondary: true,
+          type: 'info',
+          onClick: () => copyText(universalUrl, '通用订阅地址'),
+        }, { icon: () => h(CopyOutline), default: () => '通用' }) : null,
+        clashUrl ? h(NButton, {
+          size: 'small',
+          secondary: true,
+          type: 'success',
+          onClick: () => copyText(clashUrl, 'Clash 订阅地址'),
+        }, { icon: () => h(CopyOutline), default: () => 'Clash' }) : null,
+      ])
+    }
+  },
+  {
     title: '状态', key: 'status', width: 80, resizable: true,
     render: (row) => h(NTag, { type: getStatusType(row.status), size: 'small' }, { default: () => getStatusText(row.status) })
   },
@@ -324,7 +334,7 @@ const columns = [
     ])
   },
   {
-    title: '操作', key: 'actions', width: 200, fixed: 'right',
+    title: '操作', key: 'actions', width: 200, fixed: 'right', resizable: true,
     render: (row) => h('div', { class: 'action-btn-grid' }, [
       h(NButton, { size: 'small', type: 'success', onClick: () => handleLoginAs(row) }, { default: () => '后台' }),
       h(NButton, { size: 'small', type: 'warning', onClick: () => handleReset(row) }, { default: () => '重置' }),
@@ -497,6 +507,8 @@ onMounted(() => fetchData())
 :deep(.inline-quick-btns) { display: flex; gap: 4px; margin-top: 4px; justify-content: center; }
 :deep(.inline-quick-btns .n-button) { flex: 1; }
 :deep(.action-btn-grid) { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+:deep(.subscription-link-actions) { display: grid; gap: 6px; }
+:deep(.subscription-link-actions .n-button) { justify-content: flex-start; }
 /* Mobile cards */
 .mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
 .sub-card { background: var(--bg-color, #fff); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }

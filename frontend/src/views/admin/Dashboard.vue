@@ -52,7 +52,9 @@
       <n-grid :cols="appStore.isMobile ? 1 : 3" :x-gap="16" :y-gap="16">
         <n-grid-item span="2">
           <n-card title="收入趋势（近30天）" :bordered="false" class="glass-card shadow-sm">
-            <v-chart :option="revenueChartOption" autoresize style="height: 320px;" />
+            <div class="chart-shell">
+              <revenue-bar-chart :data="revenueTrend" />
+            </div>
           </n-card>
         </n-grid-item>
         <n-grid-item>
@@ -140,27 +142,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { defineAsyncComponent, ref, computed, onMounted } from 'vue'
 import { useMessage, type TagProps } from 'naive-ui'
 import {
   PeopleOutline, CheckmarkCircleOutline, TrendingUpOutline, WalletOutline,
   CartOutline, ChatbubbleEllipsesOutline, RefreshOutline, AlertCircleOutline
 } from '@vicons/ionicons5'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent, VisualMapComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
 import { useRouter } from 'vue-router'
 import { getAdminDashboard } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
 
-use([CanvasRenderer, BarChart, GridComponent, TooltipComponent, LegendComponent, VisualMapComponent])
-
 const router = useRouter()
 const appStore = useAppStore()
 const message = useMessage()
+const RevenueBarChart = defineAsyncComponent(() => import('./components/RevenueBarChart.vue'))
 
 const stats = ref<any>({
   total_users: 0,
@@ -180,23 +176,6 @@ const conversionRate = computed(() => {
   if (!stats.value.total_users) return 0
   return ((stats.value.active_subscriptions / stats.value.total_users) * 100).toFixed(1)
 })
-
-const revenueChartOption = computed(() => ({
-  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-  grid: { left: '4%', right: '4%', top: '10%', bottom: '10%', containLabel: true },
-  xAxis: { type: 'category', data: revenueTrend.value.map(d => d.date.slice(5)), axisLine: { lineStyle: { color: '#eee' } }, axisLabel: { color: '#999' } },
-  yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#f5f5f5' } }, axisLabel: { color: '#999' } },
-  series: [{
-    name: '收入',
-    type: 'bar',
-    data: revenueTrend.value.map(d => d.value),
-    itemStyle: {
-      color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#3b82f6' }, { offset: 1, color: '#60a5fa' }] },
-      borderRadius: [6, 6, 0, 0]
-    },
-    barMaxWidth: 16
-  }]
-}))
 
 const loadDashboard = async () => {
   try {
@@ -295,6 +274,12 @@ onMounted(() => loadDashboard())
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(10px);
+}
+
+.chart-shell {
+  min-height: 320px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.04), rgba(59, 130, 246, 0));
 }
 
 .activity-list {

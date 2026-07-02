@@ -32,7 +32,7 @@
             </n-input>
           </n-form-item>
           <n-form-item path="password">
-            <n-input v-model:value="form.password" type="password" show-password-on="click" placeholder="密码" size="large" @keyup.enter="handleLogin">
+            <n-input v-model:value="form.password" type="password" show-password-on="click" placeholder="密码" size="large" :input-props="{ autocomplete: 'current-password' }" @keyup.enter="handleLogin">
               <template #prefix><n-icon :component="LockClosedOutline" /></template>
             </n-input>
           </n-form-item>

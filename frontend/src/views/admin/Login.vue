@@ -26,6 +26,7 @@
             show-password-on="click"
             placeholder="密码"
             size="large"
+            :input-props="{ autocomplete: 'current-password' }"
             @keyup.enter="handleLogin"
           >
             <template #prefix><n-icon :component="LockClosedOutline" /></template>

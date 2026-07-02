@@ -40,17 +40,31 @@ server {
     listen 80;
     server_name your-domain.com;
 
-    # 前端
-    location / {
+    # 前端静态资源（Vite 文件名带 hash，可长期缓存）
+    location /assets/ {
         root /path/to/frontend/dist;
-        try_files $uri $uri/ /index.html;
+        access_log off;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        gzip_static on;
+        # 如已安装 ngx_brotli 模块，开启下一行以直接返回 npm run build 生成的 .br 文件
+        # brotli_static on;
+        try_files $uri =404;
     }
 
     # 后端 API
-    location /api {
+    location /api/ {
         proxy_pass http://localhost:9000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # SPA 入口不做长期缓存，避免发布后用户拿到旧 index.html
+    location / {
+        root /path/to/frontend/dist;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files $uri $uri/ /index.html;
     }
 }
 ```
@@ -68,7 +82,7 @@ server {
 
 1. 启用 Redis 缓存
 2. 配置 CDN
-3. 开启 Gzip 压缩
+3. 开启 Gzip/Brotli 预压缩静态资源（`gzip_static on;`，安装 ngx_brotli 后启用 `brotli_static on;`）
 
 ## 监控
 

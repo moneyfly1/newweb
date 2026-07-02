@@ -14,10 +14,11 @@
         :collapsed-icon-size="22"
         :options="menuOptions"
         :value="activeKey"
-        :default-expanded-keys="expandedKeys"
+        :expanded-keys="expandedKeys"
         :inverted="false"
-        :accordion="true"
+        :accordion="false"
         :dropdown-props="{ trigger: 'hover', placement: 'right-start' }"
+        @update:expanded-keys="handleExpandedKeys"
         @update:value="handleMenuClick"
       />
     </n-layout-sider>
@@ -32,7 +33,14 @@
         </n-space>
       </n-layout-header>
       <n-layout-content content-style="padding: 24px;" :native-scrollbar="false">
-        <div id="main-content" tabindex="-1"><router-view /></div>
+        <div id="main-content" tabindex="-1">
+          <router-view v-slot="{ Component }">
+            <suspense>
+              <component :is="Component" />
+              <template #fallback><loading-screen /></template>
+            </suspense>
+          </router-view>
+        </div>
       </n-layout-content>
     </n-layout>
   </n-layout>
@@ -50,7 +58,14 @@
       </n-dropdown>
     </n-layout-header>
     <n-layout-content content-style="padding: 16px; padding-bottom: 80px;" :native-scrollbar="false">
-      <div id="main-content" tabindex="-1"><router-view /></div>
+      <div id="main-content" tabindex="-1">
+        <router-view v-slot="{ Component }">
+          <suspense>
+            <component :is="Component" />
+            <template #fallback><loading-screen /></template>
+          </suspense>
+        </router-view>
+      </div>
     </n-layout-content>
     <div class="mobile-tabbar">
       <div v-for="tab in mobileTabs" :key="tab.key" class="mobile-tab" :class="{ active: activeKey === tab.key }" @click="handleMenuClick(tab.key)">
@@ -60,7 +75,7 @@
     </div>
     <n-drawer v-model:show="showDrawer" placement="left" :width="appStore.isMobile ? 'calc(100vw - 24px)' : 260" :style="appStore.isMobile ? { margin: '12px 0 12px 12px', borderRadius: '18px', overflow: 'hidden' } : undefined" closable>
       <n-drawer-content title="导航菜单" :native-scrollbar="false">
-        <n-menu :options="menuOptions" :value="activeKey" :default-expanded-keys="expandedKeys" @update:value="handleMobileMenuClick" />
+        <n-menu :options="menuOptions" :value="activeKey" :expanded-keys="expandedKeys" :accordion="false" @update:expanded-keys="handleExpandedKeys" @update:value="handleMobileMenuClick" />
       </n-drawer-content>
     </n-drawer>
   </n-layout>
@@ -87,13 +102,13 @@
   <n-modal v-model:show="showPwdModal" preset="card" title="修改密码" :style="{ width: appStore.isMobile ? '90%' : '420px' }">
     <n-form ref="pwdFormRef" :model="pwdForm" :rules="pwdRules" label-placement="left" label-width="80">
       <n-form-item label="当前密码" path="old_password">
-        <n-input v-model:value="pwdForm.old_password" type="password" show-password-on="click" placeholder="请输入当前密码" />
+        <n-input v-model:value="pwdForm.old_password" type="password" show-password-on="click" placeholder="请输入当前密码" :input-props="{ autocomplete: 'current-password' }" />
       </n-form-item>
       <n-form-item label="新密码" path="new_password">
-        <n-input v-model:value="pwdForm.new_password" type="password" show-password-on="click" placeholder="请输入新密码" />
+        <n-input v-model:value="pwdForm.new_password" type="password" show-password-on="click" placeholder="请输入新密码" :input-props="{ autocomplete: 'new-password' }" />
       </n-form-item>
       <n-form-item label="确认密码" path="confirm_password">
-        <n-input v-model:value="pwdForm.confirm_password" type="password" show-password-on="click" placeholder="请再次输入新密码" />
+        <n-input v-model:value="pwdForm.confirm_password" type="password" show-password-on="click" placeholder="请再次输入新密码" :input-props="{ autocomplete: 'new-password' }" />
       </n-form-item>
     </n-form>
     <template #footer>
@@ -119,6 +134,8 @@ import {
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { changePassword } from '@/api/user'
+import { preloadRouteComponent } from '@/router'
+import LoadingScreen from '@/components/LoadingScreen.vue'
 import { initNotification } from '@/utils/notification'
 import { startNotificationPolling, stopNotificationPolling } from '@/utils/polling'
 
@@ -131,6 +148,9 @@ const showDrawer = ref(false)
 
 // 初始化通知并启动轮询
 onMounted(() => {
+  if (!appStore.isMobile) {
+    appStore.sidebarCollapsed = false
+  }
   initNotification()
   startNotificationPolling()
 })
@@ -173,38 +193,54 @@ async function handleChangePwd() {
 }
 
 function renderIcon(icon: any) { return () => h(NIcon, null, { default: () => h(icon) }) }
-
-const menuOptions = [
-  { label: '概览', key: 'group-overview', icon: renderIcon(GridOutline), children: [{ label: '仪表盘', key: 'AdminDashboard' }] },
-  { label: '用户管理', key: 'group-users', icon: renderIcon(PeopleOutline), children: [
-    { label: '用户列表', key: 'AdminUsers' }, { label: '异常用户', key: 'AdminAbnormalUsers' }, { label: '订阅管理', key: 'AdminSubscriptions' },
-  ]},
-  { label: '节点管理', key: 'group-nodes', icon: renderIcon(ServerOutline), children: [
-    { label: '节点管理', key: 'AdminNodes' }, { label: '专线节点', key: 'AdminCustomNodes' }, { label: '节点更新', key: 'AdminConfigUpdate' },
-  ]},
-  { label: '订单管理', key: 'group-orders', icon: renderIcon(CartOutline), children: [
-    { label: '订单列表', key: 'AdminOrders' }, { label: '套餐管理', key: 'AdminPackages' },
-  ]},
-  { label: '系统管理', key: 'group-system', icon: renderIcon(SettingsOutline), children: [
-    { label: '系统设置', key: 'AdminSettings' }, { label: '公告管理', key: 'AdminAnnouncements' },
-    { label: '优惠券', key: 'AdminCoupons' }, { label: '邀请码管理', key: 'AdminInvites' }, { label: '卡密管理', key: 'AdminRedeem' }, { label: '盲盒管理', key: 'AdminMysteryBox' }, { label: '用户等级', key: 'AdminLevels' },
-  ]},
-  { label: '日志与分析', key: 'group-logs', icon: renderIcon(StatsChartOutline), children: [
-    { label: '数据统计', key: 'AdminStats' }, { label: '系统日志', key: 'AdminLogs' }, { label: '邮件队列', key: 'AdminEmailQueue' },
-  ]},
-  { label: '工单管理', key: 'group-tickets', icon: renderIcon(ChatbubblesOutline), children: [{ label: '工单管理', key: 'AdminTickets' }] },
-]
-
-const routeToGroup: Record<string, string> = {}
-for (const group of menuOptions) {
-  if (group.children) { for (const child of group.children) { routeToGroup[child.key] = group.key } }
+function renderMenuLabel(label: string, key: string) {
+  return () => h('span', {
+    onMouseenter: () => preloadRouteComponent(key),
+    onFocus: () => preloadRouteComponent(key),
+  }, label)
+}
+function menuItem(label: string, key: string) {
+  return { label: renderMenuLabel(label, key), key }
 }
 
-const activeKey = computed(() => route.name as string)
-const expandedKeys = computed(() => { const g = routeToGroup[route.name as string]; return g ? [g] : [] })
+const menuOptions = [
+  { label: '概览', key: 'group-overview', icon: renderIcon(GridOutline), children: [menuItem('仪表盘', 'AdminDashboard')] },
+  { label: '用户管理', key: 'group-users', icon: renderIcon(PeopleOutline), children: [
+    menuItem('用户列表', 'AdminUsers'), menuItem('异常用户', 'AdminAbnormalUsers'), menuItem('订阅管理', 'AdminSubscriptions'),
+  ]},
+  { label: '节点管理', key: 'group-nodes', icon: renderIcon(ServerOutline), children: [
+    menuItem('节点管理', 'AdminNodes'), menuItem('专线节点', 'AdminCustomNodes'), menuItem('节点更新', 'AdminConfigUpdate'),
+  ]},
+  { label: '订单管理', key: 'group-orders', icon: renderIcon(CartOutline), children: [
+    menuItem('订单列表', 'AdminOrders'), menuItem('套餐管理', 'AdminPackages'),
+  ]},
+  { label: '系统管理', key: 'group-system', icon: renderIcon(SettingsOutline), children: [
+    menuItem('系统设置', 'AdminSettings'), menuItem('公告管理', 'AdminAnnouncements'),
+    menuItem('优惠券', 'AdminCoupons'), menuItem('邀请码管理', 'AdminInvites'), menuItem('卡密管理', 'AdminRedeem'), menuItem('盲盒管理', 'AdminMysteryBox'), menuItem('用户等级', 'AdminLevels'),
+  ]},
+  { label: '日志与分析', key: 'group-logs', icon: renderIcon(StatsChartOutline), children: [
+    menuItem('数据统计', 'AdminStats'), menuItem('系统日志', 'AdminLogs'), menuItem('邮件队列', 'AdminEmailQueue'),
+  ]},
+  { label: '工单管理', key: 'group-tickets', icon: renderIcon(ChatbubblesOutline), children: [menuItem('工单管理', 'AdminTickets')] },
+]
 
-function handleMenuClick(key: string) { router.push({ name: key }) }
-function handleMobileMenuClick(key: string) { showDrawer.value = false; router.push({ name: key }) }
+const activeKey = computed(() => route.name as string)
+const allExpandedKeys = menuOptions.map(group => group.key)
+const expandedKeys = ref<string[]>([...allExpandedKeys])
+
+function handleExpandedKeys(keys: string[]) {
+  expandedKeys.value = keys.length ? keys : [...allExpandedKeys]
+}
+
+function handleMenuClick(key: string) {
+  preloadRouteComponent(key)
+  router.push({ name: key })
+}
+function handleMobileMenuClick(key: string) {
+  preloadRouteComponent(key)
+  showDrawer.value = false
+  router.push({ name: key })
+}
 
 const showThemeDrawer = ref(false)
 
@@ -237,6 +273,21 @@ function handleUserMenu(key: string) {
 }
 </script>
 <style scoped>
+.skip-to-content {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 8px 12px;
+  color: #fff;
+  background: var(--primary-color, #18a058);
+  border-radius: 6px;
+  transform: translateY(-140%);
+  transition: transform 0.2s ease;
+}
+.skip-to-content:focus {
+  transform: translateY(0);
+}
 .logo { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; cursor: pointer; border-bottom: 1px solid var(--border-color, #e8e8e8); }
 .desktop-header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
 .mobile-header { height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }

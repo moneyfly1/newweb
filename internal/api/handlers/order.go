@@ -158,7 +158,11 @@ func CreateOrder(c *gin.Context) {
 		}
 	}
 	finalAmount := amount - discountAmount
-	orderNo := fmt.Sprintf("ORD%d%s", time.Now().Unix(), utils.GenerateRandomString(6))
+	orderNo, err := services.GenerateBusinessOrderNo(db, services.OrderNoPrefixOrder)
+	if err != nil {
+		utils.InternalError(c, "生成订单号失败")
+		return
+	}
 	expireTime := time.Now().Add(30 * time.Minute)
 	order := models.Order{
 		OrderNo:        orderNo,
@@ -621,7 +625,11 @@ func CreateCustomOrder(c *gin.Context) {
 	})
 	extraStr := string(extraData)
 
-	orderNo := fmt.Sprintf("ORD%d%s", time.Now().Unix(), utils.GenerateRandomString(6))
+	orderNo, err := services.GenerateBusinessOrderNo(db, services.OrderNoPrefixOrder)
+	if err != nil {
+		utils.InternalError(c, "生成订单号失败")
+		return
+	}
 	expireTime := time.Now().Add(30 * time.Minute)
 	totalDiscount := (basePrice - finalPrice)
 	order := models.Order{
@@ -849,7 +857,11 @@ func CreateUpgradeOrder(c *gin.Context) {
 	})
 	extraStr := string(extraData)
 
-	orderNo := fmt.Sprintf("ORD%d%s", time.Now().Unix(), utils.GenerateRandomString(6))
+	orderNo, err := services.GenerateBusinessOrderNo(db, services.OrderNoPrefixUpgrade)
+	if err != nil {
+		utils.InternalError(c, "生成订单号失败")
+		return
+	}
 	expireTime := time.Now().Add(30 * time.Minute)
 	order := models.Order{
 		OrderNo:        orderNo,

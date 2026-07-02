@@ -147,6 +147,33 @@
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
     </common-drawer>
+
+    <!-- 码支付网页 Drawer -->
+    <common-drawer
+      v-model:show="showCodepayModal"
+      title="码支付"
+      :width="500"
+      :mask-closable="false"
+      show-footer
+      :show-confirm="false"
+      cancel-text="取消支付"
+      @cancel="showCodepayModal = false"
+      @after-leave="stopPolling"
+    >
+      <div style="text-align: center; padding: 24px 0;">
+        <p style="margin-bottom: 20px; color: #666; font-size: 15px;">请在新打开的页面中完成支付</p>
+        <n-button type="primary" size="large" @click="openCodepayWindow">
+          打开支付页面
+        </n-button>
+        <p style="margin-top: 20px; color: #999; font-size: 13px;">
+          如果页面被浏览器拦截，请允许弹出窗口
+        </p>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">
+          支付完成后系统会自动更新余额，若未到账请稍后刷新充值页面
+        </p>
+        <n-spin v-if="pollingStatus" size="small" style="margin-top: 12px;" />
+      </div>
+    </common-drawer>
     <!-- 充值成功提示 -->
     <common-drawer
       v-model:show="showRechargeSuccess"
@@ -208,8 +235,10 @@ const payingPending = ref(false)
 // QR / 手机
 const showQrModal = ref(false)
 const showMobilePayModal = ref(false)
+const showCodepayModal = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const mobilePayUrl = ref('')
+const codepayUrl = ref('')
 const pollingStatus = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollingRecordId = 0
@@ -219,6 +248,15 @@ const maxPollAttempts = 20
 const getPaymentLabel = (payType: string) => {
   const labels: Record<string, string> = { epay: '在线支付', alipay: '支付宝', wxpay: '微信支付', qqpay: 'QQ支付', stripe: 'Stripe', codepay: '码支付', codepay_alipay: '码支付-支付宝', codepay_wxpay: '码支付-微信' }
   return labels[payType] || payType
+}
+
+const isCodepayPayType = (payType?: string) => {
+  return !!payType && (payType === 'codepay' || payType.startsWith('codepay_'))
+}
+
+const isCodepayMethod = (methodId?: number | null) => {
+  const method = paymentMethods.value.find(pm => pm.id === methodId)
+  return isCodepayPayType(method?.pay_type)
 }
 
 const formatDateTime = (d: string) => {
@@ -263,12 +301,23 @@ const isQrCodeUrl = (url: string) => {
   return false
 }
 
+const isCodepayPageUrl = (url: string) => {
+  return url.includes('/submit.php') || url.includes('/xpay/epay/submit.php')
+}
+
+const openCodepayWindow = () => {
+  if (codepayUrl.value) {
+    window.open(codepayUrl.value, '_blank', 'width=800,height=700,scrollbars=yes,resizable=yes')
+  }
+}
+
 const checkRechargeStatus = async (recordId: number) => {
   const res = await getRechargeStatus(recordId)
   if (res.data?.status === 'paid') {
     stopPolling()
     showQrModal.value = false
     showMobilePayModal.value = false
+    showCodepayModal.value = false
     await loadData()
     rechargeSuccessInfo.value = {
       amount: Number(res.data?.amount || amount.value || pendingTarget.value?.amount || 0),
@@ -312,9 +361,24 @@ const stopPolling = () => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
 
-const handlePayUrl = async (payUrl: string, recordId: number, paymentMode?: 'qrcode' | 'page' | 'redirect') => {
-  if (paymentMode === 'page') {
-    safeRedirect(payUrl)
+const handlePayUrl = async (payUrl: string, recordId: number, paymentMode?: 'qrcode' | 'page' | 'redirect', forceCodepayPopup = false) => {
+  if (forceCodepayPopup && (paymentMode === 'qrcode' || isQrCodeUrl(payUrl))) {
+    if (appStore.isMobile) {
+      mobilePayUrl.value = payUrl
+      showMobilePayModal.value = true
+    } else {
+      showQrModal.value = true
+      await nextTick()
+      if (qrCanvas.value) QRCode.toCanvas(qrCanvas.value, payUrl, { width: 240, margin: 2 })
+    }
+    startPolling(recordId)
+    return
+  }
+  if (forceCodepayPopup || paymentMode === 'page' || isCodepayPageUrl(payUrl)) {
+    codepayUrl.value = payUrl
+    showCodepayModal.value = true
+    await nextTick()
+    openCodepayWindow()
     startPolling(recordId)
     return
   }
@@ -351,7 +415,7 @@ const handleRecharge = async () => {
     const paymentMode = data?.payment_mode
     const recordId = data?.record?.id || data?.id || 0
     if (payUrl) {
-      await handlePayUrl(payUrl, recordId, paymentMode)
+      await handlePayUrl(payUrl, recordId, paymentMode, isCodepayMethod(paymentMethodId.value) || isCodepayPayType(data?.pay_type))
     } else {
       message.success('充值订单已创建，请等待处理')
       loadData()
@@ -383,7 +447,7 @@ const handlePendingPay = async () => {
     const payUrl = res.data?.payment_url
     const paymentMode = res.data?.payment_mode
     if (payUrl) {
-      await handlePayUrl(payUrl, pendingTarget.value.id, paymentMode)
+      await handlePayUrl(payUrl, pendingTarget.value.id, paymentMode, isCodepayMethod(pendingPayMethodId.value) || isCodepayPayType(res.data?.pay_type))
     } else {
       message.info('支付订单已创建，请等待处理')
     }

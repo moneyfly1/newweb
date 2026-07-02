@@ -274,6 +274,33 @@
       </div>
     </common-drawer>
 
+    <!-- ===== 码支付网页 Drawer ===== -->
+    <common-drawer
+      v-model:show="showCodepayDrawer"
+      title="码支付"
+      :width="appStore.isMobile ? '100%' : 500"
+      :mask-closable="false"
+      show-footer
+      :show-confirm="false"
+      cancel-text="取消支付"
+      @cancel="showCodepayDrawer = false"
+      @after-leave="stopPolling"
+    >
+      <div style="text-align: center; padding: 24px 0;">
+        <p style="margin-bottom: 20px; color: #666; font-size: 15px;">请在新打开的页面中完成支付</p>
+        <n-button type="primary" size="large" @click="openCodepayWindow">
+          打开支付页面
+        </n-button>
+        <p style="margin-top: 20px; color: #999; font-size: 13px;">
+          如果页面被浏览器拦截，请允许弹出窗口，或点击上方按钮重新打开
+        </p>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">
+          支付完成后系统会自动更新状态，若未更新请稍后刷新页面
+        </p>
+        <n-spin v-if="pollingStatus" size="small" style="margin-top: 12px;" />
+      </div>
+    </common-drawer>
+
   </div>
 </template>
 
@@ -325,8 +352,10 @@ const orderStatusFilter = ref('')
 // QR / 手机支付
 const showQrDrawer = ref(false)
 const showMobilePayDrawer = ref(false)
+const showCodepayDrawer = ref(false)
 const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const mobilePayUrl = ref('')
+const codepayUrl = ref('')
 const pollingStatus = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollAttempts = 0
@@ -338,8 +367,20 @@ let pollTarget: PollTarget | null = null
 const pmLabel = (payType: string) => {
   const labels: Record<string, string> = {
     epay: '在线支付', alipay: '支付宝', wxpay: '微信支付', qqpay: 'QQ支付', stripe: 'Stripe',
+    codepay: '码支付', codepay_alipay: '码支付-支付宝', codepay_wxpay: '码支付-微信',
   }
   return labels[payType] || payType
+}
+
+const isCodepayPayType = (payType?: string) => {
+  return !!payType && (payType === 'codepay' || payType.startsWith('codepay_'))
+}
+
+const isCodepayMethodValue = (methodValue?: string) => {
+  if (!methodValue?.startsWith('pm_')) return false
+  const methodId = parseInt(methodValue.replace('pm_', ''))
+  const method = pmMethods.value.find(pm => pm.id === methodId)
+  return isCodepayPayType(method?.pay_type)
 }
 
 const loadPaymentMethods = async () => {
@@ -490,6 +531,16 @@ const isQrCodeUrl = (url: string) => {
   return false
 }
 
+const isCodepayPageUrl = (url: string) => {
+  return url.includes('/submit.php') || url.includes('/xpay/epay/submit.php')
+}
+
+const openCodepayWindow = () => {
+  if (codepayUrl.value) {
+    window.open(codepayUrl.value, '_blank', 'width=800,height=700,scrollbars=yes,resizable=yes')
+  }
+}
+
 const startPolling = (target: PollTarget) => {
   stopPolling()
   pollTarget = target
@@ -504,6 +555,7 @@ const startPolling = (target: PollTarget) => {
           stopPolling()
           showQrDrawer.value = false
           showMobilePayDrawer.value = false
+          showCodepayDrawer.value = false
           message.success('支付成功，订阅已开通')
           loadOrders()
           return
@@ -516,6 +568,7 @@ const startPolling = (target: PollTarget) => {
           stopPolling()
           showQrDrawer.value = false
           showMobilePayDrawer.value = false
+          showCodepayDrawer.value = false
           message.success('充值成功，余额已到账')
           loadRechargeRecords()
           return
@@ -539,9 +592,24 @@ const stopPolling = () => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
 
-const handlePaymentUrl = async (payUrl: string, target: PollTarget, paymentMode?: 'qrcode' | 'page' | 'redirect') => {
-  if (paymentMode === 'page') {
-    safeRedirect(payUrl)
+const handlePaymentUrl = async (payUrl: string, target: PollTarget, paymentMode?: 'qrcode' | 'page' | 'redirect', forceCodepayPopup = false) => {
+  if (forceCodepayPopup && (paymentMode === 'qrcode' || isQrCodeUrl(payUrl))) {
+    if (appStore.isMobile) {
+      mobilePayUrl.value = payUrl
+      showMobilePayDrawer.value = true
+    } else {
+      showQrDrawer.value = true
+      await nextTick()
+      if (qrCanvas.value) QRCode.toCanvas(qrCanvas.value, payUrl, { width: 240, margin: 2 })
+    }
+    startPolling(target)
+    return
+  }
+  if (forceCodepayPopup || paymentMode === 'page' || isCodepayPageUrl(payUrl)) {
+    codepayUrl.value = payUrl
+    showCodepayDrawer.value = true
+    await nextTick()
+    openCodepayWindow()
     startPolling(target)
     return
   }
@@ -591,7 +659,12 @@ const handleOrderPay = async () => {
       const data = res.data
       showOrderPayDrawer.value = false
       if (data?.payment_url) {
-        await handlePaymentUrl(data.payment_url, { type: 'order', orderNo: currentOrder.value.order_no }, data?.payment_mode)
+        await handlePaymentUrl(
+          data.payment_url,
+          { type: 'order', orderNo: currentOrder.value.order_no },
+          data?.payment_mode,
+          isCodepayMethodValue(orderPayMethod.value) || isCodepayPayType(data?.pay_type),
+        )
       } else {
         message.info('支付已创建，请等待处理')
         loadOrders()
@@ -621,7 +694,12 @@ const handleRechargePay = async () => {
     const data = res.data
     showRechargePayDrawer.value = false
     if (data?.payment_url) {
-      await handlePaymentUrl(data.payment_url, { type: 'recharge' }, data?.payment_mode)
+      await handlePaymentUrl(
+        data.payment_url,
+        { type: 'recharge' },
+        data?.payment_mode,
+        isCodepayMethodValue(rechargePayMethod.value) || isCodepayPayType(data?.pay_type),
+      )
     } else {
       message.info('支付订单已创建，请等待回调')
       loadRechargeRecords()

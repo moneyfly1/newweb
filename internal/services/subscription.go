@@ -334,50 +334,94 @@ func convertNodeToSurgeLine(node models.Node) string {
 	if node.Config == nil {
 		return ""
 	}
-	config := *node.Config
-	if strings.HasPrefix(config, "ss://") {
-		return convertSSToSurge(node.Name, config)
+	m, err := NodeConfigToClashMap(node.Type, *node.Config, node.Name)
+	if err != nil {
+		return ""
 	}
-	if strings.HasPrefix(config, "trojan://") {
-		return convertTrojanToSurge(node.Name, config)
+	return clashMapToSurgeLine(formatSafeCommaName(node.Name), m)
+}
+
+func clashMapToSurgeLine(name string, m map[string]interface{}) string {
+	typ, _ := m["type"].(string)
+	server, _ := m["server"].(string)
+	port := clashMapPortStr(m)
+	if server == "" || port == "" {
+		return ""
+	}
+	switch typ {
+	case "ss":
+		method, _ := m["cipher"].(string)
+		password, _ := m["password"].(string)
+		if method == "" || password == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s = ss, %s, %s, encrypt-method=%s, password=%s", name, server, port, method, password)
+	case "vmess":
+		uuid, _ := m["uuid"].(string)
+		if uuid == "" {
+			return ""
+		}
+		cipher, _ := m["cipher"].(string)
+		if cipher == "" || cipher == "auto" {
+			cipher = "chacha20-ietf-poly1305"
+		}
+		params := []string{"username=" + uuid, "encrypt-method=" + cipher}
+		params = appendSurgeTLSParams(params, m)
+		params = appendSurgeWSParams(params, m)
+		return fmt.Sprintf("%s = vmess, %s, %s, %s", name, server, port, strings.Join(params, ", "))
+	case "trojan":
+		password, _ := m["password"].(string)
+		if password == "" {
+			return ""
+		}
+		params := []string{"password=" + password}
+		params = appendSurgeTLSParams(params, m)
+		params = appendSurgeWSParams(params, m)
+		return fmt.Sprintf("%s = trojan, %s, %s, %s", name, server, port, strings.Join(params, ", "))
 	}
 	return ""
 }
 
-func convertSSToSurge(name, config string) string {
-	config = strings.TrimPrefix(config, "ss://")
-	if idx := strings.Index(config, "#"); idx >= 0 {
-		config = config[:idx]
+func appendSurgeTLSParams(params []string, m map[string]interface{}) []string {
+	if skipVerify, ok := m["skip-cert-verify"].(bool); ok {
+		params = append(params, fmt.Sprintf("skip-cert-verify=%t", skipVerify))
 	}
-	method, password, host, port := parseSSConfig(config)
-	if method == "" || host == "" {
-		return ""
+	if sni := loonGetSNI(m); sni != "" {
+		params = append(params, "sni="+sni)
 	}
-	name = formatSafeCommaName(name)
-	return fmt.Sprintf("%s = ss, %s, %s, encrypt-method=%s, password=%s", name, host, port, method, password)
+	return params
 }
 
-func convertTrojanToSurge(name, config string) string {
-	config = strings.TrimPrefix(config, "trojan://")
-	if idx := strings.Index(config, "#"); idx >= 0 {
-		config = config[:idx]
+func appendSurgeWSParams(params []string, m map[string]interface{}) []string {
+	network, _ := m["network"].(string)
+	if network != "ws" {
+		return params
 	}
-	u, err := url.Parse("trojan://" + config)
+	params = append(params, "ws=true")
+	wsPath, wsHost := extractWSParams(m)
+	if wsPath != "" {
+		params = append(params, "ws-path="+wsPath)
+	}
+	if wsHost != "" {
+		params = append(params, "ws-headers=Host:"+wsHost)
+	}
+	return params
+}
+
+func convertSSToSurge(name, config string) string {
+	m, err := NodeConfigToClashMap("ss", config, name)
 	if err != nil {
 		return ""
 	}
-	password := u.User.Username()
-	host := u.Hostname()
-	port := u.Port()
-	if port == "" {
-		port = "443"
+	return clashMapToSurgeLine(formatSafeCommaName(name), m)
+}
+
+func convertTrojanToSurge(name, config string) string {
+	m, err := NodeConfigToClashMap("trojan", config, name)
+	if err != nil {
+		return ""
 	}
-	sni := u.Query().Get("sni")
-	if sni == "" {
-		sni = host
-	}
-	name = formatSafeCommaName(name)
-	return fmt.Sprintf("%s = trojan, %s, %s, password=%s, sni=%s", name, host, port, password, sni)
+	return clashMapToSurgeLine(formatSafeCommaName(name), m)
 }
 
 // GenerateShadowrocketBase64 generates Shadowrocket-compatible base64 subscription
@@ -688,17 +732,17 @@ func GenerateSingBoxConfig(nodes []models.Node) string {
 			"rule_set": []interface{}{
 				map[string]interface{}{
 					"tag": "geosite-ads", "type": "remote", "format": "binary",
-					"url":              "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
+					"url":             "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
 					"download_detour": "direct",
 				},
 				map[string]interface{}{
 					"tag": "geosite-cn", "type": "remote", "format": "binary",
-					"url":              "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+					"url":             "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
 					"download_detour": "direct",
 				},
 				map[string]interface{}{
 					"tag": "geoip-cn", "type": "remote", "format": "binary",
-					"url":              "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+					"url":             "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
 					"download_detour": "direct",
 				},
 			},
@@ -707,7 +751,7 @@ func GenerateSingBoxConfig(nodes []models.Node) string {
 				map[string]interface{}{"rule_set": []string{"geosite-ads"}, "outbound": "block"},
 				map[string]interface{}{"rule_set": []string{"geosite-cn", "geoip-cn"}, "outbound": "direct"},
 			},
-			"final":                  "Proxy",
+			"final":                 "Proxy",
 			"auto_detect_interface": true,
 		},
 		"cache_file": map[string]interface{}{"enabled": true},
@@ -753,12 +797,7 @@ func clashMapToSingBoxOutbound(name string, m map[string]interface{}) map[string
 			ob["tls"] = map[string]interface{}{"enabled": true, "server_name": sni}
 		}
 		network, _ := m["network"].(string)
-		if network == "ws" {
-			wsPath, wsHost := extractWSParams(m)
-			transport := map[string]interface{}{"type": "ws", "path": wsPath}
-			if wsHost != "" {
-				transport["headers"] = map[string]interface{}{"Host": wsHost}
-			}
+		if transport := clashMapToSingBoxTransport(network, m); transport != nil {
 			ob["transport"] = transport
 		}
 		return ob
@@ -766,21 +805,34 @@ func clashMapToSingBoxOutbound(name string, m map[string]interface{}) map[string
 		password, _ := m["password"].(string)
 		sni := loonGetSNI(m)
 		skipVerify, _ := m["skip-cert-verify"].(bool)
-		return map[string]interface{}{
+		ob := map[string]interface{}{
 			"type": "trojan", "tag": name,
 			"server": server, "server_port": port,
 			"password": password,
-			"tls": map[string]interface{}{"enabled": true, "server_name": sni, "insecure": skipVerify},
+			"tls":      map[string]interface{}{"enabled": true, "server_name": sni, "insecure": skipVerify},
 		}
+		network, _ := m["network"].(string)
+		if transport := clashMapToSingBoxTransport(network, m); transport != nil {
+			ob["transport"] = transport
+		}
+		return ob
 	case "vless":
 		uuid, _ := m["uuid"].(string)
 		sni, _ := m["servername"].(string)
-		return map[string]interface{}{
+		ob := map[string]interface{}{
 			"type": "vless", "tag": name,
 			"server": server, "server_port": port,
 			"uuid": uuid,
-			"tls": map[string]interface{}{"enabled": true, "server_name": sni},
+			"tls":  map[string]interface{}{"enabled": true, "server_name": sni},
 		}
+		if flow, _ := m["flow"].(string); flow != "" {
+			ob["flow"] = flow
+		}
+		network, _ := m["network"].(string)
+		if transport := clashMapToSingBoxTransport(network, m); transport != nil {
+			ob["transport"] = transport
+		}
+		return ob
 	case "hysteria2":
 		password, _ := m["password"].(string)
 		sni := loonGetSNI(m)
@@ -788,7 +840,7 @@ func clashMapToSingBoxOutbound(name string, m map[string]interface{}) map[string
 			"type": "hysteria2", "tag": name,
 			"server": server, "server_port": port,
 			"password": password,
-			"tls": map[string]interface{}{"enabled": true, "server_name": sni},
+			"tls":      map[string]interface{}{"enabled": true, "server_name": sni},
 		}
 	case "hysteria":
 		authStr, _ := m["auth_str"].(string)
@@ -801,6 +853,27 @@ func clashMapToSingBoxOutbound(name string, m map[string]interface{}) map[string
 			"auth_str": authStr, "up": up, "down": down,
 			"tls": map[string]interface{}{"enabled": true, "server_name": sni},
 		}
+	}
+	return nil
+}
+
+func clashMapToSingBoxTransport(network string, m map[string]interface{}) map[string]interface{} {
+	switch network {
+	case "ws":
+		wsPath, wsHost := extractWSParams(m)
+		transport := map[string]interface{}{"type": "ws", "path": wsPath}
+		if wsHost != "" {
+			transport["headers"] = map[string]interface{}{"Host": wsHost}
+		}
+		return transport
+	case "grpc":
+		grpcOpts, _ := m["grpc-opts"].(map[string]interface{})
+		serviceName, _ := grpcOpts["grpc-service-name"].(string)
+		transport := map[string]interface{}{"type": "grpc"}
+		if serviceName != "" {
+			transport["service_name"] = serviceName
+		}
+		return transport
 	}
 	return nil
 }

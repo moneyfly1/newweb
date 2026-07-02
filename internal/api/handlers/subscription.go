@@ -57,6 +57,42 @@ type subscriptionContext struct {
 	HasUnlimitedDevices bool // 用户有不限制设备标记，跳过设备数量限制
 }
 
+func parseLegacySubscriptionPath(c *gin.Context) (format, token string) {
+	path := strings.Trim(strings.TrimSpace(c.Param("path")), "/")
+	if path == "" {
+		return "", ""
+	}
+	parts := strings.Split(path, "/")
+	if len(parts) == 1 {
+		return "", parts[0]
+	}
+	return parts[0], parts[len(parts)-1]
+}
+
+func findSubscriptionByAccessToken(db *gorm.DB, token string) (models.Subscription, error) {
+	var sub models.Subscription
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return sub, gorm.ErrRecordNotFound
+	}
+	if err := db.Where("subscription_url = ?", token).First(&sub).Error; err == nil {
+		return sub, nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return sub, err
+	}
+
+	var reset models.SubscriptionReset
+	if err := db.Where("old_subscription_url = ?", token).
+		Order("created_at DESC, id DESC").
+		First(&reset).Error; err != nil {
+		return sub, err
+	}
+	if err := db.First(&sub, reset.SubscriptionID).Error; err != nil {
+		return sub, err
+	}
+	return sub, nil
+}
+
 // getSubscriptionSiteConfig reads site URL and support contact from system_configs
 func getSubscriptionSiteConfig() (siteURL, supportContact string) {
 	configCacheMu.RLock()
@@ -138,6 +174,9 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	if url == "" {
 		url = c.Query("token")
 	}
+	if url == "" {
+		_, url = parseLegacySubscriptionPath(c)
+	}
 	db := database.GetDB()
 
 	// 防止订阅地址枚举攻击：记录失败访问
@@ -162,8 +201,8 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 	ctx := &subscriptionContext{SiteURL: siteURL, SupportContact: supportContact, ClientInfo: clientInfo}
 
-	var sub models.Subscription
-	if err := db.Where("subscription_url = ?", url).First(&sub).Error; err != nil {
+	sub, err := findSubscriptionByAccessToken(db, url)
+	if err != nil {
 		// 记录失败的订阅访问（用于检测枚举攻击）
 		utils.SysError("subscription", fmt.Sprintf("订阅地址不存在访问尝试: %s from IP: %s", url, clientIP))
 		ctx.Status = subStatusNotFound
@@ -244,7 +283,7 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	}
 
 	var device models.Device
-	err := db.Where("subscription_id = ? AND device_fingerprint = ? AND is_active = ?", sub.ID, fingerprint, true).First(&device).Error
+	err = db.Where("subscription_id = ? AND device_fingerprint = ? AND is_active = ?", sub.ID, fingerprint, true).First(&device).Error
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.SysError("subscription", fmt.Sprintf("查询设备失败: sub=%d err=%v", sub.ID, err))
@@ -429,11 +468,12 @@ func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) (no
 			displayName = row.Name
 		}
 		nodes = append(nodes, models.Node{
-			Name:     "⭐ " + displayName,
-			Type:     row.Protocol,
-			Status:   "online",
-			Config:   &config,
-			IsActive: true,
+			Name:      "⭐ " + displayName,
+			Type:      row.Protocol,
+			Status:    "online",
+			Config:    &config,
+			IsActive:  true,
+			UpdatedAt: row.UpdatedAt,
 		})
 	}
 	return nodes, hasDedicatedOnly, hasUnlimitedDevices
@@ -572,6 +612,9 @@ func GetSubscription(c *gin.Context) {
 		subType = c.Query("type")
 	}
 	if subType == "" {
+		subType, _ = parseLegacySubscriptionPath(c)
+	}
+	if subType == "" {
 		if strings.Contains(c.Request.URL.Path, "/clash/") {
 			subType = "clash"
 		} else if ctx.ClientInfo != nil {
@@ -594,10 +637,7 @@ func GetSubscription(c *gin.Context) {
 	var cacheKey string
 	r := database.GetRedis()
 	if ctx.Status == subStatusOK && ctx.Sub != nil && r != nil {
-		cacheKey = fmt.Sprintf("sub_payload:%d:%s", ctx.Sub.ID, subType)
-		if len(excludedProtocols) > 0 {
-			cacheKey = fmt.Sprintf("%s:exclude:%s", cacheKey, strings.Join(excludedProtocols, ","))
-		}
+		cacheKey = buildSubscriptionPayloadCacheKey(ctx, subType, excludedProtocols)
 		if cachedBody, err := r.Get(c.Request.Context(), cacheKey).Result(); err == nil && cachedBody != "" {
 			subscriptionName := generateSubscriptionName(ctx)
 			encodedName := url.QueryEscape(subscriptionName)
@@ -702,6 +742,30 @@ func GetSubscription(c *gin.Context) {
 	}
 
 	c.String(http.StatusOK, responseData)
+}
+
+func buildSubscriptionPayloadCacheKey(ctx *subscriptionContext, subType string, excludedProtocols []string) string {
+	nodeVersion := int64(0)
+	for _, node := range ctx.Nodes {
+		if node.UpdatedAt.UnixNano() > nodeVersion {
+			nodeVersion = node.UpdatedAt.UnixNano()
+		}
+	}
+	excludePart := "-"
+	if len(excludedProtocols) > 0 {
+		excludePart = strings.Join(excludedProtocols, ",")
+	}
+	return fmt.Sprintf(
+		"sub_payload:%d:%s:expire:%d:devices:%d:%d:nodes:%d:%d:exclude:%s",
+		ctx.Sub.ID,
+		subType,
+		ctx.Sub.ExpireTime.Unix(),
+		ctx.CurrentDevices,
+		ctx.DeviceLimit,
+		len(ctx.Nodes),
+		nodeVersion,
+		excludePart,
+	)
 }
 
 // setSubscriptionHeaders sets common subscription response headers（Sparkle 等客户端用 Profile-Title / Profile-Update-Interval 显示名称与自动更新间隔）

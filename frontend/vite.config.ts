@@ -4,6 +4,7 @@ import { resolve } from 'path'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { NaiveUiResolver } from 'unplugin-vue-components/resolvers'
+import { compression } from 'vite-plugin-compression2'
 
 export default defineConfig({
   plugins: [
@@ -18,6 +19,10 @@ export default defineConfig({
     }),
     Components({
       resolvers: [NaiveUiResolver()],
+    }),
+    compression({
+      threshold: 1024,
+      algorithms: ['gzip', 'brotliCompress'],
     }),
   ],
   resolve: {
@@ -56,8 +61,19 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
+            const normalizedId = id.replace(/\\/g, '/')
             if (id.includes('echarts') || id.includes('zrender') || id.includes('vue-echarts')) return 'echarts'
-            if (id.includes('naive-ui') || id.includes('vue') || id.includes('vue-router') || id.includes('pinia') || id.includes('axios')) return 'vendor'
+            if (normalizedId.includes('/node_modules/@vicons/')) return 'icons'
+            if (normalizedId.includes('/node_modules/qrcode/')) return 'qrcode'
+            if (normalizedId.includes('/node_modules/xlsx/')) return 'xlsx'
+            if (normalizedId.includes('/node_modules/sortablejs/')) return 'sortable'
+            if (normalizedId.includes('/node_modules/axios/')) return 'http'
+            if (
+              normalizedId.includes('/node_modules/vue/') ||
+              normalizedId.includes('/node_modules/@vue/') ||
+              normalizedId.includes('/node_modules/vue-router/') ||
+              normalizedId.includes('/node_modules/pinia/')
+            ) return 'vue'
           }
         },
         chunkFileNames: 'assets/js/[name]-[hash].js',

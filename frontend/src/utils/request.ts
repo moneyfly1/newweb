@@ -65,6 +65,10 @@ function setCache(key: string, data: any) {
   }
 }
 
+function clearResponseCache() {
+  requestCache.clear()
+}
+
 let isRefreshing = false
 let csrfTokenCache = ''
 let csrfTokenPromise: Promise<string> | null = null
@@ -254,13 +258,22 @@ const request = {
     return instance.get(url, config) as any
   },
   post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    return instance.post(url, data, config) as any
+    return instance.post(url, data, config).then((res: any) => {
+      clearResponseCache()
+      return res
+    }) as any
   },
   put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    return instance.put(url, data, config) as any
+    return instance.put(url, data, config).then((res: any) => {
+      clearResponseCache()
+      return res
+    }) as any
   },
   delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    return instance.delete(url, config) as any
+    return instance.delete(url, config).then((res: any) => {
+      clearResponseCache()
+      return res
+    }) as any
   },
 }
 

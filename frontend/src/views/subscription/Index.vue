@@ -369,6 +369,33 @@
       </template>
     </common-drawer>
 
+    <!-- CodePay Page Payment Drawer -->
+    <common-drawer
+      v-model:show="showCodepayModal"
+      title="码支付"
+      :width="500"
+      :mask-closable="false"
+      show-footer
+      :show-confirm="false"
+      cancel-text="取消支付"
+      @cancel="showCodepayModal = false"
+      @after-leave="stopPayPolling"
+    >
+      <div class="codepay-window-container" style="text-align: center; padding: 24px 0;">
+        <p style="margin-bottom: 20px; color: #666; font-size: 15px;">请在新打开的页面中完成支付</p>
+        <n-button type="primary" size="large" @click="openCodepayWindow">
+          打开支付页面
+        </n-button>
+        <p style="margin-top: 20px; color: #999; font-size: 13px;">
+          如果页面被浏览器拦截，请允许弹出窗口
+        </p>
+        <p style="margin-top: 16px; color: #999; font-size: 13px;">
+          支付完成后系统会自动确认并更新订阅，若未更新请手动刷新页面
+        </p>
+        <n-spin v-if="payPollingStatus" size="small" style="margin-top: 12px;" />
+      </div>
+    </common-drawer>
+
     <!-- Crypto Pay Drawer -->
     <common-drawer v-model:show="showCryptoModal" title="加密货币支付" :width="480" :mask-closable="false" @after-leave="stopPayPolling">
       <div v-if="cryptoInfo" class="crypto-panel">
@@ -646,6 +673,8 @@ const showCryptoModal = ref(false)
 const cryptoInfo = ref<any>(null)
 const cryptoOrderNo = ref('')
 const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
+const showCodepayModal = ref(false)
+const codepayUrl = ref('')
 let payPollTimer: ReturnType<typeof setInterval> | null = null
 const finalPayAmount = computed(() => upgradeOrderInfo.value?.final_amount ?? upgradeOrderInfo.value?.amount ?? 0)
 const balanceDeductAmount = computed(() => {
@@ -920,6 +949,17 @@ const getPaymentLabel = (payType: string) => {
   return labels[payType] || payType
 }
 
+const isCodepayPayType = (payType?: string) => {
+  return !!payType && (payType === 'codepay' || payType.startsWith('codepay_'))
+}
+
+const isCodepayPaymentMethod = () => {
+  if (!paymentMethod.value.startsWith('pm_')) return false
+  const methodId = parseInt(paymentMethod.value.replace('pm_', ''))
+  const method = paymentMethods.value.find(pm => pm.id === methodId)
+  return isCodepayPayType(method?.pay_type)
+}
+
 const isQrCodeUrl = (url: string) => {
   // 支付宝二维码
   if (url.includes('qr.alipay.com')) return true
@@ -932,6 +972,16 @@ const isQrCodeUrl = (url: string) => {
   // 其他常见二维码模式：短链接（长度小于100）且以 http 开头
   if ((url.startsWith('http://') || url.startsWith('https://')) && url.length < 100) return true
   return false
+}
+
+const isCodepayPageUrl = (url: string) => {
+  return url.includes('/submit.php') || url.includes('/xpay/epay/submit.php')
+}
+
+const openCodepayWindow = () => {
+  if (codepayUrl.value) {
+    window.open(codepayUrl.value, '_blank', 'width=800,height=700,scrollbars=yes,resizable=yes')
+  }
 }
 
 const fetchUserBalance = async () => {
@@ -976,7 +1026,7 @@ const startPayPolling = (orderNo: string) => {
       pollAttempts += 1
       const res = await getOrderStatus(orderNo)
       if (res.data?.status === 'paid') {
-        stopPayPolling(); showPayQrModal.value = false; showCryptoModal.value = false
+        stopPayPolling(); showPayQrModal.value = false; showCryptoModal.value = false; showCodepayModal.value = false
         await loadData()
         buildUpgradeSuccessInfo()
         message.success('支付成功，订阅已更新（设备数和到期时间已刷新）')
@@ -1103,9 +1153,24 @@ const handleOpenUpgradePay = async () => {
   finally { upgradeSubmitting.value = false }
 }
 
-const handleUpgradePaymentUrl = async (payUrl: string, orderNo: string, paymentMode?: 'qrcode' | 'page' | 'redirect') => {
-  if (paymentMode === 'page') {
-    safeRedirect(payUrl)
+const handleUpgradePaymentUrl = async (payUrl: string, orderNo: string, paymentMode?: 'qrcode' | 'page' | 'redirect', forceCodepayPopup = false) => {
+  if (forceCodepayPopup && (paymentMode === 'qrcode' || isQrCodeUrl(payUrl))) {
+    if (isMobile.value) {
+      mobilePayUrl.value = payUrl
+      showPayQrModal.value = true
+    } else {
+      showPayQrModal.value = true
+      await nextTick()
+      if (payQrCanvas.value) QRCode.toCanvas(payQrCanvas.value, payUrl, { width: 240, margin: 2 })
+    }
+    startPayPolling(orderNo)
+    return
+  }
+  if (forceCodepayPopup || paymentMode === 'page' || isCodepayPageUrl(payUrl)) {
+    codepayUrl.value = payUrl
+    showCodepayModal.value = true
+    await nextTick()
+    openCodepayWindow()
     startPayPolling(orderNo)
     return
   }
@@ -1152,7 +1217,12 @@ const handleUpgradePay = async () => {
       }
       if (data?.payment_url) {
         showUpgradePayModal.value = false
-        await handleUpgradePaymentUrl(data.payment_url, upgradeOrderInfo.value.order_no, data?.payment_mode)
+        await handleUpgradePaymentUrl(
+          data.payment_url,
+          upgradeOrderInfo.value.order_no,
+          data?.payment_mode,
+          isCodepayPaymentMethod() || isCodepayPayType(data?.pay_type),
+        )
       } else { message.info('支付已创建，请等待处理'); showUpgradePayModal.value = false; await loadData() }
     }
   } catch (e: any) { message.error(getErrorMessage(e, '支付失败')) }

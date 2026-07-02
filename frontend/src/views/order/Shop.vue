@@ -398,6 +398,17 @@ const getPaymentLabel = (payType: string) => {
   return labels[payType] || payType
 }
 
+const isCodepayPayType = (payType?: string) => {
+  return !!payType && (payType === 'codepay' || payType.startsWith('codepay_'))
+}
+
+const isCodepayPaymentMethod = () => {
+  if (!paymentMethod.value.startsWith('pm_')) return false
+  const methodId = parseInt(paymentMethod.value.replace('pm_', ''))
+  const method = paymentMethods.value.find(pm => pm.id === methodId)
+  return isCodepayPayType(method?.pay_type)
+}
+
 const parseFeatures = (features: any): string[] => {
   if (!features) return []
   if (Array.isArray(features)) return features
@@ -493,6 +504,7 @@ const startPolling = (orderNo: string) => {
       if (res.data?.status === 'paid') {
         stopPolling()
         showQrModal.value = false
+        showCodepayModal.value = false
         await fetchUserBalance()
         goToPurchaseSuccess(orderNo)
         return
@@ -528,6 +540,14 @@ const openCodepayWindow = () => {
   if (codepayUrl.value) {
     window.open(codepayUrl.value, '_blank', 'width=800,height=700,scrollbars=yes,resizable=yes')
   }
+}
+
+const showCodepayPayment = async (payUrl: string, orderNo: string) => {
+  codepayUrl.value = payUrl
+  showCodepayModal.value = true
+  await nextTick()
+  openCodepayWindow()
+  startPolling(orderNo)
 }
 
 const showQrPayment = async (payUrl: string, orderNo: string) => {
@@ -574,23 +594,18 @@ const handlePay = async () => {
 
       if (data?.payment_url) {
         showPaymentModal.value = false
+        const forceCodepayPopup = isCodepayPaymentMethod() || isCodepayPayType(data?.pay_type)
 
-        if (data?.payment_mode === 'page') {
-          codepayUrl.value = data.payment_url
-          showCodepayModal.value = true
-          await nextTick()
-          openCodepayWindow()
-          startPolling(orderInfo.value.order_no)
+        if (forceCodepayPopup && (data?.payment_mode === 'qrcode' || isQrCodeUrl(data.payment_url))) {
+          await showQrPayment(data.payment_url, orderInfo.value.order_no)
+        } else if (forceCodepayPopup || data?.payment_mode === 'page') {
+          await showCodepayPayment(data.payment_url, orderInfo.value.order_no)
         } else if (data?.payment_mode === 'qrcode') {
           await showQrPayment(data.payment_url, orderInfo.value.order_no)
         } else if (data?.payment_mode === 'redirect') {
           safeRedirect(data.payment_url)
         } else if (isCodepayPageUrl(data.payment_url)) {
-          codepayUrl.value = data.payment_url
-          showCodepayModal.value = true
-          await nextTick()
-          openCodepayWindow()
-          startPolling(orderInfo.value.order_no)
+          await showCodepayPayment(data.payment_url, orderInfo.value.order_no)
         } else if (isQrCodeUrl(data.payment_url)) {
           await showQrPayment(data.payment_url, orderInfo.value.order_no)
         } else {

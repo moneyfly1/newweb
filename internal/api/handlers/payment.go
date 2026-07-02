@@ -66,6 +66,17 @@ func updateRechargePaymentInfo(db *gorm.DB, record *models.RechargeRecord, payTy
 	}).Error
 }
 
+func updateOrderPaymentInfo(db *gorm.DB, order *models.Order, payType string, txID string) error {
+	if order == nil {
+		return nil
+	}
+	pmName := payType
+	return db.Model(order).Updates(map[string]interface{}{
+		"payment_method_name":    &pmName,
+		"payment_transaction_id": &txID,
+	}).Error
+}
+
 func storeRechargePaymentURL(db *gorm.DB, record *models.RechargeRecord, paymentURL string) error {
 	if record == nil {
 		return nil
@@ -115,6 +126,9 @@ func createNonAlipayPayment(db *gorm.DB, payConfig models.PaymentConfig, target 
 		if err != nil {
 			return nil, fmt.Errorf("创建支付订单失败: %w", err)
 		}
+		if err := updateOrderPaymentInfo(db, target.Order, payConfig.PayType, txID); err != nil {
+			return nil, fmt.Errorf("保存订单支付信息失败: %w", err)
+		}
 		if err := storeRechargePaymentURL(db, target.Recharge, paymentURL); err != nil {
 			return nil, fmt.Errorf("保存支付链接失败: %w", err)
 		}
@@ -137,6 +151,9 @@ func createNonAlipayPayment(db *gorm.DB, payConfig models.PaymentConfig, target 
 		codepayResult, err := services.CodepayCreateOrder(codepayCfg, codepayType, txID, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
 		if err != nil {
 			return nil, fmt.Errorf("创建码支付订单失败: %w", err)
+		}
+		if err := updateOrderPaymentInfo(db, target.Order, payConfig.PayType, txID); err != nil {
+			return nil, fmt.Errorf("保存订单支付信息失败: %w", err)
 		}
 		if err := storeRechargePaymentURL(db, target.Recharge, codepayResult.PaymentURL); err != nil {
 			return nil, fmt.Errorf("保存支付链接失败: %w", err)
@@ -597,6 +614,10 @@ func CreatePayment(c *gin.Context) {
 		paymentURL, err := services.EpayCreateOrder(epayCfg, "alipay", safeTransactionID(transaction.TransactionID), target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
 		if err != nil {
 			utils.InternalError(c, "创建支付订单失败: "+err.Error())
+			return
+		}
+		if err := updateOrderPaymentInfo(db, order, "epay", safeTransactionID(transaction.TransactionID)); err != nil {
+			utils.InternalError(c, "保存订单支付信息失败: "+err.Error())
 			return
 		}
 		utils.Success(c, buildPaymentURLResult("alipay", order.OrderNo, safeTransactionID(transaction.TransactionID), target.PayAmount, paymentURL, nil))
@@ -1466,84 +1487,84 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 		Processed:            true,
 	}
 
-		if transaction.Status == "pending" {
-			err := db.Transaction(func(tx *gorm.DB) error {
-				var txn models.PaymentTransaction
-				if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
-					return err
-				}
-
-				if amountTotal, ok := obj["amount_total"].(float64); ok {
-					rate := 7.2
-					if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
-						if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
-							rate = parsed
-						}
-					}
-					amountUSD := txn.Amount / rate
-					expectedCents := int64(math.Round(amountUSD * 100))
-					if expectedCents < 50 {
-						expectedCents = 50
-					}
-					actualCents := int64(amountTotal)
-
-					if math.Abs(float64(actualCents-expectedCents)) > 1 {
-						utils.SysError("payment", fmt.Sprintf("Stripe 金额不匹配: 订单 %s, 期望 %d 分, 实际 %d 分", txIDVal, expectedCents, actualCents))
-						return fmt.Errorf("金额不匹配: 期望 %d, 实际 %d (分)", expectedCents, actualCents)
-					}
-				} else {
-					utils.SysError("payment", fmt.Sprintf("Stripe 回调缺少金额字段: %s", txIDVal))
-					return fmt.Errorf("回调数据缺少金额字段")
-				}
-
-				paymentIntent, _ := obj["payment_intent"].(string)
-				sessionID, _ := obj["id"].(string)
-				extTxID := paymentIntent
-				if extTxID == "" {
-					extTxID = sessionID
-				}
-				if err := models.RecordNonce(tx, txIDVal, "stripe", extTxID); err != nil {
-					return fmt.Errorf("记录 nonce 失败: %w", err)
-				}
-
-				callbackJSON := rawStr
-				updates := map[string]interface{}{
-					"status":        "paid",
-					"callback_data": &callbackJSON,
-				}
-				if extTxID != "" {
-					updates["external_transaction_id"] = &extTxID
-				}
-				if err := tx.Model(&txn).Updates(updates).Error; err != nil {
-					return err
-				}
-
-				switch getPaymentBusinessKind(&txn) {
-				case "recharge":
-					if err := handleStripeRechargeCallback(tx, &txn, txIDVal); err != nil {
-						return err
-					}
-				case "order":
-					if err := handleStripeOrderCallback(tx, &txn); err != nil {
-						return err
-					}
-				default:
-					return fmt.Errorf("无法识别支付业务类型")
-				}
-
-				return nil
-			})
-			if err != nil {
-				errMsg := err.Error()
-				callback.Processed = false
-				callback.ErrorMessage = &errMsg
-				callback.ProcessingResult = &errMsg
-				utils.LogError("[Stripe] ❌ 回调处理失败: txID=%s error=%v", txIDVal, err)
-			} else {
-				result := "success"
-				callback.ProcessingResult = &result
+	if transaction.Status == "pending" {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			var txn models.PaymentTransaction
+			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
+				return err
 			}
+
+			if amountTotal, ok := obj["amount_total"].(float64); ok {
+				rate := 7.2
+				if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
+					if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
+						rate = parsed
+					}
+				}
+				amountUSD := txn.Amount / rate
+				expectedCents := int64(math.Round(amountUSD * 100))
+				if expectedCents < 50 {
+					expectedCents = 50
+				}
+				actualCents := int64(amountTotal)
+
+				if math.Abs(float64(actualCents-expectedCents)) > 1 {
+					utils.SysError("payment", fmt.Sprintf("Stripe 金额不匹配: 订单 %s, 期望 %d 分, 实际 %d 分", txIDVal, expectedCents, actualCents))
+					return fmt.Errorf("金额不匹配: 期望 %d, 实际 %d (分)", expectedCents, actualCents)
+				}
+			} else {
+				utils.SysError("payment", fmt.Sprintf("Stripe 回调缺少金额字段: %s", txIDVal))
+				return fmt.Errorf("回调数据缺少金额字段")
+			}
+
+			paymentIntent, _ := obj["payment_intent"].(string)
+			sessionID, _ := obj["id"].(string)
+			extTxID := paymentIntent
+			if extTxID == "" {
+				extTxID = sessionID
+			}
+			if err := models.RecordNonce(tx, txIDVal, "stripe", extTxID); err != nil {
+				return fmt.Errorf("记录 nonce 失败: %w", err)
+			}
+
+			callbackJSON := rawStr
+			updates := map[string]interface{}{
+				"status":        "paid",
+				"callback_data": &callbackJSON,
+			}
+			if extTxID != "" {
+				updates["external_transaction_id"] = &extTxID
+			}
+			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
+				return err
+			}
+
+			switch getPaymentBusinessKind(&txn) {
+			case "recharge":
+				if err := handleStripeRechargeCallback(tx, &txn, txIDVal); err != nil {
+					return err
+				}
+			case "order":
+				if err := handleStripeOrderCallback(tx, &txn); err != nil {
+					return err
+				}
+			default:
+				return fmt.Errorf("无法识别支付业务类型")
+			}
+
+			return nil
+		})
+		if err != nil {
+			errMsg := err.Error()
+			callback.Processed = false
+			callback.ErrorMessage = &errMsg
+			callback.ProcessingResult = &errMsg
+			utils.LogError("[Stripe] ❌ 回调处理失败: txID=%s error=%v", txIDVal, err)
+		} else {
+			result := "success"
+			callback.ProcessingResult = &result
 		}
+	}
 
 	if err := db.Create(&callback).Error; err != nil {
 		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))

@@ -269,7 +269,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminOrders.GET("/:id", handlers.AdminGetOrder)
 			adminOrders.POST("/:id/refund", handlers.AdminRefundOrder)
 			adminOrders.POST("/:id/cancel", handlers.AdminCancelOrder)
+			adminOrders.POST("/:id/mark-paid", handlers.AdminMarkOrderPaid)
 			adminOrders.POST("/:id/complete", handlers.AdminCompleteOrder)
+			adminOrders.POST("/batch-action", handlers.AdminBatchOrderAction)
 			adminOrders.DELETE("/:id", handlers.AdminDeleteOrder)
 		}
 

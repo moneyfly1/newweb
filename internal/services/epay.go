@@ -3,6 +3,7 @@ package services
 import (
 	"crypto/hmac"
 	"crypto/md5" // #nosec G501 -- EasyPay protocol mandates MD5 signing.
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -143,6 +144,99 @@ func EpayQueryOrder(cfg *EpayConfig, outTradeNo string) (map[string]string, erro
 		}
 	}
 	return result, nil
+}
+
+// EpayRefund refunds an EasyPay order through the gateway API.
+// Most EasyPay-compatible gateways expose api.php?act=refund with merchant key,
+// out_trade_no and/or trade_no. We send both order numbers when available.
+func EpayRefund(cfg *EpayConfig, outTradeNo, tradeNo, refundAmount string) error {
+	if cfg == nil {
+		return fmt.Errorf("易支付网关未配置")
+	}
+	if strings.TrimSpace(outTradeNo) == "" && strings.TrimSpace(tradeNo) == "" {
+		return fmt.Errorf("缺少易支付商户订单号或平台订单号")
+	}
+
+	params := url.Values{}
+	params.Set("act", "refund")
+	params.Set("pid", cfg.MerchantID)
+	params.Set("key", cfg.SecretKey)
+	if outTradeNo != "" {
+		params.Set("out_trade_no", outTradeNo)
+	}
+	if tradeNo != "" {
+		params.Set("trade_no", tradeNo)
+	}
+	if refundAmount != "" {
+		params.Set("money", refundAmount)
+		params.Set("refund_money", refundAmount)
+	}
+
+	endpoint := cfg.Gateway + "/api.php?" + params.Encode()
+	resp, err := epayHTTPClient.Get(endpoint)
+	if err != nil {
+		return fmt.Errorf("易支付退款请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("易支付退款 HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	raw := strings.TrimSpace(string(body))
+	if raw == "" {
+		return fmt.Errorf("易支付退款返回为空")
+	}
+
+	var jsonResp map[string]interface{}
+	if json.Unmarshal(body, &jsonResp) == nil && len(jsonResp) > 0 {
+		if epayResponseOK(jsonResp) {
+			return nil
+		}
+		return fmt.Errorf("易支付退款失败: %s", epayResponseMessage(jsonResp, raw))
+	}
+
+	values, err := url.ParseQuery(raw)
+	if err == nil && len(values) > 0 {
+		flat := make(map[string]interface{}, len(values))
+		for k, v := range values {
+			if len(v) > 0 {
+				flat[k] = v[0]
+			}
+		}
+		if epayResponseOK(flat) {
+			return nil
+		}
+		return fmt.Errorf("易支付退款失败: %s", epayResponseMessage(flat, raw))
+	}
+
+	lower := strings.ToLower(raw)
+	if strings.Contains(lower, "success") || strings.Contains(raw, "成功") {
+		return nil
+	}
+	return fmt.Errorf("易支付退款失败: %s", raw)
+}
+
+func epayResponseOK(resp map[string]interface{}) bool {
+	for _, key := range []string{"code", "status", "succ", "success"} {
+		if v, ok := resp[key]; ok {
+			s := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", v)))
+			if s == "1" || s == "true" || s == "success" || s == "ok" || s == "succeeded" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func epayResponseMessage(resp map[string]interface{}, fallback string) string {
+	for _, key := range []string{"msg", "message", "error", "retmsg"} {
+		if v, ok := resp[key]; ok && strings.TrimSpace(fmt.Sprintf("%v", v)) != "" {
+			return fmt.Sprintf("%v", v)
+		}
+	}
+	return fallback
 }
 
 // EpayGateway 易支付网关实现

@@ -124,8 +124,11 @@
       <n-space vertical :size="16">
         <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" class="batch-operations">
           <span class="batch-selected-text">已选择 {{ checkedRowKeys.length }} 项</span>
+          <n-button size="small" type="success" @click="handleBatchMarkPaid">批量标记付款并开通</n-button>
           <n-button size="small" type="warning" @click="handleBatchCancel">批量取消</n-button>
+          <n-button size="small" type="info" @click="handleBatchComplete">批量完成</n-button>
           <n-button size="small" type="error" @click="handleBatchRefund">批量退款</n-button>
+          <n-button size="small" tertiary type="error" @click="handleBatchDelete">批量删除</n-button>
         </n-space>
 
         <n-data-table
@@ -137,11 +140,11 @@
           :pagination="pagination"
           :bordered="false"
           :single-line="false"
-          :row-key="(row: any) => row.id"
+          :row-key="getRowKey"
           :checked-row-keys="checkedRowKeys"
           :scroll-x="1450"
           class="unified-admin-table"
-          @update:checked-row-keys="(keys: number[]) => { checkedRowKeys = keys }"
+          @update:checked-row-keys="(keys: Array<string | number>) => { checkedRowKeys = keys as string[] }"
           @update:page="(p: number) => { pagination.page = p; fetchOrders() }"
           @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; fetchOrders() }"
         />
@@ -187,9 +190,10 @@
                 </div>
                 <div class="card-actions" @click.stop>
                   <n-button size="small" quaternary type="info" @click="handleViewDetail(order)">详情</n-button>
-                  <n-button v-if="order.status === 'pending'" size="small" type="error" @click="handleCancel(order)">取消</n-button>
-                  <n-button v-if="order.status === 'paid'" size="small" type="success" @click="handleComplete(order)">完成</n-button>
-                  <n-button v-if="['paid', 'completed'].includes(order.status)" size="small" type="warning" @click="handleRefund(order)">退款</n-button>
+                  <n-button v-if="canMarkPaid(order)" size="small" type="success" @click="handleMarkPaid(order)">标记付款</n-button>
+                  <n-button v-if="canCancel(order)" size="small" type="error" @click="handleCancel(order)">取消</n-button>
+                  <n-button v-if="canComplete(order)" size="small" type="info" @click="handleComplete(order)">完成</n-button>
+                  <n-button v-if="canRefund(order)" size="small" type="warning" @click="handleRefund(order)">退款</n-button>
                 </div>
               </div>
             </div>
@@ -249,24 +253,32 @@
             - {{ formatCurrency(currentOrder.discount_amount) }}
           </n-descriptions-item>
           <n-descriptions-item label="支付网关">{{ getPaymentMethodText(currentOrder) }}</n-descriptions-item>
+          <n-descriptions-item label="商户订单号" v-if="currentOrder.payment_transaction_id">
+            <div class="copyable-row wrap-copyable-row">
+              <code class="gateway-no">{{ currentOrder.payment_transaction_id }}</code>
+              <n-button size="tiny" quaternary @click="copyToClipboard(currentOrder.payment_transaction_id)">复制</n-button>
+            </div>
+          </n-descriptions-item>
+          <n-descriptions-item label="平台流水号" v-if="currentOrder.gateway_trade_no">
+            <div class="copyable-row wrap-copyable-row">
+              <code class="gateway-no">{{ currentOrder.gateway_trade_no }}</code>
+              <n-button size="tiny" quaternary @click="copyToClipboard(currentOrder.gateway_trade_no)">复制</n-button>
+            </div>
+          </n-descriptions-item>
           <n-descriptions-item label="创建时间">{{ formatFullDate(currentOrder.created_at) }}</n-descriptions-item>
           <n-descriptions-item label="支付时间" v-if="currentOrder.payment_time">
             {{ formatFullDate(currentOrder.payment_time) }}
           </n-descriptions-item>
-          <n-descriptions-item label="外部流水号" v-if="currentOrder.gateway_order_id">
-            <div class="copyable-row wrap-copyable-row">
-              <code class="gateway-no">{{ currentOrder.gateway_order_id }}</code>
-              <n-button size="tiny" quaternary @click="copyToClipboard(currentOrder.gateway_order_id)">复制</n-button>
-            </div>
-          </n-descriptions-item>
         </n-descriptions>
 
-        <div class="detail-actions" v-if="['paid', 'completed', 'pending'].includes(currentOrder.status)">
+        <div class="detail-actions">
           <n-divider />
           <n-space :justify="appStore.isMobile ? 'start' : 'end'" :wrap="true">
-            <n-button v-if="currentOrder.status === 'pending'" type="error" ghost @click="handleCancel(currentOrder)">取消订单</n-button>
-            <n-button v-if="currentOrder.status === 'paid'" type="success" @click="handleComplete(currentOrder)">标记完成</n-button>
-            <n-button v-if="['paid', 'completed'].includes(currentOrder.status)" type="warning" @click="handleRefund(currentOrder)">全额退款</n-button>
+            <n-button v-if="canMarkPaid(currentOrder)" type="success" @click="handleMarkPaid(currentOrder)">标记已付款并开通</n-button>
+            <n-button v-if="canCancel(currentOrder)" type="error" ghost @click="handleCancel(currentOrder)">取消订单</n-button>
+            <n-button v-if="canComplete(currentOrder)" type="info" @click="handleComplete(currentOrder)">标记完成</n-button>
+            <n-button v-if="canRefund(currentOrder)" type="warning" @click="handleRefund(currentOrder)">全额退款</n-button>
+            <n-button v-if="canDelete(currentOrder)" type="error" tertiary @click="handleDelete(currentOrder)">删除记录</n-button>
           </n-space>
         </div>
       </div>
@@ -278,7 +290,7 @@
 import { ref, reactive, h, onMounted, watch } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSelect, useMessage, useDialog, type DataTableColumns, type TagProps } from 'naive-ui'
 import { SearchOutline, RefreshOutline, ReceiptOutline, TimeOutline, MailOutline, LayersOutline } from '@vicons/ionicons5'
-import { listAdminOrders, refundOrder, cancelOrder, completeOrder, getAdminDashboard } from '@/api/admin'
+import { listAdminOrders, refundOrder, cancelOrder, completeOrder, deleteOrder, markOrderPaid, batchOrderAction, getAdminDashboard } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import { useRoute } from 'vue-router'
@@ -296,7 +308,7 @@ const orderStats = ref<any>({})
 const searchQuery = ref((route.query.order_no as string) || '')
 const statusFilter = ref(null)
 const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
-const checkedRowKeys = ref<number[]>([])
+const checkedRowKeys = ref<string[]>([])
 
 const showDetailDrawer = ref(false)
 const currentOrder = ref<any>(null)
@@ -305,6 +317,7 @@ const statusOptions = [
   { label: '待支付', value: 'pending' },
   { label: '已支付', value: 'paid' },
   { label: '已完成', value: 'completed' },
+  { label: '已过期', value: 'expired' },
   { label: '已取消', value: 'cancelled' },
   { label: '已退款', value: 'refunded' }
 ]
@@ -314,13 +327,14 @@ const getStatusType = (s: string): TagProps['type'] => {
     pending: 'warning',
     paid: 'success',
     completed: 'info',
+    expired: 'warning',
     cancelled: 'default',
     refunded: 'error'
   }
   return typeMap[s] || 'default'
 }
 
-const getStatusText = (s: string) => ({ pending: '待支付', paid: '已支付', completed: '已完成', cancelled: '已取消', refunded: '已退款' }[s] || s)
+const getStatusText = (s: string) => ({ pending: '待支付', paid: '已支付', completed: '已完成', expired: '已过期', cancelled: '已取消', refunded: '已退款' }[s] || s)
 const getPaymentMethodText = (row: any) => {
   const m = row.payment_method_name
   const nameMap: Record<string, string> = { alipay: '支付宝', wechat: '微信支付', balance: '余额支付', stripe: 'Stripe', epay: '易支付' }
@@ -331,6 +345,13 @@ const getPaymentMethodText = (row: any) => {
 const getOrderTypeTag = (type: string): TagProps['type'] => ({ package: 'info', custom_package: 'warning', subscription_upgrade: 'success' }[type] as TagProps['type'] || 'default')
 const getOrderTypeText = (row: any) => row.order_type_text || '套餐订单'
 const getOrderSummary = (row: any) => row.order_summary || row.package_name || '-'
+const getRowKey = (row: any) => `${row.order_type || 'package'}:${row.id}`
+const isPackageOrder = (row: any) => row && row.order_type !== 'recharge'
+const canMarkPaid = (row: any) => isPackageOrder(row) && ['pending', 'expired', 'cancelled'].includes(row.status)
+const canCancel = (row: any) => isPackageOrder(row) && ['pending', 'expired'].includes(row.status)
+const canComplete = (row: any) => isPackageOrder(row) && row.status === 'paid'
+const canRefund = (row: any) => isPackageOrder(row) && ['paid', 'completed'].includes(row.status)
+const canDelete = (row: any) => isPackageOrder(row) && ['cancelled', 'refunded'].includes(row.status)
 
 const columns: DataTableColumns<any> = [
   { type: 'selection' },
@@ -424,7 +445,7 @@ const handleViewDetail = (row: any) => { currentOrder.value = row; showDetailDra
 const handleRefund = (row: any) => {
   dialog.warning({
     title: '确认全额退款',
-    content: `订单 ${row.order_no} 将退款 ${formatCurrency(row.final_amount || row.amount)} 到用户余额。`,
+    content: `订单 ${row.order_no} 将退款 ${formatCurrency(row.final_amount || row.amount)}。线上支付会原路退回支付渠道，余额支付才退回用户余额。`,
     positiveText: '确认退款',
     onPositiveClick: async () => {
       await refundOrder(row.id)
@@ -438,7 +459,7 @@ const handleRefund = (row: any) => {
 const handleCancel = (row: any) => {
   dialog.warning({
     title: '取消订单',
-    content: '确定要取消此待支付订单吗？',
+    content: '确定要取消此订单吗？取消后用户不能继续支付此订单。',
     positiveText: '确定',
     onPositiveClick: async () => {
       await cancelOrder(row.id)
@@ -449,10 +470,24 @@ const handleCancel = (row: any) => {
   })
 }
 
+const handleMarkPaid = (row: any) => {
+  dialog.warning({
+    title: '标记已付款并开通权限',
+    content: `确认订单 ${row.order_no} 已线下收款或需要人工放行？系统会立即开通/续期/升级对应订阅权限。`,
+    positiveText: '确认开通',
+    onPositiveClick: async () => {
+      await markOrderPaid(row.id)
+      message.success('已标记付款并开通权限')
+      showDetailDrawer.value = false
+      fetchOrders()
+    }
+  })
+}
+
 const handleComplete = (row: any) => {
   dialog.info({
     title: '手动标记完成',
-    content: '此操作将直接激活用户的订阅套餐。',
+    content: '此操作只将已支付订单标记为完成，不会重复开通订阅。',
     positiveText: '确定完成',
     onPositiveClick: async () => {
       await completeOrder(row.id)
@@ -463,38 +498,88 @@ const handleComplete = (row: any) => {
   })
 }
 
+const handleDelete = (row: any) => {
+  dialog.warning({
+    title: '删除订单记录',
+    content: `确定删除订单 ${row.order_no} 吗？只能删除已取消或已退款的订单记录。`,
+    positiveText: '删除',
+    onPositiveClick: async () => {
+      await deleteOrder(row.id)
+      message.success('订单记录已删除')
+      showDetailDrawer.value = false
+      fetchOrders()
+    }
+  })
+}
+
+const getSelectedOrders = () => orders.value.filter(o => checkedRowKeys.value.includes(getRowKey(o)))
+
+const handleBatchMarkPaid = () => {
+  const markable = getSelectedOrders().filter(canMarkPaid)
+  if (markable.length === 0) {
+    message.warning('没有可标记付款的套餐订单')
+    return
+  }
+  dialog.warning({
+    title: '批量标记付款并开通',
+    content: `确定要将 ${markable.length} 个订单标记为已付款并开通对应权限吗？`,
+    positiveText: '确认开通',
+    onPositiveClick: async () => {
+      const res = await batchOrderAction({ ids: markable.map(o => o.id), action: 'mark_paid' })
+      message.success(`批量开通完成：成功 ${res.data.success} 个，失败 ${res.data.failed} 个`)
+      checkedRowKeys.value = []
+      fetchOrders()
+    }
+  })
+}
+
 const handleBatchCancel = () => {
-  const selected = orders.value.filter(o => checkedRowKeys.value.includes(o.id))
-  const pending = selected.filter(o => o.status === 'pending')
-  if (pending.length === 0) {
-    message.warning('没有可取消的待支付订单')
+  const cancellable = getSelectedOrders().filter(canCancel)
+  if (cancellable.length === 0) {
+    message.warning('没有可取消的订单')
     return
   }
   dialog.warning({
     title: '批量取消订单',
-    content: `确定要取消选中的 ${pending.length} 个待支付订单吗？`,
+    content: `确定要取消选中的 ${cancellable.length} 个订单吗？`,
     positiveText: '确定',
     onPositiveClick: async () => {
-      try {
-        await Promise.all(pending.map(o => cancelOrder(o.id)))
-        message.success('批量取消完成')
-        checkedRowKeys.value = []
-        fetchOrders()
-      } catch { message.error('批量取消失败') }
+      const res = await batchOrderAction({ ids: cancellable.map(o => o.id), action: 'cancel' })
+      message.success(`批量取消完成：成功 ${res.data.success} 个，失败 ${res.data.failed} 个`)
+      checkedRowKeys.value = []
+      fetchOrders()
+    }
+  })
+}
+
+const handleBatchComplete = () => {
+  const completable = getSelectedOrders().filter(canComplete)
+  if (completable.length === 0) {
+    message.warning('没有可完成的已支付订单')
+    return
+  }
+  dialog.info({
+    title: '批量标记完成',
+    content: `确定要将 ${completable.length} 个已支付订单标记为完成吗？`,
+    positiveText: '确定完成',
+    onPositiveClick: async () => {
+      const res = await batchOrderAction({ ids: completable.map(o => o.id), action: 'complete' })
+      message.success(`批量完成：成功 ${res.data.success} 个，失败 ${res.data.failed} 个`)
+      checkedRowKeys.value = []
+      fetchOrders()
     }
   })
 }
 
 const handleBatchRefund = () => {
-  const selected = orders.value.filter(o => checkedRowKeys.value.includes(o.id))
-  const refundable = selected.filter(o => ['paid', 'completed'].includes(o.status))
+  const refundable = getSelectedOrders().filter(canRefund)
   if (refundable.length === 0) {
     message.warning('没有可退款的订单')
     return
   }
   dialog.warning({
     title: '批量退款',
-    content: `确定要退款选中的 ${refundable.length} 个订单吗？`,
+    content: `确定要退款选中的 ${refundable.length} 个订单吗？线上支付会逐笔原路退回，余额支付才退回余额。`,
     positiveText: '确定退款',
     onPositiveClick: async () => {
       try {
@@ -503,6 +588,25 @@ const handleBatchRefund = () => {
         checkedRowKeys.value = []
         fetchOrders()
       } catch { message.error('批量退款失败') }
+    }
+  })
+}
+
+const handleBatchDelete = () => {
+  const deletable = getSelectedOrders().filter(canDelete)
+  if (deletable.length === 0) {
+    message.warning('没有可删除的已取消/已退款订单')
+    return
+  }
+  dialog.warning({
+    title: '批量删除订单',
+    content: `确定要删除选中的 ${deletable.length} 个订单记录吗？`,
+    positiveText: '确定删除',
+    onPositiveClick: async () => {
+      const res = await batchOrderAction({ ids: deletable.map(o => o.id), action: 'delete' })
+      message.success(`批量删除完成：成功 ${res.data.success} 个，失败 ${res.data.failed} 个`)
+      checkedRowKeys.value = []
+      fetchOrders()
     }
   })
 }

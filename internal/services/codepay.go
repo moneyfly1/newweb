@@ -111,6 +111,13 @@ func codepaySubmitURL(gateway string) string {
 	return gateway + "/xpay/epay/submit.php"
 }
 
+func codepayRefundURL(gateway string) string {
+	if strings.HasSuffix(gateway, "/xpay/epay") {
+		return gateway + "/api.php"
+	}
+	return gateway + "/xpay/epay/api.php"
+}
+
 func CodepayBuildURLs(cfg *CodepayConfig, orderNo string) (notifyURL, returnURL string) {
 	if cfg == nil {
 		return "", ""
@@ -219,6 +226,76 @@ func CodepayCreateOrder(cfg *CodepayConfig, payType, outTradeNo, name, money, no
 		submitParams.Set(k, v)
 	}
 	return &CodepayResult{PaymentURL: fmt.Sprintf("%s?%s", submitURL, submitParams.Encode()), Mode: "page"}, nil
+}
+
+// CodepayRefund refunds a CodePay order through the EasyPay-compatible API.
+func CodepayRefund(cfg *CodepayConfig, outTradeNo, tradeNo, refundAmount string) error {
+	if cfg == nil {
+		return fmt.Errorf("码支付网关未配置")
+	}
+	if strings.TrimSpace(outTradeNo) == "" && strings.TrimSpace(tradeNo) == "" {
+		return fmt.Errorf("缺少码支付商户订单号或平台订单号")
+	}
+
+	params := url.Values{}
+	params.Set("act", "refund")
+	params.Set("pid", cfg.MerchantID)
+	params.Set("key", cfg.SecretKey)
+	if outTradeNo != "" {
+		params.Set("out_trade_no", outTradeNo)
+	}
+	if tradeNo != "" {
+		params.Set("trade_no", tradeNo)
+	}
+	if refundAmount != "" {
+		params.Set("money", refundAmount)
+		params.Set("refund_money", refundAmount)
+	}
+
+	endpoint := codepayRefundURL(cfg.Gateway) + "?" + params.Encode()
+	resp, err := codepayHTTPClient.Get(endpoint)
+	if err != nil {
+		return fmt.Errorf("码支付退款请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("码支付退款 HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	raw := strings.TrimSpace(string(body))
+	if raw == "" {
+		return fmt.Errorf("码支付退款返回为空")
+	}
+
+	var jsonResp map[string]interface{}
+	if json.Unmarshal(body, &jsonResp) == nil && len(jsonResp) > 0 {
+		if epayResponseOK(jsonResp) {
+			return nil
+		}
+		return fmt.Errorf("码支付退款失败: %s", epayResponseMessage(jsonResp, raw))
+	}
+
+	values, err := url.ParseQuery(raw)
+	if err == nil && len(values) > 0 {
+		flat := make(map[string]interface{}, len(values))
+		for k, v := range values {
+			if len(v) > 0 {
+				flat[k] = v[0]
+			}
+		}
+		if epayResponseOK(flat) {
+			return nil
+		}
+		return fmt.Errorf("码支付退款失败: %s", epayResponseMessage(flat, raw))
+	}
+
+	lower := strings.ToLower(raw)
+	if strings.Contains(lower, "success") || strings.Contains(raw, "成功") {
+		return nil
+	}
+	return fmt.Errorf("码支付退款失败: %s", raw)
 }
 
 // CodepayVerifySign verifies the callback signature from CodePay

@@ -37,10 +37,15 @@ func CreateRecharge(c *gin.Context) {
 	}
 	userID := c.GetUint("user_id")
 	db := database.GetDB()
+	orderNo, err := services.GenerateBusinessOrderNo(db, services.OrderNoPrefixRecharge)
+	if err != nil {
+		utils.InternalError(c, "生成充值单号失败")
+		return
+	}
 
 	record := models.RechargeRecord{
 		UserID:    userID,
-		OrderNo:   fmt.Sprintf("R%d%s", time.Now().Unix(), utils.GenerateRandomString(6)),
+		OrderNo:   orderNo,
 		Amount:    req.Amount,
 		Status:    "pending",
 		CreatedAt: time.Now(),
@@ -177,8 +182,8 @@ func GetRechargeStatus(c *gin.Context) {
 					utils.LogError("[Recharge] 状态轮询补偿失败: tx_id=%s error=%v", *record.PaymentTransactionID, err)
 				}
 				if err := db.Where("id = ? AND user_id = ?", id, userID).First(&record).Error; err != nil {
-				utils.LogError("[Recharge] 重新查询充值记录失败: id=%s err=%v", id, err)
-			}
+					utils.LogError("[Recharge] 重新查询充值记录失败: id=%s err=%v", id, err)
+				}
 			}
 		}
 	}

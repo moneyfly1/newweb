@@ -320,6 +320,54 @@
                   </n-space>
                 </div>
 
+                <!-- 软件下载 -->
+                <div v-else-if="activeTab === 'downloads'" key="downloads">
+                  <n-alert type="info" style="margin-bottom: 24px;">
+                    配置后会显示在用户端仪表盘的软件下载区域和帮助页面。留空的客户端不会对用户展示。
+                  </n-alert>
+
+                  <n-collapse arrow-placement="right" :default-expanded-names="['windows', 'android', 'macos', 'ios', 'linux']">
+                    <n-collapse-item title="Windows 客户端" name="windows">
+                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                        <n-form-item-gi label="Clash for Windows"><n-input v-model:value="form.client_clash_windows_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="V2rayN"><n-input v-model:value="form.client_v2rayn_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="Clash Party"><n-input v-model:value="form.client_clashparty_windows_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="Hiddify"><n-input v-model:value="form.client_hiddify_windows_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="FlClash"><n-input v-model:value="form.client_flclash_windows_url" placeholder="https://..." /></n-form-item-gi>
+                      </n-grid>
+                    </n-collapse-item>
+
+                    <n-collapse-item title="Android 客户端" name="android">
+                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                        <n-form-item-gi label="Clash Meta"><n-input v-model:value="form.client_clash_android_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="V2rayNG"><n-input v-model:value="form.client_v2rayng_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="Hiddify"><n-input v-model:value="form.client_hiddify_android_url" placeholder="https://..." /></n-form-item-gi>
+                      </n-grid>
+                    </n-collapse-item>
+
+                    <n-collapse-item title="macOS 客户端" name="macos">
+                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                        <n-form-item-gi label="FlClash"><n-input v-model:value="form.client_flclash_macos_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="Clash Party"><n-input v-model:value="form.client_clashparty_macos_url" placeholder="https://..." /></n-form-item-gi>
+                      </n-grid>
+                    </n-collapse-item>
+
+                    <n-collapse-item title="iOS 客户端" name="ios">
+                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                        <n-form-item-gi label="Shadowrocket"><n-input v-model:value="form.client_shadowrocket_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="Stash"><n-input v-model:value="form.client_stash_url" placeholder="https://..." /></n-form-item-gi>
+                      </n-grid>
+                    </n-collapse-item>
+
+                    <n-collapse-item title="Linux / 通用客户端" name="linux">
+                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                        <n-form-item-gi label="Clash"><n-input v-model:value="form.client_clash_linux_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="Sing-box"><n-input v-model:value="form.client_singbox_url" placeholder="https://..." /></n-form-item-gi>
+                      </n-grid>
+                    </n-collapse-item>
+                  </n-collapse>
+                </div>
+
                 <!-- 协议过滤 -->
                 <div v-else-if="activeTab === 'protocol'" key="protocol">
                   <n-alert type="info" style="margin-bottom: 24px;">
@@ -367,7 +415,7 @@ import { useMessage, useDialog } from 'naive-ui'
 import {
   SaveOutline, SettingsOutline, RocketOutline, CardOutline,
   MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline,
-  FunnelOutline, CloudDownloadOutline
+  FunnelOutline, CloudDownloadOutline, DownloadOutline
 } from '@vicons/ionicons5'
 import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, cleanOldLogs, getProtocolFilter, updateProtocolFilter } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -440,6 +488,7 @@ const menuOptions = [
   { label: '通知监控', key: 'notify', icon: NotificationsOutline },
   { label: '安全维护', key: 'security', icon: ShieldCheckmarkOutline },
   { label: '备份恢复', key: 'backup', icon: CloudDownloadOutline },
+  { label: '软件下载', key: 'downloads', icon: DownloadOutline },
   { label: '协议过滤', key: 'protocol', icon: FunnelOutline },
 ]
 
@@ -477,7 +526,13 @@ const form = ref<Record<string, any>>({
   log_retention_days: 90,
   backup_github_enabled: false, backup_github_token: '', backup_github_repo: '',
   backup_auto_enabled: false, backup_auto_time: '03:00',
-  checkin_enabled: true, checkin_min_reward: 10, checkin_max_reward: 50
+  checkin_enabled: true, checkin_min_reward: 10, checkin_max_reward: 50,
+  client_clash_windows_url: '', client_v2rayn_url: '', client_clashparty_windows_url: '',
+  client_hiddify_windows_url: '', client_flclash_windows_url: '',
+  client_clash_android_url: '', client_v2rayng_url: '', client_hiddify_android_url: '',
+  client_flclash_macos_url: '', client_clashparty_macos_url: '',
+  client_shadowrocket_url: '', client_stash_url: '',
+  client_clash_linux_url: '', client_singbox_url: ''
 })
 
 const ALL_PROTOCOLS = [

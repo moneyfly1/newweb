@@ -29,6 +29,7 @@ export const createRechargePayment = (id: number, data: { recharge_id: number; p
     transaction_id: string
     payment_url?: string
     payment_mode?: 'qrcode' | 'page' | 'redirect'
+    pay_type?: string
   }>(`/recharge/${id}/pay`, data)
 export const cancelRecharge = (id: number) => request.post(`/recharge/${id}/cancel`)
 export const getPaymentMethods = () => request.get('/payment/methods')

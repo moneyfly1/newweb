@@ -1103,6 +1103,7 @@ func AdminListOrders(c *gin.Context) {
 		PaymentMethodName    *string    `json:"payment_method_name"`
 		PaymentTime          *time.Time `json:"payment_time"`
 		PaymentTransactionID *string    `json:"payment_transaction_id"`
+		GatewayTradeNo       *string    `json:"gateway_trade_no,omitempty"`
 		ExpireTime           *time.Time `json:"expire_time"`
 		CouponID             *int64     `json:"coupon_id"`
 		DiscountAmount       *float64   `json:"discount_amount"`
@@ -1184,9 +1185,13 @@ func AdminListOrders(c *gin.Context) {
 	items := allItems[start:end]
 
 	packageIDs := make([]uint, 0, len(items))
+	orderIDs := make([]uint, 0, len(items))
 	for _, item := range items {
 		if item.PackageID > 0 {
 			packageIDs = append(packageIDs, item.PackageID)
+		}
+		if len(item.OrderNo) < 3 || item.OrderNo[:3] != "RCH" {
+			orderIDs = append(orderIDs, item.ID)
 		}
 	}
 
@@ -1196,6 +1201,20 @@ func AdminListOrders(c *gin.Context) {
 		db.Select("id, name").Where("id IN ?", packageIDs).Find(&packages)
 		for _, pkg := range packages {
 			pkgNameCache[pkg.ID] = pkg.Name
+		}
+	}
+
+	gatewayTradeCache := make(map[uint]*string)
+	if len(orderIDs) > 0 {
+		var transactions []models.PaymentTransaction
+		db.Select("id, order_id, external_transaction_id").
+			Where("order_id IN ? AND external_transaction_id IS NOT NULL AND external_transaction_id <> ''", orderIDs).
+			Order("id DESC").
+			Find(&transactions)
+		for _, txn := range transactions {
+			if _, exists := gatewayTradeCache[txn.OrderID]; !exists {
+				gatewayTradeCache[txn.OrderID] = txn.ExternalTransactionID
+			}
 		}
 	}
 
@@ -1214,6 +1233,9 @@ func AdminListOrders(c *gin.Context) {
 		item.OrderType = "package"
 		item.OrderTypeText = "套餐订单"
 		item.OrderSummary = "标准套餐"
+		if gatewayTradeNo, ok := gatewayTradeCache[item.ID]; ok {
+			item.GatewayTradeNo = gatewayTradeNo
+		}
 		if name, ok := pkgNameCache[item.PackageID]; ok {
 			item.PackageName = name
 			item.OrderSummary = name
@@ -1296,6 +1318,83 @@ func AdminGetOrder(c *gin.Context) {
 	utils.Success(c, order)
 }
 
+func findOrderPaymentTransaction(db *gorm.DB, order models.Order) (*models.PaymentTransaction, error) {
+	var txn models.PaymentTransaction
+	if order.PaymentTransactionID != nil && strings.TrimSpace(*order.PaymentTransactionID) != "" {
+		if err := db.Where("transaction_id = ?", strings.TrimSpace(*order.PaymentTransactionID)).First(&txn).Error; err == nil {
+			return &txn, nil
+		}
+	}
+	if err := db.Where("order_id = ? AND status = ?", order.ID, "paid").Order("id DESC").First(&txn).Error; err == nil {
+		return &txn, nil
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
+func paymentCallbackType(db *gorm.DB, transactionID uint) string {
+	var callback models.PaymentCallback
+	if err := db.Select("callback_type").
+		Where("payment_transaction_id = ? AND processed = ?", transactionID, true).
+		Order("id DESC").
+		First(&callback).Error; err == nil {
+		return strings.ToLower(callback.CallbackType)
+	}
+	return ""
+}
+
+func paymentConfigPayType(db *gorm.DB, paymentMethodID uint) string {
+	var paymentMethod models.PaymentConfig
+	if err := db.Select("pay_type").First(&paymentMethod, paymentMethodID).Error; err == nil {
+		return strings.ToLower(paymentMethod.PayType)
+	}
+	return ""
+}
+
+func classifyRefundChannel(db *gorm.DB, order models.Order, txn *models.PaymentTransaction) string {
+	if order.PaymentMethodName != nil {
+		method := strings.ToLower(strings.TrimSpace(*order.PaymentMethodName))
+		if method == "balance" {
+			return "balance"
+		}
+		if method == "管理员手动确认" || method == "admin_manual" || strings.HasPrefix(method, "admin") {
+			return "manual"
+		}
+	}
+	if txn == nil || txn.ID == 0 {
+		return "unknown"
+	}
+
+	callbackType := paymentCallbackType(db, txn.ID)
+	if callbackType == "epay" {
+		return "epay"
+	}
+	if callbackType == "codepay" {
+		return "codepay"
+	}
+	if callbackType == "alipay" || strings.HasPrefix(callbackType, "alipay_query") {
+		return "alipay"
+	}
+
+	payType := paymentConfigPayType(db, txn.PaymentMethodID)
+	switch payType {
+	case "epay", "wxpay", "qqpay":
+		return "epay"
+	case "codepay", "codepay_alipay", "codepay_wxpay":
+		return "codepay"
+	case "alipay":
+		return "alipay"
+	default:
+		return payType
+	}
+}
+
+func stringValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(*v)
+}
+
 func AdminRefundOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -1308,36 +1407,75 @@ func AdminRefundOrder(c *gin.Context) {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
-	if order.Status != "paid" {
-		utils.BadRequest(c, "只能退款已支付的订单")
+	if order.Status != "paid" && order.Status != "completed" {
+		utils.BadRequest(c, "只能退款已支付或已完成的订单")
 		return
 	}
 
-	// Calculate refund amount
 	refundAmount := order.Amount
 	if order.FinalAmount != nil {
 		refundAmount = *order.FinalAmount
 	}
 
-	// Try to refund via payment gateway if paid online
-	var gatewayRefunded bool
-	var txn models.PaymentTransaction
-	if db.Where("order_id = ? AND status = ?", order.ID, "paid").First(&txn).Error == nil {
-		// Has a successful payment transaction — try gateway refund
-		if txn.ExternalTransactionID != nil && *txn.ExternalTransactionID != "" {
-			// Check payment method to determine if it's direct Alipay
-			var paymentMethod models.PaymentConfig
-			if db.First(&paymentMethod, txn.PaymentMethodID).Error == nil && paymentMethod.PayType == "alipay" {
-				// Direct Alipay refund
-				if txn.TransactionID != nil && *txn.TransactionID != "" {
-					if err := services.AlipayRefund(*txn.ExternalTransactionID, *txn.TransactionID, fmt.Sprintf("%.2f", refundAmount)); err != nil {
-						utils.BadRequest(c, "支付宝退款失败: "+err.Error())
-						return
-					}
-					gatewayRefunded = true
-				}
-			}
+	txn, _ := findOrderPaymentTransaction(db, order)
+	channel := classifyRefundChannel(db, order, txn)
+	merchantOrderNo := ""
+	gatewayTradeNo := ""
+	if txn != nil {
+		merchantOrderNo = stringValue(txn.TransactionID)
+		gatewayTradeNo = stringValue(txn.ExternalTransactionID)
+	}
+
+	refundMethod := "余额"
+	switch channel {
+	case "alipay":
+		if merchantOrderNo == "" || gatewayTradeNo == "" {
+			utils.BadRequest(c, "支付宝原路退款缺少商户订单号或支付宝交易号")
+			return
 		}
+		if err := services.AlipayRefund(gatewayTradeNo, merchantOrderNo, fmt.Sprintf("%.2f", refundAmount)); err != nil {
+			utils.BadRequest(c, "支付宝退款失败: "+err.Error())
+			return
+		}
+		refundMethod = "支付宝原路退回"
+	case "epay":
+		epayCfg, err := services.GetEpayConfig()
+		if err != nil {
+			utils.BadRequest(c, "易支付退款失败: "+err.Error())
+			return
+		}
+		if merchantOrderNo == "" && gatewayTradeNo == "" {
+			utils.BadRequest(c, "易支付原路退款缺少商户订单号或易支付订单号")
+			return
+		}
+		if err := services.EpayRefund(epayCfg, merchantOrderNo, gatewayTradeNo, fmt.Sprintf("%.2f", refundAmount)); err != nil {
+			utils.BadRequest(c, err.Error())
+			return
+		}
+		refundMethod = "易支付原路退回"
+	case "balance":
+		refundMethod = "余额"
+	case "manual":
+		utils.BadRequest(c, "管理员手动确认的订单没有线上支付流水，不能原路退款；请线下退款后取消/调整用户权限")
+		return
+	case "codepay":
+		codepayCfg, err := services.GetCodepayConfig()
+		if err != nil {
+			utils.BadRequest(c, "码支付退款失败: "+err.Error())
+			return
+		}
+		if merchantOrderNo == "" && gatewayTradeNo == "" {
+			utils.BadRequest(c, "码支付原路退款缺少商户订单号或平台订单号")
+			return
+		}
+		if err := services.CodepayRefund(codepayCfg, merchantOrderNo, gatewayTradeNo, fmt.Sprintf("%.2f", refundAmount)); err != nil {
+			utils.BadRequest(c, err.Error())
+			return
+		}
+		refundMethod = "码支付原路退回"
+	default:
+		utils.BadRequest(c, "无法确认支付渠道，未执行余额退款；请检查支付流水和回调记录")
+		return
 	}
 
 	tx := db.Begin()
@@ -1346,8 +1484,7 @@ func AdminRefundOrder(c *gin.Context) {
 		return
 	}
 
-	// If not refunded via gateway, refund to user balance
-	if !gatewayRefunded {
+	if channel == "balance" {
 		if err := tx.Model(&models.User{}).Where("id = ?", order.UserID).
 			UpdateColumn("balance", gorm.Expr("balance + ?", refundAmount)).Error; err != nil {
 			tx.Rollback()
@@ -1356,16 +1493,14 @@ func AdminRefundOrder(c *gin.Context) {
 		}
 	}
 
-	// Update order status
 	if err := tx.Model(&order).Update("status", "refunded").Error; err != nil {
 		tx.Rollback()
 		utils.InternalError(c, "退款失败")
 		return
 	}
 
-	// Update payment transaction status
-	if txn.ID > 0 {
-		if err := tx.Model(&txn).Update("status", "refunded").Error; err != nil {
+	if txn != nil && txn.ID > 0 {
+		if err := tx.Model(txn).Update("status", "refunded").Error; err != nil {
 			tx.Rollback()
 			utils.InternalError(c, "退款失败")
 			return
@@ -1399,19 +1534,14 @@ func AdminRefundOrder(c *gin.Context) {
 		return
 	}
 
-	// Log
-	refundMethod := "余额"
-	if gatewayRefunded {
-		refundMethod = "原路退回"
-	}
 	var refundUser models.User
 	if db.First(&refundUser, order.UserID).Error == nil {
 		desc := fmt.Sprintf("管理员退款订单: %s (%s)", order.OrderNo, refundMethod)
-		if !gatewayRefunded {
+		if channel == "balance" {
 			utils.CreateBalanceLogEntry(order.UserID, "refund", refundAmount, refundUser.Balance-refundAmount, refundUser.Balance, func() *uint { id := uint(order.ID); return &id }(), desc, c)
 		}
 	}
-	utils.CreateAuditLog(c, "refund_order", "order", uint(id), fmt.Sprintf("退款订单: %s, 金额: %.2f, 方式: %s", order.OrderNo, refundAmount, refundMethod))
+	utils.CreateAuditLog(c, "refund_order", "order", uint(id), fmt.Sprintf("退款订单: %s, 金额: %.2f, 方式: %s, 商户单号: %s, 平台流水: %s", order.OrderNo, refundAmount, refundMethod, merchantOrderNo, gatewayTradeNo))
 	utils.SuccessMessage(c, fmt.Sprintf("退款成功（%s）", refundMethod))
 }
 
@@ -1427,8 +1557,8 @@ func AdminCancelOrder(c *gin.Context) {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
-	if order.Status != "pending" {
-		utils.BadRequest(c, "只能取消待支付的订单")
+	if order.Status != "pending" && order.Status != "expired" {
+		utils.BadRequest(c, "只能取消待支付或已过期的订单")
 		return
 	}
 
@@ -1439,6 +1569,64 @@ func AdminCancelOrder(c *gin.Context) {
 
 	utils.CreateAuditLog(c, "cancel_order", "order", uint(id), fmt.Sprintf("取消订单: %s", order.OrderNo))
 	utils.SuccessMessage(c, "订单已取消")
+}
+
+func AdminMarkOrderPaid(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的订单ID")
+		return
+	}
+
+	db := database.GetDB()
+	var order models.Order
+	if err := db.First(&order, id).Error; err != nil {
+		utils.NotFound(c, "订单不存在")
+		return
+	}
+	if order.Status != "pending" && order.Status != "expired" && order.Status != "cancelled" {
+		utils.BadRequest(c, "只能将待支付、已过期或已取消的套餐订单标记为已付款")
+		return
+	}
+
+	tx := db.Begin()
+	if tx.Error != nil {
+		utils.InternalError(c, "创建事务失败")
+		return
+	}
+
+	now := time.Now()
+	paymentMethodName := "管理员手动确认"
+	transactionID := fmt.Sprintf("ADMIN-%s-%d", order.OrderNo, now.Unix())
+	updates := map[string]interface{}{
+		"status":                 "paid",
+		"payment_time":           &now,
+		"payment_method_name":    &paymentMethodName,
+		"payment_transaction_id": &transactionID,
+	}
+	if err := tx.Model(&order).Updates(updates).Error; err != nil {
+		tx.Rollback()
+		utils.InternalError(c, "更新订单状态失败")
+		return
+	}
+	order.Status = "paid"
+	order.PaymentTime = &now
+	order.PaymentMethodName = &paymentMethodName
+	order.PaymentTransactionID = &transactionID
+
+	if err := services.ActivateSubscription(tx, &order, "admin_manual"); err != nil {
+		tx.Rollback()
+		utils.InternalError(c, "开通订阅失败: "+err.Error())
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		utils.InternalError(c, "提交事务失败")
+		return
+	}
+
+	utils.CreateAuditLog(c, "mark_order_paid", "order", uint(id), fmt.Sprintf("管理员手动标记订单已付款并开通权限: %s", order.OrderNo))
+	utils.SuccessMessage(c, "已标记付款并开通权限")
 }
 
 func AdminCompleteOrder(c *gin.Context) {
@@ -1465,6 +1653,99 @@ func AdminCompleteOrder(c *gin.Context) {
 
 	utils.CreateAuditLog(c, "complete_order", "order", uint(id), fmt.Sprintf("完成订单: %s", order.OrderNo))
 	utils.SuccessMessage(c, "订单已完成")
+}
+
+func AdminBatchOrderAction(c *gin.Context) {
+	var req struct {
+		IDs    []uint `json:"ids"`
+		Action string `json:"action"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+		utils.BadRequest(c, "参数错误")
+		return
+	}
+
+	db := database.GetDB()
+	success := 0
+	failed := 0
+	for _, id := range req.IDs {
+		var order models.Order
+		if err := db.First(&order, id).Error; err != nil {
+			failed++
+			continue
+		}
+		switch req.Action {
+		case "mark_paid":
+			if order.Status != "pending" && order.Status != "expired" && order.Status != "cancelled" {
+				failed++
+				continue
+			}
+			tx := db.Begin()
+			now := time.Now()
+			paymentMethodName := "管理员手动确认"
+			transactionID := fmt.Sprintf("ADMIN-%s-%d", order.OrderNo, now.Unix())
+			if err := tx.Model(&order).Updates(map[string]interface{}{
+				"status":                 "paid",
+				"payment_time":           &now,
+				"payment_method_name":    &paymentMethodName,
+				"payment_transaction_id": &transactionID,
+			}).Error; err != nil {
+				tx.Rollback()
+				failed++
+				continue
+			}
+			order.Status = "paid"
+			order.PaymentTime = &now
+			order.PaymentMethodName = &paymentMethodName
+			order.PaymentTransactionID = &transactionID
+			if err := services.ActivateSubscription(tx, &order, "admin_manual"); err != nil {
+				tx.Rollback()
+				failed++
+				continue
+			}
+			if err := tx.Commit().Error; err != nil {
+				failed++
+				continue
+			}
+			success++
+		case "cancel":
+			if order.Status != "pending" && order.Status != "expired" {
+				failed++
+				continue
+			}
+			if err := db.Model(&order).Update("status", "cancelled").Error; err != nil {
+				failed++
+				continue
+			}
+			success++
+		case "complete":
+			if order.Status != "paid" {
+				failed++
+				continue
+			}
+			if err := db.Model(&order).Update("status", "completed").Error; err != nil {
+				failed++
+				continue
+			}
+			success++
+		case "delete":
+			if order.Status != "cancelled" && order.Status != "refunded" {
+				failed++
+				continue
+			}
+			if err := db.Delete(&order).Error; err != nil {
+				failed++
+				continue
+			}
+			success++
+		default:
+			utils.BadRequest(c, "不支持的批量操作")
+			return
+		}
+	}
+
+	utils.CreateAuditLog(c, "batch_order_action", "order", 0, fmt.Sprintf("批量订单操作: %s, 成功: %d, 失败: %d", req.Action, success, failed))
+	utils.Success(c, gin.H{"success": success, "failed": failed})
 }
 
 func AdminDeleteOrder(c *gin.Context) {

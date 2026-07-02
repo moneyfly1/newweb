@@ -2,6 +2,7 @@ package router
 
 import (
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,7 +27,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	r.Use(gin.Recovery())
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.RequestLogger())
-	r.Use(gzip.Gzip(gzip.DefaultCompression))
+	r.Use(gzip.Gzip(
+		gzip.DefaultCompression,
+		gzip.WithExcludedPathsRegexs([]string{`^/assets/.*`}),
+	))
 
 	// CORS
 	corsConfig := cors.Config{
@@ -65,6 +69,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	// 通用链接：GET /api/v1/client/subscribe?token=TOKEN&type=universal
 	subRL := middleware.RateLimit(20, time.Minute)
 	api.GET("/client/subscribe", subRL, handlers.GetSubscription)
+	// 兼容旧订阅地址，旧 token 会映射到当前订阅记录，并继续受订阅状态、到期时间、设备数控制。
+	api.GET("/subscribe/:url", subRL, handlers.GetSubscription)
+	api.GET("/sub/*path", subRL, handlers.GetSubscription)
 
 	// 公开配置
 	api.GET("/config", handlers.GetPublicConfig)
@@ -473,8 +480,12 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	// Serve frontend static files and SPA fallback
 	distPath := filepath.Join("frontend", "dist")
 	if _, err := os.Stat(distPath); err == nil {
-		r.Static("/assets", filepath.Join(distPath, "assets"))
-		r.StaticFile("/favicon.ico", filepath.Join(distPath, "favicon.ico"))
+		assetsPath := filepath.Join(distPath, "assets")
+		r.GET("/assets/*filepath", servePrecompressedAsset(assetsPath))
+		r.GET("/favicon.ico", func(c *gin.Context) {
+			c.Header("Cache-Control", "public, max-age=86400")
+			c.File(filepath.Join(distPath, "favicon.ico"))
+		})
 
 		// SPA fallback: any route not matched by API or static files serves index.html
 		indexHTML := filepath.Join(distPath, "index.html")
@@ -494,4 +505,64 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	}
 
 	return r
+}
+
+func servePrecompressedAsset(root string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		requestPath := strings.TrimPrefix(c.Param("filepath"), "/")
+		if requestPath == "" || strings.Contains(requestPath, "..") {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		fullPath := filepath.Join(root, filepath.Clean(requestPath))
+		if !strings.HasPrefix(fullPath, filepath.Clean(root)+string(os.PathSeparator)) {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		if _, err := os.Stat(fullPath); err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		c.Header("Vary", "Accept-Encoding")
+		c.Header("X-Content-Type-Options", "nosniff")
+
+		acceptEncoding := c.GetHeader("Accept-Encoding")
+		if strings.Contains(acceptEncoding, "br") {
+			if serveEncodedAsset(c, fullPath, "br") {
+				return
+			}
+		}
+		if strings.Contains(acceptEncoding, "gzip") {
+			if serveEncodedAsset(c, fullPath, "gz") {
+				return
+			}
+		}
+
+		setAssetContentType(c, fullPath)
+		c.File(fullPath)
+	}
+}
+
+func serveEncodedAsset(c *gin.Context, originalPath string, encoding string) bool {
+	encodedPath := originalPath + "." + encoding
+	if _, err := os.Stat(encodedPath); err != nil {
+		return false
+	}
+	if encoding == "br" {
+		c.Header("Content-Encoding", "br")
+	} else {
+		c.Header("Content-Encoding", "gzip")
+	}
+	setAssetContentType(c, originalPath)
+	c.File(encodedPath)
+	return true
+}
+
+func setAssetContentType(c *gin.Context, path string) {
+	if contentType := mime.TypeByExtension(filepath.Ext(path)); contentType != "" {
+		c.Header("Content-Type", contentType)
+	}
 }

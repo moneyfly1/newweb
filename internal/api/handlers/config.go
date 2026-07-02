@@ -14,7 +14,7 @@ func GetPublicConfig(c *gin.Context) {
 	db := database.GetDB()
 	var configs []models.SystemConfig
 	publicKeys := []string{
-		"site_name", "site_description", "site_url",
+		"site_name", "site_description", "site_url", "site_icon",
 		"support_email", "support_qq", "support_telegram",
 		"register_enabled", "register_email_verify", "register_invite_required",
 		// Client download URLs

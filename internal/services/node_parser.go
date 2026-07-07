@@ -25,6 +25,20 @@ const (
 	maxResponseSize = 10 * 1024 * 1024 // 10MB limit for subscription content
 )
 
+type subscriptionRequestProfile struct {
+	Name      string
+	UserAgent string
+	Accept    string
+}
+
+var subscriptionRequestProfiles = []subscriptionRequestProfile{
+	{Name: "v2rayN", UserAgent: "v2rayN/6.23", Accept: "*/*"},
+	{Name: "ClashForAndroid", UserAgent: "ClashForAndroid/2.5.12", Accept: "*/*"},
+	{Name: "Clash", UserAgent: "clash-verge/v1.7.7", Accept: "*/*"},
+	{Name: "curl", UserAgent: "curl/8.0.1", Accept: "*/*"},
+	{Name: "browser", UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", Accept: "*/*"},
+}
+
 // FetchSubscriptionContent fetches and base64-decodes subscription content from a URL.
 func FetchSubscriptionContent(urlStr string) (string, error) {
 	// Validate URL
@@ -76,24 +90,7 @@ func FetchSubscriptionContent(urlStr string) (string, error) {
 			return nil
 		},
 	}
-	req, err := http.NewRequest("GET", urlStr, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", "ClashForAndroid/2.5.12")
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	// Limit response size to prevent memory exhaustion
-	limitedReader := io.LimitReader(resp.Body, maxResponseSize)
-	body, err := io.ReadAll(limitedReader)
+	body, err := fetchSubscriptionBody(client, urlStr)
 	if err != nil {
 		return "", err
 	}
@@ -109,6 +106,40 @@ func FetchSubscriptionContent(urlStr string) (string, error) {
 		}
 	}
 	return content, nil
+}
+
+func fetchSubscriptionBody(client *http.Client, urlStr string) ([]byte, error) {
+	var lastErr error
+	for _, profile := range subscriptionRequestProfiles {
+		req, err := http.NewRequest("GET", urlStr, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", profile.UserAgent)
+		req.Header.Set("Accept", profile.Accept)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		body, readErr := func() ([]byte, error) {
+			defer resp.Body.Close()
+			if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+				return nil, fmt.Errorf("%s profile status %d", profile.Name, resp.StatusCode)
+			}
+			limitedReader := io.LimitReader(resp.Body, maxResponseSize)
+			return io.ReadAll(limitedReader)
+		}()
+		if readErr == nil {
+			return body, nil
+		}
+		lastErr = readErr
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, fmt.Errorf("subscription request failed")
 }
 
 func normalizeSubscriptionContent(content string) string {

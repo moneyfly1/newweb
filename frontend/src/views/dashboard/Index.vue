@@ -777,21 +777,35 @@ onUnmounted(() => {
 
 /* Mobile */
 @media (max-width: 767px) {
-  .dashboard { padding: 0 12px; }
-  .welcome-card { padding: 16px; margin-bottom: 16px; }
-  .welcome-content { flex-direction: column; align-items: flex-start; }
-  .welcome-title { font-size: 20px; }
-  .welcome-stats { flex-direction: column; width: 100%; }
-  .stat-card { min-width: auto; width: 100%; }
+  .dashboard { padding: 12px; }
+  .welcome-card { padding: 16px; margin-bottom: 12px; border-radius: 8px; }
+  .welcome-content { display: grid; gap: 14px; }
+  .welcome-left { min-width: 0; }
+  .welcome-title { font-size: 20px; line-height: 1.25; white-space: normal; word-break: break-word; }
+  .welcome-stats { display: grid; grid-template-columns: 1fr; gap: 10px; width: 100%; }
+  .stat-card { min-width: 0; width: 100%; border-radius: 8px; }
   .main-grid { grid-template-columns: 1fr; }
+  .card { border-radius: 8px; }
+  .card-header { align-items: center; gap: 8px; padding-bottom: 10px; }
   .client-grid { grid-template-columns: repeat(2, 1fr); }
   .quick-actions-grid { grid-template-columns: repeat(2, 1fr); }
-  .sub-stats-row { flex-wrap: wrap; }
-  .sub-url-row { flex-wrap: wrap; }
+  .sub-stats-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .sub-stat { min-width: 0; }
+  .sub-url-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 32px 32px; gap: 6px; align-items: center; }
+  .sub-url-label { min-width: 0; }
+  .shadowrocket-qr-row {
+    display: block;
+  }
+  .dash-more-subscriptions .sub-url-row {
+    grid-template-columns: 44px minmax(0, 1fr) 32px;
+  }
   .shadowrocket-qr-header { flex-direction: column; align-items: stretch; }
   .shadowrocket-qr-canvas { max-width: 180px; }
-  .qs-main { align-items: center; }
-  .qs-hint { width: 100%; padding-left: 38px; }
-  .qs-actions { padding: 0 12px 12px 12px; }
+  .qs-main { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; }
+  .qs-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qs-hint { grid-column: 2; width: auto; padding-left: 0; }
+  .qs-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); padding: 0 12px 12px 12px; }
+  .order-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .order-right { justify-content: flex-end; flex-wrap: wrap; }
 }
 </style>

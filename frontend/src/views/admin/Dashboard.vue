@@ -253,7 +253,8 @@ onMounted(() => loadDashboard())
 
 .metric-card {
   padding: 20px;
-  border-radius: 16px;
+  min-height: 132px;
+  border-radius: 8px;
   color: white;
   position: relative;
   overflow: hidden;
@@ -271,7 +272,7 @@ onMounted(() => loadDashboard())
 .metric-icon { position: absolute; right: -10px; bottom: -10px; opacity: 0.2; transform: rotate(-15deg); }
 
 .glass-card {
-  border-radius: 16px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(10px);
 }
@@ -351,10 +352,72 @@ onMounted(() => loadDashboard())
 .amount { font-weight: 600; color: #333; }
 
 @media (max-width: 767px) {
-  .admin-dashboard { padding: 12px; }
-  .welcome-section { flex-direction: column; align-items: flex-start; gap: 16px; }
-  .metric-value { font-size: 20px; }
-  .activity-item { align-items: flex-start; flex-direction: column; }
-  .activity-side { text-align: left; }
+  .admin-dashboard {
+    padding: 12px;
+  }
+
+  .welcome-section {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .welcome-text h2 {
+    font-size: 20px;
+    line-height: 1.25;
+  }
+
+  .welcome-text p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .welcome-action,
+  .welcome-action .n-button {
+    width: 100%;
+  }
+
+  .metric-card {
+    min-height: 116px;
+    padding: 14px;
+  }
+
+  .metric-label {
+    font-size: 13px;
+  }
+
+  .metric-value {
+    font-size: 22px;
+    line-height: 1.15;
+    word-break: break-all;
+  }
+
+  .metric-icon {
+    right: -14px;
+    bottom: -14px;
+  }
+
+  .chart-shell {
+    min-height: 240px;
+  }
+
+  .activity-item {
+    align-items: flex-start;
+    flex-direction: column;
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .activity-side {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+  }
+
+  .activity-relative {
+    margin-top: 0;
+  }
 }
 </style>

@@ -120,12 +120,15 @@ async function handleLogin() {
   width: 100%;
   max-width: 420px;
   background: var(--bg-color, #fff);
-  border-radius: 16px;
+  border-radius: 8px;
   padding: 48px 40px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
 .card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   margin-bottom: 40px;
 }
@@ -162,8 +165,16 @@ async function handleLogin() {
 }
 
 @media (max-width: 480px) {
+  .admin-login-page {
+    padding: 12px;
+  }
+
   .login-card {
     padding: 36px 28px;
+  }
+
+  .card-header {
+    margin-bottom: 32px;
   }
 }
 </style>

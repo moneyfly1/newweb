@@ -763,8 +763,13 @@ onMounted(() => { loadOrders(); loadPaymentMethods() })
 .card-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; border-top: 1px solid #f0f0f0; margin-top: 4px; }
 
 @media (max-width: 767px) {
-  .order-container { padding: 0 12px; }
+  .order-container { padding: 12px; }
   .header { margin-bottom: 4px; }
   .title { font-size: 22px; }
+  .main-card { border-radius: 8px; }
+  .card-row { display: grid; grid-template-columns: minmax(72px, 34%) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .value { min-width: 0; word-break: break-word; }
+  .card-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); justify-content: stretch; }
+  .card-actions .n-button { width: 100%; }
 }
 </style>

@@ -144,19 +144,19 @@
               <div class="card-body">
                 <div class="card-row">
                   <span class="card-label">邮箱</span>
-                  <span>{{ row.email }}</span>
+                  <span class="card-value">{{ row.email }}</span>
                 </div>
                 <div class="card-row">
                   <span class="card-label">余额</span>
-                  <span>{{ formatCurrency(row.balance) }}</span>
+                  <span class="card-value">{{ formatCurrency(row.balance) }}</span>
                 </div>
                 <div class="card-row">
                   <span class="card-label">等级</span>
-                  <span>{{ row.level_name || row.level || '无' }}</span>
+                  <span class="card-value">{{ row.level_name || row.level || '无' }}</span>
                 </div>
                 <div class="card-row">
                   <span class="card-label">注册时间</span>
-                  <span>{{ row.created_at ? new Date(row.created_at).toLocaleString('zh-CN') : '-' }}</span>
+                  <span class="card-value">{{ row.created_at ? new Date(row.created_at).toLocaleString('zh-CN') : '-' }}</span>
                 </div>
               </div>
               <div class="card-actions">

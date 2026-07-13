@@ -1,5 +1,5 @@
 <template>
-  <div style="height: 100%">
+  <div class="user-layout-root">
   <a href="#main-content" class="skip-to-content">跳到主内容</a>
   <!-- Desktop Layout -->
   <n-layout has-sider style="height: 100%" v-if="!appStore.isMobile">
@@ -38,7 +38,7 @@
   <!-- Mobile Layout -->
   <n-layout style="height: 100%" v-else>
     <n-layout-header bordered class="mobile-header">
-      <span class="mobile-logo">CBoard</span>
+      <span class="mobile-logo">{{ currentTitle }}</span>
       <div class="mobile-header-right">
         <n-badge :value="unreadCount" :max="99" :offset="[-4, 4]">
           <n-button quaternary circle size="small" @click="router.push('/tickets')" aria-label="工单通知">
@@ -55,7 +55,11 @@
       <n-icon :size="16"><shield-outline /></n-icon>
       <span>正在以用户身份浏览 · 点击返回管理后台</span>
     </div>
-    <n-layout-content content-style="padding: 16px; padding-bottom: 80px;" :native-scrollbar="false">
+    <n-layout-content
+      class="user-mobile-content"
+      content-style="padding: 0; padding-bottom: calc(72px + env(safe-area-inset-bottom));"
+      :native-scrollbar="false"
+    >
       <div id="main-content" tabindex="-1"><router-view /></div>
     </n-layout-content>
     <div class="mobile-tabbar">
@@ -64,7 +68,7 @@
         <span class="mobile-tab-label">{{ tab.label }}</span>
       </div>
     </div>
-    <n-drawer v-model:show="showMobileMore" placement="bottom" :height="400" :style="appStore.isMobile ? { margin: '0 12px 12px', borderRadius: '18px', overflow: 'hidden' } : undefined" closable>
+    <n-drawer v-model:show="showMobileMore" placement="bottom" :height="'min(76vh, 520px)'" :style="appStore.isMobile ? { margin: '0 12px 12px', borderRadius: '8px', overflow: 'hidden' } : undefined" closable>
       <n-drawer-content title="更多">
         <div class="mobile-more-grid">
           <div v-for="item in moreMenuItems" :key="item.key" class="mobile-more-item" @click="handleMoreClick(item.key)">
@@ -182,7 +186,9 @@ const moreMenuItems = [
 const activeKey = computed(() => route.name as string)
 const currentTitle = computed(() => {
   const item = menuOptions.find(m => m.key === route.name)
-  return item?.label || 'CBoard'
+  const mobileItem = mobileTabs.find(m => m.key === route.name)
+  const moreItem = moreMenuItems.find(m => m.key === route.name)
+  return item?.label || mobileItem?.label || moreItem?.label || 'CBoard'
 })
 
 function handleMenuClick(key: string) { router.push({ name: key }) }
@@ -230,49 +236,61 @@ function returnToAdmin() {
 </script>
 <!-- STYLE_SECTION -->
 <style scoped>
+.user-layout-root { height: 100%; }
 .logo { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; cursor: pointer; border-bottom: 1px solid var(--border-color, #e8e8e8); }
 .desktop-header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
 
 /* Mobile Header */
-.mobile-header { height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
-.mobile-logo { font-size: 18px; font-weight: 700; }
+.mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  height: 52px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  background: var(--bg-color, #fff);
+}
+.mobile-logo { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; font-weight: 700; }
 .mobile-header-right { display: flex; align-items: center; gap: 4px; }
 
 /* Mobile Tab Bar */
 .mobile-tabbar {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-  height: 56px; display: flex; align-items: center; justify-content: space-around;
+  height: calc(56px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(5, 1fr); align-items: stretch;
   background: var(--bg-color, #fff); border-top: 1px solid var(--border-color, #e8e8e8);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .mobile-tab {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; flex: 1; padding: 6px 0; cursor: pointer; color: var(--text-color-secondary, #666); transition: color 0.2s, background-color 0.2s;
+  gap: 2px; min-width: 0; padding: 6px 0; cursor: pointer; color: var(--text-color-secondary, #666); transition: color 0.2s, background-color 0.2s;
 }
 .mobile-tab.active { color: var(--primary-color, #667eea); background: var(--primary-color-soft, rgba(102,126,234,0.08)); }
-.mobile-tab-label { font-size: 12px; line-height: 1; }
+.mobile-tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 1; }
 
 /* Mobile More Menu */
-.mobile-more-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 12px; padding: 8px 0; }
+.mobile-more-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 10px; padding: 4px 0 8px; }
 .mobile-more-item { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; }
 .mobile-more-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--primary-color-soft, rgba(102,126,234,0.08));
   color: var(--primary-color, #667eea);
 }
-.mobile-more-label { font-size: 12px; color: var(--text-color, #333); }
+.mobile-more-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-color, #333); }
 
 /* Mobile Theme Section */
 .mobile-theme-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color, #e8e8e8); }
 .mobile-theme-label { font-size: 14px; font-weight: 500; margin-bottom: 12px; color: var(--text-color, #333); }
-.mobile-theme-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.mobile-theme-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .mobile-theme-dot {
-  width: 100%; aspect-ratio: 1; border-radius: 12px; cursor: pointer;
+  width: 100%; aspect-ratio: 1; border-radius: 8px; cursor: pointer;
   display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px;
   border: 2px solid transparent; transition: all 0.2s;
 }

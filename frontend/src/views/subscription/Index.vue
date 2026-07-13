@@ -1383,7 +1383,7 @@ onUnmounted(() => { stopPayPolling() })
 
 /* Mobile */
 @media (max-width: 767px) {
-  .subscription-page { padding: 0 12px; }
+  .subscription-page { padding: 12px; }
   .hero-row-top { flex-direction: column; gap: 10px; align-items: flex-start; }
   .hero-right { align-self: flex-end; }
   .hero-stats { flex-wrap: wrap; gap: 16px; padding: 12px 16px; }
@@ -1395,19 +1395,34 @@ onUnmounted(() => { stopPayPolling() })
   .format-grid { grid-template-columns: repeat(2, 1fr); }
 
   /* Modern Hero Mobile */
-  .modern-hero { padding: 16px; }
-  .hero-header { flex-direction: column; gap: 12px; }
-  .package-title { font-size: 20px; }
+  .modern-hero { padding: 16px; border-radius: 8px; }
+  .hero-header { display: grid; gap: 12px; }
+  .hero-header > .n-button,
+  .hero-header > .n-tooltip {
+    width: 100%;
+  }
+  .package-title { font-size: 20px; line-height: 1.25; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .stat-item { padding: 12px; }
+  .stat-item { display: grid; grid-template-columns: 36px minmax(0, 1fr); padding: 12px; border-radius: 8px; }
   .stat-icon { width: 36px; height: 36px; }
-  .stat-value { font-size: 16px; }
-  .url-card, .format-card-container { padding: 16px; }
+  .stat-content { min-width: 0; }
+  .stat-value { font-size: 16px; line-height: 1.25; word-break: break-word; }
+  .stat-date { font-size: 13px; }
+  .url-card, .format-card-container, .device-card { padding: 16px; border-radius: 8px; }
+  .card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .card-header .n-space { justify-content: flex-end; }
   .format-grid { grid-template-columns: repeat(2, 1fr); }
-  .url-header { align-items: flex-start; }
+  .format-item { padding: 12px 10px; border-radius: 8px; }
+  .format-item-icon,
+  .format-item-icon img { width: 40px; height: 40px; }
+  .format-item-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .url-header { display: grid; gap: 6px; align-items: flex-start; }
   .url-actions { flex-direction: column; align-items: stretch; }
   .url-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; }
   .url-buttons .n-button { width: 100%; }
+  .mobile-device-item { border-radius: 8px; background: var(--bg-page-color, #f8fafc); }
+  .device-info-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: start; }
+  .device-value { text-align: right; word-break: break-word; }
   .drawer-section { gap: 12px !important; }
   .drawer-footer-actions { width: 100%; }
   .drawer-footer-actions :deep(.n-button) { flex: 1 1 calc(50% - 6px); min-width: 0; }

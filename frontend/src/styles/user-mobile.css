@@ -1,0 +1,190 @@
+/* User-facing mobile layout and card normalization */
+@media (max-width: 767px) {
+  :root {
+    --user-mobile-gutter: 12px;
+    --user-mobile-radius: 8px;
+    --user-mobile-control-height: 36px;
+  }
+
+  .user-mobile-content {
+    background: var(--bg-page-color, #f8fafc);
+  }
+
+  .dashboard,
+  .subscription-page,
+  .order-container,
+  .shop-container,
+  .node-page,
+  .ticket-page,
+  .ticket-detail-page,
+  .settings-page,
+  .device-page,
+  .invite-page,
+  .recharge-page,
+  .redeem-page,
+  .mystery-box-page,
+  .history-page,
+  .help-page {
+    padding: var(--user-mobile-gutter) !important;
+  }
+
+  .dashboard > :first-child,
+  .subscription-page > :first-child,
+  .order-container > :first-child,
+  .shop-container > :first-child,
+  .node-page > :first-child,
+  .settings-page > :first-child {
+    margin-top: 0;
+  }
+
+  .user-mobile-content .n-card,
+  .user-mobile-content .card,
+  .user-mobile-content .main-card,
+  .user-mobile-content .url-card,
+  .user-mobile-content .format-card-container,
+  .user-mobile-content .device-card,
+  .user-mobile-content .package-card {
+    border-radius: var(--user-mobile-radius) !important;
+  }
+
+  .user-mobile-content .n-card > .n-card__content {
+    padding: 12px !important;
+  }
+
+  .user-mobile-content .header,
+  .user-mobile-content .page-header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center !important;
+    gap: 10px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .user-mobile-content .title,
+  .user-mobile-content .page-title {
+    font-size: 22px !important;
+    line-height: 1.25;
+    margin: 0 !important;
+  }
+
+  .user-mobile-content .subtitle,
+  .user-mobile-content .page-subtitle {
+    grid-column: 1 / -1;
+    margin: 0 !important;
+    font-size: 13px !important;
+    line-height: 1.5;
+  }
+
+  .user-mobile-content .mobile-card-list {
+    display: grid !important;
+    gap: 10px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .user-mobile-content .mobile-card {
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    overflow: hidden;
+    border: 1px solid var(--border-color, #e2e8f0) !important;
+    border-radius: var(--user-mobile-radius) !important;
+    background: var(--bg-color, #fff) !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+  }
+
+  .user-mobile-content .mobile-card:nth-child(odd),
+  .user-mobile-content .mobile-card:nth-child(even) {
+    background: var(--bg-color, #fff) !important;
+  }
+
+  .user-mobile-content .mobile-card .card-row {
+    display: grid !important;
+    grid-template-columns: minmax(72px, 34%) minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 9px 12px !important;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+    font-size: 13px !important;
+  }
+
+  .user-mobile-content .mobile-card .card-row::after {
+    display: none !important;
+  }
+
+  .user-mobile-content .mobile-card .card-row:last-child {
+    border-bottom: 0 !important;
+  }
+
+  .user-mobile-content .mobile-card .card-row .label,
+  .user-mobile-content .mobile-card .card-label,
+  .user-mobile-content .mobile-card .card-row > span:first-child {
+    min-width: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-align: left !important;
+    color: var(--text-color-secondary, #64748b) !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    line-height: 1.5;
+  }
+
+  .user-mobile-content .mobile-card .card-row .value,
+  .user-mobile-content .mobile-card .card-value,
+  .user-mobile-content .mobile-card .card-row > span:last-child {
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-align: right !important;
+    word-break: break-word;
+    color: var(--text-color, #0f172a) !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    line-height: 1.5;
+  }
+
+  .user-mobile-content .mobile-card .card-actions {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+    gap: 8px !important;
+    margin: 0 !important;
+    padding: 10px 12px 12px !important;
+    border-top: 1px solid var(--border-color, #e2e8f0) !important;
+    background: transparent !important;
+  }
+
+  .user-mobile-content .mobile-card .card-actions .n-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 34px;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+  }
+
+  .user-mobile-content .mobile-empty {
+    margin: 0 !important;
+    padding: 32px 16px !important;
+    border: 1px dashed var(--border-color, #cbd5e1);
+    border-radius: var(--user-mobile-radius);
+    background: var(--bg-color, #fff) !important;
+  }
+
+  .user-mobile-content .n-pagination {
+    justify-content: center !important;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .user-mobile-content .n-tabs .n-tabs-nav {
+    overflow-x: auto;
+  }
+}

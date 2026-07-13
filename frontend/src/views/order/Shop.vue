@@ -722,24 +722,30 @@ onMounted(() => {
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
-  .shop-container { padding: 0 12px; }
+  .shop-container { padding: 12px; }
   .title { font-size: 24px; }
   .subtitle { font-size: 14px; }
   .packages-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .package-card { padding: 14px 10px; }
+  .package-card { min-height: 100%; padding: 14px 10px; border-radius: 8px; }
   .package-card:hover { transform: none; }
   .card-header { margin-bottom: 14px; }
-  .package-name { font-size: 16px; margin-bottom: 8px; }
+  .package-name { font-size: 16px; line-height: 1.3; margin-bottom: 8px; word-break: break-word; }
   .price { font-size: 28px; }
   .currency { font-size: 16px; }
   .card-body { margin-bottom: 14px; }
-  .feature-item { font-size: 13px; gap: 4px; }
+  .feature-item { align-items: flex-start; font-size: 13px; line-height: 1.45; gap: 4px; }
+  .feature-item .n-icon { margin-top: 1px; flex-shrink: 0; }
   .badge { top: -10px; right: 12px; font-size: 11px; padding: 2px 10px; }
   .description { padding: 8px; font-size: 12px; }
+  .custom-inline-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); }
   .purchase-drawer-content { gap: 12px !important; }
   .coupon-group { flex-direction: column; }
   .coupon-verify-btn { width: 100%; }
   .purchase-drawer-content :deep(.n-descriptions) { font-size: 13px; }
   .purchase-drawer-content :deep(.n-radio) { align-items: flex-start; }
+}
+
+@media (max-width: 380px) {
+  .packages-grid { grid-template-columns: 1fr; }
 }
 </style>

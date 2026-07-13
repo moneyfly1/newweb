@@ -1,5 +1,5 @@
 <template>
-  <div style="height: 100%">
+  <div class="admin-layout-root">
   <a href="#main-content" class="skip-to-content">跳到主内容</a>
   <!-- Desktop Layout -->
   <n-layout has-sider style="height: 100%" v-if="!appStore.isMobile">
@@ -57,7 +57,11 @@
         </n-button>
       </n-dropdown>
     </n-layout-header>
-    <n-layout-content content-style="padding: 16px; padding-bottom: 80px;" :native-scrollbar="false">
+    <n-layout-content
+      class="mobile-admin-content"
+      content-style="padding: 0; padding-bottom: calc(72px + env(safe-area-inset-bottom));"
+      :native-scrollbar="false"
+    >
       <div id="main-content" tabindex="-1">
         <router-view v-slot="{ Component }">
           <suspense>
@@ -288,24 +292,36 @@ function handleUserMenu(key: string) {
 .skip-to-content:focus {
   transform: translateY(0);
 }
+.admin-layout-root { height: 100%; }
 .logo { height: 56px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; cursor: pointer; border-bottom: 1px solid var(--border-color, #e8e8e8); }
 .desktop-header { height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
-.mobile-header { height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
+.mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  height: 52px;
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--bg-color, #fff);
+}
 .mobile-title { font-size: 16px; font-weight: 600; }
 
 /* Mobile Tab Bar */
 .mobile-tabbar {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-  height: 56px; display: flex; align-items: center; justify-content: space-around;
+  height: calc(56px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(4, 1fr); align-items: stretch;
   background: var(--bg-color, #fff); border-top: 1px solid var(--border-color, #e8e8e8);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .mobile-tab {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; flex: 1; padding: 6px 0; cursor: pointer; color: var(--text-color-secondary, #666); transition: color 0.2s, background-color 0.2s;
+  gap: 2px; min-width: 0; padding: 6px 0; cursor: pointer; color: var(--text-color-secondary, #666); transition: color 0.2s, background-color 0.2s;
 }
 .mobile-tab.active { color: var(--primary-color, #667eea); background: var(--primary-color-soft, rgba(102,126,234,0.08)); }
-.mobile-tab-label { font-size: 12px; line-height: 1; }
+.mobile-tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 1; }
 
 /* Theme Picker */
 .theme-picker-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }

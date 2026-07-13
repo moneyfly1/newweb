@@ -387,12 +387,21 @@ onMounted(() => { fetchNodes() })
 @media (max-width: 767px) {
   .node-page { padding: 12px; }
   .stats-bar { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .stat-card { padding: 14px; }
+  .stat-card { padding: 14px; border-radius: 8px; }
   .stat-value { font-size: 18px; }
   .stat-icon { width: 38px; height: 38px; }
-  .filter-bar { flex-direction: column; gap: 8px; align-items: flex-start; }
+  .filter-bar { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: stretch; }
+  .filter-bar :deep(.n-input),
+  .filter-bar :deep(.n-select),
+  .filter-bar .n-button { width: 100%; }
   .desktop-table { display: none; }
   .mobile-cards { display: block; }
+  .mobile-node-card { border-radius: 8px; padding: 12px; }
+  .mobile-card-info { grid-template-columns: 1fr; gap: 4px; }
+  .mobile-info-item { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: center; }
+  .mobile-info-item > :last-child { min-width: 0; text-align: right; word-break: break-word; }
+  .mobile-info-action { display: flex; justify-content: stretch; }
+  .mobile-info-action .n-button { width: 100%; }
 }
 @media (max-width: 480px) {
   .stats-bar { gap: 8px; }

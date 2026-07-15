@@ -138,6 +138,9 @@
                   <n-tag :type="row.is_active ? 'success' : 'error'" size="small">
                     {{ row.is_active ? '激活' : '禁用' }}
                   </n-tag>
+                  <n-tag :type="getLineTypeTag(row).type" size="small">
+                    {{ getLineTypeTag(row).text }}
+                  </n-tag>
                   <n-tag v-if="row.is_admin" type="warning" size="small">管理员</n-tag>
                 </n-space>
               </div>
@@ -153,6 +156,14 @@
                 <div class="card-row">
                   <span class="card-label">等级</span>
                   <span class="card-value">{{ row.level_name || row.level || '无' }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="card-label">线路类型</span>
+                  <span class="card-value">
+                    <n-tag :type="getLineTypeTag(row).type" size="small">
+                      {{ getLineTypeTag(row).text }}
+                    </n-tag>
+                  </span>
                 </div>
                 <div class="card-row">
                   <span class="card-label">注册时间</span>
@@ -424,6 +435,14 @@ const formRulesComputed = computed(() => {
   return rules
 })
 
+const getCustomNodeCount = (row) => Number(row?.custom_node_count || row?.custom_nodes_count || row?.dedicated_node_count || 0)
+const isDedicatedUser = (row) => Boolean(row?.has_custom_nodes) || getCustomNodeCount(row) > 0
+const getLineTypeTag = (row) => {
+  if (row?.dedicated_only) return { text: '仅专线', type: 'warning' }
+  if (isDedicatedUser(row)) return { text: '专线+普通', type: 'success' }
+  return { text: '普通线路', type: 'default' }
+}
+
 // Action dropdown options builder
 const actionOptions = (row) => [
   { label: '查看详情', key: 'detail' },
@@ -438,6 +457,13 @@ const columns = [
   { title: 'ID', key: 'id', width: 70, sorter: 'default', resizable: true },
   { title: '用户名', key: 'username', ellipsis: { tooltip: true }, width: 130, resizable: true },
   { title: '邮箱', key: 'email', ellipsis: { tooltip: true }, width: 200, resizable: true },
+  {
+    title: '线路类型',
+    key: 'line_type',
+    width: 130,
+    resizable: true,
+    render: (row) => h(NTag, { type: getLineTypeTag(row).type, size: 'small' }, { default: () => getLineTypeTag(row).text })
+  },
   {
     title: '余额',
     key: 'balance',

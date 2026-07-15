@@ -35,6 +35,30 @@ func roundToTwoDecimals(value float64) float64 {
 	return float64(int(value*100+0.5)) / 100
 }
 
+type userCustomNodeSummary struct {
+	Count         int  `json:"custom_node_count"`
+	DedicatedOnly bool `json:"dedicated_only"`
+}
+
+func loadUserCustomNodeSummaries(db *gorm.DB, userIDs []uint) map[uint]userCustomNodeSummary {
+	summaries := make(map[uint]userCustomNodeSummary)
+	if len(userIDs) == 0 {
+		return summaries
+	}
+
+	var assignments []models.UserCustomNode
+	db.Select("user_id, dedicated_only").Where("user_id IN ?", userIDs).Find(&assignments)
+	for _, assignment := range assignments {
+		summary := summaries[assignment.UserID]
+		summary.Count++
+		if assignment.DedicatedOnly {
+			summary.DedicatedOnly = true
+		}
+		summaries[assignment.UserID] = summary
+	}
+	return summaries
+}
+
 // ==================== Dashboard ====================
 
 func AdminDashboard(c *gin.Context) {
@@ -316,9 +340,12 @@ func AdminListUsers(c *gin.Context) {
 	// Enrich with level name and subscription fields needed by the edit dialog
 	type UserItem struct {
 		models.User
-		LevelName   string     `json:"level_name"`
-		ExpireTime  *time.Time `json:"expire_time"`
-		DeviceLimit int        `json:"device_limit"`
+		LevelName       string     `json:"level_name"`
+		ExpireTime      *time.Time `json:"expire_time"`
+		DeviceLimit     int        `json:"device_limit"`
+		HasCustomNodes  bool       `json:"has_custom_nodes"`
+		CustomNodeCount int        `json:"custom_node_count"`
+		DedicatedOnly   bool       `json:"dedicated_only"`
 	}
 	items := make([]UserItem, 0, len(users))
 	// Pre-load all levels
@@ -330,8 +357,8 @@ func AdminListUsers(c *gin.Context) {
 	}
 
 	subscriptionMap := make(map[uint]models.Subscription)
+	userIDs := make([]uint, 0, len(users))
 	if len(users) > 0 {
-		userIDs := make([]uint, 0, len(users))
 		for _, u := range users {
 			userIDs = append(userIDs, u.ID)
 		}
@@ -341,6 +368,7 @@ func AdminListUsers(c *gin.Context) {
 			subscriptionMap[sub.UserID] = sub
 		}
 	}
+	customNodeSummaries := loadUserCustomNodeSummaries(db, userIDs)
 
 	for _, u := range users {
 		item := UserItem{User: u}
@@ -350,6 +378,11 @@ func AdminListUsers(c *gin.Context) {
 		if sub, ok := subscriptionMap[u.ID]; ok {
 			item.ExpireTime = &sub.ExpireTime
 			item.DeviceLimit = sub.DeviceLimit
+		}
+		if summary, ok := customNodeSummaries[u.ID]; ok {
+			item.HasCustomNodes = summary.Count > 0
+			item.CustomNodeCount = summary.Count
+			item.DedicatedOnly = summary.DedicatedOnly
 		}
 		items = append(items, item)
 	}
@@ -2479,6 +2512,18 @@ func AdminListSubscriptions(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}
+	if lineType := c.Query("line_type"); lineType != "" {
+		allCustomUserIDs := db.Model(&models.UserCustomNode{}).Select("user_id")
+		dedicatedOnlyUserIDs := db.Model(&models.UserCustomNode{}).Select("user_id").Where("dedicated_only = ?", true)
+		switch lineType {
+		case "dedicated_only":
+			query = query.Where("user_id IN (?)", dedicatedOnlyUserIDs)
+		case "mixed":
+			query = query.Where("user_id IN (?) AND user_id NOT IN (?)", allCustomUserIDs, dedicatedOnlyUserIDs)
+		case "normal":
+			query = query.Where("user_id NOT IN (?)", allCustomUserIDs)
+		}
+	}
 	if search := c.Query("search"); search != "" {
 		// Search by user email, username, notes, or subscription URL (current + old)
 		like := "%" + search + "%"
@@ -2508,12 +2553,15 @@ func AdminListSubscriptions(c *gin.Context) {
 	baseURL := getSubscriptionBaseURL()
 	type SubItem struct {
 		models.Subscription
-		UserEmail    string  `json:"user_email"`
-		Username     string  `json:"username"`
-		PackageName  string  `json:"package_name"`
-		UserNotes    *string `json:"user_notes"`
-		UniversalURL string  `json:"universal_url"`
-		ClashURL     string  `json:"clash_url"`
+		UserEmail       string  `json:"user_email"`
+		Username        string  `json:"username"`
+		PackageName     string  `json:"package_name"`
+		UserNotes       *string `json:"user_notes"`
+		UniversalURL    string  `json:"universal_url"`
+		ClashURL        string  `json:"clash_url"`
+		HasCustomNodes  bool    `json:"has_custom_nodes"`
+		CustomNodeCount int     `json:"custom_node_count"`
+		DedicatedOnly   bool    `json:"dedicated_only"`
 	}
 
 	// 批量查询 user 和 package，避免 N+1
@@ -2533,6 +2581,7 @@ func AdminListSubscriptions(c *gin.Context) {
 			userMap[u.ID] = u
 		}
 	}
+	customNodeSummaries := loadUserCustomNodeSummaries(db, userIDs)
 	pkgMap := make(map[int64]string)
 	if len(pkgIDs) > 0 {
 		var pkgs []models.Package
@@ -2552,6 +2601,11 @@ func AdminListSubscriptions(c *gin.Context) {
 			item.UserEmail = u.Email
 			item.Username = u.Username
 			item.UserNotes = u.Notes
+		}
+		if summary, ok := customNodeSummaries[sub.UserID]; ok {
+			item.HasCustomNodes = summary.Count > 0
+			item.CustomNodeCount = summary.Count
+			item.DedicatedOnly = summary.DedicatedOnly
 		}
 		if sub.PackageID != nil {
 			if name, ok := pkgMap[*sub.PackageID]; ok {

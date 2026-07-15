@@ -11,6 +11,7 @@
             <template #prefix><n-icon><SearchOutline /></n-icon></template>
           </n-input>
           <n-select v-model:value="statusFilter" :options="statusOptions" class="status-select" @update:value="handleSearch" />
+          <n-select v-model:value="lineFilter" :options="lineOptions" class="status-select" @update:value="handleSearch" />
           <n-button @click="handleRefresh" secondary>
             <template #icon><n-icon><RefreshOutline /></n-icon></template>
             刷新
@@ -29,6 +30,7 @@
           </n-input>
           <div class="mobile-toolbar-row">
             <n-select v-model:value="statusFilter" :options="statusOptions" size="small" class="flex-1" @update:value="handleSearch" />
+            <n-select v-model:value="lineFilter" :options="lineOptions" size="small" class="flex-1" @update:value="handleSearch" />
             <n-button size="small" type="info" @click="handleSearch">搜索</n-button>
           </div>
         </div>
@@ -43,7 +45,7 @@
           <n-button size="small" type="info" @click="handleBatchEmail">批量发送</n-button>
           <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
         </n-space>
-        <n-data-table remote class="unified-admin-table" :columns="columns" :data="tableData" :loading="loading" :pagination="pagination" :bordered="false" :single-line="false" :scroll-x="1700"
+        <n-data-table remote class="unified-admin-table" :columns="columns" :data="tableData" :loading="loading" :pagination="pagination" :bordered="false" :single-line="false" :scroll-x="1730"
           :row-key="(row) => row.id"
           :checked-row-keys="checkedRowKeys"
           @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
@@ -62,7 +64,10 @@
                 <div class="sub-user-info">
                   <div class="sub-avatar">{{ (row.username || row.user_email || 'U').charAt(0).toUpperCase() }}</div>
                   <div class="sub-user-meta">
-                    <div class="sub-user-name">{{ row.username || '未知' }}</div>
+                    <div class="sub-user-name-row">
+                      <span class="sub-user-name">{{ row.username || '未知' }}</span>
+                      <n-tag :type="getLineTypeTag(row).type" size="small">{{ getLineTypeTag(row).text }}</n-tag>
+                    </div>
                     <div class="sub-user-email" v-if="row.user_email">{{ row.user_email }}</div>
                     <div class="sub-user-id">ID: {{ row.id }} · {{ row.package_name || '无套餐' }}</div>
                   </div>
@@ -193,6 +198,7 @@ const userStore = useUserStore()
 const loading = ref(false)
 const searchQuery = ref('')
 const statusFilter = ref(null)
+const lineFilter = ref(null)
 const tableData = ref([])
 const sortState = ref({ sort: 'id', order: 'desc' })
 const pagination = ref({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
@@ -204,6 +210,12 @@ const checkedRowKeys = ref([])
 const statusOptions = [
   { label: '全部', value: null }, { label: '活跃', value: 'active' },
   { label: '即将到期', value: 'expiring' }, { label: '已过期', value: 'expired' }, { label: '已禁用', value: 'disabled' }
+]
+const lineOptions = [
+  { label: '全部线路', value: null },
+  { label: '仅专线', value: 'dedicated_only' },
+  { label: '专线+普通线路', value: 'mixed' },
+  { label: '普通线路', value: 'normal' }
 ]
 const getStatusType = (s) => ({ active: 'success', expiring: 'warning', expired: 'error', disabled: 'default' }[s] || 'default')
 const getStatusText = (s) => ({ active: '活跃', expiring: '即将到期', expired: '已过期', disabled: '已禁用' }[s] || s || '-')
@@ -222,6 +234,13 @@ const getRemainingDaysColor = (t) => {
 const getShadowrocketUrl = (url) => 'sub://' + btoa(url)
 const getRowUniversalUrl = (row) => row?.universal_url || ''
 const getRowClashUrl = (row) => row?.clash_url || ''
+const getCustomNodeCount = (row) => Number(row?.custom_node_count || row?.custom_nodes_count || row?.dedicated_node_count || 0)
+const isDedicatedUser = (row) => Boolean(row?.has_custom_nodes) || getCustomNodeCount(row) > 0
+const getLineTypeTag = (row) => {
+  if (row?.dedicated_only) return { text: '仅专线', type: 'warning' }
+  if (isDedicatedUser(row)) return { text: '专线+普通', type: 'success' }
+  return { text: '普通线路', type: 'default' }
+}
 const copyText = async (text, label = '') => {
   const ok = await clipboardCopy(text)
   ok ? message.success(`${label || '内容'}已复制`) : message.error('复制失败')
@@ -250,10 +269,13 @@ const columns = [
   { type: 'selection' },
   { title: 'ID', key: 'id', width: 60, sorter: (a, b) => a.id - b.id, resizable: true },
   {
-    title: '用户', key: 'user_email', width: 180, resizable: true,
+    title: '用户', key: 'user_email', width: 210, resizable: true,
     render: (row) => h('div', {}, [
       h('div', { style: 'font-weight:500;font-size:13px;line-height:1.4' }, row.username || '未知'),
       row.user_email ? h('div', { style: 'font-size:11px;color:#999;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, row.user_email) : null,
+      h('div', { class: 'user-type-tags' }, [
+        h(NTag, { type: getLineTypeTag(row).type, size: 'small' }, { default: () => getLineTypeTag(row).text })
+      ]),
       h(NButton, { size: 'tiny', type: 'success', style: 'margin-top:4px', onClick: () => handleViewDetail(row) }, { default: () => '详情' })
     ])
   },
@@ -350,7 +372,15 @@ const columns = [
 const fetchData = async () => {
   loading.value = true
   try {
-    const params = { page: pagination.value.page, page_size: pagination.value.pageSize, search: searchQuery.value || undefined, status: statusFilter.value || undefined, sort: sortState.value.sort, order: sortState.value.order }
+    const params = {
+      page: pagination.value.page,
+      page_size: pagination.value.pageSize,
+      search: searchQuery.value || undefined,
+      status: statusFilter.value || undefined,
+      line_type: lineFilter.value || undefined,
+      sort: sortState.value.sort,
+      order: sortState.value.order
+    }
     const res = await listAdminSubscriptions(params)
     const items = res.data.items || []
     items.forEach(r => { r._expireTs = r.expire_time ? new Date(r.expire_time).getTime() : null })
@@ -509,6 +539,7 @@ onMounted(() => fetchData())
 :deep(.action-btn-grid) { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 :deep(.subscription-link-actions) { display: grid; gap: 6px; }
 :deep(.subscription-link-actions .n-button) { justify-content: flex-start; }
+:deep(.user-type-tags) { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 /* Mobile cards */
 .mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
 .sub-card { background: var(--bg-color, #fff); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
@@ -516,6 +547,7 @@ onMounted(() => fetchData())
 .sub-user-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .sub-avatar { width: 36px; height: 36px; border-radius: 50%; background: #667eea; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; flex-shrink: 0; }
 .sub-user-meta { flex: 1; min-width: 0; }
+.sub-user-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .sub-user-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-color, #333); }
 .sub-user-email { font-size: 11px; color: var(--text-color-secondary, #999); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
 .sub-user-id { font-size: 12px; color: var(--text-color-secondary, #999); margin-top: 2px; }

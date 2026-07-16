@@ -66,7 +66,11 @@
                   <div class="sub-user-meta">
                     <div class="sub-user-name-row">
                       <span class="sub-user-name">{{ row.username || '未知' }}</span>
-                      <n-tag :type="getLineTypeTag(row).type" size="small">{{ getLineTypeTag(row).text }}</n-tag>
+                      <n-dropdown trigger="click" :options="lineTypeOptions" @select="(key) => handleLineTypeChange(row, key)">
+                        <span class="line-type-trigger" @click.stop>
+                          <n-tag :type="getLineTypeTag(row).type" size="small">{{ getLineTypeTag(row).text }}</n-tag>
+                        </span>
+                      </n-dropdown>
                     </div>
                     <div class="sub-user-email" v-if="row.user_email">{{ row.user_email }}</div>
                     <div class="sub-user-id">ID: {{ row.id }} · {{ row.package_name || '无套餐' }}</div>
@@ -173,7 +177,7 @@
 </template>
 <script setup>
 import { ref, h, onMounted, nextTick } from 'vue'
-import { NButton, NTag, NDatePicker, NInputNumber, NInput, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NDatePicker, NInputNumber, NInput, NDropdown, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, RefreshOutline, PersonOutline, MailOutline, PowerOutline, TrashOutline, CopyOutline, QrCodeOutline } from '@vicons/ionicons5'
 import QRCode from 'qrcode'
 import { useRouter } from 'vue-router'
@@ -184,7 +188,7 @@ import {
   listAdminSubscriptions, resetAdminSubscription,
   extendSubscription, updateSubscriptionDeviceLimit, sendSubscriptionEmail,
   setSubscriptionExpireTime, deleteUserFull, toggleUserActive, loginAsUser,
-  updateUserNotes
+  updateUserNotes, updateUserLineType
 } from '@/api/admin'
 import UserDetailDrawer from '@/views/admin/users/components/UserDetailDrawer.vue'
 import '@/styles/admin-common.css'
@@ -217,6 +221,11 @@ const lineOptions = [
   { label: '专线+普通线路', value: 'mixed' },
   { label: '普通线路', value: 'normal' }
 ]
+const lineTypeOptions = [
+  { label: '普通线路', key: 'normal' },
+  { label: '仅专线', key: 'dedicated_only' },
+  { label: '专线+普通', key: 'mixed' }
+]
 const getStatusType = (s) => ({ active: 'success', expiring: 'warning', expired: 'error', disabled: 'default' }[s] || 'default')
 const getStatusText = (s) => ({ active: '活跃', expiring: '即将到期', expired: '已过期', disabled: '已禁用' }[s] || s || '-')
 const formatDate = (d) => d ? new Date(d).toLocaleString('zh-CN') : '-'
@@ -236,9 +245,17 @@ const getRowUniversalUrl = (row) => row?.universal_url || ''
 const getRowClashUrl = (row) => row?.clash_url || ''
 const getCustomNodeCount = (row) => Number(row?.custom_node_count || row?.custom_nodes_count || row?.dedicated_node_count || 0)
 const isDedicatedUser = (row) => Boolean(row?.has_custom_nodes) || getCustomNodeCount(row) > 0
+const getEffectiveLineType = (row) => {
+  if (['normal', 'dedicated_only', 'mixed'].includes(row?.line_type)) return row.line_type
+  if (['normal', 'dedicated_only', 'mixed'].includes(row?.special_node_subscription_type)) return row.special_node_subscription_type
+  if (row?.dedicated_only) return 'dedicated_only'
+  if (isDedicatedUser(row)) return 'mixed'
+  return 'normal'
+}
 const getLineTypeTag = (row) => {
-  if (row?.dedicated_only) return { text: '仅专线', type: 'warning' }
-  if (isDedicatedUser(row)) return { text: '专线+普通', type: 'success' }
+  const lineType = getEffectiveLineType(row)
+  if (lineType === 'dedicated_only') return { text: '仅专线', type: 'warning' }
+  if (lineType === 'mixed') return { text: '专线+普通', type: 'success' }
   return { text: '普通线路', type: 'default' }
 }
 const copyText = async (text, label = '') => {
@@ -274,7 +291,15 @@ const columns = [
       h('div', { style: 'font-weight:500;font-size:13px;line-height:1.4' }, row.username || '未知'),
       row.user_email ? h('div', { style: 'font-size:11px;color:#999;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, row.user_email) : null,
       h('div', { class: 'user-type-tags' }, [
-        h(NTag, { type: getLineTypeTag(row).type, size: 'small' }, { default: () => getLineTypeTag(row).text })
+        h(NDropdown, {
+          trigger: 'click',
+          options: lineTypeOptions,
+          onSelect: (key) => handleLineTypeChange(row, key)
+        }, {
+          default: () => h('span', { class: 'line-type-trigger', onClick: (e) => e.stopPropagation() }, [
+            h(NTag, { type: getLineTypeTag(row).type, size: 'small' }, { default: () => getLineTypeTag(row).text })
+          ])
+        })
       ]),
       h(NButton, { size: 'tiny', type: 'success', style: 'margin-top:4px', onClick: () => handleViewDetail(row) }, { default: () => '详情' })
     ])
@@ -391,6 +416,23 @@ const fetchData = async () => {
 }
 const handleSearch = () => { pagination.value.page = 1; fetchData() }
 const handleRefresh = () => fetchData()
+const handleLineTypeChange = async (row, lineType) => {
+  if (getEffectiveLineType(row) === lineType) return
+  try {
+    const res = await updateUserLineType(row.user_id || row.id, { line_type: lineType })
+    const data = res.data || {}
+    Object.assign(row, {
+      ...data,
+      line_type: data.line_type || lineType,
+      special_node_subscription_type: data.special_node_subscription_type || lineType,
+      dedicated_only: data.dedicated_only ?? lineType === 'dedicated_only'
+    })
+    message.success('线路类型已更新')
+    fetchData()
+  } catch (error) {
+    message.error(error?.response?.data?.message || error.message || '更新线路类型失败')
+  }
+}
 const handleSorterChange = (sorter) => {
   if (sorter && sorter.columnKey && sorter.order) {
     const keyMap = { id: 'id', expire_time: 'expire_time', device_limit: 'device_limit', status: 'status', sub_count: 'universal_count' }

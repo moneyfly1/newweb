@@ -250,6 +250,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminUsers.GET("/:id/custom-nodes", handlers.AdminGetUserCustomNodes)
 			adminUsers.POST("/:id/custom-nodes", handlers.AdminAssignCustomNodeToUser)
 			adminUsers.DELETE("/:id/custom-nodes/:nodeId", handlers.AdminUnassignCustomNodeFromUser)
+			adminUsers.PUT("/:id/line-type", handlers.AdminUpdateUserLineType)
 			adminUsers.POST("/:id/toggle-active", handlers.AdminToggleUserActive)
 			adminUsers.POST("/:id/reset-password", handlers.AdminResetUserPassword)
 			adminUsers.GET("/abnormal", handlers.AdminGetAbnormalUsers)

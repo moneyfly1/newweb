@@ -40,6 +40,35 @@ type userCustomNodeSummary struct {
 	DedicatedOnly bool `json:"dedicated_only"`
 }
 
+const (
+	lineTypeNormal        = "normal"
+	lineTypeDedicatedOnly = "dedicated_only"
+	lineTypeMixed         = "mixed"
+	lineTypeLegacyBoth    = "both"
+)
+
+func effectiveUserLineType(mode string, customNodeCount int, assignmentDedicatedOnly bool) string {
+	switch strings.TrimSpace(mode) {
+	case lineTypeNormal:
+		return lineTypeNormal
+	case lineTypeDedicatedOnly:
+		return lineTypeDedicatedOnly
+	case lineTypeMixed:
+		if customNodeCount > 0 {
+			return lineTypeMixed
+		}
+		return lineTypeNormal
+	default:
+		if customNodeCount == 0 {
+			return lineTypeNormal
+		}
+		if assignmentDedicatedOnly {
+			return lineTypeDedicatedOnly
+		}
+		return lineTypeMixed
+	}
+}
+
 func loadUserCustomNodeSummaries(db *gorm.DB, userIDs []uint) map[uint]userCustomNodeSummary {
 	summaries := make(map[uint]userCustomNodeSummary)
 	if len(userIDs) == 0 {
@@ -346,6 +375,7 @@ func AdminListUsers(c *gin.Context) {
 		HasCustomNodes  bool       `json:"has_custom_nodes"`
 		CustomNodeCount int        `json:"custom_node_count"`
 		DedicatedOnly   bool       `json:"dedicated_only"`
+		LineType        string     `json:"line_type"`
 	}
 	items := make([]UserItem, 0, len(users))
 	// Pre-load all levels
@@ -384,6 +414,7 @@ func AdminListUsers(c *gin.Context) {
 			item.CustomNodeCount = summary.Count
 			item.DedicatedOnly = summary.DedicatedOnly
 		}
+		item.LineType = effectiveUserLineType(u.SpecialNodeSubscriptionType, item.CustomNodeCount, item.DedicatedOnly)
 		items = append(items, item)
 	}
 
@@ -634,6 +665,71 @@ func AdminUnassignCustomNodeFromUser(c *gin.Context) {
 	utils.CreateAuditLog(c, "unassign_user_custom_node", "user", uint(id), fmt.Sprintf("解除用户专线节点 ID: %d", nodeID))
 	cache.ClearAllSubscriptionCache()
 	utils.SuccessMessage(c, "已解除分配")
+}
+
+func AdminUpdateUserLineType(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的用户ID")
+		return
+	}
+
+	var req struct {
+		LineType string `json:"line_type"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	lineType := strings.TrimSpace(req.LineType)
+	if lineType != lineTypeNormal && lineType != lineTypeDedicatedOnly && lineType != lineTypeMixed {
+		utils.BadRequest(c, "线路类型无效")
+		return
+	}
+
+	db := database.GetDB()
+	userID := uint(id)
+	var user models.User
+	if err := db.Select("id").First(&user, userID).Error; err != nil {
+		utils.NotFound(c, "用户不存在")
+		return
+	}
+
+	var customNodeCount int64
+	if err := db.Model(&models.UserCustomNode{}).Where("user_id = ?", userID).Count(&customNodeCount).Error; err != nil {
+		utils.InternalError(c, "检查专线分配失败")
+		return
+	}
+	if lineType != lineTypeNormal && customNodeCount == 0 {
+		utils.BadRequest(c, "该用户还没有分配专线节点，无法切换到专线线路")
+		return
+	}
+
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.User{}).Where("id = ?", userID).Update("special_node_subscription_type", lineType).Error; err != nil {
+			return err
+		}
+		if customNodeCount > 0 {
+			return tx.Model(&models.UserCustomNode{}).
+				Where("user_id = ?", userID).
+				Update("dedicated_only", lineType == lineTypeDedicatedOnly).Error
+		}
+		return nil
+	}); err != nil {
+		utils.InternalError(c, "更新线路类型失败")
+		return
+	}
+
+	cache.ClearAllSubscriptionCache()
+	utils.CreateAuditLog(c, "update_user_line_type", "user", userID, fmt.Sprintf("更新用户线路类型: %s", lineType))
+	utils.Success(c, gin.H{
+		"line_type":                      lineType,
+		"special_node_subscription_type": lineType,
+		"has_custom_nodes":               customNodeCount > 0,
+		"custom_node_count":              customNodeCount,
+		"dedicated_only":                 lineType == lineTypeDedicatedOnly,
+	})
 }
 
 func AdminUpdateUser(c *gin.Context) {
@@ -2513,15 +2609,19 @@ func AdminListSubscriptions(c *gin.Context) {
 		query = query.Where("status = ?", status)
 	}
 	if lineType := c.Query("line_type"); lineType != "" {
-		allCustomUserIDs := db.Model(&models.UserCustomNode{}).Select("user_id")
-		dedicatedOnlyUserIDs := db.Model(&models.UserCustomNode{}).Select("user_id").Where("dedicated_only = ?", true)
+		allCustomUserIDs := db.Model(&models.UserCustomNode{}).Select("DISTINCT user_id")
+		dedicatedOnlyUserIDs := db.Model(&models.UserCustomNode{}).Select("DISTINCT user_id").Where("dedicated_only = ?", true)
+		legacyModeUserIDs := db.Model(&models.User{}).Select("id").Where("special_node_subscription_type IS NULL OR special_node_subscription_type = '' OR special_node_subscription_type = ?", lineTypeLegacyBoth)
+		explicitDedicatedOnlyUserIDs := db.Model(&models.User{}).Select("id").Where("special_node_subscription_type = ?", lineTypeDedicatedOnly)
+		explicitMixedUserIDs := db.Model(&models.User{}).Select("id").Where("special_node_subscription_type = ?", lineTypeMixed)
+		explicitNormalUserIDs := db.Model(&models.User{}).Select("id").Where("special_node_subscription_type = ?", lineTypeNormal)
 		switch lineType {
-		case "dedicated_only":
-			query = query.Where("user_id IN (?)", dedicatedOnlyUserIDs)
-		case "mixed":
-			query = query.Where("user_id IN (?) AND user_id NOT IN (?)", allCustomUserIDs, dedicatedOnlyUserIDs)
-		case "normal":
-			query = query.Where("user_id NOT IN (?)", allCustomUserIDs)
+		case lineTypeDedicatedOnly:
+			query = query.Where("user_id IN (?) OR (user_id IN (?) AND user_id IN (?))", explicitDedicatedOnlyUserIDs, legacyModeUserIDs, dedicatedOnlyUserIDs)
+		case lineTypeMixed:
+			query = query.Where("user_id IN (?) OR (user_id IN (?) AND user_id IN (?) AND user_id NOT IN (?))", explicitMixedUserIDs, legacyModeUserIDs, allCustomUserIDs, dedicatedOnlyUserIDs)
+		case lineTypeNormal:
+			query = query.Where("user_id IN (?) OR (user_id IN (?) AND user_id NOT IN (?))", explicitNormalUserIDs, legacyModeUserIDs, allCustomUserIDs)
 		}
 	}
 	if search := c.Query("search"); search != "" {
@@ -2562,6 +2662,7 @@ func AdminListSubscriptions(c *gin.Context) {
 		HasCustomNodes  bool    `json:"has_custom_nodes"`
 		CustomNodeCount int     `json:"custom_node_count"`
 		DedicatedOnly   bool    `json:"dedicated_only"`
+		LineType        string  `json:"line_type"`
 	}
 
 	// 批量查询 user 和 package，避免 N+1
@@ -2576,7 +2677,7 @@ func AdminListSubscriptions(c *gin.Context) {
 	userMap := make(map[uint]models.User)
 	if len(userIDs) > 0 {
 		var users []models.User
-		db.Select("id, email, username, notes").Where("id IN ?", userIDs).Find(&users)
+		db.Select("id, email, username, notes, special_node_subscription_type").Where("id IN ?", userIDs).Find(&users)
 		for _, u := range users {
 			userMap[u.ID] = u
 		}
@@ -2606,6 +2707,11 @@ func AdminListSubscriptions(c *gin.Context) {
 			item.HasCustomNodes = summary.Count > 0
 			item.CustomNodeCount = summary.Count
 			item.DedicatedOnly = summary.DedicatedOnly
+		}
+		if u, ok := userMap[sub.UserID]; ok {
+			item.LineType = effectiveUserLineType(u.SpecialNodeSubscriptionType, item.CustomNodeCount, item.DedicatedOnly)
+		} else {
+			item.LineType = effectiveUserLineType("", item.CustomNodeCount, item.DedicatedOnly)
 		}
 		if sub.PackageID != nil {
 			if name, ok := pkgMap[*sub.PackageID]; ok {

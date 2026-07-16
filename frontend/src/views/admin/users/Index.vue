@@ -138,9 +138,13 @@
                   <n-tag :type="row.is_active ? 'success' : 'error'" size="small">
                     {{ row.is_active ? '激活' : '禁用' }}
                   </n-tag>
-                  <n-tag :type="getLineTypeTag(row).type" size="small">
-                    {{ getLineTypeTag(row).text }}
-                  </n-tag>
+                  <n-dropdown trigger="click" :options="lineTypeOptions" @select="(key) => handleLineTypeChange(row, key)">
+                    <span class="line-type-trigger" @click.stop>
+                      <n-tag :type="getLineTypeTag(row).type" size="small">
+                        {{ getLineTypeTag(row).text }}
+                      </n-tag>
+                    </span>
+                  </n-dropdown>
                   <n-tag v-if="row.is_admin" type="warning" size="small">管理员</n-tag>
                 </n-space>
               </div>
@@ -160,9 +164,13 @@
                 <div class="card-row">
                   <span class="card-label">线路类型</span>
                   <span class="card-value">
-                    <n-tag :type="getLineTypeTag(row).type" size="small">
-                      {{ getLineTypeTag(row).text }}
-                    </n-tag>
+                    <n-dropdown trigger="click" :options="lineTypeOptions" @select="(key) => handleLineTypeChange(row, key)">
+                      <span class="line-type-trigger" @click.stop>
+                        <n-tag :type="getLineTypeTag(row).type" size="small">
+                          {{ getLineTypeTag(row).text }}
+                        </n-tag>
+                      </span>
+                    </n-dropdown>
                   </span>
                 </div>
                 <div class="card-row">
@@ -336,12 +344,13 @@
 
 <script setup>
 import { ref, reactive, h, onMounted, computed } from 'vue'
-import { NButton, NTag, NSpace, NIcon, NDropdown, NSpin, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NIcon, NDropdown, NSpin, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, AddOutline, RefreshOutline, EllipsisVertical, DownloadOutline, CloudUploadOutline } from '@vicons/ionicons5'
 import {
   listUsers, updateUser, deleteUser, toggleUserActive,
   createUser, resetUserPassword,
-  batchUserAction, exportUsersCSV, importUsersCSV, loginAsUser
+  batchUserAction, exportUsersCSV, importUsersCSV, loginAsUser,
+  updateUserLineType
 } from '@/api/admin'
 import { listUserLevels } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -411,6 +420,11 @@ const statusOptions = [
   { label: '禁用', value: 'inactive' },
   { label: '管理员', value: 'admin' }
 ]
+const lineTypeOptions = [
+  { label: '普通线路', key: 'normal' },
+  { label: '仅专线', key: 'dedicated_only' },
+  { label: '专线+普通', key: 'mixed' }
+]
 const formRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   email: [
@@ -437,9 +451,17 @@ const formRulesComputed = computed(() => {
 
 const getCustomNodeCount = (row) => Number(row?.custom_node_count || row?.custom_nodes_count || row?.dedicated_node_count || 0)
 const isDedicatedUser = (row) => Boolean(row?.has_custom_nodes) || getCustomNodeCount(row) > 0
+const getEffectiveLineType = (row) => {
+  if (['normal', 'dedicated_only', 'mixed'].includes(row?.line_type)) return row.line_type
+  if (['normal', 'dedicated_only', 'mixed'].includes(row?.special_node_subscription_type)) return row.special_node_subscription_type
+  if (row?.dedicated_only) return 'dedicated_only'
+  if (isDedicatedUser(row)) return 'mixed'
+  return 'normal'
+}
 const getLineTypeTag = (row) => {
-  if (row?.dedicated_only) return { text: '仅专线', type: 'warning' }
-  if (isDedicatedUser(row)) return { text: '专线+普通', type: 'success' }
+  const lineType = getEffectiveLineType(row)
+  if (lineType === 'dedicated_only') return { text: '仅专线', type: 'warning' }
+  if (lineType === 'mixed') return { text: '专线+普通', type: 'success' }
   return { text: '普通线路', type: 'default' }
 }
 
@@ -462,7 +484,15 @@ const columns = [
     key: 'line_type',
     width: 130,
     resizable: true,
-    render: (row) => h(NTag, { type: getLineTypeTag(row).type, size: 'small' }, { default: () => getLineTypeTag(row).text })
+    render: (row) => h(NDropdown, {
+      trigger: 'click',
+      options: lineTypeOptions,
+      onSelect: (key) => handleLineTypeChange(row, key)
+    }, {
+      default: () => h('span', { class: 'line-type-trigger', onClick: (e) => e.stopPropagation() }, [
+        h(NTag, { type: getLineTypeTag(row).type, size: 'small' }, { default: () => getLineTypeTag(row).text })
+      ])
+    })
   },
   {
     title: '余额',
@@ -531,6 +561,23 @@ const handleSearch = () => { currentPage.value = 1; fetchUsers() }
 const handlePageChange = (page) => { currentPage.value = page; fetchUsers() }
 const handlePageSizeChange = (size) => { pageSize.value = size; currentPage.value = 1; fetchUsers() }
 const handleCheck = (keys) => { checkedRowKeys.value = keys }
+
+const handleLineTypeChange = async (row, lineType) => {
+  if (getEffectiveLineType(row) === lineType) return
+  try {
+    const response = await updateUserLineType(row.id, { line_type: lineType })
+    const data = response.data || {}
+    Object.assign(row, {
+      ...data,
+      line_type: data.line_type || lineType,
+      special_node_subscription_type: data.special_node_subscription_type || lineType,
+      dedicated_only: data.dedicated_only ?? lineType === 'dedicated_only'
+    })
+    message.success('线路类型已更新')
+  } catch (error) {
+    message.error(error?.response?.data?.message || error.message || '更新线路类型失败')
+  }
+}
 
 const getRowProps = (row) => ({
   style: 'cursor: pointer',
@@ -926,6 +973,10 @@ onMounted(async () => {
   padding: 10px 14px;
   border-top: 1px solid var(--border-color, #f0f0f0);
   flex-wrap: wrap;
+}
+.line-type-trigger {
+  display: inline-flex;
+  cursor: pointer;
 }
 :deep(.action-btn-grid) { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 </style>

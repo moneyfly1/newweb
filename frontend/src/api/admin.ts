@@ -136,6 +136,7 @@ export const getCustomNodeUsers = (id: number) => request.get(`/admin/custom-nod
 export const getUserCustomNodes = (userId: number) => request.get(`/admin/users/${userId}/custom-nodes`)
 export const assignCustomNodeToUser = (userId: number, data: any) => request.post(`/admin/users/${userId}/custom-nodes`, data)
 export const unassignCustomNodeFromUser = (userId: number, nodeId: number) => request.delete(`/admin/users/${userId}/custom-nodes/${nodeId}`)
+export const updateUserLineType = (userId: number, data: { line_type: string }) => request.put(`/admin/users/${userId}/line-type`, data)
 
 // Config Update
 export const getConfigUpdateConfig = () => request.get('/admin/config-update/config')

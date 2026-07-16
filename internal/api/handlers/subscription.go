@@ -422,6 +422,15 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 // hasDedicatedOnly: any valid node has DedicatedOnly set → subscription only shows dedicated nodes.
 // hasUnlimitedDevices: any valid node has LimitDevices=false → skip device limit.
 func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) (nodes []models.Node, hasDedicatedOnly bool, hasUnlimitedDevices bool) {
+	var user models.User
+	userLineType := lineTypeLegacyBoth
+	if err := db.Select("id, special_node_subscription_type").First(&user, userID).Error; err == nil {
+		userLineType = strings.TrimSpace(user.SpecialNodeSubscriptionType)
+	}
+	if userLineType == lineTypeNormal {
+		return nil, false, false
+	}
+
 	type customNodeWithExpiry struct {
 		models.CustomNode
 		AssignExpiresAt    *time.Time `gorm:"column:assign_expires_at"`
@@ -455,8 +464,8 @@ func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) (no
 			}
 		}
 
-		// 节点通过过期检查后才计入标记
-		if row.AssignDedicated {
+		// Explicit user line mode takes precedence over legacy per-assignment mode.
+		if userLineType == lineTypeDedicatedOnly || (userLineType != lineTypeMixed && row.AssignDedicated) {
 			hasDedicatedOnly = true
 		}
 		if !row.AssignLimitDevices {

@@ -1258,6 +1258,7 @@ func AdminListOrders(c *gin.Context) {
 	statusFilter := c.Query("status")
 	userIDFilter := c.Query("user_id")
 	orderNoFilter := c.Query("order_no")
+	searchFilter := c.Query("search")
 
 	// Query all orders without pagination first
 	orderQuery := db.Table("orders").
@@ -1271,6 +1272,13 @@ func AdminListOrders(c *gin.Context) {
 	}
 	if orderNoFilter != "" {
 		orderQuery = orderQuery.Where("orders.order_no LIKE ?", "%"+orderNoFilter+"%")
+	}
+	if searchFilter != "" {
+		searchPattern := "%" + searchFilter + "%"
+		orderQuery = orderQuery.Where(
+			"orders.order_no LIKE ? OR users.email LIKE ? OR users.username LIKE ? OR CAST(orders.user_id AS CHAR) LIKE ?",
+			searchPattern, searchPattern, searchPattern, searchPattern,
+		)
 	}
 
 	var orderItems []AdminOrderItem
@@ -1288,6 +1296,13 @@ func AdminListOrders(c *gin.Context) {
 	}
 	if orderNoFilter != "" {
 		rechargeQuery = rechargeQuery.Where("recharge_records.order_no LIKE ?", "%"+orderNoFilter+"%")
+	}
+	if searchFilter != "" {
+		searchPattern := "%" + searchFilter + "%"
+		rechargeQuery = rechargeQuery.Where(
+			"recharge_records.order_no LIKE ? OR users.email LIKE ? OR users.username LIKE ? OR CAST(recharge_records.user_id AS CHAR) LIKE ?",
+			searchPattern, searchPattern, searchPattern, searchPattern,
+		)
 	}
 
 	var rechargeItems []AdminOrderItem

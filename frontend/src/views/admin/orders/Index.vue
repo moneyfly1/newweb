@@ -305,7 +305,7 @@ const route = useRoute()
 const loading = ref(false)
 const orders = ref<any[]>([])
 const orderStats = ref<any>({})
-const searchQuery = ref((route.query.order_no as string) || '')
+const searchQuery = ref((route.query.search as string) || '')
 const statusFilter = ref(null)
 const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
 const checkedRowKeys = ref<string[]>([])
@@ -427,7 +427,7 @@ const columns: DataTableColumns<any> = [
 const fetchOrders = async () => {
   loading.value = true
   try {
-    const res = await listAdminOrders({ page: pagination.page, page_size: pagination.pageSize, order_no: searchQuery.value || undefined, status: statusFilter.value })
+    const res = await listAdminOrders({ page: pagination.page, page_size: pagination.pageSize, search: searchQuery.value || undefined, status: statusFilter.value })
     orders.value = res.data.items || []
     pagination.itemCount = res.data.total || 0
     if (pagination.page === 1) {
@@ -619,9 +619,9 @@ const copyToClipboard = (text: string) => {
   message.success('已复制到剪贴板')
 }
 
-watch(() => route.query.order_no, (orderNo) => {
-  if (typeof orderNo === 'string' && orderNo !== searchQuery.value) {
-    searchQuery.value = orderNo
+watch(() => route.query.search, (searchVal) => {
+  if (typeof searchVal === 'string' && searchVal !== searchQuery.value) {
+    searchQuery.value = searchVal
     handleSearch()
   }
 })

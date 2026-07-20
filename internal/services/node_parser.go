@@ -32,6 +32,7 @@ type subscriptionRequestProfile struct {
 }
 
 var subscriptionRequestProfiles = []subscriptionRequestProfile{
+	{Name: "v2rayN", UserAgent: "v2rayN/6.23", Accept: "*/*"},
 	{Name: "ClashForWindows", UserAgent: "ClashforWindows/0.20.39", Accept: "*/*"},
 	{Name: "ClashMeta", UserAgent: "Clash.Meta/1.18.9", Accept: "*/*"},
 	{Name: "ClashForAndroid", UserAgent: "ClashForAndroid/2.5.12", Accept: "*/*"},
@@ -40,7 +41,6 @@ var subscriptionRequestProfiles = []subscriptionRequestProfile{
 	{Name: "QuantumultX", UserAgent: "Quantumult%20X/1.5.6", Accept: "*/*"},
 	{Name: "Surge", UserAgent: "Surge iOS/5.9.0", Accept: "*/*"},
 	{Name: "Stash", UserAgent: "Stash/2.5.4", Accept: "*/*"},
-	{Name: "v2rayN", UserAgent: "v2rayN/6.23", Accept: "*/*"},
 	{Name: "Clash", UserAgent: "clash-verge/v1.7.7", Accept: "*/*"},
 	{Name: "curl", UserAgent: "curl/8.0.1", Accept: "*/*"},
 	{Name: "browser", UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", Accept: "*/*"},

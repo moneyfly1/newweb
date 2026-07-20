@@ -237,3 +237,30 @@ func TestFetchSubscriptionBodyFallsBackToSubscriptionClientHeaders(t *testing.T)
 		t.Fatalf("expected browser fallback to v2rayN, seenBrowserUA=%v seenV2rayNUA=%v", seenBrowserUA, seenV2rayNUA)
 	}
 }
+
+func TestFetchSubscriptionBodyUsesClashForWindowsUserAgent(t *testing.T) {
+	const body = "vless://c617772f-5d14-436e-be41-4faf540d899b@example.com:443?encryption=none#cfw"
+	var seenClashForWindowsUA bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.UserAgent(), "ClashforWindows") {
+			seenClashForWindowsUA = true
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(body))
+			return
+		}
+		http.Error(w, "unsupported client", http.StatusBadRequest)
+	}))
+	defer server.Close()
+
+	got, err := fetchSubscriptionBody(server.Client(), server.URL)
+	if err != nil {
+		t.Fatalf("fetchSubscriptionBody returned error: %v", err)
+	}
+	if string(got) != body {
+		t.Fatalf("unexpected body: %q", got)
+	}
+	if !seenClashForWindowsUA {
+		t.Fatalf("expected Clash for Windows user-agent to be attempted")
+	}
+}

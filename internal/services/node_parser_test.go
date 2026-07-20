@@ -238,6 +238,31 @@ func TestFetchSubscriptionBodyFallsBackToSubscriptionClientHeaders(t *testing.T)
 	}
 }
 
+func TestFetchSubscriptionBodyUsesV2rayNUserAgentFirst(t *testing.T) {
+	const body = "vmess://eyJhZGQiOiJleGFtcGxlLmNvbSJ9"
+	var firstUserAgent string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if firstUserAgent == "" {
+			firstUserAgent = r.UserAgent()
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	got, err := fetchSubscriptionBody(server.Client(), server.URL)
+	if err != nil {
+		t.Fatalf("fetchSubscriptionBody returned error: %v", err)
+	}
+	if string(got) != body {
+		t.Fatalf("unexpected body: %q", got)
+	}
+	if !strings.Contains(strings.ToLower(firstUserAgent), "v2rayn") {
+		t.Fatalf("expected first user-agent to be v2rayN, got %q", firstUserAgent)
+	}
+}
+
 func TestFetchSubscriptionBodyUsesClashForWindowsUserAgent(t *testing.T) {
 	const body = "vless://c617772f-5d14-436e-be41-4faf540d899b@example.com:443?encryption=none#cfw"
 	var seenClashForWindowsUA bool

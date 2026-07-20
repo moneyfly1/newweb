@@ -22,7 +22,9 @@ import (
 )
 
 const (
-	maxResponseSize = 10 * 1024 * 1024 // 10MB limit for subscription content
+	maxResponseSize                     = 10 * 1024 * 1024 // 10MB limit for subscription content
+	maxSubscriptionRequestAttempts      = 3
+	initialSubscriptionRequestRetryWait = 2 * time.Second
 )
 
 type subscriptionRequestProfile struct {
@@ -46,8 +48,12 @@ var subscriptionRequestProfiles = []subscriptionRequestProfile{
 	{Name: "browser", UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", Accept: "*/*"},
 }
 
-// FetchSubscriptionContent fetches and base64-decodes subscription content from a URL.
 func FetchSubscriptionContent(urlStr string) (string, error) {
+	return FetchSubscriptionContentWithProxy(urlStr, "")
+}
+
+// FetchSubscriptionContentWithProxy fetches and base64-decodes subscription content from a URL.
+func FetchSubscriptionContentWithProxy(urlStr string, proxyURL string) (string, error) {
 	// Validate URL
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
@@ -73,12 +79,8 @@ func FetchSubscriptionContent(urlStr string) (string, error) {
 	}
 
 	client := &http.Client{
-		Timeout: 30 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion: tls.VersionTLS12,
-			},
-		},
+		Timeout:   30 * time.Second,
+		Transport: subscriptionHTTPTransport(proxyURL),
 		// 防止通过重定向绕过 SSRF 检查
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
@@ -97,7 +99,8 @@ func FetchSubscriptionContent(urlStr string) (string, error) {
 			return nil
 		},
 	}
-	body, err := fetchSubscriptionBody(client, urlStr)
+	requestURL := normalizeSubscriptionRequestURL(parsedURL)
+	body, err := fetchSubscriptionBody(client, requestURL)
 	if err != nil {
 		return "", err
 	}
@@ -115,38 +118,138 @@ func FetchSubscriptionContent(urlStr string) (string, error) {
 	return content, nil
 }
 
+func subscriptionHTTPTransport(proxyURL string) *http.Transport {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+	}
+
+	proxyURL = strings.TrimSpace(proxyURL)
+	if proxyURL == "" {
+		proxyURL = strings.TrimSpace(os.Getenv("SUBSCRIPTION_FETCH_PROXY"))
+	}
+	if proxyURL != "" {
+		if parsedProxyURL, err := url.Parse(proxyURL); err == nil {
+			transport.Proxy = http.ProxyURL(parsedProxyURL)
+		}
+	}
+
+	return transport
+}
+
+func normalizeSubscriptionRequestURL(parsedURL *url.URL) string {
+	normalized := *parsedURL
+	if normalized.RawQuery != "" {
+		normalized.RawQuery = normalized.Query().Encode()
+	}
+	return normalized.String()
+}
+
 func fetchSubscriptionBody(client *http.Client, urlStr string) ([]byte, error) {
 	var lastErr error
-	for _, profile := range subscriptionRequestProfiles {
-		req, err := http.NewRequest("GET", urlStr, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("User-Agent", profile.UserAgent)
-		req.Header.Set("Accept", profile.Accept)
+	var errorsByProfile []string
+	retryWait := initialSubscriptionRequestRetryWait
+	profiles := subscriptionRequestProfilesForURL(urlStr)
 
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		body, readErr := func() ([]byte, error) {
-			defer resp.Body.Close()
-			if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-				return nil, fmt.Errorf("%s profile status %d", profile.Name, resp.StatusCode)
+	for attempt := 1; attempt <= maxSubscriptionRequestAttempts; attempt++ {
+		for _, profile := range profiles {
+			req, err := http.NewRequest("GET", urlStr, nil)
+			if err != nil {
+				return nil, err
 			}
-			limitedReader := io.LimitReader(resp.Body, maxResponseSize)
-			return io.ReadAll(limitedReader)
-		}()
-		if readErr == nil {
-			return body, nil
+			req.Header.Set("User-Agent", profile.UserAgent)
+			req.Header.Set("Accept", profile.Accept)
+			if strings.Contains(urlStr, "gist.githubusercontent.com") {
+				req.Header.Set("Connection", "close")
+			}
+
+			resp, err := client.Do(req)
+			if err != nil {
+				lastErr = fmt.Errorf("%s profile request failed: %w", profile.Name, err)
+				errorsByProfile = append(errorsByProfile, lastErr.Error())
+				continue
+			}
+			body, readErr := func() ([]byte, error) {
+				defer resp.Body.Close()
+				if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+					return nil, fmt.Errorf("%s profile status %d", profile.Name, resp.StatusCode)
+				}
+				limitedReader := io.LimitReader(resp.Body, maxResponseSize)
+				return io.ReadAll(limitedReader)
+			}()
+			if readErr == nil {
+				return body, nil
+			}
+			lastErr = readErr
+			errorsByProfile = append(errorsByProfile, readErr.Error())
 		}
-		lastErr = readErr
+
+		if attempt < maxSubscriptionRequestAttempts {
+			time.Sleep(retryWait)
+			retryWait *= 2
+		}
 	}
 	if lastErr != nil {
-		return nil, lastErr
+		return nil, fmt.Errorf("subscription request failed after %d attempts: %s", maxSubscriptionRequestAttempts, summarizeSubscriptionRequestErrors(errorsByProfile))
 	}
 	return nil, fmt.Errorf("subscription request failed")
+}
+
+func summarizeSubscriptionRequestErrors(errs []string) string {
+	if len(errs) == 0 {
+		return "no response"
+	}
+	seen := make(map[string]bool, len(errs))
+	unique := make([]string, 0, len(errs))
+	for _, errText := range errs {
+		if seen[errText] {
+			continue
+		}
+		seen[errText] = true
+		unique = append(unique, errText)
+	}
+	return strings.Join(unique, "; ")
+}
+
+func subscriptionRequestProfilesForURL(urlStr string) []subscriptionRequestProfile {
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return subscriptionRequestProfiles
+	}
+
+	switch strings.ToLower(parsedURL.Hostname()) {
+	case "static.novarelliance.com":
+		return prioritizeSubscriptionProfiles([]string{"ClashForWindows"}, subscriptionRequestProfiles)
+	default:
+		return subscriptionRequestProfiles
+	}
+}
+
+func prioritizeSubscriptionProfiles(names []string, profiles []subscriptionRequestProfile) []subscriptionRequestProfile {
+	if len(names) == 0 || len(profiles) == 0 {
+		return profiles
+	}
+
+	priorities := make(map[string]int, len(names))
+	for i, name := range names {
+		priorities[name] = i
+	}
+
+	prioritized := make([]subscriptionRequestProfile, 0, len(profiles))
+	remaining := make([]subscriptionRequestProfile, 0, len(profiles))
+	for _, profile := range profiles {
+		if _, ok := priorities[profile.Name]; ok {
+			prioritized = append(prioritized, profile)
+			continue
+		}
+		remaining = append(remaining, profile)
+	}
+	sort.SliceStable(prioritized, func(i, j int) bool {
+		return priorities[prioritized[i].Name] < priorities[prioritized[j].Name]
+	})
+	return append(prioritized, remaining...)
 }
 
 func normalizeSubscriptionContent(content string) string {

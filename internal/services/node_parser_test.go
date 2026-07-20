@@ -3,6 +3,7 @@ package services
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -260,6 +261,39 @@ func TestFetchSubscriptionBodyUsesV2rayNUserAgentFirst(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(firstUserAgent), "v2rayn") {
 		t.Fatalf("expected first user-agent to be v2rayN, got %q", firstUserAgent)
+	}
+}
+
+func TestNormalizeSubscriptionRequestURLEncodesQuery(t *testing.T) {
+	parsed, err := url.Parse("https://example.com/sub?name=网际快车")
+	if err != nil {
+		t.Fatalf("url.Parse returned error: %v", err)
+	}
+
+	got := normalizeSubscriptionRequestURL(parsed)
+	if strings.Contains(got, "网际快车") {
+		t.Fatalf("expected query to be encoded, got %q", got)
+	}
+	if !strings.Contains(got, "name=%E7%BD%91%E9%99%85%E5%BF%AB%E8%BD%A6") {
+		t.Fatalf("expected encoded name query, got %q", got)
+	}
+}
+
+func TestSubscriptionRequestProfilesForURLPrefersClashForWindowsForNovarelliance(t *testing.T) {
+	profiles := subscriptionRequestProfilesForURL("https://static.novarelliance.com/site/data/example/f8s.dat")
+	if len(profiles) == 0 {
+		t.Fatal("expected subscription request profiles")
+	}
+	if profiles[0].Name != "ClashForWindows" {
+		t.Fatalf("expected ClashForWindows first for novarelliance, got %s", profiles[0].Name)
+	}
+
+	defaultProfiles := subscriptionRequestProfilesForURL("https://example.com/sub")
+	if len(defaultProfiles) == 0 {
+		t.Fatal("expected default subscription request profiles")
+	}
+	if defaultProfiles[0].Name != "v2rayN" {
+		t.Fatalf("expected v2rayN first by default, got %s", defaultProfiles[0].Name)
 	}
 }
 

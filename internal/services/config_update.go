@@ -1,6 +1,7 @@
 package services
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -24,6 +25,14 @@ type ConfigUpdateConfig struct {
 	Keywords []string `json:"keywords"`
 	Enabled  bool     `json:"enabled"`
 	Interval int      `json:"interval"` // minutes
+	ProxyURL string   `json:"proxy_url,omitempty"`
+}
+
+type subscriptionFetchCache struct {
+	URL       string    `json:"url"`
+	Content   string    `json:"content"`
+	NodeCount int       `json:"node_count"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type ConfigUpdateService struct {
@@ -234,7 +243,7 @@ func (s *ConfigUpdateService) runUpdate() {
 		}
 
 		s.addLog("info", fmt.Sprintf("正在获取订阅: %s", u))
-		content, err := FetchSubscriptionContent(u)
+		content, usedCache, err := s.fetchSubscriptionContentWithCache(u, cfg.ProxyURL)
 		if err != nil {
 			s.addLog("error", fmt.Sprintf("获取订阅失败 [%s]: %s", u, err.Error()))
 			continue
@@ -245,11 +254,32 @@ func (s *ConfigUpdateService) runUpdate() {
 			s.addLog("error", fmt.Sprintf("解析节点失败 [%s]: %s", u, err.Error()))
 			continue
 		}
+		if len(nodes) == 0 {
+			if !usedCache {
+				if cachedContent, cachedAt, cachedNodeCount, cacheErr := s.loadSubscriptionFetchCache(u); cacheErr == nil {
+					cachedNodes, parseErr := ParseSubscriptionContent(cachedContent)
+					if parseErr == nil && len(cachedNodes) > 0 {
+						nodes = cachedNodes
+						usedCache = true
+						s.addLog("info", fmt.Sprintf("订阅源未解析到有效节点，已使用缓存 [%s]: cached_at=%s cached_nodes=%d", u, cachedAt.Format("2006-01-02 15:04:05"), cachedNodeCount))
+					}
+				}
+			}
+			if len(nodes) == 0 {
+				s.addLog("error", fmt.Sprintf("解析节点失败 [%s]: 未解析到有效节点，可能是订阅源返回了错误提示、更新频率限制或需要特殊 User-Agent", u))
+				continue
+			}
+		}
 
 		for i := range nodes {
 			nodes[i].SourceIndex = realSourceIdx
 		}
 
+		if !usedCache {
+			if err := s.saveSubscriptionFetchCache(u, content, len(nodes)); err != nil {
+				s.addLog("error", fmt.Sprintf("保存订阅缓存失败 [%s]: %v", u, err))
+			}
+		}
 		s.addLog("info", fmt.Sprintf("从 %s 解析到 %d 个节点", u, len(nodes)))
 		allNodes = append(allNodes, nodes...)
 	}
@@ -481,4 +511,69 @@ func (s *ConfigUpdateService) SaveConfig(config *ConfigUpdateConfig) error {
 		}).Error
 	}
 	return db.Model(&existing).Update("value", string(data)).Error
+}
+
+func (s *ConfigUpdateService) fetchSubscriptionContentWithCache(rawURL string, proxyURL string) (string, bool, error) {
+	content, err := FetchSubscriptionContentWithProxy(rawURL, proxyURL)
+	if err == nil {
+		return content, false, nil
+	}
+
+	cachedContent, cachedAt, cachedNodeCount, cacheErr := s.loadSubscriptionFetchCache(rawURL)
+	if cacheErr != nil {
+		return "", false, err
+	}
+	s.addLog("info", fmt.Sprintf("获取订阅失败，已使用缓存 [%s]: cached_at=%s cached_nodes=%d fetch_error=%v", rawURL, cachedAt.Format("2006-01-02 15:04:05"), cachedNodeCount, err))
+	return cachedContent, true, nil
+}
+
+func (s *ConfigUpdateService) saveSubscriptionFetchCache(rawURL string, content string, nodeCount int) error {
+	cache := subscriptionFetchCache{
+		URL:       rawURL,
+		Content:   content,
+		NodeCount: nodeCount,
+		UpdatedAt: time.Now(),
+	}
+	data, err := json.Marshal(cache)
+	if err != nil {
+		return err
+	}
+
+	db := database.GetDB()
+	key := subscriptionFetchCacheKey(rawURL)
+	var existing models.SystemConfig
+	result := db.Where("key = ? AND category = ?", key, "node").First(&existing)
+	if result.Error != nil {
+		return db.Create(&models.SystemConfig{
+			Key:         key,
+			Value:       string(data),
+			Type:        "json",
+			Category:    "node",
+			DisplayName: "订阅采集缓存",
+			Description: "订阅源最近一次成功采集内容缓存",
+		}).Error
+	}
+	return db.Model(&existing).Update("value", string(data)).Error
+}
+
+func (s *ConfigUpdateService) loadSubscriptionFetchCache(rawURL string) (string, time.Time, int, error) {
+	db := database.GetDB()
+	var cfg models.SystemConfig
+	if err := db.Where("key = ? AND category = ?", subscriptionFetchCacheKey(rawURL), "node").First(&cfg).Error; err != nil {
+		return "", time.Time{}, 0, err
+	}
+
+	var cache subscriptionFetchCache
+	if err := json.Unmarshal([]byte(cfg.Value), &cache); err != nil {
+		return "", time.Time{}, 0, err
+	}
+	if strings.TrimSpace(cache.Content) == "" {
+		return "", time.Time{}, 0, fmt.Errorf("empty subscription cache")
+	}
+	return cache.Content, cache.UpdatedAt, cache.NodeCount, nil
+}
+
+func subscriptionFetchCacheKey(rawURL string) string {
+	sum := sha256.Sum256([]byte(rawURL))
+	return fmt.Sprintf("subscription_fetch_cache_%x", sum)
 }

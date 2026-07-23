@@ -60,6 +60,7 @@ func GetNotifyTemplate(eventType string) *NotifyTemplate {
 			Fields: []NotifyField{
 				{"🆔", "工单号", "ticket_no"},
 				{"👤", "用户", "username"},
+				{"📧", "邮箱", "email"},
 				{"📝", "标题", "title"},
 			},
 		},

@@ -291,6 +291,13 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		subject = fmt.Sprintf("订阅地址已重置 - %s", siteName)
 		resetTime := time.Now().Format("2006-01-02 15:04:05")
 		htmlBody = builder.GetSubscriptionResetTemplate(data["username"], data["universal_url"], data["clash_url"], data["expire_time"], resetTime, data["reset_by"])
+	case "ticket_reply":
+		subject = fmt.Sprintf("您的工单已有管理员回复 - %s", siteName)
+		ticketURL := builder.GetBaseURL() + "/tickets"
+		if data["ticket_id"] != "" {
+			ticketURL += "/" + data["ticket_id"]
+		}
+		htmlBody = builder.GetTicketReplyTemplate(data["username"], data["ticket_no"], data["title"], data["reply"], data["history_html"], ticketURL)
 	case "abnormal_login":
 		subject = fmt.Sprintf("异常登录提醒 - %s", siteName)
 		htmlBody = builder.GetAbnormalLoginAlertTemplate(data["username"], data["time"], data["ip"], data["location"], true, true)

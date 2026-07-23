@@ -77,7 +77,11 @@ func CreateTicket(c *gin.Context) {
 	var user models.User
 	if database.GetDB().First(&user, userID).Error == nil {
 		go services.NotifyAdmin("new_ticket", map[string]string{
-			"username": user.Username, "ticket_no": ticketNo, "title": req.Title,
+			"username":  user.Username,
+			"email":     user.Email,
+			"ticket_no": ticketNo,
+			"title":     req.Title,
+			"content":   req.Content,
 		})
 	}
 

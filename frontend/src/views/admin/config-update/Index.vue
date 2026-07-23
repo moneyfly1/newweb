@@ -20,12 +20,12 @@
         <n-form-item label="订阅URL列表">
           <div style="width: 100%">
             <div ref="urlListRef" class="url-list">
-              <div v-for="(url, index) in config.urls" :key="index" class="url-item">
+              <div v-for="(row, index) in urlRows" :key="row.id" class="url-item">
                 <div class="drag-handle">
                   <n-icon size="20"><ReorderThreeOutline /></n-icon>
                 </div>
                 <div class="url-index">{{ index + 1 }}</div>
-                <template v-if="url === '__MANUAL_NODES__'">
+                <template v-if="row.value === '__MANUAL_NODES__'">
                   <div class="url-input manual-placeholder">
                     <n-tag type="warning" size="small" round>手动节点</n-tag>
                     <n-text depth="3" style="margin-left: 8px; font-size: 12px">拖动此条目可调整手动节点在订阅中的显示位置</n-text>
@@ -33,16 +33,17 @@
                 </template>
                 <template v-else>
                   <n-input
-                    v-model:value="config.urls[index]"
+                    v-model:value="row.value"
                     placeholder="请输入订阅URL"
                     class="url-input"
+                    @update:value="syncConfigUrls"
                   />
                 </template>
                 <n-button
-                  v-if="url !== '__MANUAL_NODES__'"
+                  v-if="row.value !== '__MANUAL_NODES__'"
                   text
                   type="error"
-                  @click="config.urls.splice(index, 1)"
+                  @click="removeUrlRow(index)"
                   class="delete-btn"
                 >
                   <template #icon>
@@ -57,14 +58,32 @@
               </div>
             </div>
             <n-space style="margin-top: 8px">
-              <n-button dashed @click="config.urls.push('')" style="flex: 1">+ 添加订阅URL</n-button>
-              <n-button dashed type="warning" @click="addManualPlaceholder" :disabled="config.urls.includes('__MANUAL_NODES__')">+ 插入手动节点位置</n-button>
+              <n-button dashed @click="addUrlRow" style="flex: 1">+ 添加订阅URL</n-button>
+              <n-button dashed type="warning" @click="addManualPlaceholder" :disabled="hasManualPlaceholder">+ 插入手动节点位置</n-button>
             </n-space>
           </div>
         </n-form-item>
         <n-form-item label="关键词过滤">
           <div style="width: 100%">
-            <n-dynamic-input v-model:value="config.keywords" placeholder="输入关键词（匹配节点名称）" />
+            <div class="keyword-grid">
+              <div v-for="(_, index) in config.keywords" :key="index" class="keyword-item">
+                <n-input
+                  v-model:value="config.keywords[index]"
+                  size="small"
+                  placeholder="关键词"
+                />
+                <n-button text type="error" class="keyword-remove" @click="removeKeyword(index)">
+                  <template #icon>
+                    <n-icon size="16">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                        <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="36" d="M368 368L144 144M368 144L144 368"/>
+                      </svg>
+                    </n-icon>
+                  </template>
+                </n-button>
+              </div>
+              <n-button dashed size="small" class="keyword-add" @click="addKeyword">+ 添加关键词</n-button>
+            </div>
             <n-text depth="3" style="font-size: 12px; margin-top: 4px; display: block">
               留空表示不过滤，导入所有节点。填写关键词后，名称中包含关键词的节点将被排除。支持地区缩写如 hk、us、jp 等。
             </n-text>
@@ -110,7 +129,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useMessage } from 'naive-ui'
 import { RefreshOutline, PlayOutline, ReorderThreeOutline } from '@vicons/ionicons5'
 import Sortable from 'sortablejs'
@@ -131,14 +150,53 @@ const urlListRef = ref(null)
 const starting = ref(false)
 const saving = ref(false)
 let pollTimer = null
+let sortableInstance = null
+let nextUrlRowId = 1
 
 const config = reactive({ urls: [], keywords: [], enabled: false, interval: 60 })
+const urlRows = ref([])
 const logs = ref([])
+const hasManualPlaceholder = computed(() => urlRows.value.some(row => row.value === '__MANUAL_NODES__'))
+
+const syncUrlRowsFromConfig = () => {
+  urlRows.value = (config.urls || []).map(value => ({
+    id: nextUrlRowId++,
+    value
+  }))
+}
+
+const syncConfigUrls = () => {
+  config.urls = urlRows.value.map(row => row.value)
+}
+
+const addUrlRow = () => {
+  urlRows.value.push({ id: nextUrlRowId++, value: '' })
+  syncConfigUrls()
+}
+
+const removeUrlRow = (index) => {
+  urlRows.value.splice(index, 1)
+  syncConfigUrls()
+}
+
+const addKeyword = () => {
+  if (!Array.isArray(config.keywords)) {
+    config.keywords = []
+  }
+  config.keywords.push('')
+}
+
+const removeKeyword = (index) => {
+  config.keywords.splice(index, 1)
+}
 
 const fetchConfig = async () => {
   try {
     const res = await getConfigUpdateConfig()
     Object.assign(config, res.data)
+    if (!Array.isArray(config.urls)) config.urls = []
+    if (!Array.isArray(config.keywords)) config.keywords = []
+    syncUrlRowsFromConfig()
   } catch {}
 }
 
@@ -156,6 +214,7 @@ const fetchLogs = async () => {
 const handleSaveConfig = async () => {
   saving.value = true
   try {
+    syncConfigUrls()
     await saveConfigUpdateConfig(config)
     message.success('配置已保存')
   } catch (error) {
@@ -166,8 +225,9 @@ const handleSaveConfig = async () => {
 }
 
 const addManualPlaceholder = () => {
-  if (!config.urls.includes('__MANUAL_NODES__')) {
-    config.urls.push('__MANUAL_NODES__')
+  if (!hasManualPlaceholder.value) {
+    urlRows.value.push({ id: nextUrlRowId++, value: '__MANUAL_NODES__' })
+    syncConfigUrls()
   }
 }
 
@@ -221,41 +281,42 @@ const stopPolling = () => {
   }
 }
 
-onMounted(() => {
-  fetchConfig()
-  fetchLogs()
-  startPolling()
+const initSortable = () => {
+  if (!urlListRef.value || sortableInstance) return
+  sortableInstance = Sortable.create(urlListRef.value, {
+    animation: 180,
+    handle: '.drag-handle',
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    dragClass: 'sortable-drag',
+    forceFallback: true,
+    fallbackOnBody: true,
+    swapThreshold: 0.65,
+    onEnd: (evt) => {
+      const { oldIndex, newIndex } = evt
+      if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
 
-  nextTick(() => {
-    if (urlListRef.value) {
-      Sortable.create(urlListRef.value, {
-        animation: 150,
-        handle: '.drag-handle',
-        ghostClass: 'sortable-ghost',
-        onEnd: (evt) => {
-          const { oldIndex, newIndex } = evt
-          if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
-
-          // Revert the DOM move that Sortable did — let Vue handle rendering
-          const parent = evt.from
-          const children = parent.children
-          if (evt.oldIndex < evt.newIndex) {
-            parent.insertBefore(evt.item, children[evt.oldIndex] || null)
-          } else {
-            parent.insertBefore(evt.item, children[evt.oldIndex + 1] || null)
-          }
-
-          // Now update the reactive array — Vue will re-render correctly
-          const item = config.urls.splice(oldIndex, 1)[0]
-          config.urls.splice(newIndex, 0, item)
-        }
-      })
+      const item = urlRows.value.splice(oldIndex, 1)[0]
+      urlRows.value.splice(newIndex, 0, item)
+      syncConfigUrls()
     }
   })
+}
+
+onMounted(async () => {
+  await fetchConfig()
+  fetchLogs()
+  startPolling()
+  await nextTick()
+  initSortable()
 })
 
 onUnmounted(() => {
   stopPolling()
+  if (sortableInstance) {
+    sortableInstance.destroy()
+    sortableInstance = null
+  }
 })
 </script>
 
@@ -301,18 +362,18 @@ onUnmounted(() => {
 .url-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .url-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px;
+  padding: 7px 8px;
   background: var(--n-color);
   border: 1px solid var(--n-border-color);
-  border-radius: 4px;
-  transition: all 0.3s;
+  border-radius: 6px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
 }
 
 .url-item:hover {
@@ -321,12 +382,16 @@ onUnmounted(() => {
 }
 
 .drag-handle {
-  cursor: move;
+  cursor: grab;
   color: var(--n-text-color-disabled);
   display: flex;
   align-items: center;
   transition: color 0.3s;
   flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .drag-handle:hover {
@@ -361,8 +426,48 @@ onUnmounted(() => {
 }
 
 .sortable-ghost {
-  opacity: 0.5;
-  background: var(--n-primary-color-hover);
+  opacity: 0.45;
+  border-style: dashed;
+  border-color: var(--n-primary-color);
+  background: rgba(24, 160, 88, 0.08);
+}
+
+.sortable-chosen {
+  border-color: var(--n-primary-color);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.12);
+}
+
+.sortable-drag {
+  transform: rotate(0.4deg);
+}
+
+.keyword-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+
+.keyword-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.keyword-item :deep(.n-input) {
+  min-width: 0;
+}
+
+.keyword-remove {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.keyword-add {
+  justify-content: center;
+  min-width: 120px;
 }
 
 @media (max-width: 767px) {
@@ -381,6 +486,17 @@ onUnmounted(() => {
   .url-index {
     font-size: 12px;
     min-width: 20px;
+  }
+
+  .keyword-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1180px) {
+  .keyword-grid {
+    grid-template-columns: repeat(3, minmax(110px, 1fr));
   }
 }
 .mobile-toolbar { margin-bottom: 12px; }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"cboard/v2/internal/models"
 	"cboard/v2/internal/utils"
 )
 
@@ -779,6 +780,82 @@ func (b *EmailTemplateBuilder) GetBroadcastNotificationTemplate(title, content s
 	return b.GetBaseTemplate(title, emailContent, "此邮件由系统自动发送，请勿回复。")
 }
 
+func (b *EmailTemplateBuilder) GetTicketReplyTemplate(username, ticketNo, title, replyContent, historyHTML, ticketURL string) string {
+	if username == "" {
+		username = "用户"
+	}
+	if historyHTML == "" {
+		historyHTML = `<p style="color: #999;">暂无历史记录</p>`
+	}
+
+	content := fmt.Sprintf(`<h2>工单已有管理员回复</h2>
+            <p>亲爱的 <strong>%s</strong>，您的工单已有管理员回复：</p>
+            <div class="info-box">
+                <h3>工单信息</h3>
+                <table class="info-table">
+                    <tr><th>工单号</th><td><strong style="font-family: 'Courier New', monospace;">%s</strong></td></tr>
+                    <tr><th>工单标题</th><td><strong>%s</strong></td></tr>
+                </table>
+            </div>
+            <div class="success-box">
+                <h3>管理员回复</h3>
+                <div style="line-height: 1.7; white-space: normal;">%s</div>
+            </div>
+            <div class="info-box">
+                <h3>交流历史</h3>
+                %s
+            </div>
+            <div style="text-align: center;">
+                <a href="%s" class="btn">查看工单</a>
+            </div>`,
+		template.HTMLEscapeString(username),
+		template.HTMLEscapeString(ticketNo),
+		template.HTMLEscapeString(title),
+		escapeEmailMultiline(replyContent),
+		historyHTML,
+		template.HTMLEscapeString(ticketURL),
+	)
+
+	return b.GetBaseTemplate("工单回复通知", content, "如需继续沟通，请登录后在工单中回复。")
+}
+
+func BuildTicketConversationHistoryHTML(ticket models.Ticket, replies []models.TicketReply) string {
+	var sb strings.Builder
+	writeTicketHistoryItem(&sb, "用户", ticket.CreatedAt, ticket.Content)
+	for _, reply := range replies {
+		author := "用户"
+		if reply.IsAdmin {
+			author = "管理员"
+		}
+		writeTicketHistoryItem(&sb, author, reply.CreatedAt, reply.Content)
+	}
+	return sb.String()
+}
+
+func writeTicketHistoryItem(sb *strings.Builder, author string, createdAt time.Time, content string) {
+	borderColor := "#3498db"
+	bgColor := "#f8fbff"
+	if author == "管理员" {
+		borderColor = "#27ae60"
+		bgColor = "#f8fff9"
+	}
+
+	sb.WriteString(fmt.Sprintf(`<div style="border-left: 4px solid %s; background: %s; padding: 12px 14px; margin: 12px 0; border-radius: 4px;">`, borderColor, bgColor))
+	sb.WriteString(fmt.Sprintf(`<div style="font-size: 13px; color: #666; margin-bottom: 8px;"><strong>%s</strong><span style="margin-left: 8px;">%s</span></div>`,
+		template.HTMLEscapeString(author),
+		template.HTMLEscapeString(createdAt.Format("2006-01-02 15:04:05")),
+	))
+	sb.WriteString(fmt.Sprintf(`<div style="line-height: 1.7; color: #333;">%s</div>`, escapeEmailMultiline(content)))
+	sb.WriteString(`</div>`)
+}
+
+func escapeEmailMultiline(s string) string {
+	escaped := template.HTMLEscapeString(s)
+	escaped = strings.ReplaceAll(escaped, "\r\n", "\n")
+	escaped = strings.ReplaceAll(escaped, "\r", "\n")
+	return strings.ReplaceAll(escaped, "\n", "<br>")
+}
+
 func (b *EmailTemplateBuilder) GetAdminNotificationTemplate(notificationType, title, body string, data map[string]interface{}) string {
 	var content string
 
@@ -975,7 +1052,9 @@ func (b *EmailTemplateBuilder) GetAdminNotificationTemplate(notificationType, ti
 	case "new_ticket":
 		ticketNo := getStringFromData(data, "ticket_no", "N/A")
 		username := getStringFromData(data, "username", "N/A")
+		email := getStringFromData(data, "email", "N/A")
 		title := getStringFromData(data, "title", "无标题")
+		ticketContent := getStringFromData(data, "content", "")
 		content = fmt.Sprintf(`<h2>🎫 新工单提醒</h2>
             <p>系统检测到用户提交新工单：</p>
             <div class="info-box">
@@ -983,12 +1062,23 @@ func (b *EmailTemplateBuilder) GetAdminNotificationTemplate(notificationType, ti
                 <table class="info-table">
                     <tr><th>工单号</th><td><strong style="font-family: 'Courier New', monospace;">%s</strong></td></tr>
                     <tr><th>用户账号</th><td>%s</td></tr>
+                    <tr><th>用户邮箱</th><td>%s</td></tr>
                     <tr><th>工单标题</th><td><strong>%s</strong></td></tr>
                 </table>
             </div>
             <div class="info-box">
+                <h3>问题内容</h3>
+                <div style="line-height: 1.7; color: #333;">%s</div>
+            </div>
+            <div class="info-box">
                 <p><strong>💡 提示：</strong>请及时查看并回复用户工单。</p>
-            </div>`, ticketNo, username, title)
+            </div>`,
+			template.HTMLEscapeString(ticketNo),
+			template.HTMLEscapeString(username),
+			template.HTMLEscapeString(email),
+			template.HTMLEscapeString(title),
+			escapeEmailMultiline(ticketContent),
+		)
 
 	case "abnormal_login":
 		username := getStringFromData(data, "username", "N/A")

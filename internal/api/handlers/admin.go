@@ -3200,15 +3200,43 @@ func AdminReplyTicket(c *gin.Context) {
 		return
 	}
 	db := database.GetDB()
-	reply := models.TicketReply{TicketID: uint(id), UserID: adminID, Content: req.Content, IsAdmin: true}
+
+	var ticket models.Ticket
+	if err := db.First(&ticket, id).Error; err != nil {
+		utils.NotFound(c, "工单不存在")
+		return
+	}
+	if ticket.Status == string(models.TicketStatusClosed) {
+		utils.BadRequest(c, "工单已关闭，无法回复")
+		return
+	}
+
+	reply := models.TicketReply{TicketID: ticket.ID, UserID: adminID, Content: req.Content, IsAdmin: true}
 	if err := db.Create(&reply).Error; err != nil {
 		utils.InternalError(c, "回复工单失败")
 		return
 	}
-	if err := db.Model(&models.Ticket{}).Where("id = ?", id).Update("status", "processing").Error; err != nil {
+	if err := db.Model(&ticket).Update("status", string(models.TicketStatusProcessing)).Error; err != nil {
 		utils.InternalError(c, "更新工单状态失败")
 		return
 	}
+
+	var user models.User
+	if err := db.First(&user, ticket.UserID).Error; err == nil && user.Email != "" {
+		var replies []models.TicketReply
+		db.Where("ticket_id = ?", ticket.ID).Order("created_at ASC").Find(&replies)
+		historyHTML := services.BuildTicketConversationHistoryHTML(ticket, replies)
+		subject, body := services.RenderEmail("ticket_reply", map[string]string{
+			"username":     user.Username,
+			"ticket_id":    strconv.FormatUint(uint64(ticket.ID), 10),
+			"ticket_no":    ticket.TicketNo,
+			"title":        ticket.Title,
+			"reply":        req.Content,
+			"history_html": historyHTML,
+		})
+		go services.QueueEmail(user.Email, subject, body, "ticket_reply")
+	}
+
 	utils.CreateAuditLog(c, "reply_ticket", "ticket", uint(id), fmt.Sprintf("回复工单 ID: %d", id))
 	utils.Success(c, reply)
 }

@@ -345,12 +345,12 @@ func AdminListUsers(c *gin.Context) {
 			swg.Wait()
 			allIDs := append(resetUserIDs, subUserIDs...)
 			if len(allIDs) > 0 {
-				query = query.Where("username LIKE ? OR email LIKE ? OR id IN ?", like, like, allIDs)
+				query = query.Where("username LIKE ? OR email LIKE ? OR notes LIKE ? OR id IN ?", like, like, like, allIDs)
 			} else {
-				query = query.Where("username LIKE ? OR email LIKE ?", like, like)
+				query = query.Where("username LIKE ? OR email LIKE ? OR notes LIKE ?", like, like, like)
 			}
 		} else {
-			query = query.Where("username LIKE ? OR email LIKE ?", like, like)
+			query = query.Where("username LIKE ? OR email LIKE ? OR notes LIKE ?", like, like, like)
 		}
 	}
 	if status := c.Query("is_active"); status != "" {
@@ -5232,7 +5232,7 @@ func AdminExportUsersCSV(c *gin.Context) {
 
 	if search := c.Query("search"); search != "" {
 		like := "%" + search + "%"
-		query = query.Where("username LIKE ? OR email LIKE ?", like, like)
+		query = query.Where("username LIKE ? OR email LIKE ? OR notes LIKE ?", like, like, like)
 	}
 	if status := c.Query("is_active"); status != "" {
 		query = query.Where("is_active = ?", status == "true")

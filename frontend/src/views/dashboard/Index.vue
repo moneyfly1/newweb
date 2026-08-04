@@ -320,13 +320,13 @@ const allClients = {
     { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
     { key: 'client_v2rayn_url', name: 'V2rayN', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
     { key: 'client_clashparty_windows_url', name: 'Clash Party', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
-    { key: 'client_hiddify_windows_url', name: 'Hiddify', icon: '🟠' },
+    { key: 'client_hiddify_windows_url', name: 'Hiddify', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
     { key: 'client_flclash_windows_url', name: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
   ],
   android: [
     { key: 'client_clash_android_url', name: 'Clash Meta', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
     { key: 'client_v2rayng_url', name: 'V2rayNG', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
-    { key: 'client_hiddify_android_url', name: 'Hiddify', icon: '🟠' },
+    { key: 'client_hiddify_android_url', name: 'Hiddify', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
   ],
   macos: [
     { key: 'client_flclash_macos_url', name: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
@@ -338,7 +338,7 @@ const allClients = {
   ],
   linux: [
     { key: 'client_clash_linux_url', name: 'Clash', icon: '🐧', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
-    { key: 'client_singbox_url', name: 'Sing-box', icon: '📦' },
+    { key: 'client_singbox_url', name: 'Sing-box', icon: '📦', iconUrl: 'https://raw.githubusercontent.com/SagerNet/sing-box/testing/docs/assets/icon.svg' },
   ],
 }
 
@@ -457,12 +457,12 @@ const quickSubItems = computed(() => {
     },
     {
       name: 'QuantumultX', icon: '💠',
-      iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/quantumultx.png',
+      iconUrl: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Quantumult_X.png',
       url: getSubscriptionUrl('token_quantumultx_url', 'quantumultx'), client: 'quantumultx', importable: true,
     },
     {
       name: 'Shadowrocket', icon: '🔴',
-      iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png',
+      iconUrl: 'https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Rocket.png',
       url: getSubscriptionUrl('token_shadowrocket_url', 'shadowrocket'), client: 'shadowrocket', importable: true,
     },
     {
@@ -472,7 +472,7 @@ const quickSubItems = computed(() => {
     },
     {
       name: 'V2Ray / Hiddify', icon: '🚀',
-      iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png',
+      iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg',
       url: getSubscriptionUrl('token_v2ray_url', 'v2ray'), client: 'v2ray', importable: false,
     },
   ].filter(i => i.url)

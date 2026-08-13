@@ -65,6 +65,9 @@ func main() {
 	// 确保所有用户都有订阅记录
 	ensureUserSubscriptions()
 
+	// 回填节点来源订阅链接（兼容旧数据，source_index -> source_url）
+	services.GetConfigUpdateService().BackfillNodeSourceURLs()
+
 	// 启动节点自动更新定时任务
 	services.GetConfigUpdateService().StartSchedule()
 

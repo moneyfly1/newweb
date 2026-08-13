@@ -273,6 +273,7 @@ func (s *ConfigUpdateService) runUpdate() {
 
 		for i := range nodes {
 			nodes[i].SourceIndex = realSourceIdx
+			nodes[i].SourceURL = u
 		}
 
 		if !usedCache {
@@ -490,6 +491,29 @@ func (s *ConfigUpdateService) LoadConfig() (*ConfigUpdateConfig, error) {
 		return nil, err
 	}
 	return &config, nil
+}
+
+// BackfillNodeSourceURLs 将已有节点的 source_index 映射为对应的订阅链接写入 source_url
+// （兼容升级前的数据：旧版本只记录了序号，未记录链接）
+func (s *ConfigUpdateService) BackfillNodeSourceURLs() {
+	cfg, err := s.LoadConfig()
+	if err != nil {
+		return
+	}
+	db := database.GetDB()
+	idx := 0
+	for _, u := range cfg.URLs {
+		u = strings.TrimSpace(u)
+		if u == "" || u == "__MANUAL_NODES__" {
+			continue
+		}
+		idx++
+		if err := db.Model(&models.Node{}).
+			Where("source_index = ? AND (source_url = '' OR source_url IS NULL)", idx).
+			Update("source_url", u).Error; err != nil {
+			log.Printf("[ConfigUpdate] 回填节点来源链接失败(source_index=%d): %v", idx, err)
+		}
+	}
 }
 
 func (s *ConfigUpdateService) SaveConfig(config *ConfigUpdateConfig) error {

@@ -22,7 +22,7 @@
             placeholder="来源"
             clearable
             :options="sourceOptions"
-            style="width: 130px"
+            style="width: 220px"
             @update:value="handleSearch"
           />
           <n-select
@@ -167,7 +167,8 @@
               </div>
               <div class="card-row">
                 <span class="card-label">来源</span>
-                <n-tag v-if="row.source_index && row.source_index > 0" type="info" size="small">订阅 #{{ row.source_index }}</n-tag>
+                <n-tag v-if="row.source_url" type="info" size="small" :bordered="false" class="source-tag" :title="row.source_url">{{ shortSourceLabel(row.source_url) }}</n-tag>
+                <n-tag v-else-if="row.source_index && row.source_index > 0" type="info" size="small">订阅 #{{ row.source_index }}</n-tag>
                 <n-tag v-else type="default" size="small">手动添加</n-tag>
               </div>
               <div class="card-row" v-if="row.description">
@@ -255,13 +256,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, h, onMounted, computed } from 'vue'
-import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage, useDialog, type DataTableColumns, type FormInst, type TagProps } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NSwitch, NEllipsis, useMessage, useDialog, type DataTableColumns, type FormInst, type TagProps } from 'naive-ui'
 import {
   CloudDownloadOutline, LinkOutline, RefreshOutline,
   SpeedometerOutline, GlobeOutline, ShieldCheckmarkOutline, SearchOutline,
   EllipsisVertical
 } from '@vicons/ionicons5'
-import { listAdminNodes, updateNode, deleteNode, importNodes, batchNodeAction, testNode } from '@/api/admin'
+import { listAdminNodes, updateNode, deleteNode, importNodes, batchNodeAction, testNode, getConfigUpdateConfig } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
@@ -287,10 +288,18 @@ const filterManual = ref<string | null>(null)
 const filterRegion = ref<string | null>(null)
 const filterStatus = ref<string | null>(null)
 
+const configUrls = ref<string[]>([])
+
+// 来源选项：节点更新配置里的订阅链接 + 当前数据中已存在的来源链接（含历史导入）
 const sourceOptions = computed(() => {
-  const indexes = [...new Set(tableData.value.map((n: any) => n.source_index).filter((v: number) => v > 0))].sort((a, b) => a - b)
-  return indexes.map((i: number) => ({ label: `订阅 #${i}`, value: String(i) }))
+  const urls = [...new Set([...configUrls.value, ...tableData.value.map((n: any) => n.source_url).filter((u: string) => u)])]
+  return urls.map((u: string) => ({ label: shortSourceLabel(u), value: u }))
 })
+
+const shortSourceLabel = (url: string) => {
+  const cleaned = String(url).replace(/^https?:\/\//i, '').replace(/\/+$/, '')
+  return cleaned.length > 32 ? cleaned.slice(0, 32) + '…' : cleaned
+}
 const regionOptions = computed(() => {
   const regions = [...new Set(tableData.value.map((n: any) => n.region).filter(Boolean))].sort()
   return regions.map((r: string) => ({ label: r, value: r }))
@@ -337,9 +346,14 @@ const columns: DataTableColumns<any> = [
   },
   {
     title: '来源',
-    key: 'source_index',
-    width: 120,
+    key: 'source_url',
+    width: 220,
     render: (row: any) => {
+      if (row.source_url) {
+        return h(NEllipsis, { style: 'max-width: 200px', tooltip: { width: 'trigger' } }, {
+          default: () => h(NTag, { type: 'info', size: 'small', bordered: false }, { default: () => shortSourceLabel(row.source_url) })
+        })
+      }
       if (row.source_index && row.source_index > 0) {
         return h(NTag, { type: 'info', size: 'small' }, { default: () => `订阅 #${row.source_index}` })
       }
@@ -394,7 +408,7 @@ const fetchData = async () => {
       sort: sortState.value.sort,
       order: sortState.value.order,
       search: searchQuery.value || undefined,
-      source_index: filterSource.value || undefined,
+      source_url: filterSource.value || undefined,
       is_manual: filterManual.value || undefined,
       region: filterRegion.value || undefined,
       status: filterStatus.value || undefined
@@ -536,7 +550,14 @@ const handleMobileAction = (key: string, row: any) => {
   }
 }
 
-onMounted(() => fetchData())
+onMounted(() => {
+  fetchData()
+  // 加载节点更新配置中的订阅链接，作为「来源」筛选选项
+  getConfigUpdateConfig().then((res: any) => {
+    const urls: string[] = (res.data?.urls || []).map((u: string) => String(u).trim()).filter((u: string) => u && u !== '__MANUAL_NODES__')
+    configUrls.value = urls
+  }).catch(() => {})
+})
 </script>
 
 <style scoped>
@@ -663,6 +684,12 @@ onMounted(() => fetchData())
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 200px;
+  }
+  .source-tag {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .card-actions {
     display: flex;

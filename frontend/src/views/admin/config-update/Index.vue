@@ -82,8 +82,8 @@
                   </template>
                 </n-button>
               </div>
-              <n-button dashed size="small" class="keyword-add" @click="addKeyword">+ 添加关键词</n-button>
             </div>
+            <n-button dashed size="small" class="keyword-add" @click="addKeyword">+ 添加关键词</n-button>
             <n-text depth="3" style="font-size: 12px; margin-top: 4px; display: block">
               留空表示不过滤，导入所有节点。填写关键词后，名称中包含关键词的节点将被排除。支持地区缩写如 hk、us、jp 等。
             </n-text>
@@ -443,7 +443,7 @@ onUnmounted(() => {
 
 .keyword-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   align-items: center;
 }
@@ -467,7 +467,8 @@ onUnmounted(() => {
 
 .keyword-add {
   justify-content: center;
-  min-width: 120px;
+  width: 100%;
+  margin-top: 8px;
 }
 
 @media (max-width: 767px) {
@@ -494,11 +495,6 @@ onUnmounted(() => {
   }
 }
 
-@media (min-width: 768px) and (max-width: 1180px) {
-  .keyword-grid {
-    grid-template-columns: repeat(3, minmax(110px, 1fr));
-  }
-}
 .mobile-toolbar { margin-bottom: 12px; }
 .mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
 .mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }

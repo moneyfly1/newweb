@@ -22,7 +22,7 @@
             placeholder="来源"
             clearable
             :options="sourceOptions"
-            style="width: 220px"
+            style="width: 150px"
             @update:value="handleSearch"
           />
           <n-select
@@ -167,8 +167,8 @@
               </div>
               <div class="card-row">
                 <span class="card-label">来源</span>
-                <n-tag v-if="row.source_url" type="info" size="small" :bordered="false" class="source-tag" :title="row.source_url">{{ shortSourceLabel(row.source_url) }}</n-tag>
-                <n-tag v-else-if="row.source_index && row.source_index > 0" type="info" size="small">订阅 #{{ row.source_index }}</n-tag>
+                <n-tag v-if="row.source_index && row.source_index > 0" type="info" size="small">订阅 {{ row.source_index }}</n-tag>
+                <n-tag v-else-if="row.source_url" type="warning" size="small">手动导入</n-tag>
                 <n-tag v-else type="default" size="small">手动添加</n-tag>
               </div>
               <div class="card-row" v-if="row.description">
@@ -256,7 +256,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, h, onMounted, computed } from 'vue'
-import { NButton, NTag, NSpace, NIcon, NSwitch, NEllipsis, useMessage, useDialog, type DataTableColumns, type FormInst, type TagProps } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage, useDialog, type DataTableColumns, type FormInst, type TagProps } from 'naive-ui'
 import {
   CloudDownloadOutline, LinkOutline, RefreshOutline,
   SpeedometerOutline, GlobeOutline, ShieldCheckmarkOutline, SearchOutline,
@@ -290,10 +290,12 @@ const filterStatus = ref<string | null>(null)
 
 const configUrls = ref<string[]>([])
 
-// 来源选项：节点更新配置里的订阅链接 + 当前数据中已存在的来源链接（含历史导入）
+// 来源选项：按订阅链接筛选，界面上显示订阅序号（订阅1、订阅2…）
+// 不在当前配置中的历史导入链接则显示链接短名
 const sourceOptions = computed(() => {
-  const urls = [...new Set([...configUrls.value, ...tableData.value.map((n: any) => n.source_url).filter((u: string) => u)])]
-  return urls.map((u: string) => ({ label: shortSourceLabel(u), value: u }))
+  const base = configUrls.value.map((u: string, i: number) => ({ label: `订阅${i + 1}`, value: u }))
+  const extra = [...new Set(tableData.value.map((n: any) => n.source_url).filter((u: string) => u && !configUrls.value.includes(u)))]
+  return [...base, ...extra.map((u: string) => ({ label: shortSourceLabel(u), value: u }))]
 })
 
 const shortSourceLabel = (url: string) => {
@@ -346,16 +348,14 @@ const columns: DataTableColumns<any> = [
   },
   {
     title: '来源',
-    key: 'source_url',
-    width: 220,
+    key: 'source_index',
+    width: 120,
     render: (row: any) => {
-      if (row.source_url) {
-        return h(NEllipsis, { style: 'max-width: 200px', tooltip: { width: 'trigger' } }, {
-          default: () => h(NTag, { type: 'info', size: 'small', bordered: false }, { default: () => shortSourceLabel(row.source_url) })
-        })
-      }
       if (row.source_index && row.source_index > 0) {
-        return h(NTag, { type: 'info', size: 'small' }, { default: () => `订阅 #${row.source_index}` })
+        return h(NTag, { type: 'info', size: 'small' }, { default: () => `订阅 ${row.source_index}` })
+      }
+      if (row.source_url) {
+        return h(NTag, { type: 'warning', size: 'small' }, { default: () => '手动导入' })
       }
       return h(NTag, { type: 'default', size: 'small' }, { default: () => '手动添加' })
     }
@@ -684,12 +684,6 @@ onMounted(() => {
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 200px;
-  }
-  .source-tag {
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .card-actions {
     display: flex;

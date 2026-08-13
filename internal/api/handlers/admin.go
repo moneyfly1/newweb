@@ -2025,6 +2025,9 @@ func AdminListNodes(c *gin.Context) {
 			query = query.Where("source_index = ?", si)
 		}
 	}
+	if sourceURL := c.Query("source_url"); sourceURL != "" {
+		query = query.Where("source_url = ?", sourceURL)
+	}
 	if isManual := c.Query("is_manual"); isManual != "" {
 		query = query.Where("is_manual = ?", isManual == "1" || isManual == "true")
 	}
@@ -2037,7 +2040,7 @@ func AdminListNodes(c *gin.Context) {
 	query.Count(&total)
 
 	var nodes []models.Node
-	query.Select("id, name, region, type, status, load, speed, uptime, latency, description, is_recommended, is_active, is_manual, source_index, order_index, last_test, created_at, updated_at").
+	query.Select("id, name, region, type, status, load, speed, uptime, latency, description, is_recommended, is_active, is_manual, source_index, source_url, order_index, last_test, created_at, updated_at").
 		Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&nodes)
 
 	utils.SuccessPage(c, nodes, total, p.Page, p.PageSize)
@@ -2179,6 +2182,9 @@ func AdminImportNodes(c *gin.Context) {
 	successCount := 0
 	for _, node := range nodes {
 		node.IsManual = true // 管理员手动导入的节点，自动更新时不会被删除
+		if req.Type == "subscription" {
+			node.SourceURL = req.URL // 记录导入来源的订阅链接
+		}
 		if err := db.Create(&node).Error; err == nil {
 			successCount++
 		}

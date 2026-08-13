@@ -18,6 +18,7 @@ type Node struct {
 	IsActive      bool       `gorm:"default:true;index" json:"is_active"`
 	IsManual      bool       `gorm:"default:false" json:"is_manual"`
 	SourceIndex   int        `gorm:"default:0" json:"source_index"`
+	SourceURL     string     `gorm:"type:text" json:"source_url"`
 	OrderIndex    int        `gorm:"default:0;index" json:"order_index"`
 	LastTest      *time.Time `json:"last_test"`
 	CreatedAt     time.Time  `gorm:"autoCreateTime" json:"created_at"`

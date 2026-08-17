@@ -326,7 +326,7 @@
 
 <script setup>
 import { ref, reactive, h, onMounted } from 'vue'
-import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage, useDialog } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage } from 'naive-ui'
 import {
   CreateOutline,
   TrashOutline,
@@ -353,7 +353,6 @@ import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
-const dialog = useDialog()
 const appStore = useAppStore()
 
 const loading = ref(false)
@@ -641,22 +640,14 @@ const handleToggleActive = async (row, value) => {
   }
 }
 
-const handleDelete = (row) => {
-  dialog.warning({
-    title: '确认删除',
-    content: `确定要删除专线节点 "${row.display_name}" 吗？此操作不可恢复。`,
-    positiveText: '确定',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await deleteCustomNode(row.id)
-        message.success('删除专线节点成功')
-        fetchData()
-      } catch (error) {
-        message.error(error.message || '删除专线节点失败')
-      }
-    }
-  })
+const handleDelete = async (row) => {
+  try {
+    await deleteCustomNode(row.id)
+    message.success('删除专线节点成功')
+    fetchData()
+  } catch (error) {
+    message.error(error.message || '删除专线节点失败')
+  }
 }
 
 const handleAssign = (row) => {
@@ -758,24 +749,16 @@ const handleImportSubmit = async () => {
   }
 }
 
-const handleBatchDelete = () => {
+const handleBatchDelete = async () => {
   if (checkedRowKeys.value.length === 0) return
-  dialog.warning({
-    title: '确认批量删除',
-    content: `确定要删除选中的 ${checkedRowKeys.value.length} 个专线节点吗？此操作不可恢复。`,
-    positiveText: '确定',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await batchDeleteCustomNodes({ ids: checkedRowKeys.value })
-        message.success('批量删除成功')
-        checkedRowKeys.value = []
-        fetchData()
-      } catch (error) {
-        message.error(error.message || '批量删除失败')
-      }
-    }
-  })
+  try {
+    await batchDeleteCustomNodes({ ids: checkedRowKeys.value })
+    message.success('批量删除成功')
+    checkedRowKeys.value = []
+    fetchData()
+  } catch (error) {
+    message.error(error.message || '批量删除失败')
+  }
 }
 
 const handleViewLink = async (row) => {

@@ -95,6 +95,12 @@
               </div>
             </n-form>
           </div>
+          <div v-if="userCustomNodes.length" class="custom-node-toolbar">
+            <n-text depth="3" class="custom-node-count">共 {{ userCustomNodes.length }} 个专线分配</n-text>
+            <n-button size="small" type="error" secondary :loading="removingAllCustomNodes" @click="handleRemoveAllCustomNodes">
+              全部删除
+            </n-button>
+          </div>
           <n-data-table
             v-if="userCustomNodes.length"
             :columns="customNodeCols"
@@ -345,24 +351,42 @@ const handleAssignCustomNodes = async () => {
   }
 }
 
-const handleUnassignCustomNode = (row) => {
+const handleUnassignCustomNode = async (row) => {
   const nodeId = row.custom_node_id || row.node?.id
   if (!userDetail.value.id || !nodeId) return
-  dialog.warning({
-    title: '确认解除专线分配',
-    content: `确定要解除 ${getNodeName(row)} 的专线分配吗？`,
-    positiveText: '解除',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await unassignCustomNodeFromUser(userDetail.value.id, nodeId)
-        message.success('已解除专线分配')
-        await fetchUserCustomNodes()
-      } catch (error) {
-        message.error(error.message || '解除专线分配失败')
-      }
+  try {
+    await unassignCustomNodeFromUser(userDetail.value.id, nodeId)
+    message.success('已解除专线分配')
+    await fetchUserCustomNodes()
+  } catch (error) {
+    message.error(error.message || '解除专线分配失败')
+  }
+}
+
+const removingAllCustomNodes = ref(false)
+
+const handleRemoveAllCustomNodes = async () => {
+  if (!userDetail.value.id || !userCustomNodes.value.length) return
+  removingAllCustomNodes.value = true
+  try {
+    const results = await Promise.allSettled(
+      userCustomNodes.value.map((row) => {
+        const nodeId = row.custom_node_id || row.node?.id
+        return nodeId ? unassignCustomNodeFromUser(userDetail.value.id, nodeId) : Promise.resolve()
+      })
+    )
+    const failed = results.filter((r) => r.status === 'rejected').length
+    if (failed > 0) {
+      message.warning(`已删除 ${userCustomNodes.value.length - failed} 个，失败 ${failed} 个`)
+    } else {
+      message.success('已删除全部专线分配')
     }
-  })
+    await fetchUserCustomNodes()
+  } catch (error) {
+    message.error(error.message || '全部删除失败')
+  } finally {
+    removingAllCustomNodes.value = false
+  }
 }
 
 const countryNameMap = {
@@ -534,6 +558,19 @@ const rechargeCols = [
   gap: 12px;
 }
 .assign-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.custom-node-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+.custom-node-count {
   flex: 1;
   min-width: 0;
   font-size: 12px;

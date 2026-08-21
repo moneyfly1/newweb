@@ -454,6 +454,15 @@ EOF
         proxy_send_timeout 300s;
     }
 
+    # GitHub 节点文件同步公开外链（Go 后端从 uploads/nodes 提供）
+    location /nodes/ {
+        proxy_pass http://127.0.0.1:$CBOARD_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
     location /assets/ {
         expires 30d;
         add_header Cache-Control "public, immutable";

@@ -71,6 +71,9 @@ func main() {
 	// 启动节点自动更新定时任务
 	services.GetConfigUpdateService().StartSchedule()
 
+	// 启动 GitHub 节点文件定时同步
+	services.GetGithubNodesService().StartSchedule()
+
 	// 启动后台任务调度器（邮件队列、订阅过期检查、到期提醒等）
 	services.GetScheduler().Start()
 
@@ -115,6 +118,7 @@ func main() {
 	// 停止后台任务
 	services.GetScheduler().Stop()
 	services.GetConfigUpdateService().Stop()
+	services.GetGithubNodesService().StopSchedule()
 
 	// 给活跃请求 10 秒完成
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

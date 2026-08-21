@@ -145,6 +145,13 @@ export const startConfigUpdate = () => request.post('/admin/config-update/start'
 export const getConfigUpdateLogs = () => request.get('/admin/config-update/logs', { params: { _t: Date.now() } })
 export const clearConfigUpdateLogs = () => request.post('/admin/config-update/logs/clear')
 
+// GitHub Nodes Sync
+export const getGithubNodesStatus = () => request.get('/admin/github-nodes/status')
+export const testGithubNodes = (data?: any) => request.post('/admin/github-nodes/test', data)
+export const syncGithubNodes = () => request.post('/admin/github-nodes/sync')
+export const getGithubNodesLogs = () => request.get('/admin/github-nodes/logs', { params: { _t: Date.now() } })
+export const clearGithubNodesLogs = () => request.post('/admin/github-nodes/logs/clear')
+
 // Backup
 export const createBackup = () => request.post('/admin/backup')
 export const listBackups = () => request.get('/admin/backup')

@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -452,33 +453,33 @@ func (c *GitClient) ListBackups() ([]RemoteBackupInfo, error) {
 
 	var results []RemoteBackupInfo
 	for _, year := range years {
-		if year.entryType != "dir" {
+		if year.Type != "dir" {
 			continue
 		}
-		months, err := c.listDir(year.path)
+		months, err := c.listDir(year.Path)
 		if err != nil {
 			continue
 		}
 		for _, month := range months {
-			if month.entryType != "dir" {
+			if month.Type != "dir" {
 				continue
 			}
-			files, err := c.listDir(month.path)
+			files, err := c.listDir(month.Path)
 			if err != nil {
 				continue
 			}
 			for _, f := range files {
-				if f.entryType != "file" {
+				if f.Type != "file" {
 					continue
 				}
-				if !strings.HasSuffix(f.name, ".zip") {
+				if !strings.HasSuffix(f.Name, ".zip") {
 					continue
 				}
 				results = append(results, RemoteBackupInfo{
-					Name:        f.name,
-					Path:        f.path,
-					Size:        f.size,
-					DownloadURL: f.downloadURL,
+					Name:        f.Name,
+					Path:        f.Path,
+					Size:        f.Size,
+					DownloadURL: f.DownloadURL,
 				})
 			}
 		}
@@ -486,16 +487,23 @@ func (c *GitClient) ListBackups() ([]RemoteBackupInfo, error) {
 	return results, nil
 }
 
-type dirEntry struct {
-	name        string
-	path        string
-	entryType   string
-	size        int64
-	downloadURL string
+// DirEntry is a single item in a Git platform directory listing.
+type DirEntry struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Type        string `json:"type"` // "file" or "dir"
+	Size        int64  `json:"size"`
+	DownloadURL string `json:"download_url"`
 }
 
-func (c *GitClient) listDir(dirPath string) ([]dirEntry, error) {
-	apiURL := c.getAPIURL("/contents/" + dirPath)
+// ListDirWithRef lists the contents of dirPath at ref (branch/tag/SHA).
+// An empty ref uses the repository default branch.
+func (c *GitClient) ListDirWithRef(dirPath, ref string) ([]DirEntry, error) {
+	path := "/contents/" + dirPath
+	if ref != "" {
+		path += "?ref=" + url.QueryEscape(ref)
+	}
+	apiURL := c.getAPIURL(path)
 
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
@@ -517,28 +525,16 @@ func (c *GitClient) listDir(dirPath string) ([]dirEntry, error) {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	var items []struct {
-		Name        string `json:"name"`
-		Path        string `json:"path"`
-		Type        string `json:"type"`
-		Size        int64  `json:"size"`
-		DownloadURL string `json:"download_url"`
-	}
+	var items []DirEntry
 	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
 		return nil, err
 	}
 
-	var entries []dirEntry
-	for _, item := range items {
-		entries = append(entries, dirEntry{
-			name:        item.Name,
-			path:        item.Path,
-			entryType:   item.Type,
-			size:        item.Size,
-			downloadURL: item.DownloadURL,
-		})
-	}
-	return entries, nil
+	return items, nil
+}
+
+func (c *GitClient) listDir(dirPath string) ([]DirEntry, error) {
+	return c.ListDirWithRef(dirPath, "")
 }
 
 // DownloadFile downloads a file from a URL and saves it to localPath.

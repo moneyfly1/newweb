@@ -320,6 +320,90 @@
                   </n-space>
                 </div>
 
+                <!-- GitHub 节点同步 -->
+                <div v-else-if="activeTab === 'github_nodes'" key="github_nodes">
+                  <n-alert type="info" style="margin-bottom: 24px;">
+                    定期从 GitHub 私有仓库把文件<b>原样下载</b>到服务器 uploads/nodes 目录，公开外链地址为
+                    <n-text strong>{{ nodesBaseUrl }}文件名</n-text>
+                    。此功能<b>只下载文件，不会导入或修改节点管理</b>，你可以自行使用外链地址。
+                    Token 需要拥有仓库读取（repo）权限，仅保存在服务器数据库中，公开链接不会泄露 Token。
+                  </n-alert>
+
+                  <n-h3 prefix="bar">同步配置</n-h3>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="启用定时同步"><n-switch v-model:value="form.gh_nodes_enabled" /></n-form-item-gi>
+                    <n-form-item-gi label="同步间隔 (分钟)"><n-input-number v-model:value="form.gh_nodes_interval" :min="1" :max="1440" style="width: 100%" /></n-form-item-gi>
+                    <n-form-item-gi label="仓库地址"><n-input v-model:value="form.gh_nodes_repo" placeholder="owner/repo，如 moneyfly006/nodes" /></n-form-item-gi>
+                    <n-form-item-gi label="分支"><n-input v-model:value="form.gh_nodes_branch" placeholder="main" /></n-form-item-gi>
+                    <n-form-item-gi label="仓库内目录"><n-input v-model:value="form.gh_nodes_path" placeholder="nodes" /></n-form-item-gi>
+                    <n-form-item-gi label="GitHub Token" span="2"><n-input v-model:value="form.gh_nodes_token" type="password" show-password-on="click" placeholder="ghp_xxxxxxxxxxxx" /></n-form-item-gi>
+                  </n-grid>
+                  <n-space style="margin-top: 16px;">
+                    <n-button :loading="testingGithubNodes" @click="handleTestGithubNodes">测试连接</n-button>
+                    <n-button type="primary" :loading="syncingGithubNodes" @click="handleSyncGithubNodes">立即同步</n-button>
+                  </n-space>
+                  <n-divider />
+
+                  <n-h3 prefix="bar">同步状态</n-h3>
+                  <n-space align="center" :size="24" style="margin-bottom: 12px;">
+                    <n-space align="center" :size="8"><n-text depth="2">最近同步：</n-text><n-text>{{ ghStatus.last_sync_at || '从未同步' }}</n-text></n-space>
+                    <n-space align="center" :size="8">
+                      <n-text depth="2">上次结果：</n-text>
+                      <n-tag v-if="ghStatus.last_result === 'success'" type="success" :bordered="false">成功（{{ ghStatus.last_file_count }} 个文件）</n-tag>
+                      <n-tag v-else-if="ghStatus.last_result === 'error'" type="error" :bordered="false">失败</n-tag>
+                      <n-tag v-else :bordered="false">—</n-tag>
+                    </n-space>
+                    <n-tag v-if="ghStatus.running" type="info" :bordered="false">同步中…</n-tag>
+                    <n-tag v-else-if="ghStatus.scheduled && form.gh_nodes_enabled" type="info" :bordered="false">定时运行中（每 {{ ghStatus.interval_minutes }} 分钟）</n-tag>
+                    <n-button quaternary size="small" @click="loadGithubNodesStatus">
+                      <template #icon><n-icon><refresh-outline /></n-icon></template>
+                      刷新
+                    </n-button>
+                  </n-space>
+                  <n-text v-if="ghStatus.last_result === 'error' && ghStatus.last_error" type="error" style="display: block; margin-bottom: 12px; font-size: 13px;">
+                    错误信息：{{ ghStatus.last_error }}
+                  </n-text>
+
+                  <n-h3 prefix="bar">已同步文件（外链地址）</n-h3>
+                  <n-table :bordered="false" :single-line="false" size="small" v-if="ghStatus.files && ghStatus.files.length > 0">
+                    <thead>
+                      <tr>
+                        <th>文件名</th>
+                        <th>大小</th>
+                        <th>更新时间</th>
+                        <th>外链地址</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="f in ghStatus.files" :key="f.path">
+                        <td>{{ f.path }}</td>
+                        <td>{{ formatSize(f.size) }}</td>
+                        <td>{{ f.updated_at }}</td>
+                        <td><n-text code style="font-size: 12px;">{{ nodesBaseUrl + f.path }}</n-text></td>
+                      </tr>
+                    </tbody>
+                  </n-table>
+                  <n-empty v-else description="暂无已同步文件，请先填写 Token 并点击立即同步" style="padding: 24px 0" />
+
+                  <n-divider />
+                  <n-h3 prefix="bar">同步日志</n-h3>
+                  <n-space style="margin-bottom: 12px;">
+                    <n-button quaternary size="small" @click="loadGithubNodesLogs">
+                      <template #icon><n-icon><refresh-outline /></n-icon></template>
+                      刷新日志
+                    </n-button>
+                    <n-button quaternary size="small" @click="handleClearGithubNodesLogs">清空日志</n-button>
+                  </n-space>
+                  <div class="log-viewer">
+                    <div v-if="ghLogs.length === 0" class="log-empty">暂无日志</div>
+                    <div v-for="(entry, index) in ghLogs" :key="index" class="log-entry" :class="'log-' + entry.level">
+                      <span class="log-time">{{ entry.time }}</span>
+                      <span class="log-level">[{{ entry.level.toUpperCase() }}]</span>
+                      <span class="log-message">{{ entry.message }}</span>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- 软件下载 -->
                 <div v-else-if="activeTab === 'downloads'" key="downloads">
                   <n-alert type="info" style="margin-bottom: 24px;">
@@ -410,14 +494,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useMessage, useDialog } from 'naive-ui'
 import {
   SaveOutline, SettingsOutline, RocketOutline, CardOutline,
   MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline,
-  FunnelOutline, CloudDownloadOutline, DownloadOutline
+  FunnelOutline, CloudDownloadOutline, DownloadOutline, GitBranchOutline
 } from '@vicons/ionicons5'
-import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, cleanOldLogs, getProtocolFilter, updateProtocolFilter } from '@/api/admin'
+import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -488,6 +572,7 @@ const menuOptions = [
   { label: '通知监控', key: 'notify', icon: NotificationsOutline },
   { label: '安全维护', key: 'security', icon: ShieldCheckmarkOutline },
   { label: '备份恢复', key: 'backup', icon: CloudDownloadOutline },
+  { label: 'GitHub 文件同步', key: 'github_nodes', icon: GitBranchOutline },
   { label: '软件下载', key: 'downloads', icon: DownloadOutline },
   { label: '协议过滤', key: 'protocol', icon: FunnelOutline },
 ]
@@ -526,6 +611,8 @@ const form = ref<Record<string, any>>({
   log_retention_days: 90,
   backup_github_enabled: false, backup_github_token: '', backup_github_repo: '',
   backup_auto_enabled: false, backup_auto_time: '03:00',
+  gh_nodes_enabled: false, gh_nodes_token: '', gh_nodes_repo: 'moneyfly006/nodes',
+  gh_nodes_branch: 'main', gh_nodes_path: 'nodes', gh_nodes_interval: 10,
   checkin_enabled: true, checkin_min_reward: 10, checkin_max_reward: 50,
   client_clash_windows_url: '', client_v2rayn_url: '', client_clashparty_windows_url: '',
   client_hiddify_windows_url: '', client_flclash_windows_url: '',
@@ -566,7 +653,7 @@ const handleSaveProtocolFilter = async () => {
 }
 
 const maskedFields = ref<Set<string>>(new Set())
-const sensitiveKeys = ['smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key', 'pay_epay_secret_key', 'pay_codepay_secret_key', 'pay_stripe_secret_key', 'pay_stripe_webhook_secret', 'notify_telegram_bot_token', 'backup_github_token']
+const sensitiveKeys = ['smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key', 'pay_epay_secret_key', 'pay_codepay_secret_key', 'pay_stripe_secret_key', 'pay_stripe_webhook_secret', 'notify_telegram_bot_token', 'backup_github_token', 'gh_nodes_token']
 
 const loadSettings = async () => {
   loading.value = true
@@ -737,6 +824,68 @@ const handleRefreshList = () => {
   }
 }
 
+// ── GitHub 节点同步 ──
+const ghStatus = ref<any>({})
+const ghLogs = ref<any[]>([])
+const testingGithubNodes = ref(false)
+const syncingGithubNodes = ref(false)
+let ghStatusTimer: ReturnType<typeof setInterval> | null = null
+
+const nodesBaseUrl = computed(() => (form.value.site_url || window.location.origin).replace(/\/+$/, '') + '/nodes/')
+
+const loadGithubNodesStatus = async () => {
+  try {
+    const res = await getGithubNodesStatus()
+    if (res.code === 0 && res.data) ghStatus.value = res.data
+  } catch {}
+}
+
+const loadGithubNodesLogs = async () => {
+  try {
+    const res = await getGithubNodesLogs()
+    if (res.code === 0) ghLogs.value = res.data || []
+  } catch {}
+}
+
+const handleTestGithubNodes = async () => {
+  testingGithubNodes.value = true
+  try {
+    const res = await testGithubNodes({
+      token: form.value.gh_nodes_token,
+      repo: form.value.gh_nodes_repo,
+      branch: form.value.gh_nodes_branch,
+      path: form.value.gh_nodes_path
+    })
+    if (res.code === 0) message.success(res.data?.message || '连接成功')
+  } catch (e: any) {
+    message.error(e.response?.data?.message || '连接失败')
+  } finally {
+    testingGithubNodes.value = false
+  }
+}
+
+const handleSyncGithubNodes = async () => {
+  syncingGithubNodes.value = true
+  try {
+    await syncGithubNodes()
+    message.success('同步任务已启动')
+    loadGithubNodesStatus()
+    loadGithubNodesLogs()
+  } catch (e: any) {
+    message.error(e.response?.data?.message || '启动同步失败')
+  } finally {
+    syncingGithubNodes.value = false
+  }
+}
+
+const handleClearGithubNodesLogs = async () => {
+  try {
+    await clearGithubNodesLogs()
+    ghLogs.value = []
+    message.success('日志已清空')
+  } catch {}
+}
+
 const handleRestore = (item: any) => {
   const isGitHub = restoreSource.value === 'github'
   const displayName = item.name || item.filename
@@ -807,6 +956,22 @@ onMounted(() => { loadSettings(); loadProtocolFilter() })
 
 watch(activeTab, (tab) => {
   if (tab === 'backup') loadBackupList()
+  if (tab === 'github_nodes') {
+    loadGithubNodesStatus()
+    loadGithubNodesLogs()
+    if (ghStatusTimer) clearInterval(ghStatusTimer)
+    ghStatusTimer = setInterval(() => {
+      loadGithubNodesStatus()
+      if (ghStatus.value.running) loadGithubNodesLogs()
+    }, 3000)
+  } else if (ghStatusTimer) {
+    clearInterval(ghStatusTimer)
+    ghStatusTimer = null
+  }
+})
+
+onBeforeUnmount(() => {
+  if (ghStatusTimer) clearInterval(ghStatusTimer)
 })
 </script>
 
@@ -945,4 +1110,40 @@ watch(activeTab, (tab) => {
   opacity: 0;
   transform: translateX(-10px);
 }
+
+/* GitHub 节点同步日志 */
+.log-viewer {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  padding: 16px;
+  border-radius: 6px;
+  max-height: 400px;
+  overflow-y: auto;
+  min-height: 160px;
+}
+.log-empty {
+  color: #666;
+  text-align: center;
+  padding: 40px 0;
+}
+.log-entry {
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.log-time {
+  color: #858585;
+  margin-right: 8px;
+}
+.log-level {
+  margin-right: 8px;
+  font-weight: bold;
+}
+.log-info .log-level { color: #569cd6; }
+.log-error .log-level { color: #f44747; }
+.log-error .log-message { color: #f44747; }
+.log-success .log-level { color: #6a9955; }
+.log-success .log-message { color: #6a9955; }
 </style>

@@ -12,6 +12,7 @@ import (
 	"cboard/v2/internal/api/handlers"
 	"cboard/v2/internal/api/middleware"
 	"cboard/v2/internal/config"
+	"cboard/v2/internal/services"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/gzip"
@@ -328,6 +329,17 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			configUpdate.POST("/logs/clear", handlers.AdminClearConfigUpdateLogs)
 		}
 
+		// GitHub 节点文件同步
+		githubNodes := admin.Group("/github-nodes")
+		githubNodes.Use(middleware.CSRFProtection())
+		{
+			githubNodes.GET("/status", handlers.AdminGithubNodesStatus)
+			githubNodes.POST("/test", handlers.AdminGithubNodesTest)
+			githubNodes.POST("/sync", handlers.AdminGithubNodesSync)
+			githubNodes.GET("/logs", handlers.AdminGithubNodesLogs)
+			githubNodes.POST("/logs/clear", handlers.AdminGithubNodesClearLogs)
+		}
+
 		// 订阅管理
 		adminSubs := admin.Group("/subscriptions")
 		adminSubs.Use(middleware.CSRFProtection())
@@ -480,6 +492,11 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		}
 	}
 
+	// 公开节点文件目录（GitHub 节点同步产物），外链: {site_url}/nodes/{filename}
+	nodesHandler := serveGithubNodesFile()
+	r.GET("/nodes", nodesHandler)
+	r.GET("/nodes/*filepath", nodesHandler)
+
 	// Serve frontend static files and SPA fallback
 	distPath := filepath.Join("frontend", "dist")
 	if _, err := os.Stat(distPath); err == nil {
@@ -499,6 +516,11 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 				c.JSON(http.StatusNotFound, gin.H{"code": 1, "message": "not found"})
 				return
 			}
+			// 拒绝含路径穿越的请求
+			if strings.Contains(path, "..") {
+				c.Status(http.StatusNotFound)
+				return
+			}
 			// Ensure SPA shell always updates (avoid stale cached index.html)
 			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 			c.Header("Pragma", "no-cache")
@@ -508,6 +530,57 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	}
 
 	return r
+}
+
+// serveGithubNodesFile 公开提供 uploads/nodes 目录下的节点文件（带路径穿越防护）
+func serveGithubNodesFile() gin.HandlerFunc {
+	root := filepath.Join(config.AppConfig.UploadDir, services.GithubNodesDirName)
+	return func(c *gin.Context) {
+		requestPath := strings.TrimPrefix(c.Param("filepath"), "/")
+		if requestPath == "" || strings.Contains(requestPath, "..") {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		fullPath := filepath.Join(root, filepath.Clean(requestPath))
+		if !strings.HasPrefix(fullPath, filepath.Clean(root)+string(os.PathSeparator)) {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		info, err := os.Stat(fullPath)
+		if err != nil || info.IsDir() {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		// 同步每 10 分钟更新一次，不做长缓存
+		c.Header("Cache-Control", "no-cache")
+		c.Header("X-Content-Type-Options", "nosniff")
+		setNodeFileContentType(c, fullPath)
+		c.File(fullPath)
+	}
+}
+
+func setNodeFileContentType(c *gin.Context, path string) {
+	ext := strings.ToLower(filepath.Ext(path))
+	types := map[string]string{
+		".txt":    "text/plain; charset=utf-8",
+		".yaml":   "application/yaml; charset=utf-8",
+		".yml":    "application/yaml; charset=utf-8",
+		".json":   "application/json; charset=utf-8",
+		".base64": "text/plain; charset=utf-8",
+		".conf":   "text/plain; charset=utf-8",
+		".list":   "text/plain; charset=utf-8",
+	}
+	if ct, ok := types[ext]; ok {
+		c.Header("Content-Type", ct)
+		return
+	}
+	if ct := mime.TypeByExtension(ext); ct != "" {
+		c.Header("Content-Type", ct)
+		return
+	}
+	c.Header("Content-Type", "application/octet-stream")
 }
 
 func servePrecompressedAsset(root string) gin.HandlerFunc {

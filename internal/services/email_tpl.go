@@ -141,48 +141,6 @@ func (b *EmailTemplateBuilder) GetVerificationCodeTemplate(username, verificatio
 	return b.GetBaseTemplate(title, content, "完成注册，开启您的专属网络体验")
 }
 
-func (b *EmailTemplateBuilder) GetPasswordResetTemplate(username, resetLink string) string {
-	title := "密码重置"
-	content := fmt.Sprintf(`<h2>您的密码重置请求</h2>
-            <p>亲爱的 %s，</p>
-            <p>我们收到了您的密码重置请求。如果这不是您本人的操作，请忽略此邮件。</p>
-            <div class="info-box">
-                <h3>📋 重置信息</h3>
-                <table class="info-table">
-                    <tr><th>用户账号</th><td><strong>%s</strong></td></tr>
-                    <tr><th>重置链接有效期</th><td style="color: #ffc107; font-weight: bold;">1小时</td></tr>
-                    <tr><th>链接使用次数</th><td>仅可使用一次</td></tr>
-                </table>
-            </div>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="%s" class="btn">重置密码</a>
-            </div>
-            <div class="warning-box">
-                <h3>⚠️ 安全提醒</h3>
-                <ul>
-                    <li>此重置链接仅在1小时内有效</li>
-                    <li>链接仅可使用一次，使用后自动失效</li>
-                    <li>如果链接失效，请重新申请密码重置</li>
-                    <li>如果按钮无法点击，请复制以下链接到浏览器中打开：</li>
-                </ul>
-                <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px; word-break: break-all;">
-                    <code style="color: #667eea; font-size: 12px;">%s</code>
-                </div>
-            </div>
-            <div class="info-box">
-                <p><strong>💡 密码安全建议：</strong></p>
-                <ul>
-                    <li>建议设置强密码，包含字母、数字和特殊字符</li>
-                    <li>密码长度建议在8-50个字符之间</li>
-                    <li>不要使用过于简单的密码，如"123456"、"password"等</li>
-                    <li>定期更换密码以确保账户安全</li>
-                </ul>
-            </div>
-            <p style="text-align: center; color: #666; font-size: 14px;">如果您没有请求重置密码，请忽略此邮件</p>`, username, username, resetLink, resetLink)
-
-	return b.GetBaseTemplate(title, content, "保护您的账户安全")
-}
-
 func (b *EmailTemplateBuilder) GetPasswordResetVerificationCodeTemplate(username, verificationCode string) string {
 	title := "密码重置验证码"
 	content := fmt.Sprintf(`<h2>🔐 您的密码重置验证码</h2>
@@ -421,89 +379,6 @@ func (b *EmailTemplateBuilder) GetWelcomeTemplate(username, email, loginURL stri
 	return b.GetBaseTemplate(title, content, "期待为您提供优质服务")
 }
 
-func (b *EmailTemplateBuilder) GetUserCreatedTemplate(username, email, password, expireTime string, deviceLimit int) string {
-	title := "账户创建通知"
-	loginURL := fmt.Sprintf("%s/login", b.getBaseURL())
-
-	expireDisplay := expireTime
-	if expireTime == "" || expireTime == "未设置" {
-		expireDisplay = "未设置"
-	}
-
-	content := fmt.Sprintf(`<h2>您的账户已创建</h2>
-            <p>亲爱的 %s，</p>
-            <p>管理员已为您创建账户，以下是您的账户信息：</p>
-            <div class="info-box">
-                <h3>📋 账户信息</h3>
-                <table class="info-table">
-                    <tr><th>用户账号</th><td><strong>%s</strong></td></tr>
-                    <tr><th>注册邮箱</th><td>%s</td></tr>
-                    <tr><th>登录密码</th><td style="color: #667eea; font-weight: bold; font-size: 16px;">%s</td></tr>
-                    <tr><th>登录地址</th><td><a href="%s" style="color: #667eea; text-decoration: none;">%s</a></td></tr>
-                </table>
-            </div>
-            <div class="success-box">
-                <h3>📡 服务信息</h3>
-                <table class="info-table">
-                    <tr><th>有效期</th><td style="color: #27ae60; font-weight: bold;">%s</td></tr>
-                    <tr><th>允许最大设备数</th><td style="color: #27ae60; font-weight: bold;">%d 台设备</td></tr>
-                </table>
-            </div>
-            <div class="warning-box">
-                <h3>⚠️ 重要提示</h3>
-                <ul>
-                    <li>请妥善保管您的登录密码，建议您登录后及时修改密码</li>
-                    <li>为了账户安全，建议设置强密码，包含字母、数字和特殊字符</li>
-                    <li>不要将密码泄露给他人，避免账户被盗用</li>
-                    <li>服务到期时间为：<strong>%s</strong></li>
-                    <li>您最多可以同时使用 <strong>%d 台设备</strong>连接服务</li>
-                </ul>
-            </div>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="%s" class="btn">立即登录</a>
-            </div>`, username, username, email, password, loginURL, loginURL, expireDisplay, deviceLimit, expireDisplay, deviceLimit, loginURL)
-
-	return b.GetBaseTemplate(title, content, "期待为您提供优质服务")
-}
-
-func (b *EmailTemplateBuilder) GetPasswordChangedTemplate(username, changeTime, loginURL string) string {
-	title := "密码修改成功"
-	content := fmt.Sprintf(`<h2>您的密码已修改</h2>
-            <p>亲爱的 %s，</p>
-            <p>您的账户密码已成功修改。如果这不是您本人的操作，请立即联系客服。</p>
-            <div class="info-box">
-                <h3>📋 修改信息</h3>
-                <table class="info-table">
-                    <tr><th>用户账号</th><td><strong>%s</strong></td></tr>
-                    <tr><th>修改时间</th><td>%s</td></tr>
-                    <tr><th>修改状态</th><td style="color: #27ae60; font-weight: bold;">✅ 修改成功</td></tr>
-                </table>
-            </div>
-            <div class="warning-box">
-                <h3>⚠️ 安全提醒</h3>
-                <ul>
-                    <li>如果这不是您本人的操作，请立即登录账户修改密码</li>
-                    <li>建议定期更换密码以确保账户安全</li>
-                    <li>不要使用过于简单的密码，如"123456"、"password"等</li>
-                    <li>如发现账户异常，请及时联系客服</li>
-                </ul>
-            </div>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="%s" class="btn">立即登录</a>
-            </div>
-            <div class="info-box">
-                <p><strong>💡 温馨提示：</strong></p>
-                <ul>
-                    <li>新密码已立即生效，请使用新密码登录</li>
-                    <li>建议设置强密码，包含字母、数字和特殊字符</li>
-                    <li>妥善保管您的账户信息，不要泄露给他人</li>
-                </ul>
-            </div>
-            <p style="text-align: center; color: #666; font-size: 14px;">如有任何问题，请随时联系我们的客服团队</p>`, username, username, changeTime, loginURL)
-
-	return b.GetBaseTemplate(title, content, "保护您的账户安全")
-}
-
 func (b *EmailTemplateBuilder) GetSubscriptionResetTemplate(username, universalURL, clashURL, expireTime, resetTime, resetReason string) string {
 	title := "订阅重置通知"
 
@@ -593,49 +468,6 @@ func (b *EmailTemplateBuilder) GetAccountDeletionTemplate(username, deletionDate
 	return b.GetBaseTemplate(title, content, "感谢您曾经选择我们的服务")
 }
 
-func (b *EmailTemplateBuilder) GetAccountDeletionWarningTemplate(username, email, lastLogin string, daysUntilDeletion int) string {
-	title := "账号删除提醒"
-	baseURL := b.getBaseURL()
-	loginURL := fmt.Sprintf("%s/login", baseURL)
-
-	content := fmt.Sprintf(`<h2>⚠️ 账号删除提醒</h2>
-            <p>亲爱的 %s，</p>
-            <p>我们注意到您的账号已经<strong>30天未登录</strong>，且<strong>没有有效的付费套餐</strong>。</p>
-            <div class="warning-box">
-                <h3>📋 账号状态</h3>
-                <table class="info-table">
-                    <tr><th>用户账号</th><td><strong>%s</strong></td></tr>
-                    <tr><th>注册邮箱</th><td>%s</td></tr>
-                    <tr><th>最后登录</th><td>%s</td></tr>
-                    <tr><th>订阅状态</th><td style="color: #e74c3c; font-weight: bold;">无有效套餐</td></tr>
-                </table>
-            </div>
-            <div class="warning-box">
-                <h3>⚠️ 重要通知</h3>
-                <p>根据我们的账号管理政策，您的账号将在<strong style="color: #e74c3c;">%d天后</strong>被自动删除。</p>
-                <p>如果您希望保留账号，请：</p>
-                <ol style="line-height: 2;">
-                    <li>立即登录账号（<a href="%s">点击登录</a>）</li>
-                    <li>购买并激活有效的服务套餐</li>
-                    <li>账号将自动保留</li>
-                </ol>
-            </div>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="%s" class="btn">立即登录</a>
-            </div>
-            <div class="info-box">
-                <p><strong>💡 温馨提示：</strong></p>
-                <ul>
-                    <li>账号删除后，所有数据将无法恢复</li>
-                    <li>包括订阅记录、订单记录、设备记录等</li>
-                    <li>如有任何疑问，请及时联系客服</li>
-                </ul>
-            </div>
-            <p style="text-align: center; color: #666; font-size: 14px;">如有任何问题，请随时联系我们的客服团队</p>`, username, username, email, lastLogin, daysUntilDeletion, loginURL, loginURL)
-
-	return b.GetBaseTemplate(title, content, "请及时登录以保留您的账号")
-}
-
 func (b *EmailTemplateBuilder) GetExpirationReminderTemplate(username, packageName, expireDate string, remainingDays, deviceLimit, currentDevices int, isExpired bool) string {
 	title := "订阅已到期"
 	if !isExpired {
@@ -720,55 +552,6 @@ func (b *EmailTemplateBuilder) GetExpirationReminderTemplate(username, packageNa
             <p style="text-align: center; color: #666; font-size: 14px;">如有任何问题，请随时联系我们的客服团队</p>`, headerContent, username, packageName, expireDate, remainingDaysRow, deviceLimit, currentDevices, deviceLimit, warningBox, baseURL, buttonText)
 
 	return b.GetBaseTemplate(title, content, "我们期待继续为您服务")
-}
-
-func (b *EmailTemplateBuilder) GetRenewalConfirmationTemplate(username, packageName, oldExpiryDate, newExpiryDate, renewalDate string, amount float64) string {
-	title := "续费成功"
-	baseURL := b.getBaseURL()
-
-	content := fmt.Sprintf(`<h2>🎉 续费成功！</h2>
-            <p>亲爱的用户 <strong>%s</strong>，</p>
-            <p>恭喜！您的服务续费已成功完成，服务时间已自动延长。</p>
-            <div class="success-box">
-                <h3>✅ 续费详情</h3>
-                <table class="info-table">
-                    <tr><th>套餐名称</th><td><strong>%s</strong></td></tr>
-                    <tr><th>原到期时间</th><td style="color: #999; text-decoration: line-through;">%s</td></tr>
-                    <tr><th>新到期时间</th><td style="color: #27ae60; font-weight: bold; font-size: 16px;">%s</td></tr>
-                    <tr><th>续费金额</th><td style="color: #e74c3c; font-weight: bold;">¥%.2f</td></tr>
-                    <tr><th>续费时间</th><td>%s</td></tr>
-                </table>
-            </div>
-            <div class="info-box">
-                <p><strong>📋 服务说明：</strong></p>
-                <ul>
-                    <li>✅ 您的服务已成功续费，可立即继续使用</li>
-                    <li>✅ 订阅配置地址保持不变，无需重新配置</li>
-                    <li>✅ 所有客户端配置将继续正常工作</li>
-                    <li>💡 建议定期更新订阅配置以获取最新节点信息</li>
-                </ul>
-            </div>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="%s/dashboard" class="btn">查看订阅详情</a>
-            </div>
-            <p style="text-align: center; color: #666; font-size: 14px;">感谢您的续费，祝您使用愉快！</p>`, username, packageName, oldExpiryDate, newExpiryDate, amount, renewalDate, baseURL)
-
-	return b.GetBaseTemplate(title, content, "开启您的专属网络体验")
-}
-
-func (b *EmailTemplateBuilder) GetMarketingEmailTemplate(title, content string) string {
-	baseURL := b.getBaseURL()
-
-	emailContent := fmt.Sprintf(`<h2>%s</h2>
-            <div class="info-box">
-                <div style="line-height: 1.8; color: #555;">%s</div>
-            </div>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="%s/dashboard" class="btn">查看详情</a>
-            </div>
-            <p style="text-align: center; color: #666; font-size: 14px;">此邮件来自 网络服务</p>`, title, strings.ReplaceAll(content, "\n", "<br>"), baseURL)
-
-	return b.GetBaseTemplate(title, emailContent, "感谢您的关注")
 }
 
 func (b *EmailTemplateBuilder) GetBroadcastNotificationTemplate(title, content string) string {

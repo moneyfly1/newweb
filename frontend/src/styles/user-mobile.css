@@ -3,7 +3,7 @@
   :root {
     --user-mobile-gutter: 12px;
     --user-mobile-radius: 8px;
-    --user-mobile-control-height: 36px;
+    --user-mobile-control-height: 40px;
   }
 
   .user-mobile-content {
@@ -165,7 +165,7 @@
   .user-mobile-content .mobile-card .card-actions .n-button {
     width: 100%;
     min-width: 0;
-    min-height: 34px;
+    min-height: 40px;
     border-radius: 6px !important;
     box-shadow: none !important;
   }

@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme="naiveTheme" :theme-overrides="appStore.themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
+  <n-config-provider :theme-overrides="appStore.themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
     <n-message-provider>
       <n-dialog-provider>
         <n-notification-provider>
@@ -14,12 +14,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
-import { zhCN, dateZhCN, darkTheme } from 'naive-ui'
+import { zhCN, dateZhCN } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { getPublicConfig } from '@/api/common'
 
 const appStore = useAppStore()
-const naiveTheme = computed(() => appStore.isDark ? darkTheme : null)
 
 onMounted(() => {
   appStore.initTheme()

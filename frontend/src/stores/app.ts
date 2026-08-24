@@ -223,8 +223,21 @@ function buildNaiveOverrides(config: ThemeConfig): GlobalThemeOverrides {
   }
 }
 
+// 粗略判断 hex 背景色是否为暗色（midnight 等暗色主题）
+function isDarkBackground(bg: string): boolean {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(bg)
+  if (!m) return false
+  const n = parseInt(m[1], 16)
+  const r = (n >> 16) & 0xff
+  const g = (n >> 8) & 0xff
+  const b = n & 0xff
+  // 感知亮度（YIQ）
+  return (r * 299 + g * 587 + b * 114) / 1000 < 128
+}
+
 function applyCSSVariables(config: ThemeConfig) {
   const root = document.documentElement
+  const dark = isDarkBackground(config.bg)
   const vars: Record<string, string> = {
     '--primary-color': config.primary,
     '--success-color': config.success,
@@ -248,12 +261,29 @@ function applyCSSVariables(config: ThemeConfig) {
     '--radius-sm': '6px',
     '--radius-md': '8px',
     '--radius-lg': '12px',
+    // 统一品牌渐变（此前 10+ 文件各自硬编码 #667eea→#764ba2 等，暗色主题下刺眼）
+    '--brand-gradient': dark
+      ? 'linear-gradient(135deg, #4c1d95 0%, #6d28d9 100%)'
+      : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
   }
   for (const [k, v] of Object.entries(vars)) {
     root.style.setProperty(k, v)
   }
   document.body.style.backgroundColor = config.bgPage
   document.body.style.color = config.text
+  applyThemeColor(config)
+}
+
+// 动态状态栏颜色（移动端浏览器/WebApp，跟随主题明暗）
+function applyThemeColor(config: ThemeConfig) {
+  const dark = isDarkBackground(config.bg)
+  let meta = document.head.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.setAttribute('name', 'theme-color')
+    document.head.appendChild(meta)
+  }
+  meta.setAttribute('content', dark ? config.bg : config.bgPage)
 }
 
 export const useAppStore = defineStore('app', () => {

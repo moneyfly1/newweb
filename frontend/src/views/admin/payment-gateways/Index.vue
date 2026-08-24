@@ -125,4 +125,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
+@media (max-width: 767px) {
+  .payment-gateways-container { padding: 8px; }
+  .payment-gateways-container .n-card { border-radius: 14px; }
+  .payment-gateways-container :deep(.n-data-table) { font-size: 13px; }
+}
 </style>

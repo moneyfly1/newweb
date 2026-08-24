@@ -28,8 +28,6 @@
           :row-key="(row: any) => row.id"
           :checked-row-keys="checkedRowKeys"
           @update:checked-row-keys="(keys: any) => { checkedRowKeys = keys }"
-          @update:page="(p: number) => { pagination.page = p; loadCodes() }"
-          @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; loadCodes() }"
           @update:sorter="handleSorterChange"
         />
       </template>

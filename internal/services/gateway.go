@@ -2,8 +2,6 @@ package services
 
 import (
 	"fmt"
-
-	"cboard/v2/internal/utils"
 )
 
 // PaymentGateway 支付网关接口
@@ -36,20 +34,7 @@ type BasePaymentConfig struct {
 	IsProduction bool
 }
 
-// GetPaymentSettings 获取支付配置（公共函数）
-func GetPaymentSettings(prefix string, keys ...string) map[string]string {
-	fullKeys := make([]string, len(keys))
-	for i, key := range keys {
-		fullKeys[i] = prefix + key
-	}
-	return utils.GetSettings(fullKeys...)
-}
 
-// IsPaymentEnabled 检查支付方式是否启用
-func IsPaymentEnabled(enabledKey string) bool {
-	value := utils.GetSetting(enabledKey)
-	return value == "true" || value == "1"
-}
 
 // ValidatePaymentConfig 验证支付配置是否完整
 func ValidatePaymentConfig(configs map[string]string, requiredKeys []string) error {

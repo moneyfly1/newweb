@@ -188,6 +188,7 @@ const loadTicket = async () => {
 }
 
 const handleReply = async () => {
+  if (replying.value) return // 防 Ctrl+Enter 快速双发
   if (!replyContent.value.trim()) {
     message.warning('请输入回复内容')
     return
@@ -281,7 +282,7 @@ onMounted(() => {
 }
 
 .meta-label {
-  color: #999;
+  color: var(--text-color-secondary);
   font-size: 14px;
 }
 
@@ -330,8 +331,8 @@ onMounted(() => {
 }
 
 .message-wrapper.admin .message-bubble {
-  background: #f5f5f5;
-  color: #333;
+  background: var(--bg-page-color);
+  color: var(--text-color);
 }
 
 .message-header {
@@ -365,7 +366,7 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   height: 200px;
-  color: #999;
+  color: var(--text-color-secondary);
   font-size: 14px;
 }
 

@@ -56,9 +56,19 @@
             </n-gi>
           </n-grid>
         </n-card>
+        <!-- 用户概览 -->
+        <n-card title="用户概览" :bordered="false" class="summary-card">
+          <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="16" :y-gap="16" class="summary-grid">
+            <n-gi><n-statistic label="总用户" :value="userStats.total_users || 0" /></n-gi>
+            <n-gi><n-statistic label="活跃用户" :value="userStats.active_users || 0" /></n-gi>
+            <n-gi><n-statistic label="今日新增" :value="userStats.today_new_users || 0" /></n-gi>
+            <n-gi><n-statistic label="付费用户" :value="userStats.paid_users || 0" /></n-gi>
+          </n-grid>
+        </n-card>
         <!-- Revenue Chart (bar visualization) -->
         <n-card title="收入趋势" :bordered="false">
-          <div v-if="revenueChart.length > 0">
+          <revenue-trend-chart v-if="revenueChart.length > 0 && !appStore.isMobile" :data="revenueChart" />
+          <div v-if="revenueChart.length > 0 && appStore.isMobile">
             <div v-for="(item, index) in revenueChart" :key="index" class="chart-row">
               <div class="chart-meta">
                 <div class="chart-label">{{ item.date }}</div>
@@ -78,7 +88,7 @@
               </div>
             </div>
             <n-space class="chart-legend" style="margin-top: 12px" :size="16">
-              <span class="legend"><span class="legend-dot" style="background: #18a058"></span>收入</span>
+              <span class="legend"><span class="legend-dot" style="background: var(--success-color)"></span>收入</span>
               <span class="legend"><span class="legend-dot" style="background: #2080f0"></span>充值</span>
             </n-space>
           </div>
@@ -111,6 +121,7 @@
           <!-- Package Stats -->
           <n-gi>
             <n-card title="套餐销售排行" :bordered="false">
+              <payment-pie-chart v-if="packageStats.length > 0 && !appStore.isMobile" :data="packagePieData" />
               <div v-if="packageStats.length > 0 && appStore.isMobile" class="mobile-stat-list">
                 <div v-for="(item, index) in packageStats" :key="index" class="mobile-stat-item">
                   <div class="mobile-stat-main">{{ item.package_name }}</div>
@@ -177,6 +188,79 @@
             <n-empty v-else description="暂无地区数据" style="padding: 40px 0" />
           </n-spin>
         </n-card>
+
+        <!-- 支付分析（此前后端已实现、前端未接入） -->
+        <n-card title="支付分析" :bordered="false">
+          <template #header-extra>
+            <n-radio-group v-model:value="payDays" size="small" @update:value="loadPaymentAnalysis">
+              <n-radio-button value="7">7天</n-radio-button>
+              <n-radio-button value="30">30天</n-radio-button>
+              <n-radio-button value="90">90天</n-radio-button>
+            </n-radio-group>
+          </template>
+          <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="16" :y-gap="16">
+            <n-gi>
+              <n-card title="支付方式统计" size="small" :bordered="false">
+                <div v-if="payMethodStats.length > 0" class="pay-stats-wrap">
+                  <!-- 桌面端：饼图占比 -->
+                  <payment-pie-chart v-if="!appStore.isMobile" :data="payPieData" />
+                  <div class="method-list">
+                    <div v-for="(item, index) in payMethodStats" :key="index" class="method-item">
+                      <div class="method-info">
+                        <span class="method-name">{{ paymentMethodText(item.payment_method) }}</span>
+                        <span class="method-detail">{{ item.order_count }} 笔 / {{ formatCurrency(item.total_amount) }} · 成功率 {{ item.success_rate ? item.success_rate.toFixed(1) : '0' }}%</span>
+                      </div>
+                      <n-progress
+                        type="line"
+                        :percentage="Math.round(((item.total_amount || 0) / payMaxAmount) * 100)"
+                        :show-indicator="false"
+                        :height="8"
+                        :border-radius="4"
+                        :color="getColor(index)"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <n-empty v-else description="暂无支付数据" />
+              </n-card>
+            </n-gi>
+            <n-gi>
+              <n-card title="支付方式对比" size="small" :bordered="false">
+                <div v-if="payComparisons.length > 0">
+                  <n-data-table
+                    :columns="payCompareColumns"
+                    :data="payComparisons"
+                    :bordered="false"
+                    size="small"
+                    :pagination="false"
+                    :max-height="260"
+                  />
+                </div>
+                <n-empty v-else description="暂无对比数据" />
+              </n-card>
+            </n-gi>
+          </n-grid>
+          <n-divider style="margin: 12px 0" />
+          <div class="hourly-header">
+            <span class="hourly-title">订单高峰时段</span>
+            <n-select
+              v-model:value="payAnalysisMethod"
+              :options="payAnalysisOptions"
+              size="small"
+              clearable
+              placeholder="选择支付方式"
+              style="width: 160px"
+              @update:value="loadPayAnalysis"
+            />
+          </div>
+          <div v-if="payHourly.length > 0" class="hourly-grid">
+            <div v-for="h in payHourly" :key="h.hour" class="hourly-item" :title="`${h.hour}时：${h.order_count} 单 · 成功率 ${h.success_rate ? h.success_rate.toFixed(1) : '0'}%`">
+              <div class="hourly-bar" :style="{ height: hourlyHeight(h.order_count) }"></div>
+              <span class="hourly-label">{{ h.hour }}时</span>
+            </div>
+          </div>
+          <n-empty v-else-if="payAnalysisLoaded" description="该时段无订单" style="padding: 20px 0" />
+        </n-card>
       </n-space>
     </n-spin>
   </div>
@@ -185,9 +269,11 @@
 <script setup lang="ts">
 import { ref, computed, h, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
-import { getFinancialReport, exportFinancialReport, getRegionStats } from '@/api/admin'
+import { getFinancialReport, exportFinancialReport, getRegionStats, getPaymentStats, getPaymentMethodComparison, getPaymentAnalysis, getAdminUserStats } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
+import PaymentPieChart from '../components/PaymentPieChart.vue'
+import RevenueTrendChart from '../components/RevenueTrendChart.vue'
 
 const appStore = useAppStore()
 const message = useMessage()
@@ -205,6 +291,10 @@ const summary = ref({
   new_users: 0, new_subscriptions: 0,
 })
 const revenueChart = ref<any[]>([])
+const userStats = ref<any>({})
+const loadUserStats = async () => {
+  try { const res: any = await getAdminUserStats(); userStats.value = res.data || {} } catch {}
+}
 const paymentMethodStats = ref<any[]>([])
 const packageStats = ref<any[]>([])
 const topUsers = ref<any[]>([])
@@ -224,7 +314,7 @@ const dateShortcuts = {
     return [e - 89 * 86400000, e] as [number, number]
   },
 }
-const colors = ['#18a058', '#2080f0', '#f0a020', '#d03050', '#8a2be2', '#36ad6a', '#4098fc', '#f2c97d', '#e88080', '#a78bfa']
+const colors = ['var(--success-color)', '#2080f0', 'var(--warning-color)', 'var(--danger-color)', '#8a2be2', '#36ad6a', '#4098fc', '#f2c97d', '#e88080', '#a78bfa']
 const getColor = (index: number) => colors[index % colors.length]
 
 const maxRevenue = computed(() => {
@@ -308,7 +398,7 @@ const handleExport = async () => {
   exporting.value = true
   try {
     const res = await exportFinancialReport(buildParams())
-    const blob = new Blob([res as any], { type: 'text/csv;charset=utf-8' })
+    const blob = new Blob([res.data || res], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -323,7 +413,78 @@ const handleExport = async () => {
   }
 }
 
-onMounted(() => { loadFinancialReport() })
+// ===== 支付分析（后端已实现，前端接入）=====
+const payDays = ref('30')
+const payMethodStats = ref<any[]>([])
+const payComparisons = ref<any[]>([])
+const payHourly = ref<any[]>([])
+const payAnalysisMethod = ref<string | null>(null)
+const payAnalysisLoaded = ref(false)
+const payAnalysisOptions = computed(() => [
+  { label: '支付宝', value: 'alipay' },
+  { label: '易支付', value: 'epay' },
+  { label: '微信', value: 'wxpay' },
+  { label: 'Stripe', value: 'stripe' },
+  { label: '码支付', value: 'codepay' },
+  { label: '余额', value: 'balance' },
+])
+const hourlyHeight = (count: number) => {
+  const max = Math.max(1, ...payHourly.value.map((h: any) => h.order_count || 0))
+  return Math.max(4, Math.round(((count || 0) / max) * 80)) + 'px'
+}
+const loadPayAnalysis = async () => {
+  if (!payAnalysisMethod.value) { payHourly.value = []; payAnalysisLoaded.value = false; return }
+  try {
+    const res: any = await getPaymentAnalysis({ days: payDays.value, payment_method: payAnalysisMethod.value })
+    payHourly.value = (res.data?.hourly_stats || []).filter((h: any) => h.hour >= 0)
+  } catch { payHourly.value = [] }
+  payAnalysisLoaded.value = true
+}
+const packagePieData = computed(() =>
+  packageStats.value
+    .filter((s: any) => Number(s.amount) > 0)
+    .map((s: any) => ({ name: s.package_name || '未知', value: Number(s.amount) || 0 }))
+)
+const payMaxAmount = computed(() => Math.max(1, ...payMethodStats.value.map((s: any) => Number(s.total_amount) || 0)))
+const payPieData = computed(() =>
+  payMethodStats.value
+    .filter((s: any) => Number(s.total_amount) > 0)
+    .map((s: any) => ({ name: paymentMethodText(s.payment_method), value: Number(s.total_amount) || 0 }))
+)
+
+const paymentMethodText = (m: string) => {
+  const map: Record<string, string> = {
+    alipay: '支付宝', epay: '易支付', wxpay: '微信', qqpay: 'QQ', codepay: '码支付',
+    codepay_alipay: '码支付-支付宝', codepay_wxpay: '码支付-微信', stripe: 'Stripe',
+    balance: '余额', admin_manual: '管理员确认', crypto: '加密货币', recharge: '充值',
+  }
+  return map[m] || m || '未知'
+}
+
+const payCompareColumns = [
+  { title: '方式', key: 'payment_method', width: 90, render: (row: any) => paymentMethodText(row.payment_method) },
+  { title: '总单', key: 'total_orders', width: 60 },
+  { title: '成功', key: 'success_orders', width: 60 },
+  { title: '成功率', key: 'success_rate', width: 75, render: (row: any) => (row.success_rate ? row.success_rate.toFixed(1) : '0') + '%' },
+  { title: '金额', key: 'total_amount', width: 90, render: (row: any) => formatCurrency(row.total_amount) },
+  { title: '均时(分)', key: 'average_time', width: 80, render: (row: any) => (row.average_time ? Number(row.average_time).toFixed(1) : '-') },
+]
+
+const loadPaymentAnalysis = async () => {
+  const [statsRes, compRes] = await Promise.allSettled([
+    getPaymentStats({ days: payDays.value }),
+    getPaymentMethodComparison({ days: payDays.value }),
+  ])
+  if (statsRes.status === 'fulfilled') payMethodStats.value = (statsRes.value as any).data?.method_stats || []
+  if (compRes.status === 'fulfilled') payComparisons.value = (compRes.value as any).data?.comparisons || []
+  if (payAnalysisMethod.value) loadPayAnalysis()
+}
+
+onMounted(() => {
+  loadFinancialReport()
+  loadPaymentAnalysis()
+  loadUserStats()
+})
 </script>
 
 <style scoped>
@@ -336,23 +497,23 @@ onMounted(() => { loadFinancialReport() })
 .filter-range :deep(.n-date-picker) { width: 100%; }
 .chart-row { display: flex; align-items: center; margin-bottom: 8px; gap: 8px; }
 .chart-meta { display: flex; align-items: center; gap: 8px; width: 158px; flex-shrink: 0; }
-.chart-label { width: 90px; font-size: 13px; color: #666; text-align: right; flex-shrink: 0; }
+.chart-label { width: 90px; font-size: 13px; color: var(--text-color-secondary); text-align: right; flex-shrink: 0; }
 .chart-bars { flex: 1; min-width: 0; }
 .bar-group { margin-bottom: 2px; }
 .bar {
   height: 18px; border-radius: 4px; display: flex; align-items: center;
   padding: 0 6px; min-width: 0; transition: width 0.3s;
 }
-.revenue-bar { background: #18a058; }
+.revenue-bar { background: var(--success-color); }
 .recharge-bar { background: #2080f0; }
 .bar-text { color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; }
-.chart-orders { width: 60px; font-size: 12px; color: #999; text-align: right; flex-shrink: 0; }
-.legend { display: flex; align-items: center; font-size: 13px; color: #666; }
+.chart-orders { width: 60px; font-size: 12px; color: var(--text-color-secondary); text-align: right; flex-shrink: 0; }
+.legend { display: flex; align-items: center; font-size: 13px; color: var(--text-color-secondary); }
 .legend-dot { width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; display: inline-block; }
 .method-item { margin-bottom: 12px; }
 .method-info { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px; }
 .method-name { font-weight: 500; }
-.method-detail { color: #999; font-size: 13px; }
+.method-detail { color: var(--text-color-secondary); font-size: 13px; }
 .region-list-compact { max-height: 320px; overflow-y: auto; }
 .region-list-compact.expanded { max-height: none; }
 .region-row-compact {
@@ -360,14 +521,14 @@ onMounted(() => { loadFinancialReport() })
   font-size: 13px;
 }
 .region-rank-sm {
-  width: 20px; height: 20px; border-radius: 50%; background: #f0f0f0;
+  width: 20px; height: 20px; border-radius: 50%; background: var(--bg-page-color);
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 600; color: #666; flex-shrink: 0;
+  font-size: 11px; font-weight: 600; color: var(--text-color-secondary); flex-shrink: 0;
 }
-.region-detail { flex: 0 0 180px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; }
-.region-bar-wrap { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; min-width: 40px; }
+.region-detail { flex: 0 0 180px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-color); }
+.region-bar-wrap { flex: 1; height: 8px; background: var(--bg-page-color); border-radius: 4px; min-width: 40px; }
 .region-bar { height: 8px; border-radius: 4px; display: block; transition: width 0.3s; }
-.region-count-sm { width: 40px; text-align: right; font-weight: 600; color: #333; flex-shrink: 0; font-size: 13px; }
+.region-count-sm { width: 40px; text-align: right; font-weight: 600; color: var(--text-color); flex-shrink: 0; font-size: 13px; }
 @media (max-width: 767px) {
   .stats-container { padding: 8px; }
   .filters-toolbar { flex-direction: column; align-items: stretch !important; gap: 12px; }
@@ -393,9 +554,19 @@ onMounted(() => { loadFinancialReport() })
   .region-row-compact { gap: 4px; padding: 4px 0; }
   .region-rank-sm { width: 16px; height: 16px; font-size: 10px; }
   .mobile-stat-list { display: flex; flex-direction: column; gap: 10px; }
-  .mobile-stat-item { padding: 12px; border: 1px solid #e8e8e8; border-radius: 10px; background: #fff; }
-  .mobile-stat-main { font-size: 14px; font-weight: 600; color: #333; }
-  .mobile-stat-sub { margin-top: 4px; font-size: 12px; color: #999; }
-  .mobile-stat-meta { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #666; }
+  .mobile-stat-item { padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-color); }
+  .mobile-stat-main { font-size: 14px; font-weight: 600; color: var(--text-color); }
+  .mobile-stat-sub { margin-top: 4px; font-size: 12px; color: var(--text-color-secondary); }
+  .mobile-stat-meta { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-color-secondary); }
 }
+
+.hourly-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.hourly-title { font-size: 14px; font-weight: 600; color: var(--text-color); }
+.hourly-grid { display: flex; align-items: flex-end; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+.hourly-item { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
+.hourly-bar { width: 14px; border-radius: 4px 4px 0 0; background: var(--primary-color, #4f46e5); opacity: 0.75; min-height: 4px; transition: height 0.3s; }
+.hourly-label { font-size: 10px; color: var(--text-color-secondary, #888); }
+
+.pay-stats-wrap { display: flex; flex-direction: column; gap: 8px; }
+.pay-stats-wrap .method-list { display: flex; flex-direction: column; gap: 10px; }
 </style>

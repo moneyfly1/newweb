@@ -120,7 +120,7 @@ async function handleLogin() {
   width: 100%;
   max-width: 420px;
   background: var(--bg-color, #fff);
-  border-radius: 8px;
+  border-radius: 20px;
   padding: 48px 40px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
@@ -136,7 +136,7 @@ async function handleLogin() {
 .admin-logo {
   width: 64px;
   height: 64px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   border-radius: 16px;
   display: inline-flex;
   align-items: center;
@@ -155,7 +155,7 @@ async function handleLogin() {
 }
 
 .subtitle {
-  color: #999;
+  color: var(--text-color-secondary);
   font-size: 15px;
 }
 

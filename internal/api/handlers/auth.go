@@ -197,12 +197,20 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	// 更新邀请码使用次数
+	// 更新邀请码使用次数（条件更新抢占：仅当未超上限才递增，
+	// SQLite 下 FOR UPDATE 无效，此条件更新保证并发注册不会超发）
 	if req.InviteCode != "" {
-		if err := tx.Model(&models.InviteCode{}).Where("UPPER(code) = UPPER(?)", req.InviteCode).
-			UpdateColumn("used_count", gorm.Expr("used_count + 1")).Error; err != nil {
+		upd := tx.Model(&models.InviteCode{}).
+			Where("UPPER(code) = UPPER(?) AND (max_uses IS NULL OR used_count < max_uses)", req.InviteCode).
+			UpdateColumn("used_count", gorm.Expr("used_count + 1"))
+		if upd.Error != nil {
 			tx.Rollback()
 			utils.InternalError(c, "更新邀请码失败")
+			return
+		}
+		if upd.RowsAffected == 0 {
+			tx.Rollback()
+			utils.BadRequest(c, "邀请码已达到最大使用次数")
 			return
 		}
 	}
@@ -366,19 +374,21 @@ func Login(c *gin.Context) {
 	clientIP := utils.GetRealClientIP(c)
 	userAgent := c.GetHeader("User-Agent")
 
-	// 检查登录锁定（基于IP+用户名）
+	// 检查登录锁定（基于IP+用户名，防止攻击者锁死他人账号）
 	maxAttempts := utils.GetIntSetting("max_login_attempts", 5)
 	lockoutMinutes := utils.GetIntSetting("login_lockout_minutes", 30)
 	if maxAttempts > 0 {
 		var failCount int64
 		since := time.Now().Add(-time.Duration(lockoutMinutes) * time.Minute)
 		db.Model(&models.LoginAttempt{}).
-			Where("username = ? AND success = 0 AND created_at > ?", req.Email, since).
+			Where("username = ? AND ip_address = ? AND success = 0 AND created_at > ?", req.Email, clientIP, since).
 			Count(&failCount)
+		// 仅当同 IP 对该账号失败超限才锁定——锁定的是攻击来源而非账号本身，
+		// 防止未认证攻击者对任意邮箱（含管理员）发起账号 DoS。
 		if failCount >= int64(maxAttempts) {
 			// 查询最早的失败记录，计算准确的解锁剩余时间
 			var earliest models.LoginAttempt
-			db.Where("username = ? AND success = 0 AND created_at > ?", req.Email, since).
+			db.Where("username = ? AND ip_address = ? AND success = 0 AND created_at > ?", req.Email, clientIP, since).
 				Order("created_at ASC").First(&earliest)
 			unlockAt := earliest.CreatedAt.Add(time.Duration(lockoutMinutes) * time.Minute)
 			retryAfterSec := int(time.Until(unlockAt).Seconds())
@@ -565,11 +575,21 @@ func RefreshToken(c *gin.Context) {
 		return
 	}
 
+	// token 版本校验：改密/重置后旧 refresh token 同样失效
+	if claims.Ver != user.TokenVersion {
+		utils.Unauthorized(c, "Refresh Token 已失效")
+		return
+	}
+
 	// 将旧的 refresh token 加入黑名单（防止重用）
 	db := database.GetDB()
 	expiresAt := time.Now().Add(time.Duration(config.AppConfig.RefreshTokenExpireDays) * 24 * time.Hour)
 	if err := models.AddToBlacklist(db, tokenHash, user.ID, expiresAt); err != nil {
+		// 插入失败（通常是唯一索引冲突 = 并发重用同一 refresh token 已被另一请求消费）
+		// 必须拒绝本次刷新，防止一次轮换签发两个有效令牌（令牌永续）
 		utils.SysError("auth", fmt.Sprintf("refresh token 加入黑名单失败: %v", err))
+		utils.Unauthorized(c, "Refresh Token 已失效")
+		return
 	}
 
 	accessToken, err := generateToken(user.ID, "access", time.Duration(config.AppConfig.AccessTokenExpireMinutes)*time.Minute)
@@ -599,6 +619,9 @@ func SendVerificationCode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	// 统一小写，与 Register/ForgotPassword/ResetPassword 的查询口径一致，
+	// 否则含大写字母的邮箱验证码永远无法通过校验
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if req.Purpose == "" {
 		req.Purpose = "register"
 	}
@@ -643,10 +666,19 @@ func VerifyCode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	clientIP := utils.GetRealClientIP(c)
+
+	// 防爆破：该邮箱近 30 分钟失败次数超限则锁定（按邮箱维度，防分布式 IP 爆破）
+	if locked, mins := checkVerificationLocked(req.Email, "register"); locked {
+		utils.TooManyRequests(c, fmt.Sprintf("验证失败次数过多，请 %d 分钟后再试", mins))
+		return
+	}
 
 	var vc models.VerificationCode
 	if err := database.GetDB().Where("email = ? AND code = ? AND used = 0 AND expires_at > ?",
 		req.Email, req.Code, time.Now()).Order("created_at DESC").First(&vc).Error; err != nil {
+		recordVerificationAttempt(req.Email, "register", clientIP, false)
 		utils.BadRequest(c, "验证码无效或已过期")
 		return
 	}
@@ -656,6 +688,7 @@ func VerifyCode(c *gin.Context) {
 		utils.InternalError(c, "更新验证码状态失败")
 		return
 	}
+	recordVerificationAttempt(req.Email, "register", clientIP, true)
 	utils.SuccessMessage(c, "验证成功")
 }
 
@@ -721,12 +754,21 @@ func ResetPassword(c *gin.Context) {
 		utils.BadRequest(c, err.Error())
 		return
 	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	clientIP := utils.GetRealClientIP(c)
+
+	// 防爆破：重置密码验证码按邮箱维度锁定（防分布式 IP 爆破）
+	if locked, mins := checkVerificationLocked(req.Email, "reset_password"); locked {
+		utils.TooManyRequests(c, fmt.Sprintf("验证失败次数过多，请 %d 分钟后再试", mins))
+		return
+	}
 
 	db := database.GetDB()
 
 	var vc models.VerificationCode
 	if err := db.Where("email = ? AND code = ? AND purpose = ? AND used = 0 AND expires_at > ?",
 		req.Email, req.Code, "reset_password", time.Now()).Order("created_at DESC").First(&vc).Error; err != nil {
+		recordVerificationAttempt(req.Email, "reset_password", clientIP, false)
 		utils.BadRequest(c, "验证码无效或已过期")
 		return
 	}
@@ -741,11 +783,16 @@ func ResetPassword(c *gin.Context) {
 		utils.InternalError(c, "更新密码失败")
 		return
 	}
+	// 自增 token 版本号，吊销重置前签发的全部 token
+	if err := db.Model(&models.User{}).Where("email = ?", req.Email).UpdateColumn("token_version", gorm.Expr("token_version + 1")).Error; err != nil {
+		utils.SysError("auth", fmt.Sprintf("更新 token 版本失败: email=%s err=%v", req.Email, err))
+	}
 	vc.MarkAsUsed()
 	if err := db.Save(&vc).Error; err != nil {
 		utils.InternalError(c, "更新验证码状态失败")
 		return
 	}
+	recordVerificationAttempt(req.Email, "reset_password", clientIP, true)
 
 	utils.SuccessMessage(c, "密码重置成功")
 }
@@ -829,9 +876,13 @@ func TelegramLogin(c *gin.Context) {
 
 // generateToken 生成 JWT Token
 func generateToken(userID uint, tokenType string, expiry time.Duration) (string, error) {
+	// 读取用户当前 token 版本号（改密/重置后自增，旧 token 失效）
+	var ver uint
+	database.GetDB().Model(&models.User{}).Where("id = ?", userID).Pluck("token_version", &ver)
 	claims := middleware.Claims{
 		UserID: userID,
 		Type:   tokenType,
+		Ver:    ver,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -839,4 +890,30 @@ func generateToken(userID uint, tokenType string, expiry time.Duration) (string,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(config.GetSecretKey()))
+}
+
+// recordVerificationAttempt 记录验证码校验尝试（成功/失败）
+func recordVerificationAttempt(email, purpose, ip string, success bool) {
+	db := database.GetDB()
+	attempt := models.VerificationAttempt{
+		Email: email, Purpose: purpose, IPAddress: &ip, Success: success,
+	}
+	if err := db.Create(&attempt).Error; err != nil {
+		utils.SysError("auth", fmt.Sprintf("记录验证码尝试失败: %v", err))
+	}
+}
+
+// checkVerificationLocked 检查该邮箱近 30 分钟内失败尝试是否超限（防爆破）
+func checkVerificationLocked(email, purpose string) (bool, int) {
+	maxAttempts := utils.GetIntSetting("max_login_attempts", 5)
+	lockoutMinutes := utils.GetIntSetting("login_lockout_minutes", 30)
+	since := time.Now().Add(-time.Duration(lockoutMinutes) * time.Minute)
+	var failCount int64
+	database.GetDB().Model(&models.VerificationAttempt{}).
+		Where("email = ? AND purpose = ? AND success = 0 AND created_at > ?", email, purpose, since).
+		Count(&failCount)
+	if int(failCount) >= maxAttempts {
+		return true, lockoutMinutes
+	}
+	return false, 0
 }

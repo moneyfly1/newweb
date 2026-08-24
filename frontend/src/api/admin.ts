@@ -2,9 +2,8 @@ import request from '@/utils/request'
 
 // Dashboard
 export const getAdminDashboard = () => request.get('/admin/dashboard')
-export const getAdminStats = () => request.get('/admin/stats')
-
-// Users
+export const getAdminUserStats = () => request.get('/admin/stats/users')
+export const clearLogs = (type: string) => request.delete(`/admin/logs/${type}`)
 export const listUsers = (params?: any) => request.get('/admin/users', { params })
 export const getUser = (id: number) => request.get(`/admin/users/${id}`)
 export const updateUser = (id: number, data: any) => request.put(`/admin/users/${id}`, data)
@@ -22,7 +21,6 @@ export const updateUserNotes = (userId: number, notes: string) => request.put(`/
 
 // Orders
 export const listAdminOrders = (params?: any) => request.get('/admin/orders', { params })
-export const getAdminOrder = (id: number) => request.get(`/admin/orders/${id}`)
 export const refundOrder = (id: number) => request.post(`/admin/orders/${id}/refund`)
 export const cancelOrder = (id: number) => request.post(`/admin/orders/${id}/cancel`)
 export const deleteOrder = (id: number) => request.delete(`/admin/orders/${id}`)
@@ -38,14 +36,12 @@ export const deletePackage = (id: number) => request.delete(`/admin/packages/${i
 
 // Nodes
 export const listAdminNodes = (params?: any) => request.get('/admin/nodes', { params })
-export const createNode = (data: any) => request.post('/admin/nodes', data)
 export const updateNode = (id: number, data: any) => request.put(`/admin/nodes/${id}`, data)
 export const deleteNode = (id: number) => request.delete(`/admin/nodes/${id}`)
 export const batchNodeAction = (data: { ids: number[], action: string, data?: any }) => request.post('/admin/nodes/batch-action', data)
 
 // Subscriptions
 export const listAdminSubscriptions = (params?: any) => request.get('/admin/subscriptions', { params })
-export const getAdminSubscription = (id: number) => request.get(`/admin/subscriptions/${id}`)
 export const resetAdminSubscription = (id: number) => request.post(`/admin/subscriptions/${id}/reset`)
 export const extendSubscription = (id: number, data: { days: number }) =>
   request.post(`/admin/subscriptions/${id}/extend`, data)
@@ -57,6 +53,8 @@ export const sendSubscriptionEmail = (id: number) =>
   request.post(`/admin/subscriptions/${id}/send-email`)
 export const setSubscriptionExpireTime = (id: number, data: { expire_time: string }) =>
   request.post(`/admin/subscriptions/${id}/set-expire`, data)
+export const clearSubscriptionDevices = (id: number) =>
+  request.post(`/admin/subscriptions/${id}/clear-devices`)
 export const deleteUserFull = (id: number) => request.delete(`/admin/users/${id}/full`)
 
 // Coupons
@@ -88,8 +86,6 @@ export const updateAnnouncement = (id: number, data: any) => request.put(`/admin
 export const deleteAnnouncement = (id: number) => request.delete(`/admin/announcements/${id}`)
 
 // Stats
-export const getRevenueStats = () => request.get('/admin/stats/revenue')
-export const getUserStats = () => request.get('/admin/stats/users')
 export const getRegionStats = () => request.get('/admin/stats/regions')
 export const getFinancialReport = (params?: any) => request.get('/admin/stats/financial', { params })
 export const exportFinancialReport = (params?: any) => request.get('/admin/stats/financial/export', { params, responseType: 'blob' })
@@ -132,7 +128,6 @@ export const batchAssignCustomNodes = (data: { ids: number[], user_ids: number[]
 export const importCustomNodeLinks = (data: { links: string }) => request.post('/admin/custom-nodes/import-links', data)
 export const batchDeleteCustomNodes = (data: { ids: number[] }) => request.post('/admin/custom-nodes/batch-delete', data)
 export const getCustomNodeLink = (id: number) => request.get(`/admin/custom-nodes/${id}/link`)
-export const getCustomNodeUsers = (id: number) => request.get(`/admin/custom-nodes/${id}/users`)
 export const getUserCustomNodes = (userId: number) => request.get(`/admin/users/${userId}/custom-nodes`)
 export const assignCustomNodeToUser = (userId: number, data: any) => request.post(`/admin/users/${userId}/custom-nodes`, data)
 export const unassignCustomNodeFromUser = (userId: number, nodeId: number) => request.delete(`/admin/users/${userId}/custom-nodes/${nodeId}`)
@@ -158,7 +153,6 @@ export const listBackups = () => request.get('/admin/backup')
 export const restoreBackup = (data: { path: string }) => request.post('/admin/backup/restore', data)
 export const listGitHubBackups = () => request.get('/admin/backup/github')
 export const restoreGitHubBackup = (data: { path: string, download_url: string }) => request.post('/admin/backup/restore-github', data)
-export const getUploadStatus = (taskId: string) => request.get(`/admin/backup/upload-status/${taskId}`)
 export const testGitHubConnection = (data?: any) => request.post('/admin/backup/test-github', data)
 export const updateGeoIPFiles = () => request.post('/admin/settings/update-geoip')
 export const cleanOldLogs = () => request.post('/admin/settings/clean-logs')
@@ -190,7 +184,6 @@ export const toggleAdminInviteCode = (id: number) => request.post(`/admin/invite
 
 // Payment Gateways
 export const listPaymentGateways = () => request.get('/admin/payment-gateways')
-export const getAvailablePaymentGateways = () => request.get('/admin/payment-gateways/available')
 export const getPaymentGateway = (type: string) => request.get(`/admin/payment-gateways/${type}`)
 export const testPaymentGateway = (type: string) => request.post(`/admin/payment-gateways/${type}/test`)
 

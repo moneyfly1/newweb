@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,8 +16,8 @@ import (
 
 func AdminListInviteCodes(c *gin.Context) {
 	db := database.GetDB()
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	p := utils.GetPagination(c)
+	page, pageSize := p.Page, p.PageSize
 	search := c.Query("search")
 	query := db.Model(&models.InviteCode{})
 	if search != "" {
@@ -108,8 +107,8 @@ func AdminToggleInviteCode(c *gin.Context) {
 
 func AdminListInviteRelations(c *gin.Context) {
 	db := database.GetDB()
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	p := utils.GetPagination(c)
+	page, pageSize := p.Page, p.PageSize
 	var total int64
 	db.Model(&models.InviteRelation{}).Count(&total)
 	var rels []models.InviteRelation

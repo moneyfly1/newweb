@@ -11,6 +11,11 @@ import (
 // ── Public config ──
 
 func GetPublicConfig(c *gin.Context) {
+	// 60s 内存缓存：公共配置高访问，避免每次查库
+	if cached := utils.GetPublicCache("public_config"); cached != nil {
+		utils.Success(c, cached)
+		return
+	}
 	db := database.GetDB()
 	var configs []models.SystemConfig
 	publicKeys := []string{
@@ -36,12 +41,19 @@ func GetPublicConfig(c *gin.Context) {
 	for _, cfg := range configs {
 		result[cfg.Key] = cfg.Value
 	}
+	utils.SetPublicCache("public_config", result)
 	utils.Success(c, result)
 }
 
 func ListPackages(c *gin.Context) {
+	// 60s 内存缓存
+	if cached := utils.GetPublicCache("public_packages"); cached != nil {
+		utils.Success(c, cached)
+		return
+	}
 	var packages []models.Package
 	database.GetDB().Where("is_active = ?", true).Order("sort_order ASC").Find(&packages)
+	utils.SetPublicCache("public_packages", packages)
 	utils.Success(c, packages)
 }
 

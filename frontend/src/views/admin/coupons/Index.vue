@@ -1,5 +1,11 @@
 <template>
-  <div class="coupons-container admin-page-shell">
+  <div class="coupons-container admin-page-shell" @touchstart.passive="pullTouchStart" @touchmove.passive="pullTouchMove" @touchend.passive="pullTouchEnd">
+    <transition name="fade">
+      <div v-if="pullDistance > 0 || pullRefreshing" class="pull-indicator" :style="{ transform: `translate(-50%, ${Math.min(pullDistance, 70) - 40}px)` }">
+        <n-spin v-if="pullRefreshing" size="small" />
+        <span v-else>{{ pullDistance >= 55 ? '释放刷新' : '下拉刷新' }}</span>
+      </div>
+    </transition>
     <n-card :title="appStore.isMobile ? undefined : '优惠券管理'" :bordered="false" class="admin-main-card">
       <template v-if="!appStore.isMobile" #header-extra>
         <n-button type="primary" @click="handleAdd">
@@ -20,7 +26,7 @@
 
       <!-- Batch operations -->
       <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-        <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+        <span style="color: var(--text-color-secondary)">已选择 {{ checkedRowKeys.length }} 项</span>
         <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
         <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
         <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
@@ -37,16 +43,14 @@
           :bordered="false"
           :row-key="(row) => row.id"
           :checked-row-keys="checkedRowKeys"
-          @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
-          @update:page="(p) => { pagination.page = p; fetchData() }"
-          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+          @update:checked-row-keys="(keys) => { checkedRowKeys.value = keys }"
           @update:sorter="handleSorterChange"
         />
       </template>
 
       <template v-else>
         <n-spin :show="loading">
-          <div v-if="tableData.length === 0" style="text-align: center; padding: 40px 0; color: #999;">
+          <div v-if="tableData.length === 0" style="text-align: center; padding: 40px 0; color: var(--text-color-secondary);">
             暂无数据
           </div>
           <div v-else class="mobile-card-list">
@@ -188,6 +192,8 @@ import { ref, reactive, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NTooltip, NSpin, useMessage, useDialog } from 'naive-ui'
 import { AddOutline, CreateOutline, TrashOutline, CopyOutline } from '@vicons/ionicons5'
 import { listAdminCoupons, createCoupon, updateCoupon, deleteCoupon } from '@/api/admin'
+import { useTable } from '@/composables/useTable'
+import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import CommonDrawer from '@/components/CommonDrawer.vue'
@@ -197,16 +203,20 @@ const appStore = useAppStore()
 const message = useMessage()
 const dialog = useDialog()
 
-const loading = ref(false)
 const submitting = ref(false)
 const showDrawer = ref(false)
 const modalTitle = ref('创建优惠券')
-const tableData = ref([])
 const formRef = ref(null)
 const isEdit = ref(false)
 const editId = ref(null)
-const sortState = ref({ sort: 'id', order: 'desc' })
-const checkedRowKeys = ref([])
+
+// 统一表格状态
+const { loading, tableData, checkedRowKeys, pagination, loadData, handleSorterChange, resetSelection } =
+  useTable(listAdminCoupons)
+const fetchData = loadData
+// 下拉刷新（App 原生感）
+const { distance: pullDistance, refreshing: pullRefreshing, onTouchStart: pullTouchStart, onTouchMove: pullTouchMove, onTouchEnd: pullTouchEnd } =
+  usePullRefresh(loadData)
 
 const typeOptions = [
   { label: '折扣（百分比）', value: 'discount' },
@@ -244,14 +254,6 @@ const rules = {
   max_uses_per_user: { required: true, type: 'number', message: '请输入单用户限用次数', trigger: 'blur' },
   status: { required: true, message: '请选择状态', trigger: 'change' }
 }
-
-const pagination = reactive({
-  page: 1,
-  pageSize: 10,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100]
-})
 
 const getDiscountPlaceholder = () => {
   switch (formData.type) {
@@ -393,39 +395,9 @@ const columns = [
   }
 ]
 
-const fetchData = async () => {
-  loading.value = true
-  try {
-    const res = await listAdminCoupons({
-      page: pagination.page,
-      page_size: pagination.pageSize,
-      sort: sortState.value.sort,
-      order: sortState.value.order,
-    })
-    tableData.value = res.data.items || []
-    pagination.itemCount = res.data.total || 0
-  } catch (error) {
-    message.error(error.message || '获取优惠券列表失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-const handleSorterChange = (sorter) => {
-  if (sorter && sorter.columnKey && sorter.order) {
-    sortState.value.sort = sorter.columnKey
-    sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
-  } else {
-    sortState.value.sort = 'id'
-    sortState.value.order = 'desc'
-  }
-  pagination.page = 1
-  fetchData()
-}
-
 const handlePageChange = (page) => {
   pagination.page = page
-  fetchData()
+  loadData()
 }
 
 const resetForm = () => {
@@ -494,7 +466,7 @@ const handleSubmit = async () => {
     }
 
     showDrawer.value = false
-    fetchData()
+    loadData()
   } catch (error) {
     if (error.message) {
       message.error(error.message || '操作失败')
@@ -514,7 +486,7 @@ const handleDelete = (row) => {
       try {
         await deleteCoupon(row.id)
         message.success('删除优惠券成功')
-        fetchData()
+        loadData()
       } catch (error) {
         message.error(error.message || '删除优惠券失败')
       }
@@ -529,8 +501,8 @@ const handleBatchEnable = async () => {
       return updateCoupon(id, { ...coupon, status: 'active' })
     }))
     message.success('批量启用成功')
-    checkedRowKeys.value = []
-    fetchData()
+    resetSelection()
+    loadData()
   } catch { message.error('批量启用失败') }
 }
 
@@ -541,8 +513,8 @@ const handleBatchDisable = async () => {
       return updateCoupon(id, { ...coupon, status: 'inactive' })
     }))
     message.success('批量禁用成功')
-    checkedRowKeys.value = []
-    fetchData()
+    resetSelection()
+    loadData()
   } catch { message.error('批量禁用失败') }
 }
 
@@ -556,17 +528,39 @@ const handleBatchDelete = () => {
       try {
         await Promise.all(checkedRowKeys.value.map(id => deleteCoupon(id)))
         message.success('批量删除成功')
-        checkedRowKeys.value = []
-        fetchData()
+        resetSelection()
+        loadData()
       } catch { message.error('批量删除失败') }
     }
   })
 }
 
 onMounted(() => {
-  fetchData()
+  loadData()
 })
 </script>
 
 <style scoped>
+
+.pull-indicator {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 96px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--bg-color, #fff);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  color: var(--text-color-secondary, #666);
+  transition: transform 0.15s ease;
+}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

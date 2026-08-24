@@ -89,6 +89,19 @@
           </div>
         </div>
       </n-spin>
+
+      <!-- 购买须知：信任合规说明（一次性展示） -->
+      <n-alert type="info" :bordered="false" class="trust-block">
+        <div class="trust-title">购买须知</div>
+        <div class="trust-text">支付即代表同意《服务条款》与《隐私政策》。</div>
+        <div class="trust-text">退款政策：购买后 7 天内未激活可联系客服申请退款，已激活订单不支持退款。</div>
+        <div class="trust-text" v-if="supportContactText">{{ supportContactText }}</div>
+        <n-space :size="12" wrap class="trust-links">
+          <n-button text type="primary" size="small" @click="router.push('/terms')">《服务条款》</n-button>
+          <n-button text type="primary" size="small" @click="router.push('/privacy')">《隐私政策》</n-button>
+          <n-button text type="primary" size="small" @click="router.push('/help')">联系客服</n-button>
+        </n-space>
+      </n-alert>
     </n-space>
 
     <!-- Purchase Drawer -->
@@ -107,21 +120,21 @@
           <n-descriptions-item label="有效期">{{ selectedPackage?.duration_days }} 天</n-descriptions-item>
           <n-descriptions-item label="原价">¥{{ orderInfo?.amount }}</n-descriptions-item>
           <n-descriptions-item v-if="couponInfo" label="优惠">
-            <span style="color: #e03050;">-{{ formatCurrency(orderInfo?.amount - orderInfo?.final_amount) }}</span>
+            <span style="color: var(--danger-color);">-{{ formatCurrency(orderInfo?.amount - orderInfo?.final_amount) }}</span>
           </n-descriptions-item>
           <n-descriptions-item label="账户余额">
-            <span :style="{ color: userBalance >= (orderInfo?.final_amount || 0) ? '#18a058' : '#e03050' }">
+            <span :style="{ color: userBalance >= (orderInfo?.final_amount || 0) ? 'var(--success-color)' : 'var(--danger-color)' }">
               {{ formatCurrency(userBalance) }}
             </span>
           </n-descriptions-item>
           <n-descriptions-item label="实付金额">
-            <span style="color: #18a058; font-size: 20px; font-weight: bold;">¥{{ orderInfo?.final_amount }}</span>
+            <span style="color: var(--success-color); font-size: 20px; font-weight: bold;">¥{{ orderInfo?.final_amount }}</span>
           </n-descriptions-item>
           <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="余额抵扣">
-            <span style="color: #18a058;">-{{ formatCurrency(balanceDeductAmount) }}</span>
+            <span style="color: var(--success-color);">-{{ formatCurrency(balanceDeductAmount) }}</span>
           </n-descriptions-item>
           <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="还需支付">
-            <span style="color: #e03050; font-size: 18px; font-weight: bold;">{{ formatCurrency(remainingAmount) }}</span>
+            <span style="color: var(--danger-color); font-size: 18px; font-weight: bold;">{{ formatCurrency(remainingAmount) }}</span>
           </n-descriptions-item>
         </n-descriptions>
 
@@ -139,23 +152,54 @@
         <!-- Payment Method -->
         <div class="payment-method">
           <div class="pm-label">支付方式</div>
-          <n-radio-group v-model:value="paymentMethod">
-            <n-space vertical :size="8">
-              <n-radio v-if="balanceEnabled" value="balance" :disabled="userBalance <= 0">
-                余额支付 ({{ formatCurrency(userBalance) }})
-                <span v-if="!canFullBalance && userBalance > 0" style="color: #e03050; font-size: 12px; margin-left: 4px;">余额不足</span>
-              </n-radio>
-              <n-radio v-for="pm in paymentMethods" :key="pm.id" :value="'pm_' + pm.id">
-                {{ getPaymentLabel(pm.pay_type) }}
-              </n-radio>
-            </n-space>
-          </n-radio-group>
+          <div class="pm-card-grid">
+            <div
+              v-if="balanceEnabled"
+              class="pm-card"
+              :class="{ selected: paymentMethod === 'balance', disabled: userBalance <= 0 }"
+              :style="{ '--pm-brand': pmMeta('balance').brand }"
+              role="radio"
+              :aria-checked="paymentMethod === 'balance'"
+              tabindex="0"
+              @click="handleSelectPayment('balance')"
+              @keydown.enter="handleSelectPayment('balance')"
+            >
+              <div class="pm-card-icon">{{ pmMeta('balance').icon }}</div>
+              <div class="pm-card-body">
+                <span class="pm-card-name">{{ pmMeta('balance').label }}</span>
+                <span class="pm-card-desc">
+                  余额 {{ formatCurrency(userBalance) }}
+                  <span v-if="!canFullBalance && userBalance > 0" class="pm-insufficient">· 余额不足</span>
+                </span>
+              </div>
+              <span class="pm-check"></span>
+            </div>
+            <div
+              v-for="pm in paymentMethods"
+              :key="pm.id"
+              class="pm-card"
+              :class="{ selected: paymentMethod === 'pm_' + pm.id }"
+              :style="{ '--pm-brand': pmMeta(pm.pay_type).brand }"
+              role="radio"
+              :aria-checked="paymentMethod === 'pm_' + pm.id"
+              tabindex="0"
+              @click="handleSelectPayment('pm_' + pm.id)"
+              @keydown.enter="handleSelectPayment('pm_' + pm.id)"
+            >
+              <div class="pm-card-icon">{{ pmMeta(pm.pay_type).icon }}</div>
+              <div class="pm-card-body">
+                <span class="pm-card-name">{{ pmMeta(pm.pay_type).label }}</span>
+                <span class="pm-card-desc">{{ pmMeta(pm.pay_type).desc }}</span>
+              </div>
+              <span class="pm-check"></span>
+            </div>
+          </div>
           <div v-if="paymentMethod !== 'balance' && userBalance > 0 && balanceEnabled" style="margin-top: 8px;">
             <n-checkbox v-model:checked="useBalanceDeduct">
               使用余额抵扣 {{ formatCurrency(Math.min(userBalance, finalPayAmount)) }}
             </n-checkbox>
-            <div v-if="useBalanceDeduct" style="margin-top: 4px; font-size: 13px; color: #666;">
-              余额抵扣：{{ formatCurrency(balanceDeductAmount) }}，还需支付：<span style="color: #e03050; font-weight: 600;">{{ formatCurrency(remainingAmount) }}</span>
+            <div v-if="useBalanceDeduct" style="margin-top: 4px; font-size: 13px; color: var(--text-color-secondary);">
+              余额抵扣：{{ formatCurrency(balanceDeductAmount) }}，还需支付：<span style="color: var(--danger-color); font-weight: 600;">{{ formatCurrency(remainingAmount) }}</span>
             </div>
           </div>
         </div>
@@ -175,17 +219,17 @@
       @after-leave="stopPolling"
     >
       <div v-if="isMobile" class="mobile-pay-panel">
-        <p style="margin-bottom: 16px; color: #666;">请点击下方按钮完成支付</p>
+        <p style="margin-bottom: 16px; color: var(--text-color-secondary);">请点击下方按钮完成支付</p>
         <n-button type="primary" size="large" block tag="a" :href="mobilePayUrl" target="_blank">
           打开支付App付款
         </n-button>
-        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后请返回此页面</p>
+        <p style="margin-top: 16px; color: var(--text-color-secondary); font-size: 13px;">支付完成后请返回此页面</p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
       <div v-else class="desktop-pay-panel">
-        <p style="margin-bottom: 16px; color: #666;">请使用支付宝扫描下方二维码完成支付</p>
+        <p style="margin-bottom: 16px; color: var(--text-color-secondary);">请使用支付宝扫描下方二维码完成支付</p>
         <canvas ref="qrCanvas" style="margin: 0 auto;"></canvas>
-        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付成功后系统会自动确认并跳转，若未更新请前往订单页手动刷新</p>
+        <p style="margin-top: 16px; color: var(--text-color-secondary); font-size: 13px;">支付成功后系统会自动确认并跳转，若未更新请前往订单页手动刷新</p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
     </common-drawer>
@@ -203,12 +247,12 @@
       @after-leave="stopPolling"
     >
       <div v-if="cryptoInfo" class="crypto-panel">
-        <p style="margin-bottom: 16px; color: #666;">请转账以下金额到指定钱包地址</p>
+        <p style="margin-bottom: 16px; color: var(--text-color-secondary);">请转账以下金额到指定钱包地址</p>
         <n-descriptions :column="1" bordered size="small" style="text-align: left;">
           <n-descriptions-item label="网络">{{ cryptoInfo.network }}</n-descriptions-item>
           <n-descriptions-item label="币种">{{ cryptoInfo.currency }}</n-descriptions-item>
           <n-descriptions-item label="转账金额">
-            <span style="color: #e03050; font-size: 18px; font-weight: bold;">{{ cryptoInfo.amount_usdt }} {{ cryptoInfo.currency }}</span>
+            <span style="color: var(--danger-color); font-size: 18px; font-weight: bold;">{{ cryptoInfo.amount_usdt }} {{ cryptoInfo.currency }}</span>
           </n-descriptions-item>
           <n-descriptions-item label="收款地址">
             <div style="word-break: break-all; font-family: monospace; font-size: 13px;">{{ cryptoInfo.wallet_address }}</div>
@@ -237,14 +281,14 @@
       @after-leave="stopPolling"
     >
       <div class="codepay-window-container" style="text-align: center; padding: 24px 0;">
-        <p style="margin-bottom: 20px; color: #666; font-size: 15px;">请在新打开的页面中完成支付</p>
+        <p style="margin-bottom: 20px; color: var(--text-color-secondary); font-size: 15px;">请在新打开的页面中完成支付</p>
         <n-button type="primary" size="large" @click="openCodepayWindow">
           打开支付页面
         </n-button>
-        <p style="margin-top: 20px; color: #999; font-size: 13px;">
+        <p style="margin-top: 20px; color: var(--text-color-secondary); font-size: 13px;">
           如果页面被浏览器拦截，请允许弹出窗口
         </p>
-        <p style="margin-top: 16px; color: #999; font-size: 13px;">
+        <p style="margin-top: 16px; color: var(--text-color-secondary); font-size: 13px;">
           支付完成后系统会自动确认并跳转，若未更新请前往订单页手动刷新
         </p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 12px;" />
@@ -274,6 +318,7 @@ const message = useMessage()
 
 const loading = ref(false)
 const packages = ref<any[]>([])
+const publicConfig = ref<Record<string, string>>({})
 const couponCode = ref('')
 const verifying = ref(false)
 const couponInfo = ref<any>(null)
@@ -340,6 +385,18 @@ const remainingAmount = computed(() => {
   return Math.max(0, finalPayAmount.value - balanceDeductAmount.value)
 })
 
+// 客服入口（来自公共配置，缺失时隐藏）
+const supportContactText = computed(() => {
+  const parts: string[] = []
+  const email = (publicConfig.value.support_email || '').trim()
+  const qq = (publicConfig.value.support_qq || '').trim()
+  const telegram = (publicConfig.value.support_telegram || '').trim()
+  if (email) parts.push(`邮箱 ${email}`)
+  if (qq) parts.push(`QQ ${qq}`)
+  if (telegram) parts.push(`Telegram @${telegram.replace(/^@/, '')}`)
+  return parts.length ? `客服入口：${parts.join(' · ')}` : ''
+})
+
 
 const loadPackages = async () => {
   loading.value = true
@@ -355,6 +412,7 @@ const loadPackages = async () => {
     }
     // Custom package config
     const cfg = cfgRes.data || {}
+    publicConfig.value = cfg
     customEnabled.value = cfg.custom_package_enabled === 'true' || cfg.custom_package_enabled === '1'
     if (cfg.custom_package_price_per_device_year) customPricePerDeviceYear.value = parseFloat(cfg.custom_package_price_per_device_year) || 40
     if (cfg.custom_package_min_devices) customMinDevices.value = parseInt(cfg.custom_package_min_devices) || 1
@@ -383,19 +441,31 @@ const fetchUserBalance = async () => {
   }
 }
 
-const getPaymentLabel = (payType: string) => {
-  const labels: Record<string, string> = {
-    epay: '在线支付',
-    alipay: '支付宝',
-    wxpay: '微信支付',
-    qqpay: 'QQ支付',
-    stripe: 'Stripe (国际卡)',
-    crypto: '加密货币 (USDT)',
-    codepay: '码支付',
-    codepay_alipay: '码支付-支付宝',
-    codepay_wxpay: '码支付-微信',
+interface PmMeta { payType: string; label: string; brand: string; icon: string; desc: string }
+// 支付方式品牌元数据：品牌色 + CSS 绘制图标字母 + 主文案（纯展示层，不改变支付逻辑）
+const pmMetaList: PmMeta[] = [
+  { payType: 'balance', label: '余额支付', brand: 'var(--primary-color)', icon: '余', desc: '账户余额直接抵扣' },
+  { payType: 'alipay', label: '支付宝', brand: '#1677ff', icon: '支', desc: '扫码或跳转支付' },
+  { payType: 'wxpay', label: '微信支付', brand: '#07c160', icon: '微', desc: '扫码或跳转支付' },
+  { payType: 'qqpay', label: 'QQ 支付', brand: '#12b7f5', icon: 'Q', desc: '扫码或跳转支付' },
+  { payType: 'stripe', label: 'Stripe', brand: '#635bff', icon: 'S', desc: '国际信用卡支付' },
+  { payType: 'crypto', label: '加密货币 (USDT)', brand: '#f7931a', icon: '₮', desc: '链上转账' },
+  { payType: 'codepay', label: '码支付', brand: '#7c3aed', icon: '码', desc: '扫码或跳转支付' },
+  { payType: 'codepay_alipay', label: '码支付-支付宝', brand: '#7c3aed', icon: '码', desc: '扫码或跳转支付' },
+  { payType: 'codepay_wxpay', label: '码支付-微信', brand: '#7c3aed', icon: '码', desc: '扫码或跳转支付' },
+]
+const pmMeta = (payType: string): PmMeta =>
+  pmMetaList.find(m => m.payType === payType) || {
+    payType, label: payType, brand: 'var(--primary-color)',
+    icon: (payType[0] || '?').toUpperCase(), desc: '在线支付',
   }
-  return labels[payType] || payType
+
+const handleSelectPayment = (value: string) => {
+  if (value === 'balance' && userBalance.value <= 0) {
+    message.warning('余额不足，请先充值')
+    return
+  }
+  paymentMethod.value = value
 }
 
 const isCodepayPayType = (payType?: string) => {
@@ -497,9 +567,12 @@ const startPolling = (orderNo: string) => {
   stopPolling()
   pollAttempts = 0
   pollingStatus.value = true
-  pollTimer = setInterval(async () => {
+  // 递归 setTimeout 代替 setInterval：上一次请求完成后间隔 3s 再发起下一次，
+  // 避免慢请求（最长 15s 超时）与 3s 定时器重叠导致并发轮询
+  const pollOnce = async () => {
+    if (!pollingStatus.value) return
+    pollAttempts += 1
     try {
-      pollAttempts += 1
       const res = await getOrderStatus(orderNo)
       if (res.data?.status === 'paid') {
         stopPolling()
@@ -512,20 +585,26 @@ const startPolling = (orderNo: string) => {
       if (pollAttempts >= maxPollAttempts) {
         stopPolling()
         message.warning('支付结果确认超时，请前往订单页手动刷新查看')
+        return
       }
     } catch {
       if (pollAttempts >= maxPollAttempts) {
         stopPolling()
         message.warning('支付结果确认超时，请前往订单页手动刷新查看')
+        return
       }
     }
-  }, 3000)
+    if (pollingStatus.value) {
+      pollTimer = setTimeout(pollOnce, 3000)
+    }
+  }
+  pollTimer = setTimeout(pollOnce, 3000)
 }
 
 const stopPolling = () => {
   pollingStatus.value = false
   if (pollTimer) {
-    clearInterval(pollTimer)
+    clearTimeout(pollTimer)
     pollTimer = null
   }
 }
@@ -652,7 +731,7 @@ onMounted(() => {
 .header { text-align: center; margin-bottom: 16px; }
 .title {
   font-size: 32px; font-weight: 600; margin: 0 0 8px 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 .subtitle { font-size: 16px; color: var(--text-color-secondary, #666); margin: 0; }
@@ -661,7 +740,7 @@ onMounted(() => {
   text-align: center; margin-top: 8px; font-size: 15px; color: var(--text-color-secondary, #666);
 }
 .balance-amount {
-  color: #18a058; font-weight: 700; font-size: 18px;
+  color: var(--success-color); font-weight: 700; font-size: 18px;
 }
 
 .packages-grid {
@@ -676,22 +755,22 @@ onMounted(() => {
   cursor: pointer; position: relative; height: 100%;
   display: flex; flex-direction: column;
 }
-.package-card:hover { transform: translateY(-8px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); border-color: #667eea; }
-.package-card.featured { border-color: #667eea; border-width: 3px; background: linear-gradient(135deg, rgba(102,126,234,0.06) 0%, rgba(118,75,162,0.06) 100%); }
+.package-card:hover { transform: translateY(-8px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); border-color: var(--primary-color); }
+.package-card.featured { border-color: var(--primary-color); border-width: 3px; background: linear-gradient(135deg, rgba(102,126,234,0.06) 0%, rgba(118,75,162,0.06) 100%); }
 .badge {
   position: absolute; top: -12px; right: 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   color: #fff; padding: 4px 16px; border-radius: 12px; font-size: 14px; font-weight: 600;
 }
 .card-header { text-align: center; margin-bottom: 24px; }
 .package-name { font-size: 24px; font-weight: 600; margin: 0 0 16px 0; color: var(--text-color, #333); }
 .price-section { display: flex; align-items: baseline; justify-content: center; }
-.currency { font-size: 24px; color: #667eea; font-weight: 600; }
-.price { font-size: 48px; font-weight: 700; color: #667eea; margin-left: 4px; }
+.currency { font-size: 24px; color: var(--primary-color); font-weight: 600; }
+.price { font-size: 48px; font-weight: 700; color: var(--primary-color); margin-left: 4px; }
 .card-body { flex: 1; margin-bottom: 24px; }
 .feature-item { display: flex; align-items: center; gap: 8px; color: var(--text-color-secondary, #666); font-size: 15px; }
-.feature-item .n-icon { color: #667eea; }
-.feature-extra .n-icon { color: #18a058; }
+.feature-item .n-icon { color: var(--primary-color); }
+.feature-extra .n-icon { color: var(--success-color); }
 .features-list { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color, #e8e8e8); }
 .description {
   margin-top: 8px; padding: 12px; background: rgba(0,0,0,0.03);
@@ -701,13 +780,13 @@ onMounted(() => {
 
 /* Custom package card */
 .custom-card { border-style: dashed; cursor: default; }
-.custom-card:hover { transform: none; border-color: #667eea; }
+.custom-card:hover { transform: none; border-color: var(--primary-color); }
 .custom-name { margin-bottom: 4px; }
 .custom-card-desc { font-size: 13px; color: var(--text-color-secondary, #999); margin: 0; }
 .custom-inline-form { display: flex; flex-direction: column; gap: 12px; }
 .custom-inline-row { display: flex; align-items: center; gap: 8px; }
 .custom-inline-label { font-size: 13px; color: var(--text-color-secondary, #666); min-width: 32px; flex-shrink: 0; }
-.custom-inline-discount { text-align: center; font-size: 12px; color: #18a058; font-weight: 500; }
+.custom-inline-discount { text-align: center; font-size: 12px; color: var(--success-color); font-weight: 500; }
 .custom-inline-price { display: flex; align-items: baseline; justify-content: center; margin-top: 12px; }
 
 .modal-coupon { padding: 8px 0; }
@@ -716,9 +795,60 @@ onMounted(() => {
 .coupon-verify-btn { flex-shrink: 0; }
 .payment-method { padding: 4px 0; }
 .pm-label { font-size: 14px; font-weight: 500; margin-bottom: 8px; color: var(--text-color, #333); }
+
+/* 支付方式品牌卡片 */
+.pm-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.pm-card {
+  --pm-brand: var(--primary-color);
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  border: 2px solid var(--border-color, #e8e8e8);
+  border-radius: 12px;
+  background: var(--bg-color, #fff);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 0;
+  outline: none;
+}
+.pm-card:hover { border-color: color-mix(in srgb, var(--pm-brand) 50%, var(--border-color)); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); }
+.pm-card:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--pm-brand) 40%, transparent); }
+.pm-card.selected {
+  border-color: var(--pm-brand);
+  background: color-mix(in srgb, var(--pm-brand) 8%, var(--bg-color, #fff));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pm-brand) 25%, transparent);
+}
+.pm-card.disabled { opacity: 0.5; cursor: not-allowed; }
+.pm-card.disabled:hover { border-color: var(--border-color); box-shadow: none; }
+.pm-card-icon {
+  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--pm-brand);
+  color: #fff; font-size: 18px; font-weight: 700;
+}
+.pm-card-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.pm-card-name { font-size: 14px; font-weight: 600; color: var(--text-color, #333); }
+.pm-card-desc { font-size: 12px; color: var(--text-color-secondary, #666); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pm-insufficient { color: var(--danger-color); font-weight: 600; }
+.pm-check {
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: transparent;
+  border: 2px solid var(--border-color, #ddd);
+  transition: all 0.2s ease;
+}
+.pm-card.selected .pm-check {
+  background: var(--pm-brand); border-color: var(--pm-brand); color: #fff;
+}
 .mobile-pay-panel,
 .desktop-pay-panel,
 .crypto-panel { text-align: center; }
+
+/* 购买须知：信任合规说明 */
+.trust-block { text-align: left; }
+.trust-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; color: var(--text-color, #333); }
+.trust-text { font-size: 13px; line-height: 1.7; color: var(--text-color-secondary, #666); }
+.trust-links { margin-top: 8px; }
 
 /* Mobile Responsive */
 @media (max-width: 767px) {
@@ -726,7 +856,8 @@ onMounted(() => {
   .title { font-size: 24px; }
   .subtitle { font-size: 14px; }
   .packages-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .package-card { min-height: 100%; padding: 14px 10px; border-radius: 8px; }
+  .package-card { min-height: 100%; padding: 16px 14px; border-radius: 16px; }
+  .package-card:active { transform: scale(0.98); }
   .package-card:hover { transform: none; }
   .card-header { margin-bottom: 14px; }
   .package-name { font-size: 16px; line-height: 1.3; margin-bottom: 8px; word-break: break-word; }
@@ -742,10 +873,13 @@ onMounted(() => {
   .coupon-group { flex-direction: column; }
   .coupon-verify-btn { width: 100%; }
   .purchase-drawer-content :deep(.n-descriptions) { font-size: 13px; }
-  .purchase-drawer-content :deep(.n-radio) { align-items: flex-start; }
+  .pm-card { padding: 10px 12px; border-radius: 10px; }
+  .pm-card-icon { width: 36px; height: 36px; font-size: 16px; border-radius: 9px; }
+  .pm-card-desc { white-space: normal; line-height: 1.3; }
 }
 
-@media (max-width: 380px) {
+@media (max-width: 400px) {
   .packages-grid { grid-template-columns: 1fr; }
+  .pm-card-grid { grid-template-columns: 1fr; }
 }
 </style>

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cboard/v2/internal/utils"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -35,17 +36,18 @@ func RequestLogger() gin.HandlerFunc {
 				bodyBytes, _ := io.ReadAll(io.LimitReader(c.Request.Body, 10240))
 				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 				if len(bodyBytes) > 0 {
+					maskedBody := maskSensitiveParams(string(bodyBytes))
 					if len(bodyBytes) >= 10240 {
-						utils.LogCallback("  Body: %s... (truncated)", string(bodyBytes[:200]))
+						utils.LogCallback("  Body: %s... (truncated)", maskedBody[:200])
 					} else {
-						utils.LogCallback("  Body: %s", string(bodyBytes))
+						utils.LogCallback("  Body: %s", maskedBody)
 					}
 				}
 			}
 
-			// 记录查询参数
+			// 记录查询参数（脱敏签名，防日志泄露验签数据）
 			if len(c.Request.URL.RawQuery) > 0 {
-				utils.LogCallback("  Query: %s", c.Request.URL.RawQuery)
+				utils.LogCallback("  Query: %s", maskSensitiveParams(c.Request.URL.RawQuery))
 			}
 			utils.LogCallback("========================================")
 		}
@@ -70,4 +72,17 @@ func RequestLogger() gin.HandlerFunc {
 			utils.LogPayment("[%s] %s - Status: %d, Latency: %v", method, path, statusCode, latency)
 		}
 	}
+}
+
+// maskSensitiveParams 脱敏日志中的签名等敏感参数（URL query 或 form body 中的 sign/sign_type）
+func maskSensitiveParams(s string) string {
+	if s == "" {
+		return s
+	}
+	replacer := strings.NewReplacer(
+		"sign=", "sign=***",
+		"sign_type=", "sign_type=***",
+		"&sign", "&sign***",
+	)
+	return replacer.Replace(s)
 }

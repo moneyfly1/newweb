@@ -65,7 +65,6 @@ export default defineConfig({
             if (id.includes('echarts') || id.includes('zrender') || id.includes('vue-echarts')) return 'echarts'
             if (normalizedId.includes('/node_modules/@vicons/')) return 'icons'
             if (normalizedId.includes('/node_modules/qrcode/')) return 'qrcode'
-            if (normalizedId.includes('/node_modules/xlsx/')) return 'xlsx'
             if (normalizedId.includes('/node_modules/sortablejs/')) return 'sortable'
             if (normalizedId.includes('/node_modules/axios/')) return 'http'
             if (

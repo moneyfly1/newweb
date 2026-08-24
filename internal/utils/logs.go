@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 
 	"cboard/v2/internal/database"
@@ -121,9 +120,6 @@ func CreateBalanceLogEntry(userID uint, changeType string, amount, balanceBefore
 func CreateBalanceLogSimple(userID uint, changeType string, amount, balanceBefore, balanceAfter float64, relatedOrderID *uint, description string) {
 	CreateBalanceLogEntry(userID, changeType, amount, balanceBefore, balanceAfter, relatedOrderID, description, nil)
 }
-
-// Ensure fmt is used
-var _ = fmt.Sprintf
 
 // SysLog writes a system log entry to both stdout and the database.
 func SysLog(level, module, message string, detail ...string) {

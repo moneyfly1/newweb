@@ -1,68 +1,58 @@
 <template>
-  <div class="auth-page">
-    <div class="auth-left">
-      <div class="brand-area">
-        <div class="brand-logo">C</div>
-        <h1>CBoard</h1>
-        <p class="brand-desc">高效、安全的代理订阅聚合管理平台</p>
-      </div>
+  <AuthLayout title="高速稳定 · 全球节点">
+    <template v-if="step === 1">
+      <h2 class="auth-form-title">忘记密码</h2>
+      <p class="auth-form-subtitle">输入你的邮箱地址，我们将发送验证码</p>
+      <n-form ref="emailFormRef" :model="form" :rules="emailRules" label-placement="top" size="large">
+        <n-form-item path="email" label="邮箱">
+          <n-input v-model:value="form.email" placeholder="请输入邮箱" @keyup.enter="sendCode">
+            <template #prefix><n-icon :component="MailOutline" /></template>
+          </n-input>
+        </n-form-item>
+        <n-button type="primary" block size="large" :loading="sending" class="auth-submit-btn" @click="sendCode">
+          发送验证码
+        </n-button>
+      </n-form>
+    </template>
+    <template v-else-if="step === 2">
+      <h2 class="auth-form-title">重置密码</h2>
+      <p class="auth-form-subtitle">验证码已发送至 {{ form.email }}</p>
+      <n-form ref="resetFormRef" :model="form" :rules="resetRules" label-placement="top" size="large">
+        <n-form-item path="code" label="验证码">
+          <n-input v-model:value="form.code" placeholder="请输入验证码" maxlength="6" @keyup.enter="doReset">
+            <template #prefix><n-icon :component="KeyOutline" /></template>
+          </n-input>
+        </n-form-item>
+        <n-form-item path="password" label="新密码">
+          <n-input v-model:value="form.password" type="password" show-password-on="click" placeholder="新密码（至少6位）">
+            <template #prefix><n-icon :component="LockClosedOutline" /></template>
+          </n-input>
+        </n-form-item>
+        <n-form-item path="confirmPassword" label="确认新密码">
+          <n-input v-model:value="form.confirmPassword" type="password" show-password-on="click" placeholder="请再次输入新密码" @keyup.enter="doReset">
+            <template #prefix><n-icon :component="LockClosedOutline" /></template>
+          </n-input>
+        </n-form-item>
+        <n-button type="primary" block size="large" :loading="resetting" class="auth-submit-btn" @click="doReset">
+          重置密码
+        </n-button>
+        <n-button text type="primary" size="small" style="margin-top: 12px;" @click="sendCode" :loading="sending" :disabled="countdown > 0">
+          {{ countdown > 0 ? `${countdown}s 后重新发送` : '重新发送验证码' }}
+        </n-button>
+      </n-form>
+    </template>
+    <template v-else-if="step === 3">
+      <h2 class="auth-form-title">密码已重置</h2>
+      <p class="auth-form-subtitle">你的密码已成功重置，请使用新密码登录</p>
+      <n-button type="primary" block size="large" class="auth-submit-btn" @click="goLogin">
+        立即返回登录
+      </n-button>
+      <p class="auth-redirect-hint">{{ redirectCountdown }} 秒后自动跳转登录页…</p>
+    </template>
+    <div class="auth-form-footer">
+      <router-link to="/login" class="auth-link">返回登录</router-link>
     </div>
-    <div class="auth-right">
-      <div class="auth-form-wrapper">
-        <template v-if="step === 1">
-          <h2>忘记密码</h2>
-          <p class="auth-subtitle">输入你的邮箱地址，我们将发送验证码</p>
-          <n-form ref="emailFormRef" :model="form" :rules="emailRules" label-placement="left" :show-label="false">
-            <n-form-item path="email">
-              <n-input v-model:value="form.email" placeholder="邮箱地址" size="large" @keyup.enter="sendCode">
-                <template #prefix><n-icon :component="MailOutline" /></template>
-              </n-input>
-            </n-form-item>
-            <n-button type="primary" block size="large" :loading="sending" @click="sendCode" style="border-radius: 8px; height: 44px;">
-              发送验证码
-            </n-button>
-          </n-form>
-        </template>
-        <template v-if="step === 2">
-          <h2>重置密码</h2>
-          <p class="auth-subtitle">验证码已发送至 {{ form.email }}</p>
-          <n-form ref="resetFormRef" :model="form" :rules="resetRules" label-placement="left" :show-label="false">
-            <n-form-item path="code">
-              <n-input v-model:value="form.code" placeholder="验证码" size="large" maxlength="6">
-                <template #prefix><n-icon :component="KeyOutline" /></template>
-              </n-input>
-            </n-form-item>
-            <n-form-item path="password">
-              <n-input v-model:value="form.password" type="password" show-password-on="click" placeholder="新密码（至少6位）" size="large">
-                <template #prefix><n-icon :component="LockClosedOutline" /></template>
-              </n-input>
-            </n-form-item>
-            <n-form-item path="confirmPassword">
-              <n-input v-model:value="form.confirmPassword" type="password" show-password-on="click" placeholder="确认新密码" size="large" @keyup.enter="doReset">
-                <template #prefix><n-icon :component="LockClosedOutline" /></template>
-              </n-input>
-            </n-form-item>
-            <n-button type="primary" block size="large" :loading="resetting" @click="doReset" style="border-radius: 8px; height: 44px;">
-              重置密码
-            </n-button>
-            <n-button text type="primary" size="small" style="margin-top: 12px;" @click="sendCode" :loading="sending" :disabled="countdown > 0">
-              {{ countdown > 0 ? `${countdown}s 后重新发送` : '重新发送验证码' }}
-            </n-button>
-          </n-form>
-        </template>
-        <template v-if="step === 3">
-          <h2>密码已重置</h2>
-          <p class="auth-subtitle">你的密码已成功重置，请使用新密码登录</p>
-          <n-button type="primary" block size="large" @click="router.push('/login')" style="border-radius: 8px; height: 44px;">
-            返回登录
-          </n-button>
-        </template>
-        <div class="auth-footer">
-          <router-link to="/login"><n-button text type="primary">返回登录</n-button></router-link>
-        </div>
-      </div>
-    </div>
-  </div>
+  </AuthLayout>
 </template>
 
 <script setup lang="ts">
@@ -70,6 +60,7 @@ import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage, type FormInst } from 'naive-ui'
 import { MailOutline, LockClosedOutline, KeyOutline } from '@vicons/ionicons5'
+import AuthLayout from '@/components/AuthLayout.vue'
 import { forgotPassword, resetPassword } from '@/api/auth'
 import { getErrorMessage } from '@/utils/error'
 
@@ -81,11 +72,20 @@ const step = ref(1)
 const sending = ref(false)
 const resetting = ref(false)
 const countdown = ref(0)
+// step3 成功后自动跳转登录页的倒计时
+const redirectCountdown = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
+let redirectTimer: ReturnType<typeof setInterval> | null = null
 
 const form = ref({ email: '', code: '', password: '', confirmPassword: '' })
 
-const emailRules = { email: { required: true, message: '请输入邮箱', trigger: 'blur' } }
+// 修复：邮箱规则增加格式校验（type: 'email'）
+const emailRules = {
+  email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
+    { type: 'email' as const, message: '邮箱格式不正确', trigger: 'blur' },
+  ],
+}
 const resetRules = {
   code: { required: true, message: '请输入验证码', trigger: 'blur' },
   password: { required: true, message: '请输入新密码', trigger: 'blur', min: 6 },
@@ -125,6 +125,8 @@ async function doReset() {
     await resetPassword({ email: form.value.email, code: form.value.code, password: form.value.password })
     message.success('密码重置成功')
     step.value = 3
+    // 成功提示后 3 秒倒计时，自动跳转登录页
+    startRedirectCountdown()
   } catch (e: any) {
     message.error(getErrorMessage(e, '重置失败'))
   } finally {
@@ -132,20 +134,25 @@ async function doReset() {
   }
 }
 
-onUnmounted(() => { if (timer) clearInterval(timer) })
-</script>
+function startRedirectCountdown() {
+  redirectCountdown.value = 3
+  redirectTimer = setInterval(() => {
+    redirectCountdown.value--
+    if (redirectCountdown.value <= 0 && redirectTimer) {
+      clearInterval(redirectTimer)
+      redirectTimer = null
+      router.push('/login')
+    }
+  }, 1000)
+}
 
-<style scoped>
-.auth-page { height: 100vh; display: flex; }
-.auth-left { flex: 1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: #fff; padding: 48px; }
-.brand-area { max-width: 400px; }
-.brand-logo { width: 56px; height: 56px; background: rgba(255,255,255,0.2); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; backdrop-filter: blur(10px); margin-bottom: 24px; }
-.brand-area h1 { font-size: 36px; margin-bottom: 12px; font-weight: 700; }
-.brand-desc { font-size: 16px; opacity: 0.85; line-height: 1.6; }
-.auth-right { flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px; }
-.auth-form-wrapper { width: 100%; max-width: 400px; }
-.auth-form-wrapper h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-.auth-subtitle { color: var(--text-color-secondary, #999); margin-bottom: 32px; font-size: 15px; }
-.auth-footer { text-align: center; margin-top: 24px; color: var(--text-color-secondary, #999); font-size: 14px; }
-@media (max-width: 768px) { .auth-left { display: none; } }
-</style>
+function goLogin() {
+  if (redirectTimer) { clearInterval(redirectTimer); redirectTimer = null }
+  router.push('/login')
+}
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+  if (redirectTimer) clearInterval(redirectTimer)
+})
+</script>

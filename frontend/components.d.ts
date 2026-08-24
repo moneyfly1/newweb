@@ -11,8 +11,9 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AuthLayout: typeof import('./src/components/AuthLayout.vue')['default']
     CommonDrawer: typeof import('./src/components/CommonDrawer.vue')['default']
-    ErrorBoundary: typeof import('./src/components/ErrorBoundary.vue')['default']
+    EmptyState: typeof import('./src/components/EmptyState.vue')['default']
     LoadingScreen: typeof import('./src/components/LoadingScreen.vue')['default']
     NAlert: typeof import('naive-ui')['NAlert']
     NBadge: typeof import('naive-ui')['NBadge']
@@ -76,13 +77,9 @@ declare module 'vue' {
     NText: typeof import('naive-ui')['NText']
     NThing: typeof import('naive-ui')['NThing']
     NTimePicker: typeof import('naive-ui')['NTimePicker']
-    NTooltip: typeof import('naive-ui')['NTooltip']
     NUpload: typeof import('naive-ui')['NUpload']
-    PullRefresh: typeof import('./src/components/PullRefresh.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    TableSkeleton: typeof import('./src/components/TableSkeleton.vue')['default']
-    UnifiedCardList: typeof import('./src/components/UnifiedCardList.vue')['default']
-    UnifiedTable: typeof import('./src/components/UnifiedTable.vue')['default']
+    SearchFilterBar: typeof import('./src/components/SearchFilterBar.vue')['default']
   }
 }

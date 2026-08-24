@@ -9,7 +9,7 @@
       <!-- 待支付充值提示 -->
       <n-card v-if="pendingRecords.length > 0" :bordered="false" class="pending-card">
         <div class="pending-header">
-          <n-icon :component="TimeOutline" size="18" color="#f0a020" />
+          <n-icon :component="TimeOutline" size="18" color="var(--warning-color)" />
           <span class="pending-title">有 {{ pendingRecords.length }} 条充值待支付</span>
         </div>
         <div class="pending-list">
@@ -59,7 +59,7 @@
                 </n-radio>
               </n-space>
             </n-radio-group>
-            <div v-if="paymentMethods.length === 0 && !loading" style="color: #999; font-size: 14px; margin-top: 8px;">
+            <div v-if="paymentMethods.length === 0 && !loading" style="color: var(--text-color-secondary); font-size: 14px; margin-top: 8px;">
               暂无可用支付方式，请联系管理员
             </div>
           </div>
@@ -89,7 +89,7 @@
       <n-space vertical :size="16">
         <n-descriptions :column="1" bordered>
           <n-descriptions-item label="充值金额">
-            <span style="color: #18a058; font-size: 18px; font-weight: bold;">¥{{ pendingTarget?.amount }}</span>
+            <span style="color: var(--success-color); font-size: 18px; font-weight: bold;">¥{{ pendingTarget?.amount }}</span>
           </n-descriptions-item>
           <n-descriptions-item label="订单号">{{ pendingTarget?.order_no }}</n-descriptions-item>
         </n-descriptions>
@@ -119,9 +119,9 @@
       @after-leave="stopPolling"
     >
       <div style="text-align: center;">
-        <p style="margin-bottom: 16px; color: #666;">请使用支付宝扫描下方二维码完成支付</p>
+        <p style="margin-bottom: 16px; color: var(--text-color-secondary);">请使用支付宝扫描下方二维码完成支付</p>
         <canvas ref="qrCanvas" style="margin: 0 auto; display: block;"></canvas>
-        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付后通常 1–5 秒到账，如未更新可继续刷新状态</p>
+        <p style="margin-top: 16px; color: var(--text-color-secondary); font-size: 13px;">支付后通常 1–5 秒到账，如未更新可继续刷新状态</p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
     </common-drawer>
@@ -139,11 +139,11 @@
       @after-leave="stopPolling"
     >
       <div style="text-align: center; padding: 24px 0;">
-        <p style="margin-bottom: 20px; color: #555; font-size: 15px;">请点击下方按钮完成支付</p>
+        <p style="margin-bottom: 20px; color: var(--text-color); font-size: 15px;">请点击下方按钮完成支付</p>
         <n-button type="primary" size="large" block tag="a" :href="mobilePayUrl" target="_blank">
           打开支付 App 付款
         </n-button>
-        <p style="margin-top: 16px; color: #999; font-size: 13px;">支付完成后将自动更新余额...</p>
+        <p style="margin-top: 16px; color: var(--text-color-secondary); font-size: 13px;">支付完成后将自动更新余额...</p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
       </div>
     </common-drawer>
@@ -161,14 +161,14 @@
       @after-leave="stopPolling"
     >
       <div style="text-align: center; padding: 24px 0;">
-        <p style="margin-bottom: 20px; color: #666; font-size: 15px;">请在新打开的页面中完成支付</p>
+        <p style="margin-bottom: 20px; color: var(--text-color-secondary); font-size: 15px;">请在新打开的页面中完成支付</p>
         <n-button type="primary" size="large" @click="openCodepayWindow">
           打开支付页面
         </n-button>
-        <p style="margin-top: 20px; color: #999; font-size: 13px;">
+        <p style="margin-top: 20px; color: var(--text-color-secondary); font-size: 13px;">
           如果页面被浏览器拦截，请允许弹出窗口
         </p>
-        <p style="margin-top: 16px; color: #999; font-size: 13px;">
+        <p style="margin-top: 16px; color: var(--text-color-secondary); font-size: 13px;">
           支付完成后系统会自动更新余额，若未到账请稍后刷新充值页面
         </p>
         <n-spin v-if="pollingStatus" size="small" style="margin-top: 12px;" />
@@ -336,9 +336,10 @@ const startPolling = (recordId: number) => {
   pollAttempts = 0
   pollingStatus.value = true
   checkRechargeStatus(recordId).catch(() => {})
-  pollTimer = setInterval(async () => {
+  const pollOnce = async () => {
+    if (!pollingStatus.value) return
+    pollAttempts += 1
     try {
-      pollAttempts += 1
       const handled = await checkRechargeStatus(recordId)
       if (handled) {
         return
@@ -346,19 +347,25 @@ const startPolling = (recordId: number) => {
       if (pollAttempts >= maxPollAttempts) {
         stopPolling()
         message.warning('充值结果确认较慢，支付已提交，请稍后刷新充值页面查看状态')
+        return
       }
     } catch {
       if (pollAttempts >= maxPollAttempts) {
         stopPolling()
         message.warning('充值结果确认较慢，支付已提交，请稍后刷新充值页面查看状态')
+        return
       }
     }
-  }, 3000)
+    if (pollingStatus.value) {
+      pollTimer = setTimeout(pollOnce, 3000)
+    }
+  }
+  pollTimer = setTimeout(pollOnce, 3000)
 }
 
 const stopPolling = () => {
   pollingStatus.value = false
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+  if (pollTimer) { clearTimeout(pollTimer); pollTimer = null }
 }
 
 const handlePayUrl = async (payUrl: string, recordId: number, paymentMode?: 'qrcode' | 'page' | 'redirect', forceCodepayPopup = false) => {
@@ -479,35 +486,36 @@ onMounted(() => { loadData() })
 .header { text-align: center; margin-bottom: 4px; }
 .title {
   font-size: 32px; font-weight: 600; margin: 0 0 8px 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
-.subtitle { font-size: 16px; color: #666; margin: 0; }
-.balance-val { color: #18a058; font-weight: 700; }
+.subtitle { font-size: 16px; color: var(--text-color-secondary); margin: 0; }
+.balance-val { color: var(--success-color); font-weight: 700; }
 
 /* 待支付提示卡 */
-.pending-card { border-radius: 12px; border: 1.5px solid #f0a020; background: #fffbf0; }
+.pending-card { border-radius: 12px; border: 1.5px solid var(--warning-color); background: var(--bg-color)bf0; }
 .pending-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .pending-title { font-size: 14px; font-weight: 600; color: #b76e00; }
 .pending-list { display: flex; flex-direction: column; gap: 10px; }
-.pending-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: white; border-radius: 8px; border: 1px solid #f0e0b0; }
+.pending-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--bg-color); border-radius: 12px; border: 1px solid var(--warning-color); }
+.pending-item:active { transform: scale(0.98); }
 .pending-info { display: flex; flex-direction: column; gap: 2px; }
-.pending-amount { font-size: 16px; font-weight: 700; color: #18a058; }
-.pending-time { font-size: 12px; color: #999; }
+.pending-amount { font-size: 16px; font-weight: 700; color: var(--success-color); }
+.pending-time { font-size: 12px; color: var(--text-color-secondary); }
 
 .main-card { border-radius: 12px; }
-.section-label { font-size: 14px; font-weight: 500; color: #333; margin-bottom: 12px; }
+.section-label { font-size: 14px; font-weight: 500; color: var(--text-color); margin-bottom: 12px; }
 
 .amount-chip {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 80px; padding: 10px 20px;
   border: 2px solid #e8e8e8; border-radius: 10px;
-  font-size: 16px; font-weight: 600; color: #333;
+  font-size: 16px; font-weight: 600; color: var(--text-color);
   cursor: pointer; transition: all 0.2s;
-  background: #fff; user-select: none;
+  background: var(--bg-color); user-select: none;
 }
-.amount-chip:hover { border-color: #667eea; color: #667eea; }
-.amount-chip.active { border-color: #667eea; background: #667eea12; color: #667eea; }
+.amount-chip:hover { border-color: var(--primary-color); color: var(--primary-color); }
+.amount-chip.active { border-color: var(--primary-color); background: var(--primary-color-active); color: var(--primary-color); }
 
 @media (max-width: 767px) {
   .recharge-container { padding: 0 12px; }

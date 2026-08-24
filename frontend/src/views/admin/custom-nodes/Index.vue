@@ -69,8 +69,6 @@
           :row-key="(row) => row.id"
           v-model:checked-row-keys="checkedRowKeys"
           @update:sorter="handleSorterChange"
-          @update:page="(p) => { pagination.page = p; fetchData() }"
-          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
         />
       </template>
 

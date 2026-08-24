@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
+	"cboard/v2/internal/cache"
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
@@ -35,13 +34,6 @@ const (
 )
 
 var errDeviceLimitReached = errors.New("device limit reached")
-
-var (
-	configCache     map[string]string
-	configCacheMu   sync.RWMutex
-	configCacheTime time.Time
-	configCacheTTL  = 10 * time.Minute
-)
 
 // subscriptionContext holds all info needed for subscription generation
 type subscriptionContext struct {
@@ -82,7 +74,7 @@ func findSubscriptionByAccessToken(db *gorm.DB, token string) (models.Subscripti
 	}
 
 	var reset models.SubscriptionReset
-	if err := db.Where("old_subscription_url = ?", token).
+	if err := db.Where("old_subscription_url = ? AND created_at > ?", token, time.Now().Add(-7*24*time.Hour)).
 		Order("created_at DESC, id DESC").
 		First(&reset).Error; err != nil {
 		return sub, err
@@ -93,33 +85,20 @@ func findSubscriptionByAccessToken(db *gorm.DB, token string) (models.Subscripti
 	return sub, nil
 }
 
-// getSubscriptionSiteConfig reads site URL and support contact from system_configs
+// getSubscriptionSiteConfig reads site URL and support contact from system_configs.
+// site_url 统一走 services.GetSiteURL()（site_url→domain_name 回退 + 规范化），
+// 此处仅保留 support_contact 查询，消除重复实现与第三套缓存。
 func getSubscriptionSiteConfig() (siteURL, supportContact string) {
-	configCacheMu.RLock()
-	if time.Since(configCacheTime) < configCacheTTL && configCache != nil {
-		siteURL = configCache["site_url"]
-		supportContact = configCache["support_contact"]
-		configCacheMu.RUnlock()
-		return
-	}
-	configCacheMu.RUnlock()
+	siteURL = services.GetSiteURL()
 
 	db := database.GetDB()
 	var configs []models.SystemConfig
 	db.Where("`key` IN ?",
-		[]string{"site_url", "domain_name", "support_qq", "support_telegram", "support_email"}).Find(&configs)
+		[]string{"support_qq", "support_telegram", "support_email"}).Find(&configs)
 
 	var contacts []string
 	for _, c := range configs {
 		switch c.Key {
-		case "site_url":
-			if c.Value != "" {
-				siteURL = c.Value
-			}
-		case "domain_name":
-			if siteURL == "" && c.Value != "" {
-				siteURL = c.Value
-			}
 		case "support_qq":
 			if c.Value != "" {
 				contacts = append(contacts, "QQ:"+c.Value)
@@ -135,19 +114,6 @@ func getSubscriptionSiteConfig() (siteURL, supportContact string) {
 		}
 	}
 	supportContact = strings.Join(contacts, " | ")
-	if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
-		siteURL = "https://" + siteURL
-	}
-	siteURL = strings.TrimRight(siteURL, "/")
-
-	configCacheMu.Lock()
-	configCache = map[string]string{
-		"site_url":        siteURL,
-		"support_contact": supportContact,
-	}
-	configCacheTime = time.Now()
-	configCacheMu.Unlock()
-
 	return
 }
 
@@ -353,10 +319,17 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 			if err := tx.Create(&newDevice).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.Subscription{}).
-				Where("id = ?", lockedSub.ID).
-				UpdateColumn("current_devices", gorm.Expr("current_devices + 1")).Error; err != nil {
-				return err
+			// 条件更新抢占：仅当未达上限才递增 current_devices（SQLite 下 FOR UPDATE 无效，
+			// 此条件更新保证并发登记设备不会突破设备上限）
+			updDev := tx.Model(&models.Subscription{}).
+				Where("id = ? AND (device_limit <= 0 OR current_devices < device_limit)", lockedSub.ID).
+				UpdateColumn("current_devices", gorm.Expr("current_devices + 1"))
+			if updDev.Error != nil {
+				return updDev.Error
+			}
+			if updDev.RowsAffected == 0 {
+				// 并发下已达上限：回滚设备创建，按设备超限处理
+				return errDeviceLimitReached
 			}
 
 			device = newDevice
@@ -395,12 +368,18 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		pool := worker.GetDefaultPool()
 		pool.Submit(func() {
 			asyncDB := database.GetDB()
-			if err := asyncDB.Model(&models.Device{}).Where("id = ?", deviceID).Updates(map[string]interface{}{
-				"last_access":  time.Now(),
-				"access_count": currentCount + 1,
-				"ip_address":   ipAddr,
-			}).Error; err != nil {
-				utils.SysError("subscription", fmt.Sprintf("异步更新设备记录失败: device=%d err=%v", deviceID, err))
+			// 去抖：仅当距上次访问超过 5 分钟才更新 last_access/access_count，
+			// 避免客户端频繁拉取订阅时每次都写库（SQLite 写放大）
+			lastAccess := device.LastAccess
+			now := time.Now()
+			if now.Sub(lastAccess) >= 5*time.Minute {
+				if err := asyncDB.Model(&models.Device{}).Where("id = ?", deviceID).Updates(map[string]interface{}{
+					"last_access":  now,
+					"access_count": currentCount + 1,
+					"ip_address":   ipAddr,
+				}).Error; err != nil {
+					utils.SysError("subscription", fmt.Sprintf("异步更新设备记录失败: device=%d err=%v", deviceID, err))
+				}
 			}
 
 			if oldIP == nil || *oldIP != ipAddr {
@@ -642,12 +621,26 @@ func GetSubscription(c *gin.Context) {
 	useSingBox := subType == "singbox" || subType == "sing-box"
 	useShadowrocket := subType == "shadowrocket"
 
-	// 尝试从 Redis 缓存获取下发内容 (仅当订阅状态正常时缓存)
+	// 尝试从缓存获取下发内容 (仅当订阅状态正常时缓存)；优先 Redis，无 Redis 时用内存缓存兜底
 	var cacheKey string
 	r := database.GetRedis()
-	if ctx.Status == subStatusOK && ctx.Sub != nil && r != nil {
+	memCache := cache.GetMemoryCache()
+	var cachedBody string
+	if ctx.Status == subStatusOK && ctx.Sub != nil {
 		cacheKey = buildSubscriptionPayloadCacheKey(ctx, subType, excludedProtocols)
-		if cachedBody, err := r.Get(c.Request.Context(), cacheKey).Result(); err == nil && cachedBody != "" {
+		if r != nil {
+			if body, err := r.Get(c.Request.Context(), cacheKey).Result(); err == nil {
+				cachedBody = body
+			}
+		} else {
+			if v, ok := memCache.Get(cacheKey); ok {
+				if s, ok2 := v.(string); ok2 {
+					cachedBody = s
+				}
+			}
+		}
+	}
+	if cacheKey != "" && cachedBody != "" {
 			subscriptionName := generateSubscriptionName(ctx)
 			encodedName := url.QueryEscape(subscriptionName)
 
@@ -671,7 +664,6 @@ func GetSubscription(c *gin.Context) {
 			c.String(http.StatusOK, cachedBody)
 			return
 		}
-	}
 
 	var nodes []models.Node
 	if ctx.Status != subStatusOK {
@@ -745,9 +737,13 @@ func GetSubscription(c *gin.Context) {
 	c.Header("Profile-Title", subscriptionName)
 	setSubscriptionHeaders(c, ctx)
 
-	// 设置缓存 (TTL 5 分钟)，只缓存正常状态的内容
-	if cacheKey != "" && ctx.Status == subStatusOK && r != nil {
-		r.Set(context.Background(), cacheKey, responseData, 5*time.Minute)
+	// 设置缓存 (TTL 5 分钟)，只缓存正常状态的内容；优先 Redis，无 Redis 时写内存缓存
+	if cacheKey != "" && ctx.Status == subStatusOK {
+		if r != nil {
+			r.Set(context.Background(), cacheKey, responseData, 5*time.Minute)
+		} else {
+			memCache.Set(cacheKey, responseData, 5*time.Minute)
+		}
 	}
 
 	c.String(http.StatusOK, responseData)
@@ -817,67 +813,18 @@ func incrementSubscriptionCounter(sub *models.Subscription, subType string) {
 	}
 }
 
-func GetSubscriptionByFormat(c *gin.Context) {
-	format := c.Param("format")
-	switch strings.ToLower(format) {
-	case "clash":
-		GetSubscription(c)
-	case "v2ray", "base64", "universal":
-		// 通用 base64 格式，传 type=universal 参数
-		c.Request.URL.RawQuery += "&type=universal"
-		GetSubscription(c)
-	default:
-		GetSubscription(c)
-	}
-}
-
-// getSubscriptionBaseURL reads site_url (or domain_name as fallback) from system_configs and constructs the base URL.
-func getSubscriptionBaseURL() string {
-	db := database.GetDB()
-	var configs []models.SystemConfig
-	db.Where("`key` IN ?", []string{"site_url", "domain_name"}).Find(&configs)
-
-	var domain string
-	for _, c := range configs {
-		if c.Key == "site_url" && c.Value != "" {
-			domain = c.Value
-			break
-		}
-		if c.Key == "domain_name" && c.Value != "" && domain == "" {
-			domain = c.Value
-		}
-	}
-	if domain == "" {
-		return ""
-	}
-	if !strings.HasPrefix(domain, "http://") && !strings.HasPrefix(domain, "https://") {
-		domain = "https://" + domain
-	}
-	return strings.TrimRight(domain, "/")
-}
-
-func buildClientSubscriptionURL(baseURL, token, typ string) string {
-	if baseURL == "" || token == "" {
-		return ""
-	}
-	if typ == "" {
-		return fmt.Sprintf("%s/api/v1/client/subscribe?token=%s", baseURL, token)
-	}
-	return fmt.Sprintf("%s/api/v1/client/subscribe?token=%s&type=%s", baseURL, token, typ)
-}
-
-func buildSubscriptionURLs(baseURL, token string) gin.H {
+func buildSubscriptionURLs(token string) gin.H {
 	return gin.H{
-		"universal_url":    buildClientSubscriptionURL(baseURL, token, ""),
-		"clash_url":        buildClientSubscriptionURL(baseURL, token, "clash"),
-		"stash_url":        buildClientSubscriptionURL(baseURL, token, "stash"),
-		"surge_url":        buildClientSubscriptionURL(baseURL, token, "surge"),
-		"quantumultx_url":  buildClientSubscriptionURL(baseURL, token, "quantumultx"),
-		"loon_url":         buildClientSubscriptionURL(baseURL, token, "loon"),
-		"singbox_url":      buildClientSubscriptionURL(baseURL, token, "singbox"),
-		"shadowrocket_url": buildClientSubscriptionURL(baseURL, token, ""),
-		"v2ray_url":        buildClientSubscriptionURL(baseURL, token, ""),
-		"hiddify_url":      buildClientSubscriptionURL(baseURL, token, ""),
+		"universal_url":    services.BuildSubscriptionURL(token, ""),
+		"clash_url":        services.BuildSubscriptionURL(token, "clash"),
+		"stash_url":        services.BuildSubscriptionURL(token, "stash"),
+		"surge_url":        services.BuildSubscriptionURL(token, "surge"),
+		"quantumultx_url":  services.BuildSubscriptionURL(token, "quantumultx"),
+		"loon_url":         services.BuildSubscriptionURL(token, "loon"),
+		"singbox_url":      services.BuildSubscriptionURL(token, "singbox"),
+		"shadowrocket_url": services.BuildSubscriptionURL(token, ""),
+		"v2ray_url":        services.BuildSubscriptionURL(token, ""),
+		"hiddify_url":      services.BuildSubscriptionURL(token, ""),
 	}
 }
 
@@ -889,8 +836,7 @@ func GetUserSubscription(c *gin.Context) {
 		return
 	}
 
-	baseURL := getSubscriptionBaseURL()
-	subscriptionURLs := buildSubscriptionURLs(baseURL, sub.SubscriptionURL)
+	subscriptionURLs := buildSubscriptionURLs(sub.SubscriptionURL)
 
 	// Get package name
 	var packageName string
@@ -1007,7 +953,7 @@ func ConvertToBalance(c *gin.Context) {
 		if remaining <= 0 {
 			return fmt.Errorf("expired")
 		}
-		value := math.Round(float64(sub.DeviceLimit)*pricePerDeviceYear*(remaining/365.0)*100) / 100
+		value := utils.Round2(float64(sub.DeviceLimit) * pricePerDeviceYear * (remaining / 365.0))
 		if value <= 0 {
 			return fmt.Errorf("zero_value")
 		}
@@ -1019,16 +965,24 @@ func ConvertToBalance(c *gin.Context) {
 		}
 
 		now := time.Now()
-		if err := tx.Model(&sub).Updates(map[string]interface{}{
+		// 条件更新 + RowsAffected 校验：仅当订阅仍为 active 时才置为 disabled，
+		// 防止并发请求对同一订阅重复折现（双倍入账）。
+		disableRes := tx.Model(&sub).Where("status = ?", "active").Updates(map[string]interface{}{
 			"status": "disabled", "is_active": false, "expire_time": now, "package_id": nil,
-		}).Error; err != nil {
-			return err
+		})
+		if disableRes.Error != nil {
+			return disableRes.Error
+		}
+		if disableRes.RowsAffected == 0 {
+			return fmt.Errorf("already_converted")
 		}
 
 		convertedAmount = value
 		// 读取更新后的余额
 		var u models.User
-		tx.Select("balance").First(&u, userID)
+		if err := tx.Select("balance").First(&u, userID).Error; err != nil {
+			return err
+		}
 		newBalance = u.Balance
 		return nil
 	})
@@ -1041,6 +995,8 @@ func ConvertToBalance(c *gin.Context) {
 			utils.BadRequest(c, "订阅已过期")
 		case "zero_value":
 			utils.BadRequest(c, "无法计算订阅价值")
+		case "already_converted":
+			utils.BadRequest(c, "订阅已转换或已失效")
 		default:
 			utils.InternalError(c, "转换失败")
 		}
@@ -1077,14 +1033,13 @@ func SendSubscriptionEmail(c *gin.Context) {
 		return
 	}
 
-	baseURL := getSubscriptionBaseURL()
-	if baseURL == "" {
+	if services.GetSiteURL() == "" {
 		utils.BadRequest(c, "系统未配置域名，无法生成订阅链接")
 		return
 	}
 
-	universalURL := fmt.Sprintf("%s/api/v1/sub/%s", baseURL, sub.SubscriptionURL)
-	clashURL := fmt.Sprintf("%s/api/v1/sub/clash/%s", baseURL, sub.SubscriptionURL)
+	universalURL := services.BuildSubscriptionURL(sub.SubscriptionURL, "")
+	clashURL := services.BuildSubscriptionURL(sub.SubscriptionURL, "clash")
 
 	subject, body := services.RenderEmail("subscription", map[string]string{
 		"clash_url":     clashURL,

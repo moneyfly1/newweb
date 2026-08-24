@@ -6,49 +6,7 @@
         <p class="page-subtitle">管理所有接入系统的节点，支持链接导入、批量测试及状态监控</p>
       </div>
       <div class="header-right">
-        <n-space>
-          <n-input
-            v-model:value="searchQuery"
-            placeholder="搜索名称 / 地区 / 协议 / 域名"
-            clearable
-            style="width: 260px"
-            @keyup.enter="handleSearch"
-            @clear="handleSearch"
-          >
-            <template #prefix><n-icon :component="SearchOutline" /></template>
-          </n-input>
-          <n-select
-            v-model:value="filterSource"
-            placeholder="来源"
-            clearable
-            :options="sourceOptions"
-            style="width: 150px"
-            @update:value="handleSearch"
-          />
-          <n-select
-            v-model:value="filterManual"
-            placeholder="手动/自动"
-            clearable
-            :options="[{ label: '手动添加', value: '1' }, { label: '自动采集', value: '0' }]"
-            style="width: 130px"
-            @update:value="handleSearch"
-          />
-          <n-select
-            v-model:value="filterRegion"
-            placeholder="地区"
-            clearable
-            :options="regionOptions"
-            style="width: 130px"
-            @update:value="handleSearch"
-          />
-          <n-select
-            v-model:value="filterStatus"
-            placeholder="状态"
-            clearable
-            :options="[{ label: '在线', value: 'online' }, { label: '离线', value: 'offline' }]"
-            style="width: 110px"
-            @update:value="handleSearch"
-          />
+        <n-space :wrap="false">
           <n-button secondary @click="handleRefresh" :loading="loading">
             <template #icon><n-icon><refresh-outline /></n-icon></template>
             刷新
@@ -65,20 +23,34 @@
       </div>
     </div>
 
+    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行） -->
+    <search-filter-bar
+      v-model:values="filterValues"
+      :filters="filterConfig"
+      search-placeholder="搜索名称 / 地区 / 协议 / 域名"
+      @search="handleFilterSearch"
+    />
+
     <!-- Mobile Toolbar -->
     <div v-if="appStore.isMobile" class="mobile-toolbar">
       <div class="mobile-toolbar-title">节点管理</div>
       <div class="mobile-toolbar-controls">
-        <n-input
-          v-model:value="searchQuery"
-          placeholder="搜索名称 / 域名"
-          clearable
-          size="small"
-          @keyup.enter="handleSearch"
-          @clear="handleSearch"
-        >
-          <template #prefix><n-icon :component="SearchOutline" /></template>
-        </n-input>
+        <div class="mobile-toolbar-search">
+          <n-input
+            v-model:value="searchQuery"
+            placeholder="搜索名称 / 域名"
+            clearable
+            size="small"
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+          >
+            <template #prefix><n-icon :component="SearchOutline" /></template>
+          </n-input>
+          <n-button size="small" type="primary" @click="handleSearch">
+            <template #icon><n-icon :component="SearchOutline" /></template>
+            搜索
+          </n-button>
+        </div>
         <div class="mobile-toolbar-row">
           <n-select v-model:value="filterSource" placeholder="来源" clearable :options="sourceOptions" size="small" @update:value="handleSearch" />
           <n-select v-model:value="filterManual" placeholder="手动/自动" clearable :options="[{ label: '手动', value: '1' }, { label: '自动', value: '0' }]" size="small" @update:value="handleSearch" />
@@ -146,7 +118,7 @@
           <div v-for="row in tableData" :key="row.id" class="mobile-card">
             <div class="card-header">
               <div class="card-title-row">
-                <n-icon :component="ShieldCheckmarkOutline" class="node-icon" :style="{ color: row.is_active ? '#18a058' : '#d03050' }" />
+                <n-icon :component="ShieldCheckmarkOutline" class="node-icon" :style="{ color: row.is_active ? 'var(--success-color)' : 'var(--danger-color)' }" />
                 <span class="card-title">{{ row.name }}</span>
               </div>
               <n-space :size="4">
@@ -182,20 +154,12 @@
                 测试
               </n-button>
               <n-button size="small" type="primary" quaternary @click="handleEdit(row)">编辑</n-button>
-              <n-switch size="small" :value="row.is_active" @update:value="(v) => handleToggleActive(row, v)" />
-              <n-dropdown
-                trigger="click"
-                :options="[
-                  { label: '上线', key: 'online' },
-                  { label: '下线', key: 'offline' },
-                  { label: '删除', key: 'delete' }
-                ]"
-                @select="(key: string) => handleMobileAction(key, row)"
-              >
-                <n-button size="small" quaternary>
-                  <template #icon><n-icon :component="EllipsisVertical" /></template>
-                </n-button>
-              </n-dropdown>
+              <n-button size="small" @click="handleToggleActive(row, !row.is_active)">
+                {{ row.is_active ? '禁用' : '启用' }}
+              </n-button>
+              <n-button size="small" @click="handleMobileAction('online', row)">上线</n-button>
+              <n-button size="small" @click="handleMobileAction('offline', row)">下线</n-button>
+              <n-button size="small" type="error" @click="handleMobileAction('delete', row)">删除</n-button>
             </div>
           </div>
         </div>
@@ -263,24 +227,37 @@ import {
   EllipsisVertical
 } from '@vicons/ionicons5'
 import { listAdminNodes, updateNode, deleteNode, importNodes, batchNodeAction, testNode, getConfigUpdateConfig } from '@/api/admin'
+import { useTable } from '@/composables/useTable'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import SearchFilterBar from '@/components/SearchFilterBar.vue'
 
 const message = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
 
-const loading = ref(false)
 const submitting = ref(false)
 const importing = ref(false)
 const showImportSubDrawer = ref(false)
 const showImportLinksDrawer = ref(false)
 const showEditDrawer = ref(false)
-const tableData = ref<any[]>([])
 const formRef = ref<FormInst | null>(null)
 const editId = ref<number | null>(null)
-const checkedRowKeys = ref<number[]>([])
 const subscriptionUrl = ref('')
+
+// 统一表格状态（含筛选参数 + 默认按 order_index 升序）
+const { loading, tableData, checkedRowKeys, pagination, loadData, handleSorterChange, reload } =
+  useTable(listAdminNodes, {
+    defaultSort: { sort: 'order_index', order: 'asc' },
+    getParams: () => ({
+      search: searchQuery.value || undefined,
+      source_url: filterSource.value || undefined,
+      is_manual: filterManual.value || undefined,
+      region: filterRegion.value || undefined,
+      status: filterStatus.value || undefined,
+    }),
+  })
+const fetchData = loadData
 const nodeLinks = ref('')
 const searchQuery = ref('')
 const filterSource = ref<string | null>(null)
@@ -307,9 +284,6 @@ const regionOptions = computed(() => {
   return regions.map((r: string) => ({ label: r, value: r }))
 })
 
-const sortState = ref({ sort: 'order_index', order: 'asc' })
-const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
-
 const formData = reactive({ name: '', region: '', is_active: true, order_index: 0, description: '' })
 const rules = { name: { required: true, message: '请输入节点名称' } }
 
@@ -325,7 +299,7 @@ const columns: DataTableColumns<any> = [
     minWidth: 220,
     render: (row: any) => h('div', { class: 'cell-block' }, [
       h('div', { class: 'cell-inline' }, [
-        h(NIcon, { component: ShieldCheckmarkOutline, class: 'node-icon', style: { color: row.is_active ? '#18a058' : '#d03050' } }),
+        h(NIcon, { component: ShieldCheckmarkOutline, class: 'node-icon', style: { color: row.is_active ? 'var(--success-color)' : 'var(--danger-color)' } }),
         h('span', { class: 'cell-title' }, row.name)
       ]),
       h('div', { class: 'cell-sub' }, row.description || '暂无备注')
@@ -399,36 +373,31 @@ const columns: DataTableColumns<any> = [
   }
 ]
 
-const fetchData = async () => {
-  loading.value = true
-  try {
-    const res = await listAdminNodes({
-      page: pagination.page,
-      page_size: pagination.pageSize,
-      sort: sortState.value.sort,
-      order: sortState.value.order,
-      search: searchQuery.value || undefined,
-      source_url: filterSource.value || undefined,
-      is_manual: filterManual.value || undefined,
-      region: filterRegion.value || undefined,
-      status: filterStatus.value || undefined
-    })
-    tableData.value = res.data.items || []
-    pagination.itemCount = res.data.total || 0
-  } finally {
-    loading.value = false
-  }
+// 统一筛选工具栏状态（值与原 refs 同步，保持业务逻辑不变）
+const filterValues = reactive({
+  search: '',
+  source: null,
+  manual: null,
+  region: null,
+  status: null,
+})
+const filterConfig = [
+  { key: 'source', placeholder: '来源', options: sourceOptions.value },
+  { key: 'manual', placeholder: '手动/自动', options: [{ label: '手动添加', value: '1' }, { label: '自动采集', value: '0' }] },
+  { key: 'region', placeholder: '地区', options: regionOptions.value },
+  { key: 'status', placeholder: '状态', options: [{ label: '在线', value: 'online' }, { label: '离线', value: 'offline' }] },
+]
+const handleFilterSearch = () => {
+  searchQuery.value = filterValues.search || ''
+  filterSource.value = filterValues.source
+  filterManual.value = filterValues.manual
+  filterRegion.value = filterValues.region
+  filterStatus.value = filterValues.status
+  reload()
 }
 
 const handleSearch = () => {
-  pagination.page = 1
-  fetchData()
-}
-
-const handleSorterChange = (sorter: any) => {
-  sortState.value.sort = sorter.columnKey || 'order_index'
-  sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
-  fetchData()
+  reload()
 }
 
 const handleCheck = (keys: number[]) => { checkedRowKeys.value = keys }
@@ -541,8 +510,16 @@ const handleRefresh = () => fetchData()
 const handleMobileAction = (key: string, row: any) => {
   switch (key) {
     case 'online':
+      updateNode(row.id, { status: 'online' }).then(() => {
+        message.success('节点已上线')
+        fetchData()
+      }).catch(() => message.error('上线失败'))
+      break
     case 'offline':
-      handleBatchAction.call(null, key === 'online' ? 'online' : 'offline')
+      updateNode(row.id, { status: 'offline' }).then(() => {
+        message.success('节点已下线')
+        fetchData()
+      }).catch(() => message.error('下线失败'))
       break
     case 'delete':
       handleDelete(row)
@@ -563,7 +540,7 @@ onMounted(() => {
 <style scoped>
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
 .page-title { margin: 0; font-size: 24px; font-weight: 700; color: var(--n-title-text-color); }
-.page-subtitle { margin: 4px 0 0; color: #888; font-size: 14px; }
+.page-subtitle { margin: 4px 0 0; color: var(--text-color-secondary); font-size: 14px; }
 .main-card { border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.05); }
 
 .unified-admin-table :deep(.n-data-table-th),
@@ -579,10 +556,11 @@ onMounted(() => {
   position: sticky; top: 0; z-index: 10;
   display: flex; justify-content: space-between; align-items: center;
   padding: 12px 20px; margin-bottom: 16px;
-  background: #3b82f6; color: white; border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+  background: var(--primary-color-soft, rgba(79, 70, 229, 0.08));
+  color: var(--text-color, #1f2937); border: 1px solid var(--primary-color, #4f46e5)33;
+  border-radius: 12px;
 }
-.batch-info { font-weight: 600; }
+.batch-info { font-weight: 600; color: var(--text-color, #1f2937); }
 
 .cell-block { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
 .cell-inline { display: flex; align-items: center; gap: 6px; justify-content: flex-start; text-align: left; }
@@ -592,8 +570,8 @@ onMounted(() => {
 .node-icon { opacity: 0.85; }
 .left-text { display: flex; justify-content: flex-start; align-items: center; }
 
-.latency-value { color: #18a058; font-weight: 600; font-family: monospace; }
-.latency-offline { color: #d03050; gap: 4px; opacity: 0.65; }
+.latency-value { color: var(--success-color); font-weight: 600; font-family: monospace; }
+.latency-offline { color: var(--danger-color); gap: 4px; opacity: 0.65; }
 
 @media (max-width: 767px) {
   .admin-page-shell { padding: 12px; }
@@ -674,12 +652,12 @@ onMounted(() => {
     font-size: 13px;
   }
   .card-label {
-    color: #888;
+    color: var(--text-color-secondary);
     font-size: 12px;
     min-width: 50px;
   }
   .card-desc {
-    color: #666;
+    color: var(--text-color-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -703,10 +681,11 @@ onMounted(() => {
   .empty-state {
     text-align: center;
     padding: 40px 0;
-    color: #888;
+    color: var(--text-color-secondary);
   }
 }
 
 .fade-enter-active, .fade-leave-active { transition: all 0.3s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-20px); }
+
 </style>

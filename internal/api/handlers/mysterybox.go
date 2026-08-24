@@ -10,6 +10,7 @@ import (
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -358,7 +359,7 @@ func OpenMysteryBox(c *gin.Context) {
 		deductDesc := fmt.Sprintf("开启盲盒「%s」", pool.Name)
 		if err := tx.Create(&models.BalanceLog{
 			UserID: userID, ChangeType: "mystery_box", Amount: -pool.Price,
-			BalanceBefore: balanceBefore, BalanceAfter: balanceBefore - pool.Price, Description: &deductDesc,
+			BalanceBefore: balanceBefore, BalanceAfter: utils.Round2(balanceBefore-pool.Price), Description: &deductDesc,
 		}).Error; err != nil {
 			return err
 		}
@@ -389,13 +390,12 @@ func OpenMysteryBox(c *gin.Context) {
 					return err
 				}
 			} else {
-				newExpire := sub.ExpireTime
-				if newExpire.Before(time.Now()) {
-					newExpire = time.Now()
+				// 原子延长订阅，防并发开箱丢更新
+				if _, err := services.ExtendSubscriptionExpiry(tx, sub.ID, sub.ExpireTime, days); err != nil {
+					return err
 				}
-				newExpire = newExpire.AddDate(0, 0, days)
 				if err := tx.Model(&sub).Updates(map[string]interface{}{
-					"expire_time": newExpire, "is_active": true, "status": "active",
+					"is_active": true, "status": "active",
 				}).Error; err != nil {
 					return err
 				}

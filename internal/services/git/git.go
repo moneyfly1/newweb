@@ -537,8 +537,31 @@ func (c *GitClient) listDir(dirPath string) ([]DirEntry, error) {
 	return c.ListDirWithRef(dirPath, "")
 }
 
+// githubDownloadAllowedHosts GitHub 备份下载允许的域名白名单（防 SSRF 与 GitHub Token 外泄）
+var githubDownloadAllowedHosts = map[string]bool{
+	"api.github.com":               true,
+	"github.com":                   true,
+	"raw.githubusercontent.com":    true,
+	"objects.githubusercontent.com": true,
+	"codeload.github.com":          true,
+}
+
+// maxBackupDownloadSize 备份文件下载大小上限（200MB，防止磁盘耗尽）
+const maxBackupDownloadSize = 200 * 1024 * 1024
+
 // DownloadFile downloads a file from a URL and saves it to localPath.
+// 安全约束：仅允许 https 且域名在 GitHub 白名单内（防 SSRF 与 GitHub Token 外泄）；
+// 下载大小受限（防磁盘耗尽）。
 func (c *GitClient) DownloadFile(downloadURL, localPath string) error {
+	parsed, err := url.Parse(downloadURL)
+	if err != nil {
+		return fmt.Errorf("非法的下载地址: %w", err)
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if parsed.Scheme != "https" || !githubDownloadAllowedHosts[host] {
+		return fmt.Errorf("仅允许从 GitHub 域名下载备份文件")
+	}
+
 	dir := filepath.Dir(localPath)
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("创建目录失败: %w", err)
@@ -567,8 +590,15 @@ func (c *GitClient) DownloadFile(downloadURL, localPath string) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
-	return err
+	// 限制下载大小，防止恶意超大文件耗尽磁盘
+	written, err := io.Copy(out, io.LimitReader(resp.Body, maxBackupDownloadSize))
+	if err != nil {
+		return err
+	}
+	if written >= maxBackupDownloadSize {
+		return fmt.Errorf("备份文件超过大小上限")
+	}
+	return nil
 }
 
 func validateUploadFilePath(filePath string) error {

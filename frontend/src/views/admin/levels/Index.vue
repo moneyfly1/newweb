@@ -13,7 +13,7 @@
       </div>
 
       <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-        <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+        <span style="color: var(--text-color-secondary)">已选择 {{ checkedRowKeys.length }} 项</span>
         <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
       </n-space>
       <template v-if="!appStore.isMobile">
@@ -60,10 +60,10 @@
       </template>
 
       <n-pagination
-        v-if="totalLevels > pageSize"
-        v-model:page="currentPage"
-        v-model:page-size="pageSize"
-        :item-count="totalLevels"
+        v-if="pagination.itemCount > pagination.pageSize"
+        v-model:page="pagination.page"
+        v-model:page-size="pagination.pageSize"
+        :item-count="pagination.itemCount"
         :page-sizes="[10, 20, 50]"
         show-size-picker
         style="margin-top: 16px; justify-content: flex-end"
@@ -145,6 +145,7 @@
 import { ref, reactive, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { listUserLevels, createUserLevel, updateUserLevel, deleteUserLevel } from '@/api/admin'
+import { useTable } from '@/composables/useTable'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
@@ -152,16 +153,14 @@ const message = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
 
-const loading = ref(false)
 const submitting = ref(false)
-const levels = ref<any[]>([])
-const checkedRowKeys = ref<any[]>([])
 const showDrawer = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
-const currentPage = ref(1)
-const pageSize = ref(10)
-const totalLevels = ref(0)
+
+// 统一表格状态
+const { loading, tableData: levels, checkedRowKeys, pagination, loadData, resetSelection } = useTable(listUserLevels)
+const loadLevels = loadData
 
 const formData = reactive({
   id: 0,
@@ -232,33 +231,15 @@ const columns = [
   }
 ]
 
-const loadLevels = async () => {
-  loading.value = true
-  try {
-    const res = await listUserLevels({ page: currentPage.value, page_size: pageSize.value })
-    const data = res.data
-    if (Array.isArray(data)) {
-      levels.value = data
-      totalLevels.value = data.length
-    } else {
-      levels.value = data.items || []
-      totalLevels.value = data.total || 0
-    }
-  } catch (error: any) {
-    message.error(error.message || '加载等级列表失败')
-  } finally {
-    loading.value = false
-  }
-}
-
+// 兼容原页面命名：翻页/改页大小后重新加载
 const handlePageChange = (page: number) => {
-  currentPage.value = page
+  pagination.page = page
   loadLevels()
 }
 
 const handlePageSizeChange = (size: number) => {
-  pageSize.value = size
-  currentPage.value = 1
+  pagination.pageSize = size
+  pagination.page = 1
   loadLevels()
 }
 
@@ -346,7 +327,7 @@ const handleBatchDelete = () => {
       try {
         await Promise.all(checkedRowKeys.value.map(id => deleteUserLevel(id)))
         message.success('批量删除成功')
-        checkedRowKeys.value = []
+        resetSelection()
         loadLevels()
       } catch { message.error('批量删除失败') }
     }
@@ -370,7 +351,7 @@ onMounted(() => {
 }
 
 .mobile-card {
-  background: #fff;
+  background: var(--bg-color);
   border-radius: 10px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   overflow: hidden;
@@ -381,7 +362,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .card-title {
@@ -405,14 +386,14 @@ onMounted(() => {
 }
 
 .card-label {
-  color: #999;
+  color: var(--text-color-secondary);
 }
 
 .card-actions {
   display: flex;
   gap: 8px;
   padding: 10px 14px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
   flex-wrap: wrap;
 }
 

@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -86,4 +87,15 @@ func (c *MemoryCache) Get(key string) (interface{}, bool) {
 		return nil, false
 	}
 	return item.Value, true
+}
+
+// ClearByPrefix 删除键名以指定前缀开头的全部缓存项
+func (c *MemoryCache) ClearByPrefix(prefix string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k := range c.items {
+		if strings.HasPrefix(k, prefix) {
+			delete(c.items, k)
+		}
+	}
 }

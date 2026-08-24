@@ -1,14 +1,17 @@
 package handlers
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 
+	"cboard/v2/internal/api/middleware"
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func GetCurrentUser(c *gin.Context) {
@@ -143,6 +146,12 @@ func ChangePassword(c *gin.Context) {
 		utils.InternalError(c, "更新密码失败")
 		return
 	}
+	// 自增 token 版本号，吊销改密前签发的全部 access/refresh token
+	if err := database.GetDB().Model(user).UpdateColumn("token_version", gorm.Expr("token_version + 1")).Error; err != nil {
+		utils.SysError("auth", fmt.Sprintf("更新 token 版本失败: user_id=%d err=%v", user.ID, err))
+	}
+	// 清除认证缓存
+	middleware.InvalidateUserCache(user.ID)
 	utils.SuccessMessage(c, "密码修改成功")
 }
 

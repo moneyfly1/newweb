@@ -26,8 +26,3 @@ export function notifyNewOrder(orderNo: string) {
 export function notifyNewTicket(ticketId: number) {
   showNotification('新工单', `工单 #${ticketId} 需要处理`, 'warning')
 }
-
-// 系统通知
-export function notifySystem(message: string) {
-  showNotification('系统通知', message, 'info')
-}

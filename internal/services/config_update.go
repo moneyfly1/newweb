@@ -12,6 +12,8 @@ import (
 	"cboard/v2/internal/cache"
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+
+	"gorm.io/gorm"
 )
 
 type LogEntry struct {
@@ -298,28 +300,14 @@ func (s *ConfigUpdateService) runUpdate() {
 
 	db := database.GetDB()
 
-	// Delete old auto-imported nodes and reset auto-increment
+	// Delete old auto-imported nodes（事务内：删除 + 批量插入 + 手动节点排序原子完成，
+	// 避免中途失败留下半套节点导致订阅中断）
 	result := db.Where("is_manual = ?", false).Delete(&models.Node{})
 	if result.Error != nil {
 		s.addLog("error", fmt.Sprintf("删除旧节点失败: %v", result.Error))
 		return
 	}
 	s.addLog("info", fmt.Sprintf("已删除 %d 个旧的自动导入节点", result.RowsAffected))
-
-	// Check if there are any manual nodes left
-	var manualCount int64
-	if err := db.Model(&models.Node{}).Where("is_manual = ?", true).Count(&manualCount).Error; err != nil {
-		s.addLog("error", fmt.Sprintf("统计手动节点失败: %v", err))
-		return
-	}
-	if manualCount == 0 {
-		// No nodes left at all, reset the auto-increment sequence
-		if err := db.Exec("DELETE FROM sqlite_sequence WHERE name = 'nodes'").Error; err != nil {
-			s.addLog("error", fmt.Sprintf("重置节点ID序列失败: %v", err))
-		} else {
-			s.addLog("info", "已重置节点ID序列")
-		}
-	}
 
 	// Insert new nodes, respecting manual node positions.
 	// Manual nodes keep their order_index based on the "__MANUAL_NODES__" placeholder
@@ -353,39 +341,47 @@ func (s *ConfigUpdateService) runUpdate() {
 		}
 	}
 
-	// Assign order_index: auto nodes get sequential slots, manual nodes inserted at manualInsertAt
-	successCount := 0
-	slot := 0
-	for i, node := range allNodes {
-		if i == manualInsertAt {
-			// Reserve slots for manual nodes
+	// Assign order_index and batch-insert nodes（单事务）
+	commitErr := db.Transaction(func(tx2 *gorm.DB) error {
+		toInsert := make([]models.Node, 0, len(allNodes))
+		slot := 0
+		for i, node := range allNodes {
+			if i == manualInsertAt {
+				// Reserve slots for manual nodes
+				for j := range manualNodes {
+					if err := tx2.Model(&models.Node{}).Where("id = ?", manualNodes[j].ID).Update("order_index", slot).Error; err != nil {
+						return fmt.Errorf("更新手动节点排序失败(%s): %v", manualNodes[j].Name, err)
+					}
+					slot++
+				}
+			}
+			node.IsManual = false
+			node.OrderIndex = slot
+			toInsert = append(toInsert, node)
+			slot++
+		}
+		// If manual nodes go at the very end (or no auto nodes)
+		if manualInsertAt >= len(allNodes) {
 			for j := range manualNodes {
-				if err := db.Model(&models.Node{}).Where("id = ?", manualNodes[j].ID).Update("order_index", slot).Error; err != nil {
-					s.addLog("error", fmt.Sprintf("更新手动节点排序失败(%s): %v", manualNodes[j].Name, err))
+				if err := tx2.Model(&models.Node{}).Where("id = ?", manualNodes[j].ID).Update("order_index", slot).Error; err != nil {
+					return fmt.Errorf("更新手动节点排序失败(%s): %v", manualNodes[j].Name, err)
 				}
 				slot++
 			}
 		}
-		node.IsManual = false
-		node.OrderIndex = slot
-		if err := db.Create(&node).Error; err == nil {
-			successCount++
-		} else {
-			s.addLog("error", fmt.Sprintf("导入节点失败(%s): %v", node.Name, err))
-		}
-		slot++
-	}
-	// If manual nodes go at the very end (or no auto nodes)
-	if manualInsertAt >= len(allNodes) {
-		for j := range manualNodes {
-			if err := db.Model(&models.Node{}).Where("id = ?", manualNodes[j].ID).Update("order_index", slot).Error; err != nil {
-				s.addLog("error", fmt.Sprintf("更新手动节点排序失败(%s): %v", manualNodes[j].Name, err))
+		if len(toInsert) > 0 {
+			if err := tx2.CreateInBatches(toInsert, 200).Error; err != nil {
+				return fmt.Errorf("批量导入节点失败: %v", err)
 			}
-			slot++
 		}
+		return nil
+	})
+	if commitErr != nil {
+		s.addLog("error", fmt.Sprintf("节点更新失败，已回滚: %v", commitErr))
+		return
 	}
 
-	s.addLog("success", fmt.Sprintf("更新完成: 共 %d 个节点，成功导入 %d 个", len(allNodes), successCount))
+	s.addLog("success", fmt.Sprintf("更新完成: 共 %d 个节点，成功导入 %d 个", len(allNodes), len(allNodes)))
 
 	// 清除所有订阅缓存，确保客户端立即获取最新节点
 	cache.ClearAllSubscriptionCache()

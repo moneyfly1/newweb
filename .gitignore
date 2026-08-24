@@ -1,7 +1,7 @@
-# 在现有 .gitignore 基础上添加备份目录
+# 备份目录（不忽略代码文件，仅忽略备份产物）
 backups/
 *.backup
-*_backup.*
+backup_*/
 # 环境与敏感配置（保留 .env.example 作模板）
 .env
 .env.local

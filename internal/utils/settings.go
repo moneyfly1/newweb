@@ -51,6 +51,8 @@ func InvalidateSettingsCache() {
 	settingsCache = nil
 	lastCacheTime = time.Time{}
 	cacheMu.Unlock()
+	// 配置变更同时失效公共配置缓存（站点名/logo/客户端下载链接等来自 config）
+	InvalidatePublicCache("public_config")
 }
 
 // GetSettings reads multiple keys from the cached settings map.
@@ -114,4 +116,43 @@ func GetFloatSetting(key string, defaultVal float64) float64 {
 		return defaultVal
 	}
 	return f
+}
+
+// ---------- 公共端点数据缓存（60s TTL，内存） ----------
+// 供 /config /packages /announcements /payment/methods 等高访问公共端点复用，
+// 避免每次请求都查库放大 DB 负载。
+
+var (
+	publicCacheMu   sync.RWMutex
+	publicCacheData = make(map[string]publicCacheEntry)
+)
+
+type publicCacheEntry struct {
+	data      interface{}
+	expireAt  time.Time
+}
+
+// GetPublicCache 读取公共数据缓存；未命中或过期返回 nil
+func GetPublicCache(key string) interface{} {
+	publicCacheMu.RLock()
+	defer publicCacheMu.RUnlock()
+	entry, ok := publicCacheData[key]
+	if !ok || time.Now().After(entry.expireAt) {
+		return nil
+	}
+	return entry.data
+}
+
+// SetPublicCache 写入公共数据缓存（TTL 60s）
+func SetPublicCache(key string, data interface{}) {
+	publicCacheMu.Lock()
+	defer publicCacheMu.Unlock()
+	publicCacheData[key] = publicCacheEntry{data: data, expireAt: time.Now().Add(60 * time.Second)}
+}
+
+// InvalidatePublicCache 清除指定公共缓存（配置/套餐/公告变更时调用）
+func InvalidatePublicCache(key string) {
+	publicCacheMu.Lock()
+	delete(publicCacheData, key)
+	publicCacheMu.Unlock()
 }

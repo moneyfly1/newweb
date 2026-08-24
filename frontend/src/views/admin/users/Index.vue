@@ -18,6 +18,10 @@
               <n-icon :component="SearchOutline" />
             </template>
           </n-input>
+          <n-button type="primary" @click="handleSearch">
+            <template #icon><n-icon :component="SearchOutline" /></template>
+            搜索
+          </n-button>
           <n-select
             v-model:value="statusFilter"
             placeholder="状态"
@@ -45,17 +49,23 @@
         <div v-if="appStore.isMobile" class="mobile-toolbar">
           <div class="mobile-toolbar-title">用户管理</div>
           <div class="mobile-toolbar-controls">
-            <n-input
-              v-model:value="searchQuery"
-              placeholder="搜索邮箱或用户名"
-              clearable
-              size="small"
-              @keyup.enter="handleSearch"
-            >
-              <template #prefix>
-                <n-icon :component="SearchOutline" />
-              </template>
-            </n-input>
+            <div class="mobile-toolbar-search">
+              <n-input
+                v-model:value="searchQuery"
+                placeholder="搜索邮箱或用户名"
+                clearable
+                size="small"
+                @keyup.enter="handleSearch"
+              >
+                <template #prefix>
+                  <n-icon :component="SearchOutline" />
+                </template>
+              </n-input>
+              <n-button size="small" type="primary" @click="handleSearch">
+                <template #icon><n-icon :component="SearchOutline" /></template>
+                搜索
+              </n-button>
+            </div>
             <div class="mobile-toolbar-row">
               <n-select
                 v-model:value="statusFilter"
@@ -92,7 +102,7 @@
         </div>
 
         <!-- Batch operations -->
-        <n-space v-if="checkedRowKeys.length > 0" align="center">
+        <n-space v-if="checkedRowKeys.length > 0" align="center" class="batch-operations">
           <span class="batch-selected-text">已选择 {{ checkedRowKeys.length }} 项</span>
           <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
           <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
@@ -184,29 +194,17 @@
                 <n-button size="small" @click="handleToggleActive(row)">
                   {{ row.is_active ? '禁用' : '启用' }}
                 </n-button>
-                <n-dropdown
-                  trigger="click"
-                  :options="[
-                    { label: '重置密码', key: 'resetPwd' },
-                    { label: '删除', key: 'delete' }
-                  ]"
-                  @select="(key) => handleAction(key, row)"
-                >
-                  <n-button size="small" quaternary>
-                    <template #icon>
-                      <n-icon :component="EllipsisVertical" />
-                    </template>
-                  </n-button>
-                </n-dropdown>
+                <n-button size="small" @click="openResetPwdModal(row)">重置密码</n-button>
+                <n-button size="small" type="error" @click="handleDelete(row)">删除</n-button>
               </div>
             </div>
           </div>
         </template>
 
         <n-pagination
-          v-model:page="currentPage"
-          v-model:page-size="pageSize"
-          :page-count="totalPages"
+          v-model:page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :item-count="pagination.itemCount"
           :page-sizes="[10, 20, 50, 100]"
           show-size-picker
           style="margin-top: 16px; justify-content: flex-end"
@@ -327,7 +325,7 @@
         <div v-if="importResult.errors && importResult.errors.length > 0">
           <div style="font-weight: 600; margin-bottom: 4px;">错误详情:</div>
           <n-scrollbar style="max-height: 200px">
-            <div v-for="(err, idx) in importResult.errors" :key="idx" style="font-size: 13px; color: #d03050; padding: 2px 0;">
+            <div v-for="(err, idx) in importResult.errors" :key="idx" style="font-size: 13px; color: var(--danger-color); padding: 2px 0;">
               {{ err }}
             </div>
           </n-scrollbar>
@@ -352,6 +350,7 @@ import {
   batchUserAction, exportUsersCSV, importUsersCSV, loginAsUser,
   updateUserLineType
 } from '@/api/admin'
+import { useTable } from '@/composables/useTable'
 import { listUserLevels } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -368,16 +367,20 @@ const userStore = useUserStore()
 const route = useRoute()
 
 // State
-const loading = ref(false)
 const saving = ref(false)
 const resettingPwd = ref(false)
-const users = ref([])
 const searchQuery = ref('')
 const statusFilter = ref(null)
-const currentPage = ref(1)
-const pageSize = ref(10)
-const totalPages = ref(0)
-const checkedRowKeys = ref([])
+
+// 统一表格状态（含搜索/状态筛选）
+const { loading, tableData: users, checkedRowKeys, pagination, loadData, reload } = useTable(listUsers, {
+  getParams: () => ({
+    search: searchQuery.value || undefined,
+    is_active: statusFilter.value === 'active' ? true : statusFilter.value === 'inactive' ? false : undefined,
+    is_admin: statusFilter.value === 'admin' ? true : undefined,
+  }),
+})
+const fetchUsers = loadData
 
 // Import/Export
 const importFileInput = ref(null)
@@ -536,30 +539,9 @@ const columns = [
     ])
   }
 ]
-// Fetch users
-const fetchUsers = async () => {
-  loading.value = true
-  try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize.value,
-      search: searchQuery.value || undefined,
-      is_active: statusFilter.value === 'active' ? true : statusFilter.value === 'inactive' ? false : undefined,
-      is_admin: statusFilter.value === 'admin' ? true : undefined
-    }
-    const response = await listUsers(params)
-    users.value = response.data.items || []
-    totalPages.value = Math.ceil((response.data.total || 0) / pageSize.value)
-  } catch (error) {
-    message.error('获取用户列表失败：' + (error.message || '未知错误'))
-  } finally {
-    loading.value = false
-  }
-}
-
-const handleSearch = () => { currentPage.value = 1; fetchUsers() }
-const handlePageChange = (page) => { currentPage.value = page; fetchUsers() }
-const handlePageSizeChange = (size) => { pageSize.value = size; currentPage.value = 1; fetchUsers() }
+const handleSearch = () => { reload() }
+const handlePageChange = (page) => { pagination.page = page; fetchUsers() }
+const handlePageSizeChange = (size) => { pagination.pageSize = size; pagination.page = 1; fetchUsers() }
 const handleCheck = (keys) => { checkedRowKeys.value = keys }
 
 const handleLineTypeChange = async (row, lineType) => {

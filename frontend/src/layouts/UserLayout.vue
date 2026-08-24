@@ -15,7 +15,7 @@
         <div style="font-size: 16px; font-weight: 500;">{{ currentTitle }}</div>
         <n-space align="center">
           <n-badge :value="unreadCount" :max="99">
-            <n-button quaternary circle @click="router.push('/tickets')" aria-label="工单通知">
+            <n-button quaternary circle @click="router.push('/notifications')" aria-label="工单通知">
               <template #icon><n-icon><notifications-outline /></n-icon></template>
             </n-button>
           </n-badge>
@@ -30,7 +30,15 @@
         <span>正在以用户身份浏览 · 点击返回管理后台</span>
       </div>
       <n-layout-content content-style="padding: 24px;" :native-scrollbar="false">
-        <div id="main-content" tabindex="-1"><router-view /></div>
+        <div id="main-content" tabindex="-1">
+          <router-view v-slot="{ Component }">
+            <transition name="page-slide" mode="out-in">
+              <keep-alive :include="cachedViewNames">
+                <component :is="Component" :key="route.name" />
+              </keep-alive>
+            </transition>
+          </router-view>
+        </div>
       </n-layout-content>
     </n-layout>
   </n-layout>
@@ -41,7 +49,7 @@
       <span class="mobile-logo">{{ currentTitle }}</span>
       <div class="mobile-header-right">
         <n-badge :value="unreadCount" :max="99" :offset="[-4, 4]">
-          <n-button quaternary circle size="small" @click="router.push('/tickets')" aria-label="工单通知">
+          <n-button quaternary circle size="small" @click="router.push('/notifications')" aria-label="工单通知">
             <template #icon><n-icon :size="20"><notifications-outline /></n-icon></template>
           </n-button>
         </n-badge>
@@ -60,7 +68,15 @@
       content-style="padding: 0; padding-bottom: calc(72px + env(safe-area-inset-bottom));"
       :native-scrollbar="false"
     >
-      <div id="main-content" tabindex="-1"><router-view /></div>
+      <div id="main-content" tabindex="-1">
+        <router-view v-slot="{ Component }">
+          <transition name="page-slide" mode="out-in">
+            <keep-alive :include="cachedViewNames">
+              <component :is="Component" :key="route.name" />
+            </keep-alive>
+          </transition>
+        </router-view>
+      </div>
     </n-layout-content>
     <div class="mobile-tabbar">
       <div v-for="tab in mobileTabs" :key="tab.key" class="mobile-tab" :class="{ active: activeKey === tab.key }" @click="handleMenuClick(tab.key)">
@@ -124,7 +140,8 @@ import {
   ChatbubblesOutline, ServerOutline, PhonePortraitOutline, PeopleOutline,
   SettingsOutline, NotificationsOutline, EllipsisHorizontalOutline,
   LogOutOutline, ShieldOutline, KeyOutline,
-  TimeOutline, WalletOutline, HelpCircleOutline, GiftOutline,
+  TimeOutline, WalletOutline, HelpCircleOutline, GiftOutline, PricetagOutline,
+  DocumentTextOutline, ShieldCheckmarkOutline,
 } from '@vicons/ionicons5'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -134,6 +151,8 @@ const router = useRouter()
 const route = useRoute()
 const appStore = useAppStore()
 const userStore = useUserStore()
+// KeepAlive 缓存的高频页面（切换 tab 不重挂载/不重拉数据）
+const cachedViewNames = ['Dashboard', 'Subscription', 'Orders', 'Shop', 'Nodes', 'Devices', 'Invite', 'Settings', 'Coupons', 'Recharge', 'Redeem', 'MysteryBox', 'Notifications', 'LoginHistory']
 const unreadCount = ref(0)
 const showMobileMore = ref(false)
 
@@ -148,10 +167,12 @@ const menuOptions = [
   { label: '我的订阅', key: 'Subscription', icon: renderIcon(CloudOutline) },
   { label: '购买套餐', key: 'Shop', icon: renderIcon(StorefrontOutline) },
   { label: '我的订单', key: 'Orders', icon: renderIcon(CartOutline) },
+  { label: '通知中心', key: 'Notifications', icon: renderIcon(NotificationsOutline) },
   { label: '工单', key: 'Tickets', icon: renderIcon(ChatbubblesOutline) },
   { label: '节点状态', key: 'Nodes', icon: renderIcon(ServerOutline) },
   { label: '我的设备', key: 'Devices', icon: renderIcon(PhonePortraitOutline) },
   { label: '邀请返利', key: 'Invite', icon: renderIcon(PeopleOutline) },
+  { label: '我的优惠券', key: 'MyCoupons', icon: renderIcon(PricetagOutline) },
   { label: '卡密兑换', key: 'Redeem', icon: renderIcon(KeyOutline) },
   { label: '盲盒', key: 'MysteryBox', icon: renderIcon(GiftOutline) },
   { label: '充值', key: 'Recharge', icon: renderIcon(WalletOutline) },
@@ -170,15 +191,19 @@ const mobileTabs = [
 
 // Mobile: more menu items (the rest)
 const moreMenuItems = [
+  { label: '通知中心', key: 'Notifications', icon: NotificationsOutline },
   { label: '工单', key: 'Tickets', icon: ChatbubblesOutline },
   { label: '节点状态', key: 'Nodes', icon: ServerOutline },
   { label: '我的设备', key: 'Devices', icon: PhonePortraitOutline },
   { label: '邀请返利', key: 'Invite', icon: PeopleOutline },
+  { label: '我的优惠券', key: 'MyCoupons', icon: PricetagOutline },
   { label: '卡密兑换', key: 'Redeem', icon: KeyOutline },
   { label: '盲盒', key: 'MysteryBox', icon: GiftOutline },
   { label: '充值', key: 'Recharge', icon: WalletOutline },
   { label: '登录历史', key: 'LoginHistory', icon: TimeOutline },
   { label: '帮助/下载', key: 'Help', icon: HelpCircleOutline },
+  { label: '服务条款', key: 'Tos', icon: DocumentTextOutline },
+  { label: '隐私政策', key: 'Privacy', icon: ShieldCheckmarkOutline },
   ...(userStore.isAdmin ? [{ label: '管理后台', key: 'admin', icon: ShieldOutline }] : []),
   { label: '退出登录', key: 'logout', icon: LogOutOutline },
 ]
@@ -206,6 +231,9 @@ const userMenuOptions = computed(() => {
   const opts: any[] = [
     { label: '个人设置', key: 'settings' },
     { label: '切换主题', key: 'theme-picker' },
+    { type: 'divider', key: 'd0' },
+    { label: '服务条款', key: 'terms' },
+    { label: '隐私政策', key: 'privacy' },
   ]
   if (userStore.isAdmin) opts.push({ label: '管理后台', key: 'admin' })
   opts.push({ type: 'divider', key: 'd1' }, { label: '退出登录', key: 'logout' })
@@ -217,6 +245,8 @@ function handleUserMenu(key: string) {
   else if (key === 'admin') { router.push('/admin') }
   else if (key === 'theme-picker') { showThemeDrawer.value = true }
   else if (key === 'settings') { router.push({ name: 'Settings' }) }
+  else if (key === 'terms') { router.push({ name: 'Tos' }) }
+  else if (key === 'privacy') { router.push({ name: 'Privacy' }) }
 }
 
 const isAdminViewing = computed(() => !!localStorage.getItem('admin_token'))
@@ -267,7 +297,7 @@ function returnToAdmin() {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px; min-width: 0; padding: 6px 0; cursor: pointer; color: var(--text-color-secondary, #666); transition: color 0.2s, background-color 0.2s;
 }
-.mobile-tab.active { color: var(--primary-color, #667eea); background: var(--primary-color-soft, rgba(102,126,234,0.08)); }
+.mobile-tab.active { color: var(--primary-color, var(--primary-color)); background: var(--primary-color-soft, rgba(102,126,234,0.08)); }
 .mobile-tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 1; }
 
 /* Mobile More Menu */
@@ -281,7 +311,7 @@ function returnToAdmin() {
   align-items: center;
   justify-content: center;
   background: var(--primary-color-soft, rgba(102,126,234,0.08));
-  color: var(--primary-color, #667eea);
+  color: var(--primary-color, var(--primary-color));
 }
 .mobile-more-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-color, #333); }
 
@@ -294,7 +324,7 @@ function returnToAdmin() {
   display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px;
   border: 2px solid transparent; transition: all 0.2s;
 }
-.mobile-theme-dot.active { border-color: var(--primary-color, #667eea); box-shadow: 0 0 0 2px var(--primary-color, #667eea)33; }
+.mobile-theme-dot.active { border-color: var(--primary-color, var(--primary-color)); box-shadow: 0 0 0 2px var(--primary-color, var(--primary-color))33; }
 .mobile-theme-dot-label { font-size: 10px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 
 /* Desktop Theme Picker Drawer */
@@ -304,8 +334,8 @@ function returnToAdmin() {
   border-radius: 8px; cursor: pointer; border: 2px solid transparent;
   transition: all 0.2s; background: var(--primary-color-soft, rgba(102,126,234,0.08));
 }
-.theme-picker-item:hover { border-color: var(--primary-color, #667eea)66; }
-.theme-picker-item.active { border-color: var(--primary-color, #667eea); background: var(--primary-color, #667eea)11; }
+.theme-picker-item:hover { border-color: var(--primary-color, var(--primary-color))66; }
+.theme-picker-item.active { border-color: var(--primary-color, var(--primary-color)); background: var(--primary-color, var(--primary-color))11; }
 .theme-picker-color { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
 .theme-picker-label { font-size: 13px; }
 

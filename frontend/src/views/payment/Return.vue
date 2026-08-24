@@ -1,5 +1,9 @@
 <template>
-  <div class="payment-return">
+  <div class="payment-return" :class="{ 'is-success': status === 'success' }">
+    <!-- 成功庆祝：轻量 CSS confetti（纯装饰，pointer-events: none） -->
+    <div v-if="status === 'success' && !loading" class="confetti" aria-hidden="true">
+      <i v-for="piece in confettiPieces" :key="piece.id" class="confetti-piece" :style="piece.style" />
+    </div>
     <n-card :bordered="false" style="max-width: 600px; margin: 0 auto;">
       <n-spin :show="loading">
         <n-result
@@ -16,13 +20,14 @@
               <n-descriptions-item label="订单号">{{ orderInfo.order_no }}</n-descriptions-item>
               <n-descriptions-item label="套餐名称">{{ orderInfo.package_name }}</n-descriptions-item>
               <n-descriptions-item label="支付金额">
-                <span style="color: #18a058; font-weight: 600;">¥{{ orderInfo.final_amount }}</span>
+                <span style="color: var(--success-color); font-weight: 600;">¥{{ orderInfo.final_amount }}</span>
               </n-descriptions-item>
               <n-descriptions-item label="支付时间">{{ formatDateTime(orderInfo.paid_at) }}</n-descriptions-item>
             </n-descriptions>
             <n-space justify="center">
               <n-button @click="$router.push('/orders')">返回订单列表</n-button>
-              <n-button type="primary" @click="$router.push('/subscription')">查看订阅</n-button>
+              <n-button v-if="status === 'success'" type="primary" @click="$router.push('/subscription')">查看订阅</n-button>
+              <n-button v-if="status === 'fail'" type="primary" @click="$router.push('/orders')">重新支付</n-button>
             </n-space>
           </template>
         </n-result>
@@ -49,6 +54,24 @@ const countdown = ref(2)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let redirectTimer: ReturnType<typeof setInterval> | null = null
 let pollCount = 0
+
+// 成功庆祝：CSS confetti 粒子（一次性生成，纯装饰）
+const confettiColors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#ffd166', '#06d6a0']
+const confettiPieces = Array.from({ length: 16 }, (_, i) => {
+  const size = 6 + Math.random() * 5
+  return {
+    id: i,
+    style: {
+      left: `${(i * 6.25 + Math.random() * 3) % 100}%`,
+      width: `${size}px`,
+      height: `${size * 1.4}px`,
+      background: confettiColors[i % confettiColors.length],
+      animationDelay: `${(Math.random() * 0.7).toFixed(2)}s`,
+      animationDuration: `${(2.4 + Math.random() * 1.2).toFixed(2)}s`,
+      '--sway': `${(Math.random() * 80 - 40).toFixed(0)}px`,
+    },
+  }
+})
 
 const source = computed(() => route.query.source || 'purchase')
 const shouldAutoRedirect = computed(() => route.query.redirect === 'dashboard')
@@ -172,5 +195,62 @@ onUnmounted(() => {
 
 @media (max-width: 767px) {
   .payment-return { padding: 16px; padding-top: 30px; }
+}
+
+/* ---------- 成功庆祝动效（轻量，仅 transform/opacity） ---------- */
+.confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 100;
+}
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  border-radius: 2px;
+  opacity: 0;
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+@keyframes confetti-fall {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--sway, 20px), 108vh, 0) rotate(560deg);
+    opacity: 0.45;
+  }
+}
+
+/* 成功图标放大淡入 */
+.payment-return.is-success :deep(.n-result__icon) {
+  animation: success-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes success-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti {
+    display: none;
+  }
+  .payment-return.is-success :deep(.n-result__icon) {
+    animation: none;
+  }
 }
 </style>

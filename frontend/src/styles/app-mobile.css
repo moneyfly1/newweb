@@ -1,0 +1,354 @@
+/* ============================================================
+   app-mobile.css —— 移动端「手机 App 原生感」统一样式
+   依赖主题 CSS 变量（--bg-color/--text-color/--primary-color 等）
+   ============================================================ */
+
+/* ---------- 页面转场动画（App 感核心：像 iOS push 的滑动切换） ---------- */
+.page-slide-enter-active,
+.page-slide-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.page-slide-enter-from {
+  opacity: 0;
+  transform: translateX(28px);
+}
+.page-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-14px);
+}
+
+@media (max-width: 767px) {
+  /* ---------- 移动端滚动体验 ---------- */
+  html, body {
+    overscroll-behavior-y: none;
+  }
+  /* 隐藏布局滚动条（App 感） */
+  .n-layout-scroll-container::-webkit-scrollbar,
+  .user-mobile-content::-webkit-scrollbar,
+  .mobile-admin-content::-webkit-scrollbar {
+    display: none;
+    width: 0;
+  }
+
+  /* ---------- 顶部栏毛玻璃（App 常见） ---------- */
+  .mobile-header {
+    backdrop-filter: saturate(180%) blur(18px) !important;
+    -webkit-backdrop-filter: saturate(180%) blur(18px) !important;
+    background: color-mix(in srgb, var(--bg-color, #fff) 80%, transparent) !important;
+  }
+
+  /* ---------- 底部 Tab 栏：指示器 + 按压缩放 ---------- */
+  .mobile-tab {
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.2s, transform 0.12s ease !important;
+  }
+  .mobile-tab:active {
+    transform: scale(0.9);
+  }
+  .mobile-tab .n-icon {
+    transition: transform 0.2s ease;
+  }
+  .mobile-tab.active .n-icon {
+    transform: translateY(-1px);
+  }
+  /* 顶部胶囊指示器 */
+  .mobile-tab.active::before {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22px;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--primary-color, #4f46e5);
+  }
+  .mobile-tab.active {
+    background: transparent !important;
+  }
+
+  /* ---------- 页面内容 App 化：卡片圆角/间距/按压 ---------- */
+  /* 统一页面横向留白，内容像 App 内容区 */
+  .user-mobile-content .page-container,
+  .mobile-admin-content .admin-page-shell {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  /* 卡片按压反馈（原生感） */
+  .mobile-card:active,
+  .quick-action:active,
+  .qs-main:active,
+  .client-card:active {
+    transform: scale(0.98);
+  }
+  .mobile-card {
+    transition: transform 0.12s ease, box-shadow 0.2s ease;
+  }
+
+  /* 统一移动端卡片圆角（App 风格 14px） */
+  .mobile-card,
+  .card,
+  .quick-sub-item,
+  .stat-card {
+    border-radius: 14px !important;
+  }
+
+  /* 列表项按压反馈 */
+  .order-item:active,
+  .announcement-item:active,
+  .activity-item:active {
+    background: var(--primary-color-soft, rgba(79, 70, 229, 0.08)) !important;
+  }
+
+  /* ---------- 弹层 App 化 ---------- */
+  /* 底部抽屉圆角上沿 */
+  .n-drawer.n-drawer--bottom .n-drawer-content {
+    border-radius: 16px 16px 0 0;
+  }
+  /* 弹窗圆角 */
+  .n-modal {
+    border-radius: 14px !important;
+  }
+
+  /* ---------- 输入框 / 按钮移动端舒适高度 ---------- */
+  .mobile-admin-content .n-input,
+  .user-mobile-content .n-input {
+    font-size: 16px; /* 防 iOS 聚焦缩放 */
+  }
+  .user-mobile-content .n-input__input-el,
+  .mobile-admin-content .n-input__input-el {
+    font-size: 16px;
+  }
+
+  /* ---------- 触控目标兜底 ---------- */
+  .user-mobile-content .n-button,
+  .mobile-admin-content .n-button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ---------- 深色模式毛玻璃降级 ---------- */
+  @media (prefers-color-scheme: dark) {
+    .mobile-header {
+      background: color-mix(in srgb, var(--bg-color, #1a1a2e) 82%, transparent) !important;
+    }
+  }
+}
+
+/* ---------- App 风格空状态（管理端/用户端移动列表统一） ---------- */
+.mobile-empty {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  padding: 56px 20px !important;
+  text-align: center !important;
+}
+/* 虚线「空容器」图标（App 常见隐喻） */
+.mobile-empty::before {
+  content: '';
+  width: 52px;
+  height: 52px;
+  border: 2px dashed var(--border-color, #d4d4d8);
+  border-radius: 16px;
+  background: var(--primary-color-soft, rgba(79, 70, 229, 0.06));
+  flex-shrink: 0;
+}
+.mobile-empty::after {
+  content: '';
+  width: 20px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--border-color, #d4d4d8);
+}
+
+/* ---------- 刘海屏安全区精确适配 ---------- */
+@media (max-width: 767px) {
+  /* 顶部：状态栏区域让位（毛玻璃头部与状态栏融合） */
+  .mobile-header {
+    height: calc(52px + env(safe-area-inset-top)) !important;
+    padding-top: env(safe-area-inset-top) !important;
+  }
+  /* 底部 Tab 栏安全区（已有 padding-bottom，补最小高度） */
+  .mobile-tabbar {
+    min-height: calc(56px + env(safe-area-inset-bottom));
+  }
+  /* 页面内容顶部留白避免被状态栏遮挡（当头部非 sticky 时） */
+  .user-mobile-content > div:first-child,
+  .mobile-admin-content > div:first-child {
+    min-height: calc(100% + env(safe-area-inset-top));
+  }
+}
+
+/* ---------- 桌面窄屏工具栏兜底（防止 header-right 控件挤爆换行错位） ---------- */
+.page-header {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+.page-header .header-right {
+  min-width: 0;
+}
+.page-header .header-right .n-space {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+/* ---------- 移动端工具栏：控件不溢出屏幕 ---------- */
+@media (max-width: 767px) {
+  .admin-page-shell .mobile-toolbar-controls {
+    width: 100%;
+  }
+  .admin-page-shell .mobile-toolbar-row .n-select {
+    min-width: 0;
+    flex: 1 1 40%;
+  }
+  /* 搜索输入框全宽，筛选/按钮自适应换行 */
+  .admin-page-shell .mobile-toolbar-controls > .n-input {
+    width: 100% !important;
+  }
+  /* 搜索行：输入框弹性 + 搜索按钮同行等宽不溢出 */
+  .admin-page-shell .mobile-toolbar-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .admin-page-shell .mobile-toolbar-search .n-input {
+    flex: 1;
+    min-width: 0;
+  }
+  .admin-page-shell .mobile-toolbar-search .n-button {
+    flex: 0 0 auto;
+  }
+  .user-mobile-content .n-input,
+  .mobile-admin-content .n-input {
+    max-width: 100%;
+  }
+}
+
+/* ---------- 移动端卡片操作按钮：网格化等宽、不隐藏、自动换行 ----------
+   规则：默认 3 列（3 个一行，5 个=3+2，6 个=3+3）；
+   恰好 4 个按钮时 2 列（2+2，用户指定）；
+   按钮等宽、贴齐。 */
+@media (max-width: 767px) {
+  .mobile-card .card-actions,
+  .mobile-card .mobile-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+  }
+  .mobile-card .card-actions > *,
+  .mobile-card .mobile-actions > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+  .mobile-card .card-actions .n-button,
+  .mobile-card .mobile-actions .n-button {
+    width: 100% !important;
+  }
+  /* 恰好 4 个按钮 → 2 列（2+2） */
+  .mobile-card .card-actions:has(> *:nth-child(4):last-child),
+  .mobile-card .mobile-actions:has(> *:nth-child(4):last-child) {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  /* 下拉按钮在网格中占位（如有残留） */
+  .mobile-card .card-actions .n-dropdown,
+  .mobile-card .mobile-actions .n-dropdown {
+    width: 100% !important;
+  }
+  .mobile-card .card-actions .n-dropdown .n-button,
+  .mobile-card .mobile-actions .n-dropdown .n-button {
+    width: 100% !important;
+  }
+
+  /* ---------- 批量操作栏：移动端网格化等宽（不溢出、对齐） ---------- */
+  .batch-bar,
+  .batch-operations {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    width: 100% !important;
+    align-items: stretch !important;
+  }
+  .batch-bar .batch-info {
+    grid-column: 1 / -1;
+    width: 100%;
+    text-align: left;
+  }
+  .batch-bar .n-space,
+  .batch-operations .n-space {
+    grid-column: 1 / -1;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  .batch-bar > *,
+  .batch-operations > *,
+  .batch-bar .n-space > *,
+  .batch-operations .n-space > * {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+  .batch-bar .n-button,
+  .batch-operations .n-button {
+    width: 100% !important;
+  }
+}
+
+/* ============================================================
+   商业级细节（全局一致性 · 本文件后导入，覆盖早期文件同名规则）
+   仅作用于本项目自定义类，不覆盖 Naive 组件默认样式。
+   ============================================================ */
+
+/* 桌面端卡片圆角统一 12px（覆盖 mobile-cards.css 的 14px 与页面 scoped 圆角；
+   移动端保持 14px App 风格，见上方 max-width: 767px 规则） */
+@media (min-width: 768px) {
+  .mobile-card,
+  .page-card,
+  .admin-main-card,
+  .main-card,
+  .stat-card,
+  .card {
+    border-radius: 12px !important;
+  }
+}
+
+/* hover 微阴影过渡（仅精确指针设备，避免触屏误触发） */
+@media (hover: hover) and (pointer: fine) {
+  .mobile-card.clickable:hover,
+  .page-card:hover,
+  .admin-main-card:hover,
+  .main-card:hover,
+  .stat-card:hover {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
+  }
+}
+
+/* 按压缩放统一 0.98（本项目自定义可点元素） */
+.mobile-card:active,
+.page-card:active,
+.admin-main-card:active,
+.main-card:active,
+.stat-card:active,
+.quick-action:active,
+.client-card:active,
+.qs-main:active,
+.quick-sub-item:active {
+  transform: scale(0.98);
+}
+
+/* 暗色主题兜底：卡片背景跟随 --bg-color 变量（防御性；本项目卡片本就用变量，
+   此处仅覆盖任何遗漏的硬编码浅色背景） */
+@media (prefers-color-scheme: dark) {
+  .mobile-card,
+  .page-card {
+    background: var(--bg-color, #1a1a2e);
+  }
+}

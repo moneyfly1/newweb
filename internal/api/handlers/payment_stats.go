@@ -7,7 +7,27 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+// avgPaymentTimeExpr 返回「平均支付耗时（分钟）」的 SQL 表达式（按方言适配）。
+// MySQL/PostgreSQL 用 TIMESTAMPDIFF；SQLite 无此函数，用 strftime 差值换算。
+func avgPaymentTimeExpr(db *gorm.DB) string {
+	if db.Dialector.Name() == "sqlite" {
+		return "AVG(CASE WHEN status IN ('paid', 'completed') AND payment_time IS NOT NULL THEN " +
+			"(strftime('%s', payment_time) - strftime('%s', created_at)) / 60.0 ELSE NULL END)"
+	}
+	return "AVG(CASE WHEN status IN ('paid', 'completed') AND payment_time IS NOT NULL THEN " +
+		"TIMESTAMPDIFF(MINUTE, created_at, payment_time) ELSE NULL END)"
+}
+
+// hourExpr 返回「取时间字段的小时」的 SQL 表达式（按方言适配）。
+func hourExpr(db *gorm.DB, column string) string {
+	if db.Dialector.Name() == "sqlite" {
+		return "CAST(strftime('%H', " + column + ") AS INTEGER)"
+	}
+	return "HOUR(" + column + ")"
+}
 
 // AdminPaymentStats 支付统计
 func AdminPaymentStats(c *gin.Context) {
@@ -156,8 +176,7 @@ func AdminPaymentMethodComparison(c *gin.Context) {
 			"SUM(CASE WHEN status IN ('paid', 'completed') THEN 1 ELSE 0 END) as success_orders, "+
 			"SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_orders, "+
 			"SUM(CASE WHEN status IN ('paid', 'completed') THEN COALESCE(final_amount, amount) ELSE 0 END) as total_amount, "+
-			"AVG(CASE WHEN status IN ('paid', 'completed') AND payment_time IS NOT NULL THEN "+
-			"TIMESTAMPDIFF(MINUTE, created_at, payment_time) ELSE NULL END) as average_time").
+			avgPaymentTimeExpr(db)).
 		Where("DATE(created_at) >= ?", startDate).
 		Group("payment_method").
 		Scan(&comparisons)
@@ -202,10 +221,10 @@ func AdminPaymentAnalysis(c *gin.Context) {
 
 	var hourlyStats []HourlyStat
 	db.Model(&models.Order{}).
-		Select("HOUR(created_at) as hour, COUNT(*) as order_count, "+
+		Select(hourExpr(db, "created_at")+" as hour, COUNT(*) as order_count, "+
 			"SUM(CASE WHEN status IN ('paid', 'completed') THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate").
 		Where("payment_method = ? AND DATE(created_at) BETWEEN ? AND ?", paymentMethod, startDate, endDate).
-		Group("HOUR(created_at)").
+		Group(hourExpr(db, "created_at")).
 		Order("hour ASC").
 		Scan(&hourlyStats)
 

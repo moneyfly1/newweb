@@ -1,0 +1,64 @@
+/* =========================================================
+   Auth 认证页公共样式（仅 Login / Register / ForgotPassword 使用）
+   与 AuthLayout.vue 的 scoped 布局样式互补：
+   AuthLayout 负责左右栏骨架/品牌面板/动效，这里负责表单区排版
+   ========================================================= */
+
+/* 表单区标题（h2） */
+.auth-form-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text-color, #1f2937);
+}
+
+/* 表单区副标题 */
+.auth-form-subtitle {
+  color: var(--text-color-secondary, #64748b);
+  margin-bottom: 28px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* 底部跳转链接区 */
+.auth-form-footer {
+  text-align: center;
+  margin-top: 24px;
+  color: var(--text-color-secondary, #64748b);
+  font-size: 14px;
+}
+
+/* 行内可点击链接 */
+.auth-link {
+  color: var(--primary-color, #667eea);
+  font-weight: 500;
+}
+
+/* 登录页「记住我 / 忘记密码」行 */
+.auth-form-extra {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 4px 0 20px;
+}
+
+/* 注册页条款勾选行 */
+.auth-terms-row {
+  margin: 4px 0 20px;
+  font-size: 14px;
+  color: var(--text-color-secondary, #64748b);
+}
+
+/* 提交按钮统一尺寸 */
+.auth-submit-btn {
+  height: 44px;
+  border-radius: 8px;
+}
+
+/* 忘记密码 step3 自动跳转提示 */
+.auth-redirect-hint {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-color-secondary, #94a3b8);
+}

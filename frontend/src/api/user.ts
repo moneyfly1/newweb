@@ -11,8 +11,6 @@ export const updateNotificationSettings = (data: any) => request.put('/users/not
 export const getPrivacySettings = () => request.get('/users/privacy-settings')
 export const updatePrivacySettings = (data: any) => request.put('/users/privacy-settings', data)
 export const getMyLevel = () => request.get('/users/my-level')
-export const getActivities = (params?: any) => request.get('/users/activities', { params })
-export const getUserDevices = () => request.get('/users/devices')
 export const getSubscriptionResets = (params?: any) => request.get('/users/subscription-resets', { params })
 
 // Telegram

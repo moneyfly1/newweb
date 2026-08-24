@@ -1,5 +1,16 @@
 <template>
-  <div class="ticket-container">
+  <div
+    class="ticket-container"
+    @touchstart.passive="pullTouchStart"
+    @touchmove.passive="pullTouchMove"
+    @touchend.passive="pullTouchEnd"
+  >
+    <transition name="fade">
+      <div v-if="pullDistance > 0 || pullRefreshing" class="pull-indicator" :style="{ transform: `translate(-50%, ${Math.min(pullDistance, 70) - 40}px)` }">
+        <n-spin v-if="pullRefreshing" size="small" />
+        <span v-else>{{ pullDistance >= 55 ? '释放刷新' : '下拉刷新' }}</span>
+      </div>
+    </transition>
     <n-card :bordered="false" class="header-card">
       <div class="header">
         <h2>我的工单</h2>
@@ -68,7 +79,7 @@
       show-footer
       @confirm="handleCreate"
       @cancel="showCreateModal = false"
-      :confirm-loading="submitting"
+      :loading="submitting"
       confirm-text="提交工单"
       cancel-text="取消"
     >
@@ -110,6 +121,7 @@
 
 <script setup>
 import { ref, reactive, h, onMounted } from 'vue'
+import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useRouter } from 'vue-router'
 import { NButton, NTag, NIcon, useMessage } from 'naive-ui'
 import { AddOutline } from '@vicons/ionicons5'
@@ -293,12 +305,38 @@ const handleCreate = async () => {
   }
 }
 
+// 下拉刷新（App 原生感）
+const { distance: pullDistance, refreshing: pullRefreshing, onTouchStart: pullTouchStart, onTouchMove: pullTouchMove, onTouchEnd: pullTouchEnd } =
+  usePullRefresh(loadTickets)
+
 onMounted(() => {
   loadTickets()
 })
 </script>
 
 <style scoped>
+
+.pull-indicator {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 96px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--bg-color, #fff);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  color: var(--text-color-secondary, #666);
+  transition: transform 0.15s ease;
+}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 .ticket-container {
   padding: 20px;
 }

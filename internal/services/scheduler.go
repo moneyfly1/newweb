@@ -55,7 +55,7 @@ func (s *Scheduler) Start() {
 	s.startLoop("CancelExpiredOrders", 2*time.Hour, cancelExpiredOrdersTask)
 	s.startLoop("CleanPaymentNonces", 12*time.Hour, cleanPaymentNoncesTask)
 	s.startLoop("CleanExpiredTokens", 6*time.Hour, cleanExpiredTokensTask)
-	s.startLoop("CleanOldLogs", 24*time.Hour, cleanOldLogsTask)
+	s.startLoop("CleanOldLogs", 1*time.Hour, cleanOldLogsTask)
 	s.startLoop("AutoBackup", 30*time.Minute, autoBackupTask)
 }
 
@@ -311,8 +311,25 @@ func cleanExpiredTokensTask() {
 	}
 }
 
+var lastLogCleanTime time.Time
+
 // cleanOldLogsTask removes log records older than the configured retention period.
+// 受系统设置控制：log_auto_clean_enabled（总开关）+ log_clean_interval_hours（自动清理间隔小时）
 func cleanOldLogsTask() {
+	// 总开关：关闭时跳过
+	if !utils.IsBoolSettingDefault("log_auto_clean_enabled", true) {
+		return
+	}
+	// 间隔控制：距上次清理不足配置间隔时跳过
+	intervalHours := utils.GetIntSetting("log_clean_interval_hours", 24)
+	if intervalHours <= 0 {
+		intervalHours = 24
+	}
+	if !lastLogCleanTime.IsZero() && time.Since(lastLogCleanTime) < time.Duration(intervalHours)*time.Hour {
+		return
+	}
+	lastLogCleanTime = time.Now()
+
 	retentionDays := utils.GetIntSetting("log_retention_days", 90)
 	if retentionDays <= 0 {
 		return

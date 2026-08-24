@@ -33,23 +33,6 @@ func ExtractLogContext(c *gin.Context) *LogContext {
 	}
 }
 
-// ApplyLogContext 将日志上下文应用到日志实体
-func ApplyLogContext(entry interface{}, ctx *LogContext) {
-	if ctx == nil {
-		return
-	}
-
-	// 使用反射或类型断言来设置字段
-	// 这里简化处理，实际使用时需要根据具体类型设置
-	type LogWithContext interface {
-		SetContext(ip, ua, location *string)
-	}
-
-	if e, ok := entry.(LogWithContext); ok {
-		e.SetContext(ctx.IPAddress, ctx.UserAgent, ctx.Location)
-	}
-}
-
 // AsyncCreateLog 异步创建日志记录
 func AsyncCreateLog(entry interface{}, logType string) {
 	go func() {

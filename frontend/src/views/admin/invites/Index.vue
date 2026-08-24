@@ -9,7 +9,7 @@
             <span class="stat-lbl">总邀请码</span>
           </div>
           <div class="stat-item">
-            <span class="stat-val" style="color: #18a058">{{ stats.active_codes || 0 }}</span>
+            <span class="stat-val" style="color: var(--success-color)">{{ stats.active_codes || 0 }}</span>
             <span class="stat-lbl">有效</span>
           </div>
           <div class="stat-item">
@@ -17,7 +17,7 @@
             <span class="stat-lbl">邀请人数</span>
           </div>
           <div class="stat-item">
-            <span class="stat-val" style="color: #f0a020">{{ formatCurrency(stats.total_inviter_reward) }}</span>
+            <span class="stat-val" style="color: var(--warning-color)">{{ formatCurrency(stats.total_inviter_reward) }}</span>
             <span class="stat-lbl">邀请人奖励</span>
           </div>
           <div class="stat-item">
@@ -59,7 +59,7 @@
         <n-tabs type="line" animated>
           <n-tab-pane name="codes" tab="邀请码列表">
             <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-              <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+              <span style="color: var(--text-color-secondary)">已选择 {{ checkedRowKeys.length }} 项</span>
               <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
             </n-space>
             <template v-if="!appStore.isMobile">

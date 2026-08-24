@@ -31,6 +31,11 @@ cboard.db-shm
 cboard.db-wal
 backups/
 # uploads 目录及模板可提交（temp.yaml 为 Clash 模板）
+# GeoIP/地理数据库为运行时下载的二进制数据，不提交
+uploads/config/*.dat
+uploads/config/*.mmdb
+uploads/config/*.metadb
+uploads/config/stash_temp.yaml
 
 # IDE / 编辑器
 .idea/

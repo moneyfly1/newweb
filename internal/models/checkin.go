@@ -4,10 +4,11 @@ import "time"
 
 // CheckIn 签到记录
 type CheckIn struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"index" json:"user_id"`
-	Amount    float64   `gorm:"type:decimal(10,2)" json:"amount"`
-	CreatedAt time.Time `gorm:"autoCreateTime;index" json:"created_at"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	UserID      uint      `gorm:"uniqueIndex:idx_checkin_user_date" json:"user_id"`
+	CheckInDate string    `gorm:"type:varchar(10);uniqueIndex:idx_checkin_user_date" json:"-"` // YYYY-MM-DD，与 user_id 组成唯一索引防并发双签
+	Amount      float64   `gorm:"type:decimal(10,2)" json:"amount"`
+	CreatedAt   time.Time `gorm:"autoCreateTime;index" json:"created_at"`
 }
 
 func (CheckIn) TableName() string {

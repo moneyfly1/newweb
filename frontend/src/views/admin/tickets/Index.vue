@@ -414,6 +414,11 @@ const handleReply = async () => {
 
   replyLoading.value = true
   try {
+    // 若选择了状态更新则一并提交（修复原状态选择器为死控件）
+    if (updateStatus.value) {
+      await updateTicket(currentTicket.value.id, { status: updateStatus.value })
+      updateStatus.value = ''
+    }
     await replyAdminTicket(currentTicket.value.id, {
       content: replyContent.value,
     })

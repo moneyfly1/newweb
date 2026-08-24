@@ -15,7 +15,7 @@
             :options="typeOptions"
             @update:value="handleSearch"
           />
-          <n-button @click="fetchAbnormalUsers" secondary>
+          <n-button @click="loadData" secondary>
             <template #icon><n-icon :component="RefreshOutline" /></template>
             刷新
           </n-button>
@@ -86,10 +86,10 @@
         </n-alert>
 
         <n-pagination
-          v-if="totalUsers > pageSize"
-          v-model:page="currentPage"
-          v-model:page-size="pageSize"
-          :item-count="totalUsers"
+          v-if="pagination.itemCount > pagination.pageSize"
+          v-model:page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :item-count="pagination.itemCount"
           :page-sizes="[10, 20, 50]"
           show-size-picker
           style="margin-top: 16px; justify-content: flex-end"
@@ -107,6 +107,7 @@ import { NButton, NTag, NSpace, NIcon, useMessage } from 'naive-ui'
 import { SearchOutline, RefreshOutline, PersonOutline } from '@vicons/ionicons5'
 import { useRouter } from 'vue-router'
 import { getAbnormalUsers } from '@/api/admin'
+import { useTable } from '@/composables/useTable'
 import { useAppStore } from '@/stores/app'
 
 const message = useMessage()
@@ -114,12 +115,17 @@ const router = useRouter()
 const appStore = useAppStore()
 
 // State
-const loading = ref(false)
-const users = ref([])
 const typeFilter = ref(null)
-const currentPage = ref(1)
-const pageSize = ref(10)
-const totalUsers = ref(0)
+
+// 统一表格状态（getAbnormalUsers 返回 data.users 非标格式，用 fetcher 包装适配）
+const abnormalFetcher = async (params) => {
+  const res = await getAbnormalUsers(params)
+  const data = res.data || {}
+  return { data: { items: data.users || data.items || [], total: data.total || 0 } }
+}
+const { loading, tableData: users, pagination, loadData, reload } = useTable(abnormalFetcher, {
+  getParams: () => ({ type: typeFilter.value || undefined }),
+})
 
 const typeOptions = [
   { label: '全部', value: null },
@@ -187,48 +193,16 @@ const columns = [
   }
 ]
 
-// Fetch abnormal users
-const fetchAbnormalUsers = async () => {
-  loading.value = true
-  try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize.value,
-      type: typeFilter.value || undefined
-    }
-    const response = await getAbnormalUsers(params)
-    const data = response.data
-    users.value = data.users || data.items || []
-    totalUsers.value = data.total || 0
-  } catch (error) {
-    message.error('获取异常用户列表失败：' + (error.message || '未知错误'))
-  } finally {
-    loading.value = false
-  }
-}
-
-const handleSearch = () => {
-  currentPage.value = 1
-  fetchAbnormalUsers()
-}
-
-const handlePageChange = (page) => {
-  currentPage.value = page
-  fetchAbnormalUsers()
-}
-
-const handlePageSizeChange = (size) => {
-  pageSize.value = size
-  currentPage.value = 1
-  fetchAbnormalUsers()
-}
+const handleSearch = () => { reload() }
+const handlePageChange = (page) => { pagination.page = page; loadData() }
+const handlePageSizeChange = (size) => { pagination.pageSize = size; pagination.page = 1; loadData() }
 
 const handleViewUser = (userId) => {
   router.push({ name: 'AdminUsers', query: { userId } })
 }
 
 onMounted(() => {
-  fetchAbnormalUsers()
+  loadData()
 })
 </script>
 
@@ -244,7 +218,7 @@ onMounted(() => {
 }
 
 .mobile-card {
-  background: #fff;
+  background: var(--bg-color);
   border-radius: 10px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   overflow: hidden;
@@ -255,7 +229,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .card-title {
@@ -281,7 +255,7 @@ onMounted(() => {
 }
 
 .card-label {
-  color: #999;
+  color: var(--text-color-secondary);
   white-space: nowrap;
   margin-right: 8px;
 }
@@ -290,7 +264,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   padding: 10px 14px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
   flex-wrap: wrap;
 }
 

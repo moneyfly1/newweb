@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -19,10 +20,70 @@ import (
 
 // ── Subscription activation ──
 
+// BuildSubscriptionURL 生成用户订阅链接（权威格式：/api/v1/client/subscribe?token=TOKEN[&type=xxx]）。
+// 全站统一在此生成，避免各处拼接出不同格式（旧代码曾混用 /api/v1/sub/、/api/v1/subscribe/ 两种）。
+func BuildSubscriptionURL(token, subType string) string {
+	siteURL := GetSiteURL()
+	if siteURL == "" || token == "" {
+		return ""
+	}
+	base := siteURL + "/api/v1/client/subscribe?token=" + url.QueryEscape(token)
+	if subType != "" {
+		base += "&type=" + url.QueryEscape(subType)
+	}
+	return base
+}
+
+// ErrSubscriptionConflict 订阅行被并发修改（乐观锁冲突）
+var ErrSubscriptionConflict = errors.New("subscription conflict")
+
+// CustomPackageDurationDays 统一「自定义套餐」月→天换算（1 个月 ≈ 30.44 天）。
+// 此前 order.go 余额支付用 30.44、本文件网关支付用 months*30，
+// 同一订单不同支付方式获得不同订阅天数；现统一收敛到此处。
+func CustomPackageDurationDays(months int) int {
+	if months <= 0 {
+		return 0
+	}
+	return int(math.Round(float64(months) * 30.44))
+}
+
+// ExtendSubscriptionExpiry 原子顺延订阅到期时间（乐观锁防并发丢更新）。
+// 以调用方读到的旧到期时间 oldExpire 为基准；若已过期则从现在起算。
+// 并发下若 expire_time 已被其它事务修改（WHERE 条件失配），返回 ErrSubscriptionConflict。
+func ExtendSubscriptionExpiry(tx *gorm.DB, subID uint, oldExpire time.Time, days int) (time.Time, error) {
+	if days <= 0 {
+		return time.Time{}, fmt.Errorf("无效的延长天数: %d", days)
+	}
+	base := oldExpire
+	now := time.Now()
+	if base.Before(now) {
+		base = now
+	}
+	newExpire := base.AddDate(0, 0, days)
+	res := tx.Model(&models.Subscription{}).
+		Where("id = ? AND expire_time = ?", subID, oldExpire).
+		Update("expire_time", newExpire)
+	if res.Error != nil {
+		return time.Time{}, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return time.Time{}, ErrSubscriptionConflict
+	}
+	return newExpire, nil
+}
+
+// AddSubscriptionDevices 原子增加订阅设备数（防并发读-改-写丢更新）
+func AddSubscriptionDevices(tx *gorm.DB, subID uint, add int) error {
+	if add <= 0 {
+		return nil
+	}
+	return tx.Model(&models.Subscription{}).Where("id = ?", subID).
+		UpdateColumn("device_limit", gorm.Expr("device_limit + ?", add)).Error
+}
+
 // ActivateSubscription creates or extends a subscription after successful payment.
 func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string) error {
-	fmt.Printf("[subscription] 开始激活订阅: order_id=%d, order_no=%s, user_id=%d, package_id=%d\n",
-		order.ID, order.OrderNo, order.UserID, order.PackageID)
+	utils.SysError("subscription", fmt.Sprintf("开始激活订阅: order_id=%d, order_no=%s, user_id=%d, package_id=%d", order.ID, order.OrderNo, order.UserID, order.PackageID))
 
 	var deviceLimit int
 	var durationDays int
@@ -72,9 +133,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 				var subURL string
 				var userSub models.Subscription
 				if db.Where("user_id = ?", order.UserID).First(&userSub).Error == nil {
-					if siteURL := GetSiteURL(); siteURL != "" {
-						subURL = siteURL + "/api/v1/client/subscribe?token=" + userSub.SubscriptionURL
-					}
+					subURL = BuildSubscriptionURL(userSub.SubscriptionURL, "")
 				}
 				emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
 					"username": user.Username, "order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL,
@@ -93,7 +152,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 		devices, _ := extra["devices"].(float64)
 		months, _ := extra["months"].(float64)
 		deviceLimit = int(devices)
-		durationDays = int(months) * 30
+		durationDays = CustomPackageDurationDays(int(months))
 		pkgName = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
 	} else {
 		var pkg models.Package
@@ -108,8 +167,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 	var sub models.Subscription
 	if err := db.Where("user_id = ?", order.UserID).First(&sub).Error; err != nil {
 		// Create new subscription
-		fmt.Printf("[subscription] 创建新订阅: user_id=%d, device_limit=%d, duration_days=%d\n",
-			order.UserID, deviceLimit, durationDays)
+		utils.SysError("subscription", fmt.Sprintf("创建新订阅: user_id=%d, device_limit=%d, duration_days=%d", order.UserID, deviceLimit, durationDays))
 		sub = models.Subscription{
 			UserID:          order.UserID,
 			SubscriptionURL: utils.GenerateHexToken(),
@@ -127,11 +185,11 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			return fmt.Errorf("创建订阅失败: %w", err)
 		}
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "activate", "system", nil, fmt.Sprintf("购买套餐激活订阅: %s", pkgName), nil, nil)
-		fmt.Printf("[subscription] 订阅创建成功: subscription_id=%d\n", sub.ID)
+		utils.SysError("subscription", fmt.Sprintf("订阅创建成功: subscription_id=%d", sub.ID))
 	} else {
-		// Extend existing subscription
-		fmt.Printf("[subscription] 续期现有订阅: subscription_id=%d, old_expire=%s, add_days=%d\n",
-			sub.ID, sub.ExpireTime.Format("2006-01-02"), durationDays)
+		// Extend existing subscription（乐观锁：条件更新 expire_time = 旧值，
+		// 防止同一订阅两个订单并发支付时丢失一次续期）
+		utils.SysError("subscription", fmt.Sprintf("续期现有订阅: subscription_id=%d, old_expire=%s, add_days=%d", sub.ID, sub.ExpireTime.Format("2006-01-02"), durationDays))
 		newExpire := sub.ExpireTime
 		if newExpire.Before(time.Now()) {
 			newExpire = time.Now()
@@ -147,11 +205,46 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			pkgID := int64(order.PackageID)
 			updates["package_id"] = &pkgID
 		}
-		if err := db.Model(&sub).Updates(updates).Error; err != nil {
-			return fmt.Errorf("更新订阅失败: %w", err)
+		// 条件更新（CAS）：仅当 expire_time 仍等于读取时的旧值时更新
+		res := db.Model(&models.Subscription{}).
+			Where("id = ? AND expire_time = ?", sub.ID, sub.ExpireTime).
+			Updates(updates)
+		if res.Error != nil {
+			return fmt.Errorf("更新订阅失败: %w", res.Error)
+		}
+		if res.RowsAffected == 0 {
+			// 并发冲突：重读最新订阅，基于最新到期时间重新计算续期并重试一次
+			var fresh models.Subscription
+			if err := db.First(&fresh, sub.ID).Error; err != nil {
+				return fmt.Errorf("重读订阅失败: %w", err)
+			}
+			newExpire2 := fresh.ExpireTime
+			if newExpire2.Before(time.Now()) {
+				newExpire2 = time.Now()
+			}
+			newExpire2 = newExpire2.AddDate(0, 0, durationDays)
+			updates2 := map[string]interface{}{
+				"device_limit": deviceLimit,
+				"expire_time":  newExpire2,
+				"is_active":    true,
+				"status":       "active",
+			}
+			if order.PackageID > 0 {
+				pkgID := int64(order.PackageID)
+				updates2["package_id"] = &pkgID
+			}
+			res2 := db.Model(&models.Subscription{}).
+				Where("id = ? AND expire_time = ?", sub.ID, fresh.ExpireTime).
+				Updates(updates2)
+			if res2.Error != nil {
+				return fmt.Errorf("重试更新订阅失败: %w", res2.Error)
+			}
+			if res2.RowsAffected == 0 {
+				return ErrSubscriptionConflict
+			}
 		}
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "extend", "system", nil, fmt.Sprintf("购买套餐续期订阅: %s, +%d天", pkgName, durationDays), nil, nil)
-		fmt.Printf("[subscription] 订阅续期成功: subscription_id=%d, new_expire=%s\n", sub.ID, newExpire.Format("2006-01-02"))
+		utils.SysError("subscription", fmt.Sprintf("订阅续期成功: subscription_id=%d, new_expire=%s", sub.ID, newExpire.Format("2006-01-02")))
 	}
 
 	var user models.User
@@ -163,9 +256,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 		var subURL string
 		var userSub models.Subscription
 		if db.Where("user_id = ?", order.UserID).First(&userSub).Error == nil {
-			if siteURL := GetSiteURL(); siteURL != "" {
-				subURL = siteURL + "/api/v1/client/subscribe?token=" + userSub.SubscriptionURL
-			}
+			subURL = BuildSubscriptionURL(userSub.SubscriptionURL, "")
 		}
 		emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
 			"username": user.Username, "order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL,
@@ -177,7 +268,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 	}
 
 	distributeInviteCommission(db, order)
-	fmt.Printf("[subscription] 订阅激活完成: order_no=%s, package=%s\n", order.OrderNo, pkgName)
+	utils.SysError("subscription", fmt.Sprintf("订阅激活完成: order_no=%s, package=%s", order.OrderNo, pkgName))
 	return nil
 }
 
@@ -210,7 +301,7 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 	if order.FinalAmount != nil {
 		payAmount = *order.FinalAmount
 	}
-	commission := math.Round(payAmount*rate/100*100) / 100
+	commission := utils.Round2(payAmount*rate/100)
 	if commission <= 0 {
 		return
 	}
@@ -408,21 +499,7 @@ func appendSurgeWSParams(params []string, m map[string]interface{}) []string {
 	return params
 }
 
-func convertSSToSurge(name, config string) string {
-	m, err := NodeConfigToClashMap("ss", config, name)
-	if err != nil {
-		return ""
-	}
-	return clashMapToSurgeLine(formatSafeCommaName(name), m)
-}
 
-func convertTrojanToSurge(name, config string) string {
-	m, err := NodeConfigToClashMap("trojan", config, name)
-	if err != nil {
-		return ""
-	}
-	return clashMapToSurgeLine(formatSafeCommaName(name), m)
-}
 
 // GenerateShadowrocketBase64 generates Shadowrocket-compatible base64 subscription
 func GenerateShadowrocketBase64(nodes []models.Node) string {

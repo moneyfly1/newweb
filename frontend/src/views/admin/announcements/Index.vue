@@ -14,7 +14,7 @@
 
       <!-- Batch operations -->
       <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-        <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+        <span style="color: var(--text-color-secondary)">已选择 {{ checkedRowKeys.length }} 项</span>
         <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
         <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
         <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
@@ -30,16 +30,16 @@
           :bordered="false"
           :row-key="(row: any) => row.id"
           :checked-row-keys="checkedRowKeys"
-          @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
-          @update:page="(p) => { pagination.page = p; fetchData() }"
-          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
+          @update:checked-row-keys="updateChecked"
+          @update:page="(p) => { pagination.page = p; loadData() }"
+          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; loadData() }"
           @update:sorter="handleSorterChange"
         />
       </template>
 
       <template v-else>
         <n-spin :show="loading">
-          <div v-if="tableData.length === 0" style="text-align: center; padding: 40px 0; color: #999;">
+          <div v-if="tableData.length === 0" style="text-align: center; padding: 40px 0; color: var(--text-color-secondary);">
             暂无数据
           </div>
           <div v-else class="mobile-card-list">
@@ -144,6 +144,7 @@ import {
 } from 'naive-ui'
 import { listAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { useTable } from '@/composables/useTable'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
@@ -151,31 +152,19 @@ const appStore = useAppStore()
 const message = useMessage()
 const dialog = useDialog()
 const formRef = ref()
-const loading = ref(false)
 const submitting = ref(false)
 const showDrawer = ref(false)
 const modalTitle = ref('发布公告')
-const tableData = ref<any[]>([])
 const isEdit = ref(false)
-const sortState = ref({ sort: 'id', order: 'desc' })
-const checkedRowKeys = ref<any[]>([])
 
-const pagination = reactive({
-  page: 1,
-  pageSize: 10,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50],
-  onChange: (page: number) => {
-    pagination.page = page
-    loadData()
-  },
-  onUpdatePageSize: (pageSize: number) => {
-    pagination.pageSize = pageSize
-    pagination.page = 1
-    loadData()
-  },
-})
+// 统一表格状态（loading / data / 分页 / 排序 / 批量选择）
+const { loading, tableData, checkedRowKeys, pagination, loadData, handleSorterChange, resetSelection } =
+  useTable(listAnnouncements)
+
+// 模板事件绑定用（ref 在模板中自动解包，需经函数写回 .value）
+function updateChecked(keys: any[]) {
+  checkedRowKeys.value = keys
+}
 
 const formData = ref({
   id: 0,
@@ -253,38 +242,6 @@ const columns: DataTableColumns = [
   },
 ]
 
-const loadData = async () => {
-  loading.value = true
-  try {
-    const res = await listAnnouncements({
-      page: pagination.page,
-      page_size: pagination.pageSize,
-      sort: sortState.value.sort,
-      order: sortState.value.order,
-    })
-    tableData.value = res.data?.items || []
-    pagination.itemCount = res.data?.total || 0
-  } catch (error: any) {
-    message.error(error.message || '加载失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-const fetchData = loadData
-
-const handleSorterChange = (sorter: { columnKey?: string; order?: 'ascend' | 'descend' } | null) => {
-  if (sorter && sorter.columnKey && sorter.order) {
-    sortState.value.sort = sorter.columnKey
-    sortState.value.order = sorter.order === 'ascend' ? 'asc' : 'desc'
-  } else {
-    sortState.value.sort = 'id'
-    sortState.value.order = 'desc'
-  }
-  pagination.page = 1
-  loadData()
-}
-
 const handleCreate = () => {
   isEdit.value = false
   modalTitle.value = '发布公告'
@@ -347,7 +304,7 @@ const handleBatchEnable = async () => {
       return updateAnnouncement(id, { ...item, is_active: true })
     }))
     message.success('批量启用成功')
-    checkedRowKeys.value = []
+    resetSelection()
     loadData()
   } catch { message.error('批量启用失败') }
 }
@@ -359,7 +316,7 @@ const handleBatchDisable = async () => {
       return updateAnnouncement(id, { ...item, is_active: false })
     }))
     message.success('批量禁用成功')
-    checkedRowKeys.value = []
+    resetSelection()
     loadData()
   } catch { message.error('批量禁用失败') }
 }
@@ -373,7 +330,7 @@ const handleBatchDelete = async () => {
       try {
         await Promise.all(checkedRowKeys.value.map(id => deleteAnnouncement(id)))
         message.success('批量删除成功')
-        checkedRowKeys.value = []
+        resetSelection()
         loadData()
       } catch { message.error('批量删除失败') }
     }
@@ -397,7 +354,7 @@ onMounted(() => {
 }
 
 .mobile-card {
-  background: #fff;
+  background: var(--bg-color);
   border-radius: 10px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   overflow: hidden;
@@ -408,7 +365,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .card-title {
@@ -434,14 +391,14 @@ onMounted(() => {
 }
 
 .card-label {
-  color: #999;
+  color: var(--text-color-secondary);
 }
 
 .card-actions {
   display: flex;
   gap: 8px;
   padding: 10px 14px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
   flex-wrap: wrap;
 }
 

@@ -1,6 +1,17 @@
 <template>
   <div class="logs-container admin-page-shell">
     <n-card title="系统日志" :bordered="false" class="admin-main-card">
+      <template #header-extra>
+        <n-popconfirm @positive-click="handleClearCurrent">
+          <template #trigger>
+            <n-button type="error" size="small" :loading="clearing">
+              <template #icon><n-icon><trash-outline /></n-icon></template>
+              清空当前日志
+            </n-button>
+          </template>
+          确定清空「{{ currentTabText }}」的全部记录吗？此操作不可恢复！
+        </n-popconfirm>
+      </template>
       <n-tabs type="line" animated @update:value="handleTabChange">
         <n-tab-pane name="audit" tab="审计日志">
           <template v-if="!appStore.isMobile">
@@ -254,7 +265,7 @@
               <div v-for="item in systemData" :key="item.id" class="mobile-card">
                 <div class="card-header">
                   <n-tag :type="item.level === 'error' ? 'error' : item.level === 'warn' ? 'warning' : 'info'" size="small">{{ item.level }}</n-tag>
-                  <span style="font-size: 12px; color: #999">{{ item.created_at }}</span>
+                  <span style="font-size: 12px; color: var(--text-color-secondary)">{{ item.created_at }}</span>
                 </div>
                 <div class="card-body">
                   <div class="card-row"><span class="card-label">模块:</span><span>{{ item.module }}</span></div>
@@ -279,7 +290,9 @@
 </template>
 
 <script setup lang="tsx">
-import { ref, reactive, h, onMounted } from 'vue'
+import { ref, reactive, h, computed, onMounted } from 'vue'
+import { TrashOutline } from '@vicons/ionicons5'
+import { clearLogs } from '@/api/admin'
 import { NCard, NTabs, NTabPane, NDataTable, NTag, NPagination, NSpace, NSelect, useMessage, type DataTableColumns } from 'naive-ui'
 import { getAuditLogs, getLoginLogs, getRegistrationLogs, getSubscriptionLogs, getBalanceLogs, getCommissionLogs, getSystemLogs } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -789,6 +802,28 @@ const handleTabChange = (value: string) => {
   }
 }
 
+// 清空当前类型日志
+const clearing = ref(false)
+const currentTabText = computed(() => {
+  const map: Record<string, string> = { audit: '审计', login: '登录', registration: '注册', subscription: '订阅', balance: '余额', commission: '佣金', system: '系统' }
+  return (map[currentTab.value] || '') + '日志'
+})
+const handleClearCurrent = async () => {
+  clearing.value = true
+  try {
+    const res: any = await clearLogs(currentTab.value)
+    message.success(`已清空 ${res.data?.deleted || 0} 条记录`)
+    // 刷新当前 tab
+    const loaders: Record<string, () => Promise<void>> = {
+      audit: loadAuditLogs, login: loadLoginLogs, registration: loadRegistrationLogs,
+      subscription: loadSubscriptionLogs, balance: loadBalanceLogs, commission: loadCommissionLogs, system: loadSystemLogs,
+    }
+    await (loaders[currentTab.value] || loadAuditLogs)()
+  } catch (e: any) {
+    message.error(e.message || '清空失败')
+  } finally { clearing.value = false }
+}
+
 onMounted(() => {
   loadAuditLogs()
 })
@@ -800,13 +835,13 @@ onMounted(() => {
 }
 
 .mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.mobile-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
-.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+.mobile-card { background: var(--bg-color); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
 .card-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-body { padding: 10px 14px; }
 .card-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
-.card-label { color: #999; }
-.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid #f0f0f0; flex-wrap: wrap; }
+.card-label { color: var(--text-color-secondary); }
+.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-wrap: wrap; }
 
 @media (max-width: 767px) {
   .logs-container { padding: 8px; }

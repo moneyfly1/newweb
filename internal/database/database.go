@@ -187,6 +187,9 @@ func AutoMigrate() error {
 		return fmt.Errorf("数据库未初始化，请先调用 InitDatabase")
 	}
 
+	// 签到防双签迁移：先加列、回填历史数据、清理重复，确保唯一索引可安全创建
+	ensureCheckInUniqueIndex()
+
 	var existingUserLevelColumns []string
 	if DB.Migrator().HasTable(&models.UserLevel{}) {
 		columnTypes, err := DB.Migrator().ColumnTypes(&models.UserLevel{})
@@ -384,4 +387,41 @@ func ReopenDB() error {
 	}
 	Close()
 	return InitDatabase(storedCfg)
+}
+
+// ensureCheckInUniqueIndex 为 check_ins 表准备 (user_id, check_in_date) 唯一索引：
+// 1. 若列不存在则先添加；2. 回填历史记录的 check_in_date；3. 清理历史重复签到（保留最早一条）。
+// 必须在 AutoMigrate 之前执行，否则唯一索引会因历史重复数据创建失败。
+func ensureCheckInUniqueIndex() {
+	if DB == nil || !DB.Migrator().HasTable(&models.CheckIn{}) {
+		return
+	}
+	m := DB.Migrator()
+	if !m.HasColumn(&models.CheckIn{}, "check_in_date") {
+		if err := m.AddColumn(&models.CheckIn{}, "CheckInDate"); err != nil {
+			log.Printf("[migration] 添加 check_ins.check_in_date 列失败: %v", err)
+			return
+		}
+	}
+
+	var dateExpr, cleanupSQL string
+	switch DB.Dialector.Name() {
+	case "mysql":
+		dateExpr = "DATE(created_at)"
+		cleanupSQL = "DELETE c1 FROM check_ins c1 INNER JOIN check_ins c2 ON c1.user_id = c2.user_id AND c1.check_in_date = c2.check_in_date AND c1.id > c2.id"
+	case "postgres":
+		dateExpr = "TO_CHAR(created_at, 'YYYY-MM-DD')"
+		cleanupSQL = "DELETE FROM check_ins a USING check_ins b WHERE a.user_id = b.user_id AND a.check_in_date = b.check_in_date AND a.id > b.id"
+	default: // sqlite
+		dateExpr = "SUBSTR(created_at, 1, 10)"
+		cleanupSQL = "DELETE FROM check_ins WHERE id NOT IN (SELECT MIN(id) FROM check_ins GROUP BY user_id, check_in_date)"
+	}
+
+	if err := DB.Exec("UPDATE check_ins SET check_in_date = " + dateExpr + " WHERE check_in_date IS NULL OR check_in_date = ''").Error; err != nil {
+		log.Printf("[migration] 回填 check_ins.check_in_date 失败: %v", err)
+		return
+	}
+	if err := DB.Exec(cleanupSQL).Error; err != nil {
+		log.Printf("[migration] 清理重复签到记录失败: %v", err)
+	}
 }

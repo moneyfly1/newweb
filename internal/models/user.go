@@ -33,6 +33,8 @@ type User struct {
 	TotalConsumption            float64    `gorm:"type:decimal(10,2);default:0" json:"total_consumption"`
 	LevelExpiresAt              *time.Time `json:"level_expires_at"`
 	SpecialNodeSubscriptionType string     `gorm:"type:varchar(20);default:'both'" json:"special_node_subscription_type"`
+	// TokenVersion 密码变更/重置/管理员重置时自增，用于吊销该用户全部已签发 token
+	TokenVersion uint `gorm:"default:0" json:"-"`
 	SpecialNodeExpiresAt        *time.Time `json:"special_node_expires_at"`
 	TelegramID                  *int64     `gorm:"uniqueIndex" json:"telegram_id"`
 	TelegramUsername            *string    `gorm:"type:varchar(100)" json:"telegram_username"`

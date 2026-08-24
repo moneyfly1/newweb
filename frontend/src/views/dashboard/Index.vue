@@ -1,5 +1,18 @@
 <template>
-  <div class="dashboard">
+  <div
+    class="dashboard"
+    :class="{ 'dash-ready': loaded }"
+    @touchstart.passive="pullTouchStart"
+    @touchmove.passive="pullTouchMove"
+    @touchend.passive="pullTouchEnd"
+  >
+    <!-- 下拉刷新指示器（App 原生感） -->
+    <transition name="fade">
+      <div v-if="pullDistance > 0 || pullRefreshing" class="pull-indicator" :style="{ transform: `translate(-50%, ${Math.min(pullDistance, 70) - 40}px)` }">
+        <n-spin v-if="pullRefreshing" size="small" />
+        <span v-else>{{ pullDistance >= 55 ? '释放刷新' : '下拉刷新' }}</span>
+      </div>
+    </transition>
     <!-- Modern Welcome Card -->
     <div class="welcome-card">
       <div class="welcome-content">
@@ -16,25 +29,25 @@
           </div>
         </div>
         <div class="welcome-stats">
-          <div class="stat-card balance-card">
+          <div class="welcome-stat balance-card dash-fade-up" style="animation-delay: 0ms">
             <div class="stat-icon">
               <n-icon size="24" :component="WalletOutline" />
             </div>
             <div class="stat-info">
               <span class="stat-label">账户余额</span>
-              <span class="stat-value">{{ formatCurrency(info.balance) }}</span>
+              <span class="stat-value">{{ formatCurrency(balanceCount) }}</span>
             </div>
             <n-button type="primary" size="small" @click="$router.push('/recharge')">
               充值
             </n-button>
           </div>
-          <div class="stat-card checkin-card">
+          <div class="welcome-stat checkin-card dash-fade-up" style="animation-delay: 80ms">
             <div class="stat-icon">
               <n-icon size="24" :component="CalendarOutline" />
             </div>
             <div class="stat-info">
               <span class="stat-label">连续签到</span>
-              <span class="stat-value">{{ checkinStatus.consecutive_days || 0 }} 天</span>
+              <span class="stat-value">{{ checkinDaysCount }} 天</span>
             </div>
             <n-button
               type="success"
@@ -55,15 +68,24 @@
       <!-- Left Column -->
       <div class="left-col">
         <!-- Subscription Info -->
-        <div class="card">
+        <div class="card dash-fade-up" style="animation-delay: 160ms">
           <div class="card-header">
             <span class="card-title">订阅信息</span>
             <n-button text type="primary" size="small" @click="$router.push('/subscription')">管理</n-button>
           </div>
           <n-spin :show="subscriptionLoading">
             <div v-if="subscription.token_url || subscription.token_clash_url" class="sub-info">
+              <!-- 剩余天数大字 + 到期日 -->
+              <div class="sub-days-block">
+                <div class="sub-days-text">
+                  <span class="sub-days-number">剩余 <span class="sub-days-big">{{ remainingDaysCount }}</span> 天</span>
+                  <span class="sub-days-expire">到期：{{ formatDate(subscription.expire_time) }}</span>
+                </div>
+                <n-tag :type="remainingDaysType" size="small" :bordered="false" class="sub-days-tag">
+                  {{ remainingDays > 30 ? '充足' : remainingDays >= 7 ? '即将到期' : '已到期' }}
+                </n-tag>
+              </div>
               <div class="sub-stats-row">
-                <div class="sub-stat"><span class="sub-stat-label">剩余</span><n-tag :type="remainingDaysType" size="small" :bordered="false">{{ remainingDays }}天</n-tag></div>
                 <div class="sub-stat"><span class="sub-stat-label">设备</span><span class="sub-stat-val">{{ subscription.current_devices || 0 }}/{{ subscription.device_limit || 0 }}</span></div>
                 <div class="sub-stat"><span class="sub-stat-label">状态</span><n-tag :type="subscription.is_active ? 'success' : 'error'" size="small" :bordered="false">{{ subscription.is_active ? '使用中' : '未激活' }}</n-tag></div>
               </div>
@@ -117,13 +139,13 @@
               </div>
             </div>
             <n-empty v-else description="暂无订阅" size="small">
-              <template #extra><n-button size="small" type="primary" @click="$router.push('/shop')">购买套餐</n-button></template>
+              <template #extra><n-button size="small" type="primary" @click="$router.push('/shop')">去购买</n-button></template>
             </n-empty>
           </n-spin>
         </div>
 
         <!-- Quick Subscription -->
-        <div class="card">
+        <div class="card dash-fade-up" style="animation-delay: 240ms">
           <div class="card-header"><span class="card-title">快速订阅</span></div>
           <div v-if="quickSubItems.length" class="quick-sub-grid">
             <div
@@ -163,7 +185,7 @@
         </div>
 
         <!-- Announcements -->
-        <div class="card">
+        <div class="card dash-fade-up" style="animation-delay: 320ms">
           <div class="card-header"><span class="card-title">最近公告</span></div>
           <n-spin :show="announcementsLoading">
             <div v-if="announcements.length" class="announcement-list">
@@ -175,22 +197,40 @@
             <n-empty v-else description="暂无公告" size="small" />
           </n-spin>
         </div>
+
+        <!-- 签到记录 -->
+        <div class="card dash-fade-up" style="animation-delay: 400ms">
+          <div class="card-header">
+            <span class="card-title">签到记录</span>
+            <n-button v-if="checkinHistory.length" text type="primary" size="small" @click="loadCheckinHistory">刷新</n-button>
+          </div>
+          <div v-if="checkinHistory.length" class="checkin-history-list">
+            <div v-for="h in checkinHistory" :key="h.id" class="checkin-history-item">
+              <div class="checkin-history-left">
+                <n-icon :size="14" :component="CalendarOutline" />
+                <span>{{ formatCheckinDate(h.created_at) }}</span>
+              </div>
+              <span class="checkin-history-amount">+{{ formatAmount(h.amount) }} 元</span>
+            </div>
+          </div>
+          <n-empty v-else description="暂无签到记录" size="small" />
+        </div>
       </div>
       <!-- Right Column -->
       <div class="right-col">
         <!-- Quick Actions -->
-        <div class="card">
+        <div class="card dash-fade-up" style="animation-delay: 480ms">
           <div class="card-header"><span class="card-title">快捷操作</span></div>
           <div class="quick-actions-grid">
-            <div class="quick-action" @click="$router.push('/shop')"><n-icon size="18" :component="CartOutline" color="#667eea" /><span>购买套餐</span></div>
-            <div class="quick-action" @click="$router.push('/subscription')"><n-icon size="18" :component="LinkOutline" color="#764ba2" /><span>获取订阅</span></div>
-            <div class="quick-action" @click="$router.push('/tickets')"><n-icon size="18" :component="ChatbubblesOutline" color="#f093fb" /><span>提交工单</span></div>
-            <div class="quick-action" @click="$router.push('/invite')"><n-icon size="18" :component="PeopleOutline" color="#4facfe" /><span>邀请好友</span></div>
+            <div class="quick-action" @click="$router.push('/shop')"><n-icon size="18" :component="CartOutline" color="var(--primary-color)" /><span>购买套餐</span></div>
+            <div class="quick-action" @click="$router.push('/subscription')"><n-icon size="18" :component="LinkOutline" color="var(--primary-color)" /><span>获取订阅</span></div>
+            <div class="quick-action" @click="$router.push('/tickets')"><n-icon size="18" :component="ChatbubblesOutline" color="var(--primary-color)" /><span>提交工单</span></div>
+            <div class="quick-action" @click="$router.push('/invite')"><n-icon size="18" :component="PeopleOutline" color="var(--primary-color)" /><span>邀请好友</span></div>
           </div>
         </div>
 
         <!-- Recent Orders -->
-        <div class="card">
+        <div class="card dash-fade-up" style="animation-delay: 560ms">
           <div class="card-header">
             <span class="card-title">最近订单</span>
             <n-button text type="primary" size="small" @click="$router.push('/orders')">查看全部</n-button>
@@ -213,7 +253,7 @@
         </div>
 
         <!-- Client Downloads -->
-        <div class="card" v-if="hasAnyClientUrl">
+        <div class="card dash-fade-up" v-if="hasAnyClientUrl" style="animation-delay: 640ms">
           <div class="card-header">
             <span class="card-title">软件下载</span>
             <n-tag v-if="currentClientTabLabel" size="small" type="info" :bordered="false">
@@ -249,19 +289,21 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, nextTick, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import {
   WalletOutline, RibbonOutline, CartOutline, LinkOutline,
   ChatbubblesOutline, PeopleOutline, CopyOutline, CloudDownloadOutline,
   DownloadOutline, CalendarOutline, EyeOutline, EyeOffOutline,
 } from '@vicons/ionicons5'
-import { getDashboardInfo, checkIn, getCheckInStatus } from '@/api/user'
+import { getDashboardInfo, checkIn, getCheckInStatus, getCheckInHistory } from '@/api/user'
 import { listPublicAnnouncements, getPublicConfig } from '@/api/common'
 import { listOrders } from '@/api/order'
 import { getSubscription } from '@/api/subscription'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatCurrency, formatAmount } from '@/utils/amount'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+import { useCountUp } from '@/composables/useCountUp'
 
 const message = useMessage()
 
@@ -272,6 +314,7 @@ const recentOrders = ref<any[]>([])
 const announcementsLoading = ref(false)
 const ordersLoading = ref(false)
 const subscriptionLoading = ref(false)
+const loaded = ref(false)
 const dashQrCanvas = ref<HTMLCanvasElement | null>(null)
 const showSubUrls = ref(false)
 const expandedQuickSub = ref('')
@@ -299,6 +342,17 @@ function maskUrl(url: string) {
 const clientConfig = ref<Record<string, string>>({})
 const activeClientTab = ref('windows')
 const checkinStatus = ref<any>({})
+const checkinHistory = ref<any[]>([])
+const loadCheckinHistory = async () => {
+  try {
+    const res: any = await getCheckInHistory({ page: 1, page_size: 5 })
+    checkinHistory.value = res.data?.items || []
+  } catch {}
+}
+const formatCheckinDate = (t: string) => {
+  if (!t) return ''
+  return new Date(t).toLocaleDateString('zh-CN')
+}
 const checkinLoading = ref(false)
 
 async function handleCheckIn() {
@@ -506,13 +560,7 @@ const levelColor = computed(() => {
     'Lv.0': '#999999', 'Lv.1': '#52c41a', 'Lv.2': '#1890ff',
     'Lv.3': '#722ed1', 'Lv.4': '#eb2f96', 'Lv.5': '#fa8c16',
   }
-  return colors[info.value.level_name] || '#667eea'
-})
-
-const levelProgress = computed(() => {
-  const current = info.value.current_exp || 0
-  const next = info.value.next_level_exp || 100
-  return Math.min((current / next) * 100, 100)
+  return colors[info.value.level_name] || 'var(--primary-color)'
 })
 
 const remainingDays = computed(() => {
@@ -526,6 +574,11 @@ const remainingDaysType = computed(() => {
   if (remainingDays.value >= 7) return 'warning'
   return 'error'
 })
+
+// 数字滚动（余额 / 签到天数 / 订阅剩余天数）：数据就绪后 600ms 内从 0 滚到目标值
+const { value: balanceCount } = useCountUp(() => Number(info.value.balance) || 0)
+const { value: checkinDaysCount } = useCountUp(() => checkinStatus.value.consecutive_days || 0)
+const { value: remainingDaysCount } = useCountUp(() => remainingDays.value)
 
 const shadowrocketQrData = computed(() => {
   const url = getSubscriptionUrl('token_shadowrocket_url', 'shadowrocket')
@@ -602,13 +655,17 @@ const loadDashboardData = async () => {
   if (checkinRes.status === 'fulfilled') { const res: any = checkinRes.value; if (res.data) checkinStatus.value = res.data }
 }
 
+// 下拉刷新：重新拉取首页数据（App 原生感）
+const { distance: pullDistance, refreshing: pullRefreshing, onTouchStart: pullTouchStart, onTouchMove: pullTouchMove, onTouchEnd: pullTouchEnd } =
+  usePullRefresh(loadDashboardData)
+
 const handleVisibilityChange = () => {
   if (!document.hidden) {
     loadDashboardData().catch(() => {})
   }
 }
 
-onMounted(async () => {
+async function loadFullDashboardData() {
   subscriptionLoading.value = true
   announcementsLoading.value = true
   ordersLoading.value = true
@@ -634,8 +691,19 @@ onMounted(async () => {
   if (ordersRes.status === 'fulfilled') { const res: any = ordersRes.value; recentOrders.value = (res.data?.items || []).slice(0, 5) }
   ordersLoading.value = false
   if (checkinRes.status === 'fulfilled') { const res: any = checkinRes.value; if (res.data) checkinStatus.value = res.data }
+  loadCheckinHistory()
+  // 数据就绪：触发卡片依次入场（仅一次性）
+  loaded.value = true
+}
 
+onMounted(() => {
+  loadFullDashboardData()
   document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+// KeepAlive 缓存激活时刷新数据（余额/订阅/订单保持最新）
+onActivated(() => {
+  loadFullDashboardData()
 })
 
 onUnmounted(() => {
@@ -645,65 +713,83 @@ onUnmounted(() => {
 <style scoped>
 .dashboard { padding: 0; }
 
+/* 下拉刷新指示器（App 原生感） */
+.pull-indicator {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 96px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--bg-color, #fff);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  color: var(--text-color-secondary, #666);
+  transition: transform 0.15s ease;
+}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
 /* Welcome Card */
-.welcome-card { background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%); border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; color: #333; }
+.welcome-card { background: var(--brand-gradient); border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; color: #fff; }
 .welcome-content { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
 .welcome-left { flex: 1; }
-.welcome-title { font-size: 22px; font-weight: 700; margin: 0 0 8px 0; text-shadow: 0 1px 2px rgba(255,255,255,0.5); color: #333; }
+.welcome-title { font-size: 22px; font-weight: 700; margin: 0 0 8px 0; text-shadow: 0 1px 2px rgba(0,0,0,0.2); color: #fff; }
 .user-meta { display: flex; align-items: center; gap: 8px; }
-.level-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 16px; color: white; font-weight: 600; font-size: 13px; background: rgba(102,126,234,0.85); }
+.level-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 16px; color: white; font-weight: 600; font-size: 13px; background: rgba(0,0,0,0.18); }
 .welcome-stats { display: flex; gap: 12px; }
-.stat-card { background: rgba(255,255,255,0.7); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; backdrop-filter: blur(10px); min-width: 200px; border: 1px solid rgba(255,255,255,0.9); }
-.stat-icon { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: white; }
+.welcome-stat { background: rgba(255,255,255,0.16); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; backdrop-filter: blur(10px); min-width: 200px; border: 1px solid rgba(255,255,255,0.28); }
+.stat-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.22); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: white; }
 .stat-info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
-.stat-label { font-size: 12px; opacity: 0.8; color: #555; }
-.stat-value { font-size: 18px; font-weight: 700; line-height: 1.2; color: #333; }
-.stat-card .n-button { flex-shrink: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; color: white !important; border: none !important; font-weight: 600 !important; }
-.stat-card .n-button:hover { opacity: 0.9; }
-.stat-card .n-button:disabled { background: rgba(102,126,234,0.5) !important; color: rgba(255,255,255,0.7) !important; }
-
-/* Top Bar */
-.top-bar {
-  background: linear-gradient(135deg, #4a5fd7 0%, #7c3aed 100%);
-  border-radius: 10px; padding: 14px 20px; color: white; position: relative; overflow: hidden;
-  display: flex; justify-content: space-between; align-items: center;
-}
-.welcome-section { display: flex; align-items: center; gap: 24px; flex: 1; z-index: 1; }
-.welcome-title { font-size: 18px; font-weight: 700; margin: 0; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.15); }
-.welcome-decoration { position: absolute; right: -20px; top: -20px; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,0.08); }
-.top-stats { display: flex; align-items: center; gap: 16px; }
-.top-stat { display: flex; align-items: center; gap: 6px; }
-.top-stat-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.35); }
-.top-stat-label { font-size: 12px; opacity: 0.9; }
-.top-stat-val { font-size: 15px; font-weight: 700; }
-.gradient-btn { background: rgba(255,255,255,0.95) !important; color: #4a5fd7 !important; border: none !important; font-weight: 600 !important; }
-.gradient-btn:hover { background: #fff !important; }
-.gradient-btn:disabled { background: rgba(255,255,255,0.5) !important; color: rgba(74,95,215,0.6) !important; }
-.level-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 12px; color: white; font-weight: 600; font-size: 12px; }
-.top-bar :deep(.n-tag) { background: rgba(255,255,255,0.2) !important; color: white !important; font-weight: 600; }
-.top-bar :deep(.n-tag .n-tag__content) { color: white !important; }
+.stat-label { font-size: 12px; opacity: 0.9; color: rgba(255,255,255,0.85); }
+.stat-value { font-size: 18px; font-weight: 700; line-height: 1.2; color: #fff; }
+.welcome-stat .n-button { flex-shrink: 0; background: rgba(255,255,255,0.95) !important; color: var(--primary-color) !important; border: none !important; font-weight: 600 !important; }
+.welcome-stat .n-button:hover { opacity: 0.9; }
+.welcome-stat .n-button:disabled { background: rgba(255,255,255,0.5) !important; color: rgba(0,0,0,0.5) !important; }
 
 /* Main Grid */
 .main-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; margin-top: 12px; }
 .left-col, .right-col { display: flex; flex-direction: column; gap: 12px; }
 
 /* Card */
-.card { background: white; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.card { background: var(--bg-color); border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.card-title { font-size: 14px; font-weight: 600; color: #333; }
+.card-title { font-size: 14px; font-weight: 600; color: var(--text-color); }
 
 /* Subscription Info */
+.sub-days-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--primary-color-soft) 0%, var(--primary-color-hover) 100%);
+  border: 1px solid var(--primary-color-hover);
+}
+.sub-days-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sub-days-number { font-size: 14px; font-weight: 600; color: var(--text-color); }
+.sub-days-big { font-size: 30px; font-weight: 800; line-height: 1.1; color: var(--primary-color); margin: 0 2px; }
+.sub-days-expire { font-size: 12px; color: var(--text-color-secondary); }
+.sub-days-tag { flex-shrink: 0; }
 .sub-stats-row { display: flex; gap: 16px; margin-bottom: 10px; }
 .sub-stat { display: flex; align-items: center; gap: 6px; }
-.sub-stat-label { font-size: 12px; color: #999; }
+.sub-stat-label { font-size: 12px; color: var(--text-color-secondary); }
 .sub-stat-val { font-size: 13px; font-weight: 600; }
 .sub-urls { display: flex; flex-direction: column; gap: 6px; }
 .sub-url-row { display: flex; align-items: center; gap: 6px; }
 .dash-protocol-exclude {
   padding: 8px 10px;
-  border: 1px solid #eef0f5;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: #fafbff;
+  background: var(--primary-color-soft);
 }
 .dash-protocol-exclude-head {
   display: flex;
@@ -712,7 +798,7 @@ onUnmounted(() => {
   margin-bottom: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #555;
+  color: var(--text-color);
 }
 .dash-protocol-exclude :deep(.n-checkbox) {
   font-size: 12px;
@@ -727,28 +813,32 @@ onUnmounted(() => {
   margin-bottom: 0;
 }
 .shadowrocket-qr-row { align-items: stretch; }
-.shadowrocket-qr-card { width: 100%; padding: 12px; border-radius: 10px; background: linear-gradient(135deg, #fff7ed 0%, #f5f3ff 100%); border: 1px solid #eadcff; }
+.shadowrocket-qr-card {
+  width: 100%; padding: 12px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--primary-color-soft) 0%, var(--primary-color-hover) 100%);
+  border: 1px solid var(--primary-color-hover);
+}
 .shadowrocket-qr-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.shadowrocket-qr-title { font-size: 14px; font-weight: 600; color: #333; }
-.shadowrocket-qr-desc { margin-top: 4px; font-size: 12px; color: #666; }
-.shadowrocket-qr-canvas { display: block; margin: 0 auto; max-width: 200px; border-radius: 8px; background: #fff; }
-.sub-url-label { font-size: 12px; color: #666; min-width: 36px; font-weight: 500; }
+.shadowrocket-qr-title { font-size: 14px; font-weight: 600; color: var(--text-color); }
+.shadowrocket-qr-desc { margin-top: 4px; font-size: 12px; color: var(--text-color-secondary); }
+.shadowrocket-qr-canvas { display: block; margin: 0 auto; max-width: 200px; border-radius: 8px; background: var(--bg-color); }
+.sub-url-label { font-size: 12px; color: var(--text-color-secondary); min-width: 36px; font-weight: 500; }
 
 /* Quick Subscription */
 .quick-sub-grid { display: flex; flex-direction: column; gap: 10px; }
-.quick-sub-item { border-radius: 10px; background: #f8f8fa; border: 1px solid transparent; transition: all 0.2s; }
-.quick-sub-item.is-open { background: #f6f8ff; border-color: #d8e0ff; }
+.quick-sub-item { border-radius: 10px; background: var(--primary-color-soft); border: 1px solid transparent; transition: all 0.2s; }
+.quick-sub-item.is-open { background: var(--primary-color-soft); border-color: #d8e0ff; }
 .qs-main { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; background: transparent; cursor: pointer; text-align: left; }
 .qs-main:hover { background: rgba(102,126,234,0.04); }
 .qs-icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-.qs-name { flex: 1; font-size: 13px; font-weight: 600; color: #333; }
-.qs-hint { font-size: 12px; color: #999; flex-shrink: 0; }
+.qs-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text-color); }
+.qs-hint { font-size: 12px; color: var(--text-color-secondary); flex-shrink: 0; }
 .qs-actions { display: flex; gap: 8px; padding: 0 12px 12px 50px; flex-wrap: wrap; }
 
 /* Client Downloads */
 .client-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
-.client-card { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: #f8f8fa; color: inherit; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
-.client-card:hover { background: #eef0f5; border-color: #dfe4ee; }
+.client-card { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: var(--primary-color-soft); color: inherit; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+.client-card:hover { background: var(--primary-color-soft); border-color: #dfe4ee; }
 .client-card:focus-visible { outline: 2px solid rgba(102,126,234,0.45); outline-offset: 2px; }
 .client-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; font-size: 16px; flex-shrink: 0; }
 .client-name { flex: 1; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -757,9 +847,9 @@ onUnmounted(() => {
 
 /* Quick Actions */
 .quick-actions-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.quick-action { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 8px; background: #f8f8fa; cursor: pointer; transition: background 0.2s; }
-.quick-action:hover { background: #eef0f5; }
-.quick-action span { font-size: 11px; color: #555; }
+.quick-action { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 8px; background: var(--primary-color-soft); cursor: pointer; transition: background 0.2s; }
+.quick-action:hover { background: var(--primary-color-soft); }
+.quick-action span { font-size: 11px; color: var(--text-color); }
 
 /* Announcements */
 .announcement-list { display: flex; flex-direction: column; gap: 6px; }
@@ -768,28 +858,52 @@ onUnmounted(() => {
 
 /* Orders */
 .order-list { display: flex; flex-direction: column; gap: 6px; }
-.order-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 6px; background: #f8f8fa; }
+.order-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 6px; background: var(--primary-color-soft); }
 .order-left { display: flex; flex-direction: column; gap: 2px; }
 .order-name { font-size: 13px; font-weight: 500; }
-.order-time { font-size: 11px; color: #999; }
+.order-time { font-size: 11px; color: var(--text-color-secondary); }
 .order-right { display: flex; align-items: center; gap: 8px; }
-.order-amount { font-size: 14px; font-weight: 600; color: #18a058; }
+.order-amount { font-size: 14px; font-weight: 600; color: var(--success-color); }
 
 /* Mobile */
 @media (max-width: 767px) {
   .dashboard { padding: 12px; }
-  .welcome-card { padding: 16px; margin-bottom: 12px; border-radius: 8px; }
+  .welcome-card { padding: 18px 16px; margin-bottom: 12px; border-radius: 16px; }
   .welcome-content { display: grid; gap: 14px; }
   .welcome-left { min-width: 0; }
   .welcome-title { font-size: 20px; line-height: 1.25; white-space: normal; word-break: break-word; }
-  .welcome-stats { display: grid; grid-template-columns: 1fr; gap: 10px; width: 100%; }
-  .stat-card { min-width: 0; width: 100%; border-radius: 8px; }
+  /* 统计卡横向滑动（App 仪表盘风格，scroll-snap 吸附） */
+  .welcome-stats {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    width: 100%;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    margin: 0 -4px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .welcome-stat {
+    flex: 0 0 78%;
+    min-width: 0;
+    scroll-snap-align: start;
+    border-radius: 14px;
+  }
+  .welcome-stat .n-button {
+    white-space: nowrap;
+  }
   .main-grid { grid-template-columns: 1fr; }
-  .card { border-radius: 8px; }
+  .card { border-radius: 14px; }
   .card-header { align-items: center; gap: 8px; padding-bottom: 10px; }
   .client-grid { grid-template-columns: repeat(2, 1fr); }
-  .quick-actions-grid { grid-template-columns: repeat(2, 1fr); }
-  .sub-stats-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .quick-actions-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .quick-action { padding: 12px 4px; border-radius: 12px; }
+  .quick-action span { font-size: 11px; }
+  .sub-days-block { align-items: flex-start; }
+  .sub-stats-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .sub-stat { min-width: 0; }
   .sub-url-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 32px 32px; gap: 6px; align-items: center; }
   .sub-url-label { min-width: 0; }
@@ -807,5 +921,37 @@ onUnmounted(() => {
   .qs-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); padding: 0 12px 12px 12px; }
   .order-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
   .order-right { justify-content: flex-end; flex-wrap: wrap; }
+}
+
+.checkin-history-list { display: flex; flex-direction: column; gap: 6px; }
+.checkin-history-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 8px; background: var(--primary-color-soft, rgba(79,70,229,0.04)); font-size: 13px; }
+.checkin-history-left { display: flex; align-items: center; gap: 6px; color: var(--text-color-secondary, #666); }
+.checkin-history-amount { color: var(--success-color, #059669); font-weight: 600; }
+
+/* 卡片入场：数据加载完成后依次 fade-up（stagger 80ms，仅一次性） */
+.dash-fade-up {
+  opacity: 0;
+  visibility: hidden;
+}
+.dash-ready .dash-fade-up {
+  visibility: visible;
+  animation: dash-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes dash-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-fade-up {
+    animation: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
 }
 </style>

@@ -209,8 +209,16 @@ func CancelRecharge(c *gin.Context) {
 		utils.NotFound(c, "充值记录不存在")
 		return
 	}
-	if err := db.Model(&record).Update("status", "cancelled").Error; err != nil {
+	// 条件更新：仅当仍为 pending 时才取消，防止覆盖并发支付回调刚置为 paid 的充值
+	cancelRes := db.Model(&models.RechargeRecord{}).
+		Where("id = ? AND user_id = ? AND status = ?", id, userID, "pending").
+		Update("status", "cancelled")
+	if cancelRes.Error != nil {
 		utils.InternalError(c, "取消充值失败")
+		return
+	}
+	if cancelRes.RowsAffected == 0 {
+		utils.BadRequest(c, "充值状态已变化，无法取消")
 		return
 	}
 	utils.SuccessMessage(c, "充值已取消")

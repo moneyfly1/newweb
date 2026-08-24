@@ -209,7 +209,7 @@ const profileForm = ref({
 const pwForm = ref({ old_password: '', new_password: '', confirm_password: '' })
 const pwRules = {
   old_password: { required: true, message: '请输入当前密码', trigger: 'blur' },
-  new_password: { required: true, message: '请输入新密码', trigger: 'blur', min: 6 },
+  new_password: [{ required: true, message: '请输入新密码', trigger: 'blur' }, { validator: (_r: any, v: string) => !v || (v.length >= 8 && /[a-zA-Z]/.test(v) && /[0-9]/.test(v)), message: '密码至少8位，需包含字母和数字', trigger: 'blur' }],
   confirm_password: [
     { required: true, message: '请确认密码', trigger: 'blur' },
     { validator: (_r: any, v: string) => v === pwForm.value.new_password, message: '两次密码不一致', trigger: 'blur' },
@@ -366,6 +366,6 @@ onMounted(async () => {
 .telegram-widget-container { min-height: 40px; }
 @media (max-width: 767px) {
   .settings-page { padding: 0 12px; }
-  .n-card { border-radius: 10px; }
+  .n-card { border-radius: 14px; }
 }
 </style>

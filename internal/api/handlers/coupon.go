@@ -11,6 +11,7 @@ import (
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // CouponValidationResult holds the result of coupon validation.
@@ -71,6 +72,7 @@ func ValidateAndApplyCoupon(code string, userID uint, orderAmount float64, packa
 	var discountAmount float64
 	switch coupon.Type {
 	case "discount":
+		// 百分比折扣：value 为百分数（如 10 = 10%），按分位舍入防浮点误差
 		discountAmount = math.Round(orderAmount*coupon.DiscountValue) / 100
 	case "fixed":
 		discountAmount = coupon.DiscountValue
@@ -84,7 +86,7 @@ func ValidateAndApplyCoupon(code string, userID uint, orderAmount float64, packa
 	if discountAmount > orderAmount {
 		discountAmount = orderAmount
 	}
-	discountAmount = math.Round(discountAmount*100) / 100
+	discountAmount = utils.Round2(discountAmount)
 
 	return &CouponValidationResult{
 		Coupon:         &coupon,
@@ -158,5 +160,79 @@ func GetMyCoupons(c *gin.Context) {
 	var usages []models.CouponUsage
 	db.Where("user_id = ?", userID).Order("used_at DESC").Limit(200).Find(&usages)
 
-	utils.Success(c, usages)
+	// 补充优惠券名称/面值/状态与订单号（批量查询避免 N+1）
+	type MyCouponItem struct {
+		models.CouponUsage
+		CouponName string  `json:"coupon_name"`
+		Code       string  `json:"code"`
+		Type       string  `json:"coupon_type"`
+		Value      float64 `json:"coupon_value"`
+		Status     string  `json:"coupon_status"`
+		OrderNo    string  `json:"order_no"`
+	}
+
+	items := make([]MyCouponItem, 0, len(usages))
+	if len(usages) == 0 {
+		utils.Success(c, items)
+		return
+	}
+
+	couponIDs := make([]uint, 0, len(usages))
+	orderIDs := make([]int64, 0, len(usages))
+	for _, u := range usages {
+		couponIDs = append(couponIDs, u.CouponID)
+		if u.OrderID != nil {
+			orderIDs = append(orderIDs, *u.OrderID)
+		}
+	}
+
+	couponMap := make(map[uint]models.Coupon)
+	var coupons []models.Coupon
+	db.Select("id, name, code, type, discount_value, status").Where("id IN ?", couponIDs).Find(&coupons)
+	for _, cp := range coupons {
+		couponMap[cp.ID] = cp
+	}
+
+	orderMap := make(map[int64]string)
+	if len(orderIDs) > 0 {
+		var orders []models.Order
+		db.Select("id, order_no").Where("id IN ?", orderIDs).Find(&orders)
+		for _, o := range orders {
+			orderMap[int64(o.ID)] = o.OrderNo
+		}
+	}
+
+	for _, u := range usages {
+		item := MyCouponItem{CouponUsage: u}
+		if cp, ok := couponMap[u.CouponID]; ok {
+			item.CouponName = cp.Name
+			item.Code = cp.Code
+			item.Type = cp.Type
+			item.Value = cp.DiscountValue
+			item.Status = cp.Status
+		}
+		if u.OrderID != nil {
+			item.OrderNo = orderMap[*u.OrderID]
+		}
+		items = append(items, item)
+	}
+
+	utils.Success(c, items)
+}
+
+// checkCouponPerUserInTx 在事务内复核该用户对该优惠券的使用次数是否已达上限。
+// 必须在创建 CouponUsage 前调用（同一事务），SQLite 写事务串行化保证并发下计数可靠，
+// 防止并发下单绕过 MaxUsesPerUser 导致 0 元订单。
+func checkCouponPerUserInTx(tx *gorm.DB, couponID uint, userID uint, maxUsesPerUser int) error {
+	if maxUsesPerUser <= 0 {
+		return nil
+	}
+	var used int64
+	if err := tx.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_id = ?", couponID, userID).Count(&used).Error; err != nil {
+		return err
+	}
+	if int(used) >= maxUsesPerUser {
+		return fmt.Errorf("您已达到该优惠券的使用上限")
+	}
+	return nil
 }

@@ -42,12 +42,14 @@ func ListNodes(c *gin.Context) {
 	var hasActiveSub bool
 	var isDedicatedOnly bool
 	if userID > 0 {
+		now := time.Now()
 		var activeSub int64
-		db.Model(&models.Subscription{}).Where("user_id = ? AND status = ?", userID, "active").Count(&activeSub)
+		// 有效订阅：status=active 且 is_active=1 且未过期（与订阅接口判定一致，防止免费/过期账号读取节点真实配置）
+		db.Model(&models.Subscription{}).Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, "active", true, now).Count(&activeSub)
 		hasActiveSub = activeSub > 0
 		if hasActiveSub {
 			var sub models.Subscription
-			if err := db.Where("user_id = ? AND status = ?", userID, "active").First(&sub).Error; err == nil {
+			if err := db.Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, "active", true, now).First(&sub).Error; err == nil {
 				customNodes, isDedicatedOnly, _ = fetchUserCustomNodes(db, userID, sub.ExpireTime)
 			}
 		}
@@ -145,7 +147,7 @@ func GetNodeStats(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	if userID > 0 {
 		var sub models.Subscription
-		if err := db.Where("user_id = ? AND status = ?", userID, "active").First(&sub).Error; err == nil {
+		if err := db.Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, "active", true, time.Now()).First(&sub).Error; err == nil {
 			customNodes, _, _ := fetchUserCustomNodes(db, userID, sub.ExpireTime)
 			allNodes = append(allNodes, customNodes...)
 		}
@@ -191,8 +193,16 @@ func GetNode(c *gin.Context) {
 		return
 	}
 
-	// Strip config for unauthenticated requests
-	if c.GetUint("user_id") == 0 {
+	// 与 ListNodes 一致：仅对具有有效订阅的用户返回完整节点配置，
+	// 防止无订阅/免费账号枚举节点真实服务器地址（核心资产泄露）。
+	userID := c.GetUint("user_id")
+	hasActiveSub := false
+	if userID > 0 {
+		var activeSub int64
+		db.Model(&models.Subscription{}).Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, "active", true, time.Now()).Count(&activeSub)
+		hasActiveSub = activeSub > 0
+	}
+	if !hasActiveSub {
 		node.Config = nil
 	}
 
@@ -310,11 +320,17 @@ func TestNode(c *gin.Context) {
 	if reachable {
 		status = "online"
 	}
-	if err := db.Model(&node).Updates(map[string]interface{}{
-		"status": status, "latency": latency, "last_test": &now,
-	}).Error; err != nil {
-		utils.InternalError(c, "更新节点测试结果失败")
-		return
+	// 仅管理员测试结果回写全局节点状态；普通用户测试只读不写库，
+	// 防止任意登录用户批量探测/篡改共享节点状态（越权写面）。
+	if user, exists := c.Get("user"); exists {
+		if u, ok := user.(*models.User); ok && u.IsAdmin {
+			if err := db.Model(&node).Updates(map[string]interface{}{
+				"status": status, "latency": latency, "last_test": &now,
+			}).Error; err != nil {
+				utils.InternalError(c, "更新节点测试结果失败")
+				return
+			}
+		}
 	}
 
 	utils.Success(c, gin.H{
@@ -364,10 +380,15 @@ func BatchTestNodes(c *gin.Context) {
 			if reachable {
 				status = "online"
 			}
-			if err := db.Model(&n).Updates(map[string]interface{}{
-				"status": status, "latency": latency, "last_test": &now,
-			}).Error; err != nil {
-				utils.SysError("node", fmt.Sprintf("批量更新节点测试结果失败: node=%d err=%v", n.ID, err))
+			// 普通用户批量测速不写库（防止任意登录用户篡改全局节点状态），仅管理员可回写
+			if user, exists := c.Get("user"); exists {
+				if u, ok := user.(*models.User); ok && u.IsAdmin {
+					if err := db.Model(&n).Updates(map[string]interface{}{
+						"status": status, "latency": latency, "last_test": &now,
+					}).Error; err != nil {
+						utils.SysError("node", fmt.Sprintf("批量更新节点测试结果失败: node=%d err=%v", n.ID, err))
+					}
+				}
 			}
 			mu.Lock()
 			results = append(results, Result{

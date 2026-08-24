@@ -281,6 +281,7 @@ const handleConfirmDelete = async () => {
   try {
     await deleteDevice(deleteDeviceId.value)
     message.success('设备删除成功')
+    showDeleteModal.value = false
     await fetchDevices()
   } catch (error: any) {
     message.error(error.message || '删除设备失败')

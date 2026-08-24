@@ -1,7 +1,14 @@
 <template>
   <div class="subscription-page">
     <n-spin :show="loading">
-      <div v-if="!subscription" class="empty-state">
+      <div v-if="loadFailed" class="empty-state">
+        <n-empty description="加载失败，请检查网络后重试">
+          <template #extra>
+            <n-button type="primary" size="large" @click="loadData">重新加载</n-button>
+          </template>
+        </n-empty>
+      </div>
+      <div v-else-if="!subscription" class="empty-state">
         <n-empty description="您还没有订阅">
           <template #extra>
             <n-button type="primary" size="large" @click="$router.push('/shop')">购买套餐</n-button>
@@ -20,49 +27,52 @@
               </div>
               <h1 class="package-title">{{ subscription.package_name || '当前套餐' }}</h1>
             </div>
-            <n-tooltip v-if="isExpired" trigger="hover">
-              <template #trigger>
-                <n-button type="primary" size="medium" disabled>
-                  <template #icon><n-icon :component="ArrowUpCircleOutline" /></template>
-                  升级套餐
-                </n-button>
-              </template>
-              订阅已到期，请先续费或购买套餐后再升级设备
-            </n-tooltip>
-            <n-button v-else type="primary" size="medium" @click="openUpgradeModal">
-              <template #icon><n-icon :component="ArrowUpCircleOutline" /></template>
-              升级套餐
-            </n-button>
+            <div class="hero-actions">
+              <!-- 到期前 7 天（含已到期）：醒目「立即续费」CTA → /shop -->
+              <n-button
+                v-if="isExpired || remainingDays <= 7"
+                type="primary"
+                size="medium"
+                class="renew-cta"
+                @click="router.push('/shop')"
+              >
+                <template #icon><n-icon :component="CartOutline" /></template>
+                立即续费
+              </n-button>
+              <!-- 未到期：「续费/升级」次级按钮（保留升级弹窗能力） -->
+              <n-button v-if="!isExpired" size="medium" class="hero-sub-action" @click="openUpgradeModal">
+                <template #icon><n-icon :component="ArrowUpCircleOutline" /></template>
+                续费/升级
+              </n-button>
+            </div>
           </div>
 
+          <!-- 四宫格：剩余天数（主角）→ 到期时间 → 设备数 → 余额 -->
           <div class="stats-grid">
-            <div class="stat-item">
-              <div class="stat-icon balance-icon">
-                <n-icon :size="24" :component="WalletOutline" />
-              </div>
-              <div class="stat-content">
-                <span class="stat-label">账户余额</span>
-                <span class="stat-value">{{ formatCurrency(userBalance) }}</span>
-              </div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-icon days-icon">
-                <n-icon :size="24" :component="TimeOutline" />
-              </div>
-              <div class="stat-content">
+            <!-- 剩余天数：主角卡（大数字 + 进度条 + 到期副文案） -->
+            <div class="stat-item days-stat">
+              <div class="days-stat-head">
+                <div class="stat-icon days-icon">
+                  <n-icon :size="24" :component="TimeOutline" />
+                </div>
                 <span class="stat-label">剩余天数</span>
-                <span class="stat-value">{{ remainingDays }} 天</span>
               </div>
+              <div class="days-number-row">
+                <span class="days-number">{{ remainingDays }}</span>
+                <span class="days-unit">天</span>
+              </div>
+              <div class="days-progress">
+                <div class="days-progress-track">
+                  <div class="days-progress-fill" :style="{ width: daysProgress + '%' }"></div>
+                </div>
+                <div class="days-progress-meta">
+                  <span>已用 {{ daysUsed }} 天</span>
+                  <span>共 {{ daysTotal }} 天</span>
+                </div>
+              </div>
+              <div class="days-expire">到期：{{ formatDateShort(subscription.expire_time) }}</div>
             </div>
-            <div class="stat-item">
-              <div class="stat-icon device-icon">
-                <n-icon :size="24" :component="PhonePortraitOutline" />
-              </div>
-              <div class="stat-content">
-                <span class="stat-label">设备使用</span>
-                <span class="stat-value">{{ devices.length }}/{{ subscription.device_limit || 0 }}</span>
-              </div>
-            </div>
+            <!-- 到期时间 -->
             <div class="stat-item">
               <div class="stat-icon expire-icon">
                 <n-icon :size="24" :component="CalendarOutline" />
@@ -70,6 +80,26 @@
               <div class="stat-content">
                 <span class="stat-label">到期时间</span>
                 <span class="stat-value stat-date">{{ formatDate(subscription.expire_time) }}</span>
+              </div>
+            </div>
+            <!-- 设备数（当前/上限） -->
+            <div class="stat-item">
+              <div class="stat-icon device-icon">
+                <n-icon :size="24" :component="PhonePortraitOutline" />
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">设备数</span>
+                <span class="stat-value">{{ deviceTotal }}/{{ subscription.device_limit || 0 }}</span>
+              </div>
+            </div>
+            <!-- 余额（次要） -->
+            <div class="stat-item balance-item">
+              <div class="stat-icon balance-icon">
+                <n-icon :size="24" :component="WalletOutline" />
+              </div>
+              <div class="stat-content">
+                <span class="stat-label">账户余额</span>
+                <span class="stat-value">{{ formatCurrency(userBalance) }}</span>
               </div>
             </div>
           </div>
@@ -228,7 +258,13 @@
         <div class="device-card">
           <div class="card-header">
             <h3 class="card-title">我的设备</h3>
-            <span class="card-subtitle">{{ deviceTotal }}/{{ subscription.device_limit }} 台设备</span>
+            <n-space :size="10" align="center">
+              <span class="card-subtitle">{{ deviceTotal }}/{{ subscription.device_limit }} 台设备</span>
+              <n-button size="small" type="primary" ghost @click="router.push('/devices')">
+                <template #icon><n-icon :component="SettingsOutline" /></template>
+                管理设备
+              </n-button>
+            </n-space>
           </div>
           <!-- Desktop Table -->
           <n-data-table
@@ -512,7 +548,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, nextTick, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import QRCode from 'qrcode'
 import {
@@ -520,7 +556,7 @@ import {
   RefreshOutline, SwapHorizontalOutline, MailOutline,
   CheckmarkCircle, CloseCircle, AlertCircle, QrCodeOutline,
   ArrowUpCircleOutline, WalletOutline, CalendarOutline, EyeOutline, EyeOffOutline,
-  ArrowForwardOutline
+  ArrowForwardOutline, CartOutline, SettingsOutline
 } from '@vicons/ionicons5'
 import {
   getSubscription, getSubscriptionDevices, deleteDevice,
@@ -543,6 +579,7 @@ const message = useMessage()
 const router = useRouter()
 
 const subscription = ref<any>(null)
+const loadFailed = ref(false)
 const devices = ref<any[]>([])
 const devicePage = ref(1)
 const devicePageSize = ref(10)
@@ -833,6 +870,23 @@ const remainingDays = computed(() => {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
 })
 
+// 进度条：已用天数 / 总天数（按订阅创建时间到到期时间估算）
+const daysTotal = computed(() => {
+  if (!subscription.value?.expire_time) return 0
+  const end = new Date(subscription.value.expire_time).getTime()
+  const start = subscription.value?.created_at ? new Date(subscription.value.created_at).getTime() : 0
+  if (!start || isNaN(start) || isNaN(end)) return 0
+  return Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)))
+})
+const daysUsed = computed(() => {
+  if (daysTotal.value <= 0) return 0
+  return Math.min(daysTotal.value, Math.max(0, daysTotal.value - remainingDays.value))
+})
+const daysProgress = computed(() => {
+  if (daysTotal.value <= 0) return 0
+  return Math.min(100, Math.max(0, Math.round((daysUsed.value / daysTotal.value) * 100)))
+})
+
 const canConvert = computed(() => remainingDays.value > 0)
 
 // 订阅是否已到期（到期则禁止升级设备）
@@ -1021,9 +1075,10 @@ const startPayPolling = (orderNo: string) => {
   let pollAttempts = 0
   const maxPollAttempts = 20
   payPollingStatus.value = true
-  payPollTimer = setInterval(async () => {
+  const pollOnce = async () => {
+    if (!payPollingStatus.value) return
+    pollAttempts += 1
     try {
-      pollAttempts += 1
       const res = await getOrderStatus(orderNo)
       if (res.data?.status === 'paid') {
         stopPayPolling(); showPayQrModal.value = false; showCryptoModal.value = false; showCodepayModal.value = false
@@ -1035,22 +1090,29 @@ const startPayPolling = (orderNo: string) => {
       if (pollAttempts >= maxPollAttempts) {
         stopPayPolling()
         message.warning('升级结果确认超时，请手动刷新当前订阅页面查看')
+        return
       }
     } catch {
       if (pollAttempts >= maxPollAttempts) {
         stopPayPolling()
         message.warning('升级结果确认超时，请手动刷新当前订阅页面查看')
+        return
       }
     }
-  }, 3000)
+    if (payPollingStatus.value) {
+      payPollTimer = setTimeout(pollOnce, 3000)
+    }
+  }
+  payPollTimer = setTimeout(pollOnce, 3000)
 }
 const stopPayPolling = () => {
   payPollingStatus.value = false
-  if (payPollTimer) { clearInterval(payPollTimer); payPollTimer = null }
+  if (payPollTimer) { clearTimeout(payPollTimer); payPollTimer = null }
 }
 
 const loadData = async () => {
   loading.value = true
+  loadFailed.value = false
   try {
     // Balance is shown at the top; fetch it regardless of subscription state
     const balanceP = fetchUserBalance()
@@ -1077,15 +1139,21 @@ const loadData = async () => {
     }
     await Promise.all([balanceP, pmP])
   } catch (e: any) {
-    if (e?.response?.status !== 404) message.error(getErrorMessage(e, '加载数据失败'))
+    if (e?.response?.status !== 404) {
+      loadFailed.value = true
+      message.error(getErrorMessage(e, '加载数据失败'))
+    }
   } finally { loading.value = false }
 }
 
 // Auto-show upgrade modal when devices near limit
+// 仅首次达到阈值时弹一次（autoUpgradeShown 标记），避免每次刷新/翻页重复弹窗
+let autoUpgradeShown = false
 watch(() => deviceTotal.value, (count) => {
-  if (!subscription.value) return
+  if (!subscription.value || autoUpgradeShown) return
   const limit = subscription.value.device_limit || 0
   if (limit > 0 && count >= limit - 1) {
+    autoUpgradeShown = true
     showUpgradeModal.value = true
     if (count >= limit) {
       message.warning('您的设备数量已达上限，建议升级套餐增加设备数')
@@ -1242,6 +1310,8 @@ watch(showCryptoModal, async (val) => {
 })
 
 onMounted(() => { loadData() })
+// KeepAlive 缓存激活时刷新
+onActivated(() => { loadData() })
 onUnmounted(() => { stopPayPolling() })
 </script>
 <style scoped>
@@ -1266,10 +1336,7 @@ onUnmounted(() => { stopPayPolling() })
 .hero-stat-val.hero-stat-date { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
 .hero-stat-label { font-size: 12px; opacity: 0.8; margin-top: 4px; }
 .hero-stat-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.25); }
-.hero-actions { margin-top: 12px; display: flex; justify-content: flex-end; }
-.hero-sub-action { background: rgba(255,255,255,0.15) !important; color: white !important; border: none !important; font-weight: 500 !important; font-size: 12px !important; }
-.hero-sub-action:hover { background: rgba(255,255,255,0.3) !important; }
-.hero-sub-action:disabled { background: rgba(255,255,255,0.08) !important; color: rgba(255,255,255,0.4) !important; }
+.hero-sub-action { font-weight: 600; }
 /* Hero upgrade button */
 .hero-upgrade-btn { background: rgba(255,255,255,0.95) !important; color: #4a5fd7 !important; border: none !important; font-weight: 600 !important; }
 .hero-upgrade-btn:hover { background: #fff !important; }
@@ -1289,6 +1356,31 @@ onUnmounted(() => { stopPayPolling() })
 .stat-content { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .stat-label { font-size: 12px; opacity: 0.8; color: #555; }
 .stat-value { font-size: 18px; font-weight: 700; line-height: 1.2; color: #333; }
+
+/* Hero Actions：续费 CTA */
+.hero-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+.renew-cta { box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35); font-weight: 600; }
+
+/* 剩余天数主角卡 */
+.days-stat {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.55) 100%);
+  border: 1px solid var(--primary-color);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.18);
+}
+.days-stat-head { display: flex; align-items: center; gap: 8px; }
+.days-stat-head .stat-label { font-size: 13px; font-weight: 600; opacity: 1; color: #555; }
+.days-number-row { display: flex; align-items: baseline; gap: 6px; }
+.days-number { font-size: 52px; font-weight: 800; line-height: 1; color: var(--primary-color); letter-spacing: -1px; }
+.days-unit { font-size: 16px; font-weight: 600; color: #555; }
+.days-progress { width: 100%; }
+.days-progress-track { height: 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.1); overflow: hidden; }
+.days-progress-fill { height: 100%; border-radius: 999px; background: var(--brand-gradient); transition: width 0.4s ease; }
+.days-progress-meta { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: #666; }
+.days-expire { font-size: 12px; color: #666; }
+.balance-item { opacity: 0.92; }
 
 /* Modern Hero Status Badge */
 .modern-hero .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
@@ -1397,10 +1489,8 @@ onUnmounted(() => { stopPayPolling() })
   /* Modern Hero Mobile */
   .modern-hero { padding: 16px; border-radius: 8px; }
   .hero-header { display: grid; gap: 12px; }
-  .hero-header > .n-button,
-  .hero-header > .n-tooltip {
-    width: 100%;
-  }
+  .hero-actions { width: 100%; }
+  .hero-actions .n-button { flex: 1 1 auto; }
   .package-title { font-size: 20px; line-height: 1.25; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .stat-item { display: grid; grid-template-columns: 36px minmax(0, 1fr); padding: 12px; border-radius: 8px; }
@@ -1408,6 +1498,11 @@ onUnmounted(() => { stopPayPolling() })
   .stat-content { min-width: 0; }
   .stat-value { font-size: 16px; line-height: 1.25; word-break: break-word; }
   .stat-date { font-size: 13px; }
+  /* 剩余天数主角卡：移动端占满整行 */
+  .days-stat { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 14px; }
+  .days-stat .stat-icon { width: 32px; height: 32px; }
+  .days-number { font-size: 42px; }
+  .days-unit { font-size: 14px; }
   .url-card, .format-card-container, .device-card { padding: 16px; border-radius: 8px; }
   .card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
   .card-header .n-space { justify-content: flex-end; }

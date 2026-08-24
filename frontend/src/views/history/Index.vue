@@ -175,7 +175,7 @@ onMounted(() => {
   font-size: 28px;
   font-weight: 600;
   margin: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -184,13 +184,13 @@ onMounted(() => {
 .stat-card {
   padding: 20px 24px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #667eea10, #764ba210);
-  border: 1px solid #667eea20;
+  background: linear-gradient(135deg, var(--primary-color-hover), var(--primary-color)10);
+  border: 1px solid var(--primary-color-active);
 }
 
 .stat-label {
   font-size: 13px;
-  color: #999;
+  color: var(--text-color-secondary);
   margin-bottom: 8px;
 }
 

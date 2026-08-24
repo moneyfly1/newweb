@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type paymentTarget struct {
@@ -107,6 +108,57 @@ func buildPaymentURLResult(payType, orderNo, transactionID string, amount float6
 		result[k] = v
 	}
 	return result
+}
+
+// createAlipayDirectPayment 处理支付宝直连（AppID+私钥）支付创建。
+// 支持订单（target.Order）与充值（target.Recharge）两类业务；已处理（含成功与失败响应）返回 true，
+// 未配置直连返回 false，由调用方回退到易支付通道。此前 CreatePayment 与 CreateRechargePayment
+// 各有一份逐行重复的实现，现统一收敛于此。
+func createAlipayDirectPayment(c *gin.Context, db *gorm.DB, target paymentTarget, transaction *models.PaymentTransaction, isMobile bool) bool {
+	if !services.IsDirectAlipayConfigured() {
+		return false
+	}
+	alipayCfg, err := services.GetAlipayConfig()
+	if err != nil {
+		return false
+	}
+	notifyURL, returnURL := services.BuildPaymentURLs("alipay", target.OrderNo)
+	if alipayCfg.IsProduction && (notifyURL == "" || returnURL == "") {
+		utils.BadRequest(c, "支付宝生产环境支付地址配置无效，请检查支付公网域名配置")
+		return true
+	}
+	outTradeNo := safeTransactionID(transaction.TransactionID)
+	utils.LogPayment("[CreatePayment] 使用 txID 作为 out_trade_no: %s (order_no: %s)", outTradeNo, target.OrderNo)
+	var paymentURL string
+	if isMobile {
+		paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, outTradeNo, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
+	} else {
+		paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
+	}
+	if err != nil {
+		utils.LogError("[payment] 直接支付宝失败: %v", err)
+		utils.BadRequest(c, "支付宝直连创建失败: "+err.Error())
+		return true
+	}
+	if target.Order != nil {
+		ptxID := outTradeNo
+		if err := db.Model(target.Order).Update("payment_transaction_id", &ptxID).Error; err != nil {
+			utils.InternalError(c, "更新订单支付信息失败")
+			return true
+		}
+	}
+	if target.Recharge != nil {
+		if err := db.Model(target.Recharge).Updates(map[string]interface{}{
+			"payment_url":            &paymentURL,
+			"payment_transaction_id": &outTradeNo,
+		}).Error; err != nil {
+			utils.InternalError(c, "更新充值支付信息失败")
+			return true
+		}
+	}
+	utils.LogPayment("[CreatePayment] ✅ 支付宝订单创建成功 - txID=%s, order_no=%s", outTradeNo, target.OrderNo)
+	utils.Success(c, buildPaymentURLResult("alipay", target.OrderNo, outTradeNo, target.PayAmount, paymentURL, nil))
+	return true
 }
 
 func createNonAlipayPayment(db *gorm.DB, payConfig models.PaymentConfig, target paymentTarget, transaction *models.PaymentTransaction) (gin.H, error) {
@@ -446,7 +498,7 @@ func GetPaymentMethods(c *gin.Context) {
 	if isEnabled(cfgMap["pay_epay_enabled"]) && epayConfigured {
 		if !hasPayType("epay") {
 			pc := models.PaymentConfig{PayType: "epay", Status: 1, SortOrder: 100}
-			if err := db.Create(&pc).Error; err != nil {
+			if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&pc).Error; err != nil {
 				utils.SysError("payment", fmt.Sprintf("创建支付配置失败(epay): %v", err))
 			}
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "epay", "sort_order": 100})
@@ -458,7 +510,7 @@ func GetPaymentMethods(c *gin.Context) {
 	if isEnabled(cfgMap["pay_alipay_enabled"]) && (epayConfigured || alipayDirectConfigured) {
 		if !hasPayType("alipay") {
 			pc := models.PaymentConfig{PayType: "alipay", Status: 1, SortOrder: 101}
-			if err := db.Create(&pc).Error; err != nil {
+			if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&pc).Error; err != nil {
 				utils.SysError("payment", fmt.Sprintf("创建支付配置失败(alipay): %v", err))
 			}
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "alipay", "sort_order": 101})
@@ -469,7 +521,7 @@ func GetPaymentMethods(c *gin.Context) {
 	if isEnabled(cfgMap["pay_wechat_enabled"]) && epayConfigured {
 		if !hasPayType("wxpay") {
 			pc := models.PaymentConfig{PayType: "wxpay", Status: 1, SortOrder: 102}
-			if err := db.Create(&pc).Error; err != nil {
+			if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&pc).Error; err != nil {
 				utils.SysError("payment", fmt.Sprintf("创建支付配置失败(wxpay): %v", err))
 			}
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "wxpay", "sort_order": 102})
@@ -481,7 +533,7 @@ func GetPaymentMethods(c *gin.Context) {
 	if isEnabled(cfgMap["pay_stripe_enabled"]) && stripeConfigured {
 		if !hasPayType("stripe") {
 			pc := models.PaymentConfig{PayType: "stripe", Status: 1, SortOrder: 103}
-			if err := db.Create(&pc).Error; err != nil {
+			if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&pc).Error; err != nil {
 				utils.SysError("payment", fmt.Sprintf("创建支付配置失败(stripe): %v", err))
 			}
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "stripe", "sort_order": 103})
@@ -493,7 +545,7 @@ func GetPaymentMethods(c *gin.Context) {
 	if isEnabled(cfgMap["pay_crypto_enabled"]) && cryptoConfigured {
 		if !hasPayType("crypto") {
 			pc := models.PaymentConfig{PayType: "crypto", Status: 1, SortOrder: 104}
-			if err := db.Create(&pc).Error; err != nil {
+			if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&pc).Error; err != nil {
 				utils.SysError("payment", fmt.Sprintf("创建支付配置失败(crypto): %v", err))
 			}
 			methods = append(methods, gin.H{"id": pc.ID, "pay_type": "crypto", "sort_order": 104})
@@ -506,7 +558,7 @@ func GetPaymentMethods(c *gin.Context) {
 		if isEnabled(cfgMap["pay_codepay_alipay_enabled"]) {
 			if !hasPayType("codepay_alipay") {
 				pc := models.PaymentConfig{PayType: "codepay_alipay", Status: 1, SortOrder: 105}
-				if err := db.Create(&pc).Error; err != nil {
+				if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&pc).Error; err != nil {
 					utils.SysError("payment", fmt.Sprintf("创建支付配置失败(codepay_alipay): %v", err))
 				}
 				methods = append(methods, gin.H{"id": pc.ID, "pay_type": "codepay_alipay", "sort_order": 105})
@@ -515,7 +567,7 @@ func GetPaymentMethods(c *gin.Context) {
 		if isEnabled(cfgMap["pay_codepay_wxpay_enabled"]) {
 			if !hasPayType("codepay_wxpay") {
 				pc := models.PaymentConfig{PayType: "codepay_wxpay", Status: 1, SortOrder: 106}
-				if err := db.Create(&pc).Error; err != nil {
+				if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&pc).Error; err != nil {
 					utils.SysError("payment", fmt.Sprintf("创建支付配置失败(codepay_wxpay): %v", err))
 				}
 				methods = append(methods, gin.H{"id": pc.ID, "pay_type": "codepay_wxpay", "sort_order": 106})
@@ -573,36 +625,9 @@ func CreatePayment(c *gin.Context) {
 	}
 
 	if payConfig.PayType == "alipay" {
-		if services.IsDirectAlipayConfigured() {
-			alipayCfg, err := services.GetAlipayConfig()
-			if err == nil {
-				notifyURL, returnURL := services.BuildPaymentURLs("alipay", order.OrderNo)
-				if alipayCfg.IsProduction && (notifyURL == "" || returnURL == "") {
-					utils.BadRequest(c, "支付宝生产环境支付地址配置无效，请检查支付公网域名配置")
-					return
-				}
-				outTradeNo := safeTransactionID(transaction.TransactionID)
-				utils.LogPayment("[CreatePayment] 使用 txID 作为 out_trade_no: %s (order_no: %s)", outTradeNo, order.OrderNo)
-				var paymentURL string
-				if req.IsMobile {
-					paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, outTradeNo, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
-				} else {
-					paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
-				}
-				if err == nil {
-					ptxID := outTradeNo
-					if err := db.Model(order).Update("payment_transaction_id", &ptxID).Error; err != nil {
-						utils.InternalError(c, "更新订单支付信息失败")
-						return
-					}
-					utils.LogPayment("[CreatePayment] ✅ 支付宝订单创建成功 - txID=%s, order_no=%s, order_id=%d", outTradeNo, order.OrderNo, order.ID)
-					utils.Success(c, buildPaymentURLResult("alipay", order.OrderNo, outTradeNo, target.PayAmount, paymentURL, nil))
-					return
-				}
-				utils.LogError("[payment] 直接支付宝失败: %v", err)
-				utils.BadRequest(c, "支付宝直连创建失败: "+err.Error())
-				return
-			}
+		// 直连支付宝（未配置时回退易支付）
+		if createAlipayDirectPayment(c, db, *target, transaction, req.IsMobile) {
+			return
 		}
 
 		epayCfg, err := services.GetEpayConfig()
@@ -674,37 +699,9 @@ func CreateRechargePayment(c *gin.Context) {
 	}
 
 	if payConfig.PayType == "alipay" {
-		if services.IsDirectAlipayConfigured() {
-			alipayCfg, err := services.GetAlipayConfig()
-			if err == nil {
-				notifyURL, returnURL := services.BuildPaymentURLs("alipay", record.OrderNo)
-				if alipayCfg.IsProduction && (notifyURL == "" || returnURL == "") {
-					utils.BadRequest(c, "支付宝生产环境支付地址配置无效，请检查支付公网域名配置")
-					return
-				}
-				utils.LogPayment("[CreateRechargePayment] 使用 txID 作为 out_trade_no: %s (order_no: %s)", txID, record.OrderNo)
-				var paymentURL string
-				if req.IsMobile {
-					paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, txID, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
-				} else {
-					paymentURL, err = services.AlipayCreateOrder(alipayCfg, txID, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
-				}
-				if err == nil {
-					if err := db.Model(record).Updates(map[string]interface{}{
-						"payment_url":            &paymentURL,
-						"payment_transaction_id": &txID,
-					}).Error; err != nil {
-						utils.InternalError(c, "更新充值支付信息失败")
-						return
-					}
-					utils.LogPayment("[CreateRechargePayment] ✅ 充值支付宝订单创建成功 - txID=%s, order_no=%s", txID, record.OrderNo)
-					utils.Success(c, buildPaymentURLResult("alipay", record.OrderNo, txID, target.PayAmount, paymentURL, nil))
-					return
-				}
-				utils.LogError("[payment] 充值直接支付宝失败: %v", err)
-				utils.BadRequest(c, "支付宝直连创建失败: "+err.Error())
-				return
-			}
+		// 直连支付宝（未配置时回退易支付）
+		if createAlipayDirectPayment(c, db, *target, transaction, req.IsMobile) {
+			return
 		}
 
 		epayCfg, err := services.GetEpayConfig()
@@ -920,120 +917,13 @@ func PaymentNotify(c *gin.Context) {
 		return
 	}
 
-	// 限制请求体大小为 10MB，防止 DoS 攻击
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 10*1024*1024)
-
-	// Read raw callback body
-	rawBody, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.String(400, "fail")
-		return
-	}
-	rawStr := string(rawBody)
-
-	// Find the payment config for this pay type
-	var payConfig models.PaymentConfig
-	if err := db.Where("pay_type = ? AND status = ?", payType, 1).First(&payConfig).Error; err != nil {
-		c.String(400, "unknown payment type")
-		return
-	}
-
-	// Parse callback data to find transaction/order
-	var callbackData map[string]interface{}
-	if err := json.Unmarshal(rawBody, &callbackData); err != nil {
-		utils.SysError("payment", fmt.Sprintf("解析支付回调数据失败: %v", err))
-		c.String(400, "invalid callback data")
-		return
-	}
-
-	// Try to find transaction by common callback fields
-	var transaction models.PaymentTransaction
-	txFound := false
-
-	// Try out_trade_no (common in Alipay/WeChat)
-	if outTradeNo, ok := callbackData["out_trade_no"].(string); ok && outTradeNo != "" {
-		if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err == nil {
-			txFound = true
-		}
-	}
-
-	// Try order_no field
-	if !txFound {
-		if orderNo, ok := callbackData["order_no"].(string); ok && orderNo != "" {
-			var order models.Order
-			if err := db.Where("order_no = ?", orderNo).First(&order).Error; err == nil {
-				if err := db.Where("order_id = ?", order.ID).First(&transaction).Error; err == nil {
-					txFound = true
-				}
-			}
-		}
-	}
-
-	// Log the callback regardless
-	callback := models.PaymentCallback{
-		CallbackType: payType,
-		CallbackData: string(rawBody),
-		RawRequest:   &rawStr,
-		Processed:    txFound,
-	}
-	if txFound {
-		callback.PaymentTransactionID = transaction.ID
-	}
-
-	if txFound && transaction.Status == "pending" {
-		err := db.Transaction(func(tx *gorm.DB) error {
-			// Re-fetch with status check inside transaction to prevent double-spend
-			var txn models.PaymentTransaction
-			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
-				return err // Already processed or not found
-			}
-
-			// Mark transaction as paid
-			extTxID := ""
-			if v, ok := callbackData["trade_no"].(string); ok {
-				extTxID = v
-			}
-			callbackJSON := string(rawBody)
-			updates := map[string]interface{}{
-				"status":        "paid",
-				"callback_data": &callbackJSON,
-			}
-			if extTxID != "" {
-				updates["external_transaction_id"] = &extTxID
-			}
-			if err := tx.Model(&txn).Updates(updates).Error; err != nil {
-				return err
-			}
-
-			// Mark order as paid and activate subscription
-			var order models.Order
-			if err := tx.First(&order, txn.OrderID).Error; err == nil && order.Status == "pending" {
-				now := time.Now()
-				pmName := payType
-				if err := tx.Model(&order).Updates(map[string]interface{}{
-					"status":              "paid",
-					"payment_method_name": &pmName,
-					"payment_time":        &now,
-				}).Error; err != nil {
-					return err
-				}
-				if err := services.ActivateSubscription(tx, &order, payType); err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
-		if err == nil {
-			result := "success"
-			callback.ProcessingResult = &result
-		}
-	}
-
-	if err := db.Create(&callback).Error; err != nil {
-		utils.SysError("payment", fmt.Sprintf("保存支付回调日志失败: %v", err))
-	}
-	c.String(200, "success")
+	// 安全修复（P0）：此前的"通用 JSON 回调分支"不验证任何签名，
+	// 攻击者只要知道某个 pending 支付事务的 transaction_id（用户下单时接口会返回），
+	// 伪造 POST /api/v1/payment/notify/wxpay（或任意存在的 pay_type）即可把订单标记为已支付并激活订阅，免费开通服务。
+	// 所有合法渠道（epay/alipay/stripe/codepay，含经易支付网关的微信/QQ 支付）的回调
+	// 均指向上述已验签的专用入口，通用分支不存在任何合法流量，一律拒绝。
+	utils.SysError("payment", fmt.Sprintf("拒绝未知支付回调类型: type=%s ip=%s", payType, utils.GetRealClientIP(c)))
+	c.String(http.StatusBadRequest, "unknown payment type")
 }
 
 func handleEpayNotify(c *gin.Context, db *gorm.DB) {
@@ -1214,7 +1104,7 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 
 	// Only process successful trades
 	if notification.TradeStatus != "TRADE_SUCCESS" && notification.TradeStatus != "TRADE_FINISHED" {
-		fmt.Printf("[alipay] 交易状态非成功: %s\n", notification.TradeStatus)
+		utils.LogCallback("[alipay] 交易状态非成功: %s", notification.TradeStatus)
 		c.String(200, "success")
 		return
 	}
@@ -1336,49 +1226,8 @@ func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 		return fmt.Errorf("充值订单缺少 transaction_id")
 	}
 
-	err := db.Transaction(func(tx *gorm.DB) error {
-		var order models.Order
-		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
-			utils.LogError("[Alipay] ❌ 查找订单失败: order_id=%d, error=%v", transaction.OrderID, err)
-			return err // Already processed or not found
-		}
-
-		utils.LogCallback("[Alipay] ✓ 找到待支付订单: order_no=%s, user_id=%d, package_id=%d, amount=%.2f",
-			order.OrderNo, order.UserID, order.PackageID, order.Amount)
-
-		now := time.Now()
-		pmName := "alipay"
-		txIDStr := ""
-		if transaction.TransactionID != nil {
-			txIDStr = *transaction.TransactionID
-		}
-		if err := tx.Model(&order).Updates(map[string]interface{}{
-			"status":                 "paid",
-			"payment_method_name":    &pmName,
-			"payment_time":           &now,
-			"payment_transaction_id": &txIDStr,
-		}).Error; err != nil {
-			utils.LogError("[Alipay] ❌ 更新订单状态失败: error=%v", err)
-			return err
-		}
-
-		utils.LogCallback("[Alipay] ✅ 订单状态已更新为 paid - order_no=%s", order.OrderNo)
-
-		if err := services.ActivateSubscription(tx, &order, "alipay"); err != nil {
-			utils.LogError("[Alipay] ❌ 激活订阅失败: error=%v", err)
-			return fmt.Errorf("激活订阅失败: %w", err)
-		}
-
-		utils.LogCallback("[Alipay] ✅ 订阅激活成功 - order_no=%s", order.OrderNo)
-		return nil
-	})
-	if err != nil {
-		utils.SysError("payment", fmt.Sprintf("支付宝订单回调处理失败: %v", err))
-		utils.LogError("[Alipay] ❌ 订单回调处理失败: %v", err)
-		return err
-	}
-	utils.LogCallback("[Alipay] ✅✅✅ 订单回调处理完成")
-	return nil
+	// 订单激活逻辑与网关回调完全一致，复用统一实现（避免第三份重复）
+	return handleGatewayOrderCallback(db, transaction, "alipay")
 }
 
 func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
@@ -1398,13 +1247,13 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 
 	// Verify webhook signature (required)
 	if stripeCfg.WebhookSecret == "" {
-		fmt.Printf("[stripe] webhook secret 未配置，拒绝处理\n")
+		utils.LogCallback("[stripe] webhook secret 未配置，拒绝处理")
 		c.String(400, "webhook secret not configured")
 		return
 	}
 	sigHeader := c.GetHeader("Stripe-Signature")
 	if !services.StripeVerifyWebhook(rawBody, sigHeader, stripeCfg.WebhookSecret) {
-		fmt.Printf("[stripe] webhook 签名验证失败\n")
+		utils.LogCallback("[stripe] webhook 签名验证失败")
 		c.String(400, "signature verification failed")
 		return
 	}

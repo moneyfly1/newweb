@@ -20,15 +20,9 @@ type PageData struct {
 	PageSize int         `json:"page_size"`
 }
 
-type FieldError struct {
-	Field   string `json:"field"`
-	Message string `json:"message"`
-}
-
 type ErrorResponse struct {
-	Code    int          `json:"code"`
-	Message string       `json:"message"`
-	Errors  []FieldError `json:"errors,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
 func Success(c *gin.Context, data interface{}) {
@@ -52,10 +46,6 @@ func SuccessPage(c *gin.Context, items interface{}, total int64, page, pageSize 
 
 func Error(c *gin.Context, httpStatus int, code int, message string) {
 	c.JSON(httpStatus, ErrorResponse{Code: code, Message: message})
-}
-
-func ErrorWithFields(c *gin.Context, httpStatus int, code int, message string, errors []FieldError) {
-	c.JSON(httpStatus, ErrorResponse{Code: code, Message: message, Errors: errors})
 }
 
 func BadRequest(c *gin.Context, message string)      { Error(c, 400, 40000, message) }

@@ -80,7 +80,7 @@
 
         <!-- Data Table -->
         <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-          <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+          <span style="color: var(--text-color-secondary)">已选择 {{ checkedRowKeys.length }} 项</span>
           <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
         </n-space>
         <template v-if="!appStore.isMobile">
@@ -133,9 +133,9 @@
 
         <!-- Pagination -->
         <n-pagination
-          v-model:page="currentPage"
-          v-model:page-size="pageSize"
-          :page-count="totalPages"
+          v-model:page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :item-count="pagination.itemCount"
           :page-sizes="[10, 20, 50, 100]"
           show-size-picker
           style="margin-top: 16px; justify-content: flex-end"
@@ -199,6 +199,7 @@ import {
   EyeOutline
 } from '@vicons/ionicons5'
 import { listEmailQueue, retryEmail, deleteEmail } from '@/api/admin'
+import { useTable } from '@/composables/useTable'
 import { useAppStore } from '@/stores/app'
 import { translateEmailType } from '@/utils/i18n'
 import DOMPurify from 'dompurify'
@@ -209,16 +210,15 @@ const message = useMessage()
 const dialog = useDialog()
 
 // State
-const loading = ref(false)
-const emails = ref([])
-const checkedRowKeys = ref([])
 const statusFilter = ref('all')
-const currentPage = ref(1)
-const pageSize = ref(10)
-const totalPages = ref(0)
-const totalCount = ref(0)
 const showDetail = ref(false)
 const detailItem = ref(null)
+
+// 统一表格状态（含状态筛选）
+const { loading, tableData: emails, checkedRowKeys, pagination, loadData, reload } = useTable(listEmailQueue, {
+  getParams: () => ({ status: statusFilter.value === 'all' ? undefined : statusFilter.value }),
+})
+const fetchEmails = loadData
 
 const formatTime = (t) => t ? new Date(t).toLocaleString('zh-CN') : '-'
 
@@ -245,7 +245,7 @@ const handleDetail = (row) => {
 // Stats
 const stats = computed(() => {
   return {
-    total: totalCount.value,
+    total: pagination.itemCount,
     pending: emails.value.filter(e => e.status === 'pending').length,
     sent: emails.value.filter(e => e.status === 'sent').length,
     failed: emails.value.filter(e => e.status === 'failed').length
@@ -376,40 +376,19 @@ const columns = [
   }
 ]
 
-// Fetch emails
-const fetchEmails = async () => {
-  loading.value = true
-  try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize.value,
-      status: statusFilter.value === 'all' ? undefined : statusFilter.value
-    }
-    const response = await listEmailQueue(params)
-    emails.value = response.data.items || []
-    totalCount.value = response.data.total || 0
-    totalPages.value = Math.ceil(totalCount.value / pageSize.value)
-  } catch (error) {
-    message.error('获取邮件队列失败：' + (error.message || '未知错误'))
-  } finally {
-    loading.value = false
-  }
-}
-
 // Handlers
 const handleStatusChange = () => {
-  currentPage.value = 1
-  fetchEmails()
+  reload()
 }
 
 const handlePageChange = (page) => {
-  currentPage.value = page
+  pagination.page = page
   fetchEmails()
 }
 
 const handlePageSizeChange = (size) => {
-  pageSize.value = size
-  currentPage.value = 1
+  pagination.pageSize = size
+  pagination.page = 1
   fetchEmails()
 }
 
@@ -472,7 +451,7 @@ onMounted(() => {
 
 <style scoped>
 .stat-card-blue::before {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
 }
 
 .stat-card-orange::before {
@@ -507,7 +486,7 @@ onMounted(() => {
 }
 
 .stat-card-blue .stat-icon {
-  color: #667eea;
+  color: var(--primary-color);
 }
 
 .stat-card-orange .stat-icon {
@@ -528,14 +507,14 @@ onMounted(() => {
 
 .stat-label {
   font-size: 13px;
-  color: #666;
+  color: var(--text-color-secondary);
   margin-bottom: 4px;
 }
 
 .stat-value {
   font-size: 24px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-color);
 }
 
 .page-card {
@@ -556,14 +535,14 @@ onMounted(() => {
 }
 
 .mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.mobile-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
-.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+.mobile-card { background: var(--bg-color); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
 .card-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 8px; }
 .card-body { padding: 10px 14px; }
 .card-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 4px 0; font-size: 13px; }
 .card-row span:last-child { text-align: right; word-break: break-word; max-width: 60%; }
-.card-label { color: #999; }
-.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid #f0f0f0; flex-wrap: wrap; }
+.card-label { color: var(--text-color-secondary); }
+.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-wrap: wrap; }
 
 @media (max-width: 767px) {
   .admin-email-queue-page { padding: 8px; }
@@ -572,9 +551,9 @@ onMounted(() => {
 .email-preview {
   max-height: 400px;
   overflow: auto;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 16px;
-  background: #fff;
+  background: var(--bg-color);
 }
 </style>

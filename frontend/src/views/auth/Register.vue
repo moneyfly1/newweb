@@ -1,80 +1,78 @@
 <template>
-  <div class="auth-page">
-    <div class="auth-left">
-      <div class="brand-area">
-        <div class="brand-logo">C</div>
-        <h1>CBoard</h1>
-        <p class="brand-desc">高效、安全的代理订阅聚合管理平台</p>
-        <div class="feature-list">
-          <div class="feature-item"><div class="feature-dot" /><span>多格式订阅聚合，一键导入</span></div>
-          <div class="feature-item"><div class="feature-dot" /><span>智能设备管理，安全可控</span></div>
-          <div class="feature-item"><div class="feature-dot" /><span>实时节点监控，稳定高速</span></div>
-        </div>
+  <AuthLayout title="高速稳定 · 全球节点" :subtitle="brandFeatures">
+    <template v-if="registerDisabled">
+      <h2 class="auth-form-title">暂未开放注册</h2>
+      <p class="auth-form-subtitle">管理员已关闭注册功能</p>
+      <div class="auth-form-footer">
+        已有账户？<router-link to="/login" class="auth-link">立即登录</router-link>
       </div>
-    </div>
-    <div class="auth-right">
-      <div class="auth-form-wrapper">
-        <template v-if="registerDisabled">
-          <h2>暂未开放注册</h2>
-          <p class="auth-subtitle">管理员已关闭注册功能</p>
-          <div class="auth-footer">
-            已有账户？<router-link to="/login"><n-button text type="primary">立即登录</n-button></router-link>
-          </div>
-        </template>
-        <template v-else>
-          <h2>创建账户</h2>
-          <p class="auth-subtitle">注册后即可开始使用</p>
-          <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :show-label="false">
-            <n-form-item path="username">
-              <n-input v-model:value="form.username" placeholder="用户名" size="large">
-                <template #prefix><n-icon :component="PersonOutline" /></template>
-              </n-input>
-            </n-form-item>
-            <n-form-item path="email">
-              <n-input v-model:value="form.email" placeholder="邮箱地址" size="large">
-                <template #prefix><n-icon :component="MailOutline" /></template>
-              </n-input>
-            </n-form-item>
-            <n-form-item v-if="emailVerifyRequired" path="verification_code">
-              <n-input-group>
-                <n-input v-model:value="form.verification_code" placeholder="邮箱验证码" size="large" style="flex: 1;">
-                  <template #prefix><n-icon :component="ShieldCheckmarkOutline" /></template>
-                </n-input>
-                <n-button size="large" :loading="sendingCode" :disabled="codeCooldown > 0" @click="handleSendCode" style="width: 120px;">
-                  {{ codeCooldown > 0 ? codeCooldown + 's' : '发送验证码' }}
-                </n-button>
-              </n-input-group>
-            </n-form-item>
-            <n-form-item path="password">
-              <n-input v-model:value="form.password" type="password" show-password-on="click" placeholder="密码（至少6位）" size="large">
-                <template #prefix><n-icon :component="LockClosedOutline" /></template>
-              </n-input>
-            </n-form-item>
-            <n-form-item v-if="inviteEnabled" path="invite_code">
-              <n-input-group>
-                <n-input v-model:value="form.invite_code" :placeholder="inviteRequired ? '邀请码（必填）' : '邀请码（选填）'" size="large" style="flex: 1" @blur="autoValidateInvite">
-                  <template #prefix><n-icon :component="GiftOutline" /></template>
-                </n-input>
-                <n-button size="large" :loading="validatingInvite" @click="handleValidateInvite" style="width: 80px">验证</n-button>
-              </n-input-group>
-            </n-form-item>
-            <n-alert v-if="inviteEnabled && inviteValid === true" type="success" :bordered="false" size="small" style="margin-bottom: 16px">
-              邀请码有效{{ inviteReward > 0 ? `，注册后可获得 ¥${inviteReward} 奖励` : '' }}
-            </n-alert>
-            <n-alert v-else-if="inviteEnabled && inviteValid === false" type="error" :bordered="false" size="small" style="margin-bottom: 16px">
-              {{ inviteError }}
-            </n-alert>
-            <n-button type="primary" block size="large" :loading="loading" @click="handleRegister" style="border-radius: 8px; height: 44px;">
-              注 册
+    </template>
+    <template v-else>
+      <h2 class="auth-form-title">创建账户</h2>
+      <p class="auth-form-subtitle">注册后即可开始使用</p>
+
+      <n-form ref="formRef" :model="form" :rules="rules" label-placement="top" size="large">
+        <n-form-item path="username" label="用户名">
+          <n-input v-model:value="form.username" placeholder="请输入用户名">
+            <template #prefix><n-icon :component="PersonOutline" /></template>
+          </n-input>
+        </n-form-item>
+        <n-form-item path="email" label="邮箱">
+          <n-input v-model:value="form.email" placeholder="请输入邮箱">
+            <template #prefix><n-icon :component="MailOutline" /></template>
+          </n-input>
+        </n-form-item>
+        <n-form-item v-if="emailVerifyRequired" path="verification_code" label="邮箱验证码">
+          <n-input-group>
+            <n-input v-model:value="form.verification_code" placeholder="请输入验证码" style="flex: 1;">
+              <template #prefix><n-icon :component="ShieldCheckmarkOutline" /></template>
+            </n-input>
+            <n-button size="large" :loading="sendingCode" :disabled="codeCooldown > 0" @click="handleSendCode" style="width: 120px;">
+              {{ codeCooldown > 0 ? codeCooldown + 's' : '发送验证码' }}
             </n-button>
-          </n-form>
-          <div class="auth-footer">
-            已有账户？<router-link to="/login"><n-button text type="primary">立即登录</n-button></router-link>
-          </div>
-        </template>
+          </n-input-group>
+        </n-form-item>
+        <n-form-item path="password" label="密码">
+          <n-input v-model:value="form.password" type="password" show-password-on="click" placeholder="密码（至少8位，含字母和数字）">
+            <template #prefix><n-icon :component="LockClosedOutline" /></template>
+          </n-input>
+        </n-form-item>
+        <n-form-item path="confirmPassword" label="确认密码">
+          <n-input v-model:value="form.confirmPassword" type="password" show-password-on="click" placeholder="请再次输入密码" @keyup.enter="handleRegister">
+            <template #prefix><n-icon :component="LockClosedOutline" /></template>
+          </n-input>
+        </n-form-item>
+        <n-form-item v-if="inviteEnabled" path="invite_code" label="邀请码">
+          <n-input-group>
+            <n-input v-model:value="form.invite_code" :placeholder="inviteRequired ? '邀请码（必填）' : '邀请码（选填）'" style="flex: 1" @blur="autoValidateInvite">
+              <template #prefix><n-icon :component="GiftOutline" /></template>
+            </n-input>
+            <n-button size="large" :loading="validatingInvite" @click="handleValidateInvite" style="width: 80px">验证</n-button>
+          </n-input-group>
+        </n-form-item>
+        <n-alert v-if="inviteEnabled && inviteValid === true" type="success" :bordered="false" size="small" style="margin-bottom: 16px">
+          邀请码有效{{ inviteReward > 0 ? `，注册后可获得 ¥${inviteReward} 奖励` : '' }}
+        </n-alert>
+        <n-alert v-else-if="inviteEnabled && inviteValid === false" type="error" :bordered="false" size="small" style="margin-bottom: 16px">
+          {{ inviteError }}
+        </n-alert>
+
+        <div class="auth-terms-row">
+          <n-checkbox v-model:checked="agreedTerms">
+            我已阅读并同意
+            <router-link to="/terms" class="auth-link" @click.stop>《服务条款》</router-link>
+          </n-checkbox>
+        </div>
+
+        <n-button type="primary" block size="large" :loading="loading" :disabled="!agreedTerms" class="auth-submit-btn" @click="handleRegister">
+          注 册
+        </n-button>
+      </n-form>
+      <div class="auth-form-footer">
+        已有账户？<router-link to="/login" class="auth-link">立即登录</router-link>
       </div>
-    </div>
-  </div>
+    </template>
+  </AuthLayout>
 </template>
 
 <script setup lang="ts">
@@ -82,6 +80,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useMessage, type FormInst } from 'naive-ui'
 import { PersonOutline, MailOutline, LockClosedOutline, GiftOutline, ShieldCheckmarkOutline } from '@vicons/ionicons5'
+import AuthLayout from '@/components/AuthLayout.vue'
 import { register, sendVerificationCode } from '@/api/auth'
 import { getPublicConfig, validateInviteCode } from '@/api/common'
 import { getErrorMessage, silentCatch } from '@/utils/error'
@@ -97,7 +96,11 @@ const validatingInvite = ref(false)
 const inviteValid = ref<boolean | null>(null)
 const inviteReward = ref(0)
 const inviteError = ref('')
+// 是否已同意《服务条款》
+const agreedTerms = ref(false)
 let codeTimer: ReturnType<typeof setInterval> | null = null
+
+const brandFeatures = ['多格式订阅聚合，一键导入', '智能设备管理，安全可控', '实时节点监控，稳定高速']
 
 const siteConfig = ref<Record<string, string>>({})
 const registerDisabled = computed(() => {
@@ -114,7 +117,7 @@ const inviteRequired = computed(() => {
 })
 const inviteEnabled = computed(() => inviteRequired.value)
 
-const form = ref({ username: '', email: '', password: '', invite_code: '', verification_code: '' })
+const form = ref({ username: '', email: '', password: '', confirmPassword: '', invite_code: '', verification_code: '' })
 const rules = computed(() => ({
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
@@ -127,7 +130,11 @@ const rules = computed(() => ({
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码至少6位', trigger: 'blur' },
+    { validator: (_r: any, v: string) => !v || (v.length >= 8 && /[a-zA-Z]/.test(v) && /[0-9]/.test(v)), message: '密码至少8位，需包含字母和数字', trigger: 'blur' },
+  ],
+  confirmPassword: [
+    { required: true, message: '请再次输入密码', trigger: 'blur' },
+    { validator: (_r: any, v: string) => !v || v === form.value.password, message: '两次输入的密码不一致', trigger: 'blur' },
   ],
   invite_code: inviteRequired.value
     ? [{ required: true, message: '请输入邀请码', trigger: 'blur' }]
@@ -159,11 +166,18 @@ const handleSendCode = async () => {
 }
 
 async function handleRegister() {
+  // 未勾选《服务条款》禁止提交（按钮同时置灰，双保险）
+  if (!agreedTerms.value) {
+    message.warning('请先阅读并同意《服务条款》')
+    return
+  }
   await formRef.value?.validate()
   loading.value = true
   try {
     await register(form.value)
     message.success('注册成功，请登录')
+    // 成功过渡：短暂停留 300ms 后跳转登录页
+    await new Promise((resolve) => setTimeout(resolve, 300))
     router.push('/login')
   } catch (e: any) {
     message.error(getErrorMessage(e, '注册失败'))
@@ -220,30 +234,3 @@ onMounted(async () => {
 
 onUnmounted(() => { if (codeTimer) clearInterval(codeTimer) })
 </script>
-
-<style scoped>
-.auth-page { height: 100vh; display: flex; }
-.auth-left {
-  flex: 1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex; align-items: center; justify-content: center; color: #fff; padding: 48px;
-}
-.brand-area { max-width: 400px; }
-.brand-logo {
-  width: 56px; height: 56px; background: rgba(255,255,255,0.2); border-radius: 14px;
-  display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold;
-  backdrop-filter: blur(10px); margin-bottom: 24px;
-}
-.brand-area h1 { font-size: 36px; margin-bottom: 12px; font-weight: 700; }
-.brand-desc { font-size: 16px; opacity: 0.85; margin-bottom: 40px; line-height: 1.6; }
-.feature-list { display: flex; flex-direction: column; gap: 16px; }
-.feature-item { display: flex; align-items: center; gap: 12px; font-size: 15px; opacity: 0.9; }
-.feature-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.7); flex-shrink: 0; }
-.auth-right {
-  flex: 1; display: flex; align-items: center; justify-content: center; padding: 48px; background: var(--bg-color, #fff);
-}
-.auth-form-wrapper { width: 100%; max-width: 400px; }
-.auth-form-wrapper h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-.auth-subtitle { color: var(--text-color-secondary, #999); margin-bottom: 32px; font-size: 15px; }
-.auth-footer { text-align: center; margin-top: 24px; color: var(--text-color-secondary, #999); font-size: 14px; }
-@media (max-width: 768px) { .auth-left { display: none; } }
-</style>

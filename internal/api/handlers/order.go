@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -157,7 +157,7 @@ func CreateOrder(c *gin.Context) {
 			validatedCoupon = result.Coupon
 		}
 	}
-	finalAmount := amount - discountAmount
+	finalAmount := utils.Round2(amount-discountAmount)
 	orderNo, err := services.GenerateBusinessOrderNo(db, services.OrderNoPrefixOrder)
 	if err != nil {
 		utils.InternalError(c, "生成订单号失败")
@@ -200,6 +200,13 @@ func CreateOrder(c *gin.Context) {
 		if freshCoupon.TotalQuantity != nil && freshCoupon.UsedQuantity >= int(*freshCoupon.TotalQuantity) {
 			tx.Rollback()
 			utils.BadRequest(c, "优惠券已被领完")
+			return
+		}
+
+		// 事务内复核 per-user 使用上限（防止并发下单绕过 MaxUsesPerUser）
+		if err := checkCouponPerUserInTx(tx, uint(*couponID), userID, freshCoupon.MaxUsesPerUser); err != nil {
+			tx.Rollback()
+			utils.BadRequest(c, err.Error())
 			return
 		}
 
@@ -267,9 +274,29 @@ func PayOrder(c *gin.Context) {
 			utils.InternalError(c, "创建事务失败")
 			return
 		}
-		// Re-check order status inside transaction to prevent double-spend
+		// 抢订单：仅当订单仍为 pending 时才允许进入支付流程。
+		// 用「条件更新 + RowsAffected 校验」代替「先读再改」，
+		// 防止并发余额支付时订单被处理两次（双扣款 + 订阅双倍延期）。
 		var freshOrder models.Order
 		if err := tx.Where("id = ? AND status = ?", order.ID, "pending").First(&freshOrder).Error; err != nil {
+			tx.Rollback()
+			utils.BadRequest(c, "订单已支付或已取消")
+			return
+		}
+		now := time.Now()
+		balanceStr := "balance"
+		claimRes := tx.Model(&models.Order{}).Where("id = ? AND status = ?", order.ID, "pending").
+			Updates(map[string]interface{}{
+				"status":              "paid",
+				"payment_method_name": &balanceStr,
+				"payment_time":        &now,
+			})
+		if claimRes.Error != nil {
+			tx.Rollback()
+			utils.InternalError(c, "更新订单状态失败")
+			return
+		}
+		if claimRes.RowsAffected == 0 {
 			tx.Rollback()
 			utils.BadRequest(c, "订单已支付或已取消")
 			return
@@ -296,17 +323,6 @@ func PayOrder(c *gin.Context) {
 		// 记录余额消费日志
 		orderID := order.ID
 		utils.CreateBalanceLogEntry(userID, "consume", -payAmount, freshUser.Balance, freshUser.Balance-payAmount, &orderID, fmt.Sprintf("余额支付订单: %s", orderNo), c)
-		now := time.Now()
-		balanceStr := "balance"
-		if err := tx.Model(&order).Updates(map[string]interface{}{
-			"status":              "paid",
-			"payment_method_name": &balanceStr,
-			"payment_time":        &now,
-		}).Error; err != nil {
-			tx.Rollback()
-			utils.InternalError(c, "更新订单状态失败")
-			return
-		}
 		// 创建或续期订阅
 		var deviceLimit int
 		var durationDays int
@@ -334,8 +350,8 @@ func PayOrder(c *gin.Context) {
 				devices, _ := extra["devices"].(float64)
 				months, _ := extra["months"].(float64)
 				deviceLimit = int(devices)
-				// 使用更准确的天数计算：1个月约30.44天
-				durationDays = int(math.Round(float64(months) * 30.44))
+				// 与 services.ActivateSubscription 统一：1个月约30.44天
+				durationDays = services.CustomPackageDurationDays(int(months))
 				pkgName = fmt.Sprintf("自定义套餐 (%d设备/%d月)", int(devices), int(months))
 			}
 		} else {
@@ -380,30 +396,40 @@ func PayOrder(c *gin.Context) {
 				if upgradeExtendMonths > 0 {
 					pkgName = fmt.Sprintf("订阅升级: +%d设备, 续期%d月", upgradeAddDevices, upgradeExtendMonths)
 				}
-				newLimit := sub.DeviceLimit + upgradeAddDevices
-				newExpire := sub.ExpireTime
+				// 设备数原子增加 + 到期时间原子延长，防并发读-改-写丢更新
+				if err := services.AddSubscriptionDevices(tx, sub.ID, upgradeAddDevices); err != nil {
+					tx.Rollback()
+					utils.InternalError(c, "订阅升级失败")
+					return
+				}
 				if upgradeExtendMonths > 0 {
-					newExpire = newExpire.AddDate(0, upgradeExtendMonths, 0)
+					if _, err := services.ExtendSubscriptionExpiry(tx, sub.ID, sub.ExpireTime, upgradeExtendMonths*30); err != nil {
+						tx.Rollback()
+						utils.InternalError(c, "订阅升级失败")
+						return
+					}
 				}
 				if err := tx.Model(&sub).Updates(map[string]interface{}{
-					"device_limit": newLimit,
-					"expire_time":  newExpire,
-					"is_active":    true,
-					"status":       "active",
+					"is_active": true,
+					"status":    "active",
 				}).Error; err != nil {
 					tx.Rollback()
 					utils.InternalError(c, "订阅升级失败")
 					return
 				}
 			} else {
-				newExpire := sub.ExpireTime
-				if newExpire.Before(time.Now()) {
-					newExpire = time.Now()
+				// 原子延长到期时间，防并发读-改-写丢更新
+				if _, err := services.ExtendSubscriptionExpiry(tx, sub.ID, sub.ExpireTime, durationDays); err != nil {
+					tx.Rollback()
+					if errors.Is(err, services.ErrSubscriptionConflict) {
+						utils.BadRequest(c, "订阅状态已变化，请重试")
+						return
+					}
+					utils.InternalError(c, "续期订阅失败")
+					return
 				}
-				newExpire = newExpire.AddDate(0, 0, durationDays)
 				updates := map[string]interface{}{
 					"device_limit": deviceLimit,
-					"expire_time":  newExpire,
 					"is_active":    true,
 					"status":       "active",
 				}
@@ -435,16 +461,7 @@ func PayOrder(c *gin.Context) {
 		var subURL string
 		var userSub models.Subscription
 		if database.GetDB().Where("user_id = ?", userID).First(&userSub).Error == nil {
-			settings := utils.GetSettings("site_url", "domain_name")
-			siteURL := settings["site_url"]
-			if siteURL == "" {
-				siteURL = settings["domain_name"]
-			}
-			if siteURL != "" && !strings.HasPrefix(siteURL, "http") {
-				siteURL = "https://" + siteURL
-			}
-			siteURL = strings.TrimRight(siteURL, "/")
-			subURL = siteURL + "/api/v1/subscribe/" + userSub.SubscriptionURL
+			subURL = services.BuildSubscriptionURL(userSub.SubscriptionURL, "")
 		}
 		emailSubject, emailBody := services.RenderEmail("payment_success", map[string]string{
 			"username": notifyUser.Username, "order_no": orderNo, "amount": payAmountStr, "package_name": pkgName, "subscription_url": subURL,
@@ -469,8 +486,16 @@ func CancelOrder(c *gin.Context) {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
-	if err := db.Model(&order).Update("status", "cancelled").Error; err != nil {
+	// 条件更新：仅当订单仍为 pending 时才取消，防止覆盖并发支付回调刚置为 paid 的订单
+	cancelRes := db.Model(&models.Order{}).
+		Where("order_no = ? AND user_id = ? AND status = ?", orderNo, userID, "pending").
+		Update("status", "cancelled")
+	if cancelRes.Error != nil {
 		utils.InternalError(c, "取消订单失败")
+		return
+	}
+	if cancelRes.RowsAffected == 0 {
+		utils.BadRequest(c, "订单状态已变化，无法取消")
 		return
 	}
 	utils.LogOrder("订单已取消: order_no=%s user_id=%d ip=%s", orderNo, userID, utils.GetRealClientIP(c))
@@ -583,7 +608,7 @@ func CreateCustomOrder(c *gin.Context) {
 
 	// Calculate price
 	basePrice := pricePerDeviceYear * float64(req.Devices) * (float64(req.Months) / 12.0)
-	basePrice = math.Round(basePrice*100) / 100
+	basePrice = utils.Round2(basePrice)
 
 	// Find best matching discount
 	var discountPercent float64
@@ -593,7 +618,7 @@ func CreateCustomOrder(c *gin.Context) {
 		}
 	}
 	finalPrice := basePrice * (1 - discountPercent/100)
-	finalPrice = math.Round(finalPrice*100) / 100
+	finalPrice = utils.Round2(finalPrice)
 
 	// Apply coupon
 	userID := c.GetUint("user_id")
@@ -667,6 +692,13 @@ func CreateCustomOrder(c *gin.Context) {
 			utils.BadRequest(c, "优惠券已被领完")
 			return
 		}
+		// 事务内复核 per-user 使用上限（防止并发下单绕过 MaxUsesPerUser）
+		if err := checkCouponPerUserInTx(tx, uint(*couponID), userID, lockCoupon.MaxUsesPerUser); err != nil {
+			tx.Rollback()
+			utils.BadRequest(c, err.Error())
+			return
+		}
+
 		if err := tx.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount}).Error; err != nil {
 			tx.Rollback()
 			utils.InternalError(c, "记录优惠券使用失败")
@@ -734,17 +766,17 @@ func CalcUpgradePrice(c *gin.Context) {
 	var feeExtend float64
 	if req.ExtendMonths > 0 {
 		feeExtend = float64(currentDevices) * pricePerDeviceYear * (float64(req.ExtendMonths) / 12.0)
-		feeExtend = math.Round(feeExtend*100) / 100
+		feeExtend = utils.Round2(feeExtend)
 	}
 
 	remainingYears := remainingDays / 365.0
 	extendYears := float64(req.ExtendMonths) / 12.0
 	totalYearsForNewDevices := remainingYears + extendYears
 	feeNewDevices := float64(req.AddDevices) * pricePerDeviceYear * totalYearsForNewDevices
-	feeNewDevices = math.Round(feeNewDevices*100) / 100
+	feeNewDevices = utils.Round2(feeNewDevices)
 
 	total := feeExtend + feeNewDevices
-	total = math.Round(total*100) / 100
+	total = utils.Round2(total)
 
 	// 升级后的设备上限与到期时间（用于前端展示「升级前 → 升级后」）
 	newDeviceLimit := currentDevices + req.AddDevices
@@ -809,14 +841,14 @@ func CreateUpgradeOrder(c *gin.Context) {
 	var feeExtend float64
 	if req.ExtendMonths > 0 {
 		feeExtend = float64(sub.DeviceLimit) * pricePerDeviceYear * (float64(req.ExtendMonths) / 12.0)
-		feeExtend = math.Round(feeExtend*100) / 100
+		feeExtend = utils.Round2(feeExtend)
 	}
 	remainingYears := remainingDays / 365.0
 	extendYears := float64(req.ExtendMonths) / 12.0
 	feeNewDevices := float64(req.AddDevices) * pricePerDeviceYear * (remainingYears + extendYears)
-	feeNewDevices = math.Round(feeNewDevices*100) / 100
+	feeNewDevices = utils.Round2(feeNewDevices)
 	basePrice := feeExtend + feeNewDevices
-	basePrice = math.Round(basePrice*100) / 100
+	basePrice = utils.Round2(basePrice)
 
 	var couponDiscount float64
 	var couponID *int64
@@ -837,7 +869,7 @@ func CreateUpgradeOrder(c *gin.Context) {
 	if finalPrice < 0 {
 		finalPrice = 0
 	}
-	finalPrice = math.Round(finalPrice*100) / 100
+	finalPrice = utils.Round2(finalPrice)
 	totalDiscount := basePrice - finalPrice
 
 	extraData, _ := json.Marshal(map[string]interface{}{
@@ -898,6 +930,13 @@ func CreateUpgradeOrder(c *gin.Context) {
 			utils.BadRequest(c, "优惠券已被领完")
 			return
 		}
+		// 事务内复核 per-user 使用上限（防止并发下单绕过 MaxUsesPerUser）
+		if err := checkCouponPerUserInTx(tx, uint(*couponID), userID, lockCoupon.MaxUsesPerUser); err != nil {
+			tx.Rollback()
+			utils.BadRequest(c, err.Error())
+			return
+		}
+
 		if err := tx.Create(&models.CouponUsage{CouponID: uint(*couponID), UserID: userID, OrderID: func() *int64 { id := int64(order.ID); return &id }(), DiscountAmount: couponDiscount}).Error; err != nil {
 			tx.Rollback()
 			utils.InternalError(c, "记录优惠券使用失败")

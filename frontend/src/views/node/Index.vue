@@ -328,7 +328,7 @@ onMounted(() => { fetchNodes() })
 .stat-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
 .stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .stat-icon.total { background: rgba(99,125,255,0.12); color: #637dff; }
-.stat-icon.online { background: rgba(24,160,88,0.12); color: #18a058; }
+.stat-icon.online { background: rgba(24,160,88,0.12); color: var(--success-color); }
 .stat-icon.latency { background: rgba(245,166,35,0.12); color: #f5a623; }
 .stat-icon.regions { background: rgba(114,46,209,0.12); color: #722ed1; }
 .stat-info { display: flex; flex-direction: column; gap: 2px; }
@@ -358,24 +358,24 @@ onMounted(() => { fetchNodes() })
 .col-latency { width: 90px; }
 .col-action { width: 80px; text-align: center; }
 .status-badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 500; }
-.status-badge.online { background: rgba(24,160,88,0.12); color: #18a058; }
-.status-badge.offline { background: rgba(208,48,80,0.12); color: #d03050; }
+.status-badge.online { background: rgba(24,160,88,0.12); color: var(--success-color); }
+.status-badge.offline { background: rgba(208,48,80,0.12); color: var(--danger-color); }
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
-.dot-online { background: #18a058; box-shadow: 0 0 0 0 rgba(24,160,88,0.4); animation: pulse-green 2s infinite; }
-.dot-offline { background: #d03050; }
+.dot-online { background: var(--success-color); box-shadow: 0 0 0 0 rgba(24,160,88,0.4); animation: pulse-green 2s infinite; }
+.dot-offline { background: var(--danger-color); }
 @keyframes pulse-green {
   0% { box-shadow: 0 0 0 0 rgba(24,160,88,0.4); }
   70% { box-shadow: 0 0 0 6px rgba(24,160,88,0); }
   100% { box-shadow: 0 0 0 0 rgba(24,160,88,0); }
 }
 .protocol-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; background: rgba(99,125,255,0.12); color: #637dff; }
-.latency-good { color: #18a058; font-weight: 600; }
+.latency-good { color: var(--success-color); font-weight: 600; }
 .latency-medium { color: #f5a623; font-weight: 600; }
-.latency-poor { color: #d03050; font-weight: 600; }
+.latency-poor { color: var(--danger-color); font-weight: 600; }
 .latency-none { color: var(--text-color-secondary, #ccc); }
 .mobile-node-list { display: flex; flex-direction: column; gap: 10px; }
-.mobile-node-card { border-radius: 10px; padding: 14px 16px; border: 1px solid var(--border-color, #eef0f3); border-left: 4px solid #18a058; }
-.mobile-node-card.card-offline { border-left-color: #d03050; opacity: 0.7; }
+.mobile-node-card { border-radius: 10px; padding: 14px 16px; border: 1px solid var(--border-color, #eef0f3); border-left: 4px solid var(--success-color); }
+.mobile-node-card.card-offline { border-left-color: var(--danger-color); opacity: 0.7; }
 .mobile-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color, #f5f5f5); }
 .mobile-node-name { display: flex; align-items: center; font-size: 14px; font-weight: 600; color: var(--text-color, #1a1a1a); min-width: 0; }
 .mobile-node-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -387,7 +387,7 @@ onMounted(() => { fetchNodes() })
 @media (max-width: 767px) {
   .node-page { padding: 12px; }
   .stats-bar { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .stat-card { padding: 14px; border-radius: 8px; }
+  .stat-card { padding: 14px; border-radius: 14px; }
   .stat-value { font-size: 18px; }
   .stat-icon { width: 38px; height: 38px; }
   .filter-bar { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: stretch; }
@@ -396,7 +396,8 @@ onMounted(() => { fetchNodes() })
   .filter-bar .n-button { width: 100%; }
   .desktop-table { display: none; }
   .mobile-cards { display: block; }
-  .mobile-node-card { border-radius: 8px; padding: 12px; }
+  .mobile-node-card { border-radius: 14px; padding: 12px; }
+  .mobile-node-card:active { transform: scale(0.98); }
   .mobile-card-info { grid-template-columns: 1fr; gap: 4px; }
   .mobile-info-item { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: center; }
   .mobile-info-item > :last-child { min-width: 0; text-align: right; word-break: break-word; }

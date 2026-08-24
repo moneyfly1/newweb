@@ -19,8 +19,12 @@ const viewLoaders = {
   Invite: () => import('@/views/invite/Index.vue'),
   Settings: () => import('@/views/settings/Index.vue'),
   Help: () => import('@/views/help/Index.vue'),
+  Tos: () => import('@/views/legal/Tos.vue'),
+  Privacy: () => import('@/views/legal/Privacy.vue'),
   PaymentReturn: () => import('@/views/payment/Return.vue'),
   LoginHistory: () => import('@/views/history/Index.vue'),
+  Notifications: () => import('@/views/notification/Index.vue'),
+  MyCoupons: () => import('@/views/coupons/Index.vue'),
   Recharge: () => import('@/views/recharge/Index.vue'),
   Redeem: () => import('@/views/redeem/Index.vue'),
   MysteryBox: () => import('@/views/mystery-box/Index.vue'),
@@ -98,8 +102,12 @@ const routes: RouteRecordRaw[] = [
       { path: 'invite', name: 'Invite', component: viewLoaders.Invite },
       { path: 'settings', name: 'Settings', component: viewLoaders.Settings },
       { path: 'help', name: 'Help', component: viewLoaders.Help },
+      { path: 'terms', name: 'Tos', component: viewLoaders.Tos, meta: { auth: true } },
+      { path: 'privacy', name: 'Privacy', component: viewLoaders.Privacy, meta: { auth: true } },
       { path: 'payment/return', name: 'PaymentReturn', component: viewLoaders.PaymentReturn },
       { path: 'login-history', name: 'LoginHistory', component: viewLoaders.LoginHistory },
+      { path: 'notifications', name: 'Notifications', component: viewLoaders.Notifications },
+      { path: 'coupons', name: 'MyCoupons', component: viewLoaders.MyCoupons },
       { path: 'recharge', name: 'Recharge', component: viewLoaders.Recharge },
       { path: 'redeem', name: 'Redeem', component: viewLoaders.Redeem },
       { path: 'mystery-box', name: 'MysteryBox', component: viewLoaders.MysteryBox },
@@ -161,7 +169,9 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (to.meta.auth && !userStore.isLoggedIn) {
-    return next('/login')
+    // 携带原始目标路由，登录成功后跳回（深链接如 /tickets/5 不丢失）
+    const redirect = encodeURIComponent(to.fullPath)
+    return next(`/login?redirect=${redirect}`)
   }
   if (to.meta.guest && userStore.isLoggedIn) {
     return next(userStore.isAdmin ? '/admin' : '/')

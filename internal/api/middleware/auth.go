@@ -28,10 +28,19 @@ var (
 	blacklistMu    sync.RWMutex
 )
 
+// InvalidateUserCache 清除指定用户的认证缓存（禁用/启用/改密/管理员更新用户后调用，
+// 避免 5 分钟缓存窗口内旧状态仍生效）
+func InvalidateUserCache(userID uint) {
+	userCacheMu.Lock()
+	delete(userCache, userID)
+	userCacheMu.Unlock()
+}
+
 // Claims JWT 声明
 type Claims struct {
 	UserID uint   `json:"user_id"`
 	Type   string `json:"type"` // "access" or "refresh"
+	Ver    uint   `json:"ver"` // token 版本号，用于改密后吊销旧 token
 	jwt.RegisteredClaims
 }
 
@@ -131,6 +140,12 @@ func AuthRequired() gin.HandlerFunc {
 		}
 		if !user.IsActive {
 			utils.Forbidden(c, "账户已被禁用")
+			c.Abort()
+			return
+		}
+		// token 版本校验：改密/重置后版本自增，旧 token 立即失效
+		if claims.Ver != user.TokenVersion {
+			utils.Unauthorized(c, "Token 已失效，请重新登录")
 			c.Abort()
 			return
 		}

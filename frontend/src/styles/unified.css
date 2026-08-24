@@ -434,3 +434,43 @@ html {
     padding: 4px 8px;
   }
 }
+
+/* ============================================================
+   商业级细节（全局一致性）
+   仅作用于本项目自定义类（.mobile-card / .page-card / .stat-card 等），
+   不覆盖 Naive 组件默认样式；移动端 14px App 圆角见 app-mobile.css。
+   ============================================================ */
+
+/* 卡片统一圆角 12px（桌面端基准） */
+.page-card,
+.admin-main-card,
+.main-card,
+.mobile-card,
+.stat-card {
+  border-radius: 12px;
+}
+
+/* hover 微阴影过渡（仅精确指针设备，避免触屏误触发） */
+@media (hover: hover) and (pointer: fine) {
+  .page-card:hover,
+  .admin-main-card:hover,
+  .main-card:hover,
+  .mobile-card.clickable:hover,
+  .stat-card:hover {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* 可点元素按压缩放（按钮 / 卡片统一 0.98） */
+.page-card:active,
+.admin-main-card:active,
+.main-card:active,
+.mobile-card:active,
+.stat-card:active,
+.quick-action:active,
+.client-card:active,
+.qs-main:active,
+.quick-sub-item:active {
+  transform: scale(0.98);
+}
+

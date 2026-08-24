@@ -1,15 +1,26 @@
 package handlers
 
 import (
+	"errors"
 	"time"
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
+)
+
+// 兑换结果哨兵错误（事务内不写 HTTP 响应，统一在事务外处理）
+var (
+	errRedeemNotFound  = errors.New("redeem_not_found")
+	errRedeemUsed      = errors.New("redeem_used")
+	errRedeemExpired   = errors.New("redeem_expired")
+	errRedeemLimit     = errors.New("redeem_limit")
+	errRedeemConflict  = errors.New("redeem_conflict")
+	errRedeemDuplicate = errors.New("redeem_duplicate")
 )
 
 func RedeemCode(c *gin.Context) {
@@ -25,23 +36,35 @@ func RedeemCode(c *gin.Context) {
 
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var code models.RedeemCode
-		// Lock the row to prevent concurrent redemption
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("code = ?", req.Code).First(&code).Error; err != nil {
-			utils.NotFound(c, "卡密不存在")
-			return err
+		if err := tx.Where("code = ?", req.Code).First(&code).Error; err != nil {
+			return errRedeemNotFound
 		}
 		if code.Status != "unused" && code.Status != "active" {
-			utils.BadRequest(c, "卡密已使用或已失效")
-			return gorm.ErrInvalidData
+			return errRedeemUsed
 		}
 		if code.ExpiresAt != nil && time.Now().After(*code.ExpiresAt) {
-			utils.BadRequest(c, "卡密已过期")
-			return gorm.ErrInvalidData
+			return errRedeemExpired
 		}
 		if code.UsedCount >= code.MaxUses {
-			utils.BadRequest(c, "卡密使用次数已达上限")
-			return gorm.ErrInvalidData
+			return errRedeemLimit
+		}
+
+		// 原子抢占使用次数（条件更新 + 行数校验）。
+		// SQLite 不支持 SELECT ... FOR UPDATE，原先的行锁在默认数据库下无效；
+		// 改为按「旧 used_count」条件更新，并发兑换同一卡密时只有一方 RowsAffected=1。
+		newCount := code.UsedCount + 1
+		newStatus := code.Status
+		if newCount >= code.MaxUses {
+			newStatus = "used"
+		}
+		claimRes := tx.Model(&models.RedeemCode{}).
+			Where("id = ? AND status IN ('unused','active') AND used_count = ?", code.ID, code.UsedCount).
+			Updates(map[string]interface{}{"used_count": newCount, "status": newStatus})
+		if claimRes.Error != nil {
+			return claimRes.Error
+		}
+		if claimRes.RowsAffected == 0 {
+			return errRedeemConflict
 		}
 
 		if code.Type == "balance" {
@@ -100,11 +123,7 @@ func RedeemCode(c *gin.Context) {
 					return err
 				}
 			} else {
-				// Extend existing subscription
-				newExpire := sub.ExpireTime
-				if newExpire.Before(time.Now()) {
-					newExpire = time.Now()
-				}
+				// Extend existing subscription（原子延长，防并发兑换丢更新）
 				days := int(code.Value)
 				if code.Type == "package" && code.PackageID != nil {
 					var pkg models.Package
@@ -112,22 +131,20 @@ func RedeemCode(c *gin.Context) {
 						days = pkg.DurationDays
 					}
 				}
-				newExpire = newExpire.AddDate(0, 0, days)
+				if _, err := services.ExtendSubscriptionExpiry(tx, sub.ID, sub.ExpireTime, days); err != nil {
+					if errors.Is(err, services.ErrSubscriptionConflict) {
+						return errRedeemConflict
+					}
+					return err
+				}
 				if err := tx.Model(&sub).Updates(map[string]interface{}{
-					"expire_time": newExpire, "is_active": true, "status": "active",
+					"is_active": true, "status": "active",
 				}).Error; err != nil {
 					return err
 				}
 			}
 		}
 
-		code.UsedCount++
-		if code.UsedCount >= code.MaxUses {
-			code.Status = "used"
-		}
-		if err := tx.Save(&code).Error; err != nil {
-			return err
-		}
 		ip := c.ClientIP()
 		return tx.Create(&models.RedeemRecord{
 			RedeemCodeID: code.ID, UserID: userID, Code: code.Code,
@@ -136,9 +153,24 @@ func RedeemCode(c *gin.Context) {
 		}).Error
 	})
 
-	if err == nil {
-		utils.SuccessMessage(c, "兑换成功")
+	if err != nil {
+		switch err {
+		case errRedeemNotFound:
+			utils.NotFound(c, "卡密不存在")
+		case errRedeemUsed:
+			utils.BadRequest(c, "卡密已使用或已失效")
+		case errRedeemExpired:
+			utils.BadRequest(c, "卡密已过期")
+		case errRedeemLimit:
+			utils.BadRequest(c, "卡密使用次数已达上限")
+		case errRedeemConflict:
+			utils.BadRequest(c, "卡密正在被使用，请稍后重试")
+		default:
+			utils.InternalError(c, "兑换失败")
+		}
+		return
 	}
+	utils.SuccessMessage(c, "兑换成功")
 }
 
 func GetRedeemHistory(c *gin.Context) {

@@ -41,8 +41,8 @@ func (Coupon) TableName() string {
 
 type CouponUsage struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
-	CouponID       uint      `gorm:"index" json:"coupon_id"`
-	UserID         uint      `gorm:"index" json:"user_id"`
+	CouponID       uint      `gorm:"index:idx_coupon_user,priority:1" json:"coupon_id"`
+	UserID         uint      `gorm:"index:idx_coupon_user,priority:2" json:"user_id"`
 	OrderID        *int64    `gorm:"index" json:"order_id"`
 	DiscountAmount float64   `gorm:"type:decimal(10,2)" json:"discount_amount"`
 	UsedAt         time.Time `gorm:"autoCreateTime" json:"used_at"`

@@ -27,11 +27,11 @@ instance.interceptors.request.use((config: any) => {
 const requestCache = new Map<string, { data: any; timestamp: number }>()
 const CACHE_DURATION = 3 * 60 * 1000 // 3分钟
 
-// 只缓存这些列表接口
+// 只缓存这些列表接口（精确路径匹配，避免 /packages 误配 /admin/packages、/settings 误配 /notification-settings 等）
 const CACHEABLE_URLS = [
   '/admin/packages',
   '/admin/coupons',
-  '/admin/levels',
+  '/admin/user-levels',
   '/admin/announcements',
   '/config',
   '/packages',
@@ -41,7 +41,8 @@ const CACHEABLE_URLS = [
 ]
 
 function shouldCache(url: string): boolean {
-  return CACHEABLE_URLS.some(cacheable => url.includes(cacheable))
+  const path = url.split('?')[0]
+  return CACHEABLE_URLS.some(cacheable => path === cacheable)
 }
 
 function getCacheKey(url: string, params?: any): string {
@@ -73,16 +74,19 @@ let isRefreshing = false
 let csrfTokenCache = ''
 let csrfTokenPromise: Promise<string> | null = null
 let pendingRequests: Array<{
-  resolve: (config: InternalAxiosRequestConfig) => void
+  resolve: (newToken: string) => void
   reject: (error: any) => void
 }> = []
 
+// 刷新完成后统一放行挂起的请求（成功传新 token，失败传 error）
+// 边界兜底：error 与 newToken 都为空时视为失败，避免队列永久挂起
 function processQueue(error: any, newToken: string | null) {
+  const finalError = error || new Error('登录已过期，请重新登录')
   pendingRequests.forEach(({ resolve, reject }) => {
-    if (error) {
-      reject(error)
-    } else if (newToken) {
-      resolve({} as InternalAxiosRequestConfig) // placeholder, actual retry below
+    if (newToken) {
+      resolve(newToken)
+    } else {
+      reject(finalError)
     }
   })
   pendingRequests = []
@@ -169,12 +173,25 @@ instance.interceptors.response.use(
       const userStore = useUserStore()
       const storedRefresh = userStore.refreshTokenVal
 
-      if (storedRefresh && !isRefreshing) {
+      if (storedRefresh) {
+        // 已有刷新在进行中：挂入队列，刷新完成后用新 token 统一重放，
+        // 避免并发 401 直接走登出（误登出 bug）
+        if (isRefreshing) {
+          return new Promise<string>((resolve, reject) => {
+            pendingRequests.push({ resolve, reject })
+          }).then((newToken) => {
+            originalRequest.headers = originalRequest.headers || {}
+            originalRequest.headers.Authorization = `Bearer ${newToken}`
+            return instance(originalRequest)
+          }).catch((e) => Promise.reject(e))
+        }
+
         isRefreshing = true
         originalRequest._retry = true
 
         try {
-          const res = await axios.post('/api/v1/auth/refresh', { refresh_token: storedRefresh })
+          // 裸 axios 加 10s 超时，防止刷新请求挂起导致 isRefreshing 永久为 true、全部请求卡死
+          const res = await axios.post('/api/v1/auth/refresh', { refresh_token: storedRefresh }, { timeout: 10000 })
           const newToken = res.data?.data?.access_token
           const newRefresh = res.data?.data?.refresh_token
           if (newToken) {
@@ -183,16 +200,20 @@ instance.interceptors.response.use(
             csrfTokenCache = ''
             localStorage.setItem('token', newToken)
             if (newRefresh) localStorage.setItem('refresh_token', newRefresh)
-            originalRequest.headers.Authorization = `Bearer ${newToken}`
+            processQueue(null, newToken)
             isRefreshing = false
+            originalRequest.headers.Authorization = `Bearer ${newToken}`
             return instance(originalRequest)
           }
+          processQueue(new Error('刷新失败'), null)
+          isRefreshing = false
         } catch (refreshError) {
+          processQueue(refreshError, null)
           isRefreshing = false
         }
       }
 
-      // Refresh failed — logout
+      // 刷新失败或没有 refresh token — 登出
       csrfTokenCache = ''
       userStore.logout(true)
       router.push('/login')
@@ -226,8 +247,10 @@ instance.interceptors.response.use(
     if (serverMsg) {
       return Promise.reject(new Error(serverMsg))
     }
-    // 网络错误重试
-    if (!error.response && originalRequest && originalRequest.retryCount < MAX_RETRIES) {
+    // 网络错误重试：仅对幂等的 GET/HEAD 自动重试。
+    // 写请求（POST/PUT/DELETE）不重试，防止超时/断网后自动重发导致重复下单/重复扣款。
+    const retryMethod = (originalRequest?.method || 'get').toUpperCase()
+    if (!error.response && originalRequest && ['GET', 'HEAD'].includes(retryMethod) && originalRequest.retryCount < MAX_RETRIES) {
       originalRequest.retryCount++
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
       return instance(originalRequest)

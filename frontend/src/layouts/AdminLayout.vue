@@ -36,7 +36,11 @@
         <div id="main-content" tabindex="-1">
           <router-view v-slot="{ Component }">
             <suspense>
-              <component :is="Component" />
+              <template #default>
+                <transition name="page-slide" mode="out-in">
+                  <component :is="Component" :key="route.fullPath" />
+                </transition>
+              </template>
               <template #fallback><loading-screen /></template>
             </suspense>
           </router-view>
@@ -65,15 +69,19 @@
       <div id="main-content" tabindex="-1">
         <router-view v-slot="{ Component }">
           <suspense>
-            <component :is="Component" />
+            <template #default>
+              <transition name="page-slide" mode="out-in">
+                <component :is="Component" :key="route.fullPath" />
+              </transition>
+            </template>
             <template #fallback><loading-screen /></template>
           </suspense>
         </router-view>
       </div>
     </n-layout-content>
     <div class="mobile-tabbar">
-      <div v-for="tab in mobileTabs" :key="tab.key" class="mobile-tab" :class="{ active: activeKey === tab.key }" @click="handleMenuClick(tab.key)">
-        <n-icon :size="22" :component="tab.icon" />
+      <div v-for="tab in mobileTabs" :key="tab.key" class="mobile-tab" :class="{ active: activeKey === tab.key || (tab.key === 'more' && showDrawer) }" @click="handleMenuClick(tab.key)">
+        <n-icon :size="22" :component="tab.iconMore || tab.icon" />
         <span class="mobile-tab-label">{{ tab.label }}</span>
       </div>
     </div>
@@ -168,7 +176,7 @@ const mobileTabs = [
   { label: '仪表盘', key: 'AdminDashboard', icon: GridOutline },
   { label: '用户', key: 'AdminUsers', icon: PeopleOutline },
   { label: '订阅', key: 'AdminSubscriptions', icon: CloudOutline },
-  { label: '设置', key: 'AdminSettings', icon: SettingsOutline },
+  { label: '更多', key: 'more', icon: GridOutline, iconMore: EllipsisVertical },
 ]
 
 // Password change
@@ -178,7 +186,7 @@ const pwdFormRef = ref<FormInst | null>(null)
 const pwdForm = ref({ old_password: '', new_password: '', confirm_password: '' })
 const pwdRules = {
   old_password: { required: true, message: '请输入当前密码', trigger: 'blur' },
-  new_password: [{ required: true, message: '请输入新密码', trigger: 'blur' }, { min: 6, message: '密码至少6个字符', trigger: 'blur' }],
+  new_password: [{ required: true, message: '请输入新密码', trigger: 'blur' }, { validator: (_r: any, v: string) => !v || (v.length >= 8 && /[a-zA-Z]/.test(v) && /[0-9]/.test(v)), message: '密码至少8位，需包含字母和数字', trigger: 'blur' }],
   confirm_password: [
     { required: true, message: '请确认密码', trigger: 'blur' },
     { validator: (_r: any, v: string) => v === pwdForm.value.new_password, message: '两次密码不一致', trigger: 'blur' },
@@ -237,6 +245,10 @@ function handleExpandedKeys(keys: string[]) {
 }
 
 function handleMenuClick(key: string) {
+  if (key === 'more') {
+    showDrawer.value = true
+    return
+  }
   preloadRouteComponent(key)
   router.push({ name: key })
 }
@@ -284,7 +296,7 @@ function handleUserMenu(key: string) {
   z-index: 1000;
   padding: 8px 12px;
   color: #fff;
-  background: var(--primary-color, #18a058);
+  background: var(--primary-color, var(--success-color));
   border-radius: 6px;
   transform: translateY(-140%);
   transition: transform 0.2s ease;
@@ -320,7 +332,7 @@ function handleUserMenu(key: string) {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px; min-width: 0; padding: 6px 0; cursor: pointer; color: var(--text-color-secondary, #666); transition: color 0.2s, background-color 0.2s;
 }
-.mobile-tab.active { color: var(--primary-color, #667eea); background: var(--primary-color-soft, rgba(102,126,234,0.08)); }
+.mobile-tab.active { color: var(--primary-color, var(--primary-color)); background: var(--primary-color-soft, rgba(102,126,234,0.08)); }
 .mobile-tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 1; }
 
 /* Theme Picker */
@@ -330,8 +342,8 @@ function handleUserMenu(key: string) {
   border-radius: 8px; cursor: pointer; border: 2px solid transparent;
   transition: all 0.2s; background: var(--primary-color-soft, rgba(102,126,234,0.08));
 }
-.theme-picker-item:hover { border-color: var(--primary-color, #667eea)66; }
-.theme-picker-item.active { border-color: var(--primary-color, #667eea); background: var(--primary-color, #667eea)11; }
+.theme-picker-item:hover { border-color: var(--primary-color, var(--primary-color))66; }
+.theme-picker-item.active { border-color: var(--primary-color, var(--primary-color)); background: var(--primary-color, var(--primary-color))11; }
 .theme-picker-color { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
 .theme-picker-label { font-size: 13px; }
 </style>

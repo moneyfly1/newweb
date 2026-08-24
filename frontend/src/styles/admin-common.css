@@ -43,3 +43,33 @@
 /* 加载和空状态 */
 .loading-center { text-align: center; padding: 40px; }
 .empty-state { text-align: center; padding: 40px; color: var(--text-color-secondary, #666); }
+
+/* 筛选工具栏（节点管理/专线节点等列表页共用） */
+.filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+.filter-toolbar .n-input,
+.filter-toolbar .n-select {
+  flex-shrink: 0;
+}
+@media (max-width: 767px) {
+  .filter-toolbar {
+    margin-bottom: 10px;
+  }
+  .filter-toolbar .n-input,
+  .filter-toolbar .n-select {
+    flex: 1 1 45%;
+    min-width: 0;
+    width: auto !important;
+  }
+  .filter-toolbar .n-input {
+    flex-basis: 100%;
+  }
+  .page-header .header-right .n-space {
+    flex-wrap: wrap;
+  }
+}

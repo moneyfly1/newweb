@@ -101,7 +101,7 @@
       </n-form>
       <template #footer>
         <div style="display: flex; justify-content: flex-end">
-          <n-button type="primary" :loading="saving" @click="handleSaveConfig">保存配置</n-button>
+          <n-button type="primary" :loading="saving" :disabled="configLoadFailed" @click="handleSaveConfig">保存配置</n-button>
         </div>
       </template>
     </n-card>
@@ -149,7 +149,9 @@ const logViewerRef = ref(null)
 const urlListRef = ref(null)
 const starting = ref(false)
 const saving = ref(false)
+const configLoadFailed = ref(false)
 let pollTimer = null
+let fastPollTimer = null
 let sortableInstance = null
 let nextUrlRowId = 1
 
@@ -191,13 +193,17 @@ const removeKeyword = (index) => {
 }
 
 const fetchConfig = async () => {
+  configLoadFailed.value = false
   try {
     const res = await getConfigUpdateConfig()
     Object.assign(config, res.data)
     if (!Array.isArray(config.urls)) config.urls = []
     if (!Array.isArray(config.keywords)) config.keywords = []
     syncUrlRowsFromConfig()
-  } catch {}
+  } catch {
+    // 加载失败：禁用保存，防止用默认值覆盖线上真实配置
+    configLoadFailed.value = true
+  }
 }
 
 const fetchLogs = async () => {
@@ -212,6 +218,10 @@ const fetchLogs = async () => {
 }
 
 const handleSaveConfig = async () => {
+  if (configLoadFailed.value) {
+    message.warning('配置加载失败，为避免覆盖线上配置已禁用保存，请刷新页面重试')
+    return
+  }
   saving.value = true
   try {
     syncConfigUrls()
@@ -240,13 +250,14 @@ const handleStart = async () => {
     // 立即获取一次日志
     await fetchLogs()
 
-    // 启动快速轮询（每秒一次，持续10秒）
+    // 启动快速轮询（每秒一次，持续10秒），模块级变量以便卸载时清理
     let fastPollCount = 0
-    const fastPollInterval = setInterval(async () => {
+    fastPollTimer = setInterval(async () => {
       await fetchLogs()
       fastPollCount++
       if (fastPollCount >= 10) {
-        clearInterval(fastPollInterval)
+        if (fastPollTimer) clearInterval(fastPollTimer)
+        fastPollTimer = null
       }
     }, 1000)
 
@@ -313,6 +324,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopPolling()
+  if (fastPollTimer) {
+    clearInterval(fastPollTimer)
+    fastPollTimer = null
+  }
   if (sortableInstance) {
     sortableInstance.destroy()
     sortableInstance = null
@@ -336,7 +351,7 @@ onUnmounted(() => {
   min-height: 200px;
 }
 .log-empty {
-  color: #666;
+  color: var(--text-color-secondary);
   text-align: center;
   padding: 40px 0;
 }

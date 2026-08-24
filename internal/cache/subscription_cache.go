@@ -8,6 +8,8 @@ import (
 // ClearAllSubscriptionCache globally flushes all generated subscription payload caches.
 // Call this when global nodes, custom nodes, or node scraper updates the node list.
 func ClearAllSubscriptionCache() {
+	// 清理内存缓存兜底（无 Redis 部署时的订阅 payload 缓存）
+	GetMemoryCache().ClearByPrefix("sub_payload:")
 	r := database.GetRedis()
 	if r == nil {
 		return

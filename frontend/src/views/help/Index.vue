@@ -77,7 +77,7 @@
                       <span class="client-name">{{ c.name }}</span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
-                    <n-icon :component="DownloadOutline" size="18" color="#667eea" />
+                    <n-icon :component="DownloadOutline" size="18" color="var(--primary-color)" />
                   </a>
                 </div>
               </n-tab-pane>
@@ -89,7 +89,7 @@
                       <span class="client-name">{{ c.name }}</span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
-                    <n-icon :component="DownloadOutline" size="18" color="#667eea" />
+                    <n-icon :component="DownloadOutline" size="18" color="var(--primary-color)" />
                   </a>
                 </div>
               </n-tab-pane>
@@ -101,7 +101,7 @@
                       <span class="client-name">{{ c.name }}</span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
-                    <n-icon :component="DownloadOutline" size="18" color="#667eea" />
+                    <n-icon :component="DownloadOutline" size="18" color="var(--primary-color)" />
                   </a>
                 </div>
               </n-tab-pane>
@@ -113,7 +113,7 @@
                       <span class="client-name">{{ c.name }}</span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
-                    <n-icon :component="DownloadOutline" size="18" color="#667eea" />
+                    <n-icon :component="DownloadOutline" size="18" color="var(--primary-color)" />
                   </a>
                 </div>
               </n-tab-pane>
@@ -125,7 +125,7 @@
                       <span class="client-name">{{ c.name }}</span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
-                    <n-icon :component="DownloadOutline" size="18" color="#667eea" />
+                    <n-icon :component="DownloadOutline" size="18" color="var(--primary-color)" />
                   </a>
                 </div>
               </n-tab-pane>
@@ -136,11 +136,31 @@
       </n-card>
 
       <n-card title="联系我们" :bordered="false">
-        <n-space vertical :size="8">
+        <n-space vertical :size="12">
           <n-text>如果您在使用过程中遇到任何问题，可以通过以下方式联系我们：</n-text>
-          <n-text>1. 提交工单：前往「工单」页面创建新工单</n-text>
-          <n-text>2. 邮件联系：发送邮件至客服邮箱</n-text>
+          <div v-if="supportItems.length" class="contact-list">
+            <a
+              v-for="item in supportItems"
+              :key="item.key"
+              class="contact-item"
+              :href="item.href"
+              target="_blank"
+              rel="noopener"
+            >
+              <n-icon :component="item.icon" :size="18" class="contact-icon" />
+              <span class="contact-label">{{ item.label }}</span>
+              <span class="contact-value">{{ item.display }}</span>
+            </a>
+          </div>
+          <n-text v-else depth="3">客服联系方式暂未配置，请向管理员索取。</n-text>
+          <n-text>提交工单：前往「工单」页面创建新工单，我们会尽快回复您。</n-text>
           <n-text depth="3">工作时间：周一至周五 9:00 - 18:00，工单通常在 24 小时内回复。</n-text>
+          <n-divider style="margin: 4px 0 8px;" />
+          <n-space :size="12" wrap align="center">
+            <n-text depth="3" style="font-size: 13px;">相关协议：</n-text>
+            <n-button text type="primary" size="small" @click="$router.push('/terms')">《服务条款》</n-button>
+            <n-button text type="primary" size="small" @click="$router.push('/privacy')">《隐私政策》</n-button>
+          </n-space>
         </n-space>
       </n-card>
     </n-space>
@@ -149,7 +169,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { DownloadOutline, ChevronDownOutline, ChevronUpOutline } from '@vicons/ionicons5'
+import { DownloadOutline, ChevronDownOutline, ChevronUpOutline, MailOutline, ChatbubblesOutline, SendOutline } from '@vicons/ionicons5'
 import { getPublicConfig } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 
@@ -161,6 +181,31 @@ const expandedTut = ref('')
 const toggleTut = (key: string) => {
   expandedTut.value = expandedTut.value === key ? '' : key
 }
+
+interface SupportItem {
+  key: string
+  label: string
+  display: string
+  href: string
+  icon: any
+}
+
+function buildTelegramUrl(tg: string) {
+  const value = tg.trim()
+  if (/^https?:\/\//i.test(value)) return value
+  return `https://t.me/${value.replace(/^@/, '')}`
+}
+
+const supportItems = computed<SupportItem[]>(() => {
+  const items: SupportItem[] = []
+  const email = (config.value.support_email || '').trim()
+  const qq = (config.value.support_qq || '').trim()
+  const telegram = (config.value.support_telegram || '').trim()
+  if (email) items.push({ key: 'email', label: '邮箱', display: email, href: `mailto:${email}`, icon: MailOutline })
+  if (qq) items.push({ key: 'qq', label: 'QQ 群', display: qq, href: `tencent://message/?uin=${encodeURIComponent(qq)}`, icon: ChatbubblesOutline })
+  if (telegram) items.push({ key: 'telegram', label: 'Telegram', display: `@${telegram.replace(/^@/, '')}`, href: buildTelegramUrl(telegram), icon: SendOutline })
+  return items
+})
 
 interface TutSection { subtitle?: string; steps: string[] }
 interface Tutorial {
@@ -341,7 +386,7 @@ onMounted(async () => {
   font-size: 28px;
   font-weight: 600;
   margin: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--brand-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -375,15 +420,51 @@ onMounted(async () => {
 .client-icon { font-size: 24px; flex-shrink: 0; }
 .client-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .client-name { font-size: 15px; font-weight: 600; }
-.client-desc { font-size: 12px; color: #999; }
+.client-desc { font-size: 12px; color: var(--text-color-secondary); }
+
+/* Contact */
+.contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.contact-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--primary-color-soft, rgba(102, 126, 234, 0.06));
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.2s;
+}
+.contact-item:hover {
+  background: var(--primary-color-soft, rgba(102, 126, 234, 0.12));
+}
+.contact-icon {
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+.contact-label {
+  font-size: 13px;
+  color: var(--text-color-secondary);
+  flex-shrink: 0;
+}
+.contact-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary-color);
+  word-break: break-all;
+}
 
 .tutorial { padding: 12px 0; }
 .tutorial h4 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
-.tutorial h5 { margin: 16px 0 8px; font-size: 14px; font-weight: 600; color: #555; }
+.tutorial h5 { margin: 16px 0 8px; font-size: 14px; font-weight: 600; color: var(--text-color); }
 .tutorial ol { padding-left: 20px; margin: 0; }
-.tutorial li { margin: 6px 0; font-size: 14px; line-height: 1.7; color: #444; }
-.tutorial li strong { color: #333; }
-.tut-note { background: #fff7e6; border: 1px solid #ffe58f; border-radius: 6px; padding: 8px 12px; font-size: 13px; color: #ad6800; margin-bottom: 12px; }
+.tutorial li { margin: 6px 0; font-size: 14px; line-height: 1.7; color: var(--text-color); }
+.tutorial li strong { color: var(--text-color); }
+.tut-note { background: var(--bg-color); opacity: 0.7; border: 1px solid #ffe58f; border-radius: 6px; padding: 8px 12px; font-size: 13px; color: #ad6800; margin-bottom: 12px; }
 .tut-tip { background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 6px; padding: 8px 12px; font-size: 13px; color: #389e0d; margin-top: 12px; }
 
 @media (max-width: 767px) {
@@ -434,7 +515,7 @@ onMounted(async () => {
 
 .tut-card-platform {
   font-size: 11px;
-  color: #999;
+  color: var(--text-color-secondary);
 }
 
 .tut-card-body {
@@ -451,13 +532,13 @@ onMounted(async () => {
   margin: 4px 0;
   font-size: 13px;
   line-height: 1.6;
-  color: #555;
+  color: var(--text-color);
 }
 
 .tut-subtitle {
   font-size: 13px;
   font-weight: 600;
-  color: #555;
+  color: var(--text-color);
   margin: 10px 0 4px;
 }
 

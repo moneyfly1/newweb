@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -36,7 +37,7 @@ func UserCheckIn(c *gin.Context) {
 	rangeSize := maxReward - minReward + 1
 	n, _ := rand.Int(rand.Reader, big.NewInt(int64(rangeSize)))
 	rewardCents := minReward + int(n.Int64())
-	amount := float64(rewardCents) / 100.0
+	amount := utils.Round2(float64(rewardCents))
 
 	var newBalance float64
 
@@ -59,12 +60,17 @@ func UserCheckIn(c *gin.Context) {
 		}
 		balanceBefore := user.Balance
 
-		// 创建签到记录
+		// 创建签到记录（写入 check_in_date 并依赖 (user_id, check_in_date) 唯一索引兜底：
+		// 并发双签时第二个 INSERT 触发唯一约束冲突，事务回滚，余额不会重复入账）
 		checkIn := models.CheckIn{
-			UserID: userID,
-			Amount: amount,
+			UserID:      userID,
+			CheckInDate: today,
+			Amount:      amount,
 		}
 		if err := tx.Create(&checkIn).Error; err != nil {
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
+				return fmt.Errorf("already_checked_in")
+			}
 			return err
 		}
 
@@ -182,12 +188,14 @@ func calcConsecutiveDays(db *gorm.DB, userID uint) int {
 		D string
 	}
 	// 查最近 365 天，覆盖最长连续签到
-	since := time.Now().AddDate(0, 0, -365)
+	// 统一使用 check_in_date 列（与防双签唯一索引同口径），避免 DATE(created_at)
+	// 在 UTC 存储与本地时区下的跨午夜偏差
+	since := time.Now().AddDate(0, 0, -365).Format("2006-01-02")
 	var dates []DateRow
 	db.Model(&models.CheckIn{}).
-		Select("DATE(created_at) as d").
-		Where("user_id = ? AND created_at >= ?", userID, since).
-		Group("DATE(created_at)").
+		Select("check_in_date as d").
+		Where("user_id = ? AND check_in_date >= ?", userID, since).
+		Group("check_in_date").
 		Order("d DESC").
 		Find(&dates)
 

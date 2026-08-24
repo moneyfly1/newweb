@@ -1,5 +1,17 @@
 <template>
-  <div class="admin-dashboard">
+  <div
+    class="admin-dashboard"
+    @touchstart.passive="pullTouchStart"
+    @touchmove.passive="pullTouchMove"
+    @touchend.passive="pullTouchEnd"
+  >
+    <!-- 下拉刷新指示器 -->
+    <transition name="fade">
+      <div v-if="pullDistance > 0 || pullRefreshing" class="pull-indicator" :style="{ transform: `translate(-50%, ${Math.min(pullDistance, 70) - 40}px)` }">
+        <n-spin v-if="pullRefreshing" size="small" />
+        <span v-else>{{ pullDistance >= 55 ? '释放刷新' : '下拉刷新' }}</span>
+      </div>
+    </transition>
     <div class="welcome-section">
       <div class="welcome-text">
         <h2>工作控制台</h2>
@@ -61,15 +73,15 @@
           <n-card title="待办任务" :bordered="false" class="glass-card shadow-sm">
             <n-list hoverable clickable>
               <n-list-item @click="$router.push('/admin/orders?status=pending')">
-                <template #prefix><n-icon :size="20" color="#f0a020"><cart-outline /></n-icon></template>
+                <template #prefix><n-icon :size="20" color="var(--warning-color)"><cart-outline /></n-icon></template>
                 <n-thing title="待支付订单" :description="`${stats.pending_orders || 0} 个订单正在等待用户支付`" />
               </n-list-item>
               <n-list-item @click="$router.push('/admin/tickets')">
-                <template #prefix><n-icon :size="20" color="#18a058"><chatbubble-ellipses-outline /></n-icon></template>
+                <template #prefix><n-icon :size="20" color="var(--success-color)"><chatbubble-ellipses-outline /></n-icon></template>
                 <n-thing title="待处理工单" :description="`${stats.pending_tickets || 0} 个工单需要管理员回复`" />
               </n-list-item>
               <n-list-item @click="$router.push('/admin/abnormal-users')">
-                <template #prefix><n-icon :size="20" color="#d03050"><alert-circle-outline /></n-icon></template>
+                <template #prefix><n-icon :size="20" color="var(--danger-color)"><alert-circle-outline /></n-icon></template>
                 <n-thing title="异常用户提醒" description="有用户存在频繁重置订阅的行为" />
               </n-list-item>
             </n-list>
@@ -137,19 +149,94 @@
           </n-card>
         </n-grid-item>
       </n-grid>
+
+      <!-- 系统监控 + 签到统计（后端已实现、前端接入） -->
+      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="16" :y-gap="16">
+        <n-grid-item>
+          <n-card title="系统监控" :bordered="false" class="glass-card shadow-sm">
+            <n-grid :cols="appStore.isMobile ? 2 : 3" :x-gap="12" :y-gap="12">
+              <n-grid-item>
+                <div class="monitor-item">
+                  <div class="monitor-value">{{ monitoring.user_count || 0 }}</div>
+                  <div class="monitor-label">用户总数</div>
+                </div>
+              </n-grid-item>
+              <n-grid-item>
+                <div class="monitor-item">
+                  <div class="monitor-value">{{ monitoring.node_count || 0 }}</div>
+                  <div class="monitor-label">节点总数</div>
+                </div>
+              </n-grid-item>
+              <n-grid-item>
+                <div class="monitor-item">
+                  <div class="monitor-value">{{ monitoring.active_subscriptions || 0 }}</div>
+                  <div class="monitor-label">活跃订阅</div>
+                </div>
+              </n-grid-item>
+              <n-grid-item>
+                <div class="monitor-item">
+                  <div class="monitor-value" :style="{ color: 'var(--warning-color)' }">{{ monitoring.pending_orders || 0 }}</div>
+                  <div class="monitor-label">待支付订单</div>
+                </div>
+              </n-grid-item>
+              <n-grid-item>
+                <div class="monitor-item">
+                  <div class="monitor-value" :style="{ color: 'var(--warning-color)' }">{{ monitoring.pending_tickets || 0 }}</div>
+                  <div class="monitor-label">待处理工单</div>
+                </div>
+              </n-grid-item>
+              <n-grid-item>
+                <div class="monitor-item">
+                  <div class="monitor-value" :style="{ color: 'var(--success-color)' }">{{ checkinStats.today_count || 0 }}</div>
+                  <div class="monitor-label">今日签到</div>
+                </div>
+              </n-grid-item>
+            </n-grid>
+            <template #footer>
+              <n-space justify="end" :size="8">
+                <n-button quaternary size="tiny" @click="loadMonitoring">刷新</n-button>
+              </n-space>
+            </template>
+          </n-card>
+        </n-grid-item>
+        <n-grid-item>
+          <n-card title="签到统计" :bordered="false" class="glass-card shadow-sm">
+            <div class="checkin-stats">
+              <div class="checkin-stat-main">
+                <div class="checkin-today">{{ checkinStats.today_count || 0 }} <span>人今日签到</span></div>
+                <div class="checkin-reward">累计发放 {{ formatCurrency(checkinStats.today_total_reward || 0) }}</div>
+              </div>
+              <n-divider />
+              <div class="checkin-sub">
+                <span>累计签到 {{ checkinStats.total_count || 0 }} 次</span>
+                <span v-if="checkinStats.settings">
+                  奖励区间 ¥{{ (checkinStats.settings.min_reward || 0) / 100 }} ~ ¥{{ (checkinStats.settings.max_reward || 0) / 100 }}
+                  <n-tag v-if="checkinStats.settings.enabled === false" size="tiny" type="error" :bordered="false" style="margin-left: 6px">已关闭</n-tag>
+                </span>
+              </div>
+            </div>
+            <template #footer>
+              <n-space justify="end" :size="8">
+                <n-button quaternary size="tiny" @click="loadCheckinStats">刷新</n-button>
+              </n-space>
+            </template>
+          </n-card>
+        </n-grid-item>
+      </n-grid>
     </n-space>
   </div>
 </template>
 
 <script setup lang="ts">
 import { defineAsyncComponent, ref, computed, onMounted } from 'vue'
+import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useMessage, type TagProps } from 'naive-ui'
 import {
   PeopleOutline, CheckmarkCircleOutline, TrendingUpOutline, WalletOutline,
   CartOutline, ChatbubbleEllipsesOutline, RefreshOutline, AlertCircleOutline
 } from '@vicons/ionicons5'
 import { useRouter } from 'vue-router'
-import { getAdminDashboard } from '@/api/admin'
+import { getAdminDashboard, getMonitoring, getCheckInStats } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
 
@@ -233,10 +320,56 @@ const goToOrder = (order: any) => {
   router.push({ path: '/admin/orders', query: { order_no: order.order_no } })
 }
 
-onMounted(() => loadDashboard())
+// 下拉刷新（App 原生感）
+const { distance: pullDistance, refreshing: pullRefreshing, onTouchStart: pullTouchStart, onTouchMove: pullTouchMove, onTouchEnd: pullTouchEnd } =
+  usePullRefresh(loadDashboard)
+
+// 系统监控 + 签到统计
+const monitoring = ref<any>({})
+const checkinStats = ref<any>({})
+
+const loadMonitoring = async () => {
+  try { const res: any = await getMonitoring(); monitoring.value = res.data || {} } catch {}
+}
+const loadCheckinStats = async () => {
+  try { const res: any = await getCheckInStats(); checkinStats.value = res.data || {} } catch {}
+}
+
+onMounted(() => {
+  loadDashboard()
+  loadMonitoring()
+  loadCheckinStats()
+})
 </script>
 
 <style scoped>
+.admin-dashboard {
+  position: relative;
+}
+
+/* 下拉刷新指示器（App 原生感） */
+.pull-indicator {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 96px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--bg-color, #fff);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  color: var(--text-color-secondary, #666);
+  transition: transform 0.15s ease;
+}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
 .admin-dashboard {
   padding: 24px;
 }
@@ -249,17 +382,19 @@ onMounted(() => loadDashboard())
 }
 
 .welcome-text h2 { margin: 0; font-size: 24px; font-weight: 700; }
-.welcome-text p { margin: 4px 0 0; color: #666; }
+.welcome-text p { margin: 4px 0 0; color: var(--text-color-secondary); }
 
 .metric-card {
   padding: 20px;
   min-height: 132px;
-  border-radius: 8px;
+  border-radius: 16px;
   color: white;
   position: relative;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  transition: transform 0.12s ease;
 }
+.metric-card:active { transform: scale(0.97); }
 
 .metric-primary { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
 .metric-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
@@ -272,14 +407,14 @@ onMounted(() => loadDashboard())
 .metric-icon { position: absolute; right: -10px; bottom: -10px; opacity: 0.2; transform: rotate(-15deg); }
 
 .glass-card {
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.8);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-color, #fff) 85%, transparent);
   backdrop-filter: blur(10px);
 }
 
 .chart-shell {
   min-height: 320px;
-  border-radius: 12px;
+  border-radius: 14px;
   background: linear-gradient(180deg, rgba(59, 130, 246, 0.04), rgba(59, 130, 246, 0));
 }
 
@@ -292,7 +427,7 @@ onMounted(() => loadDashboard())
 .activity-item {
   width: 100%;
   border: 0;
-  background: #f8fafc;
+  background: var(--bg-page-color);
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
@@ -349,7 +484,7 @@ onMounted(() => loadDashboard())
   margin-top: 4px;
 }
 
-.amount { font-weight: 600; color: #333; }
+.amount { font-weight: 600; color: var(--text-color); }
 
 @media (max-width: 767px) {
   .admin-dashboard {
@@ -420,4 +555,24 @@ onMounted(() => loadDashboard())
     margin-top: 0;
   }
 }
+
+.monitor-item { padding: 8px 4px; text-align: center; }
+.monitor-value { font-size: 22px; font-weight: 700; color: var(--text-color); line-height: 1.3; }
+.monitor-label { font-size: 12px; color: var(--text-color-secondary, #888); margin-top: 2px; }
+.checkin-stats { padding: 4px 0; }
+.checkin-stat-main { text-align: center; padding: 8px 0; }
+.checkin-today { font-size: 26px; font-weight: 700; color: var(--primary-color); }
+.checkin-today span { font-size: 13px; font-weight: 400; color: var(--text-color-secondary); }
+.checkin-reward { font-size: 13px; color: var(--text-color-secondary, #666); margin-top: 6px; }
+.checkin-sub { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-color-secondary, #666); }
+
+.monitor-item { padding: 8px 4px; text-align: center; }
+.monitor-value { font-size: 22px; font-weight: 700; color: var(--text-color); line-height: 1.3; }
+.monitor-label { font-size: 12px; color: var(--text-color-secondary, #888); margin-top: 2px; }
+.checkin-stats { padding: 4px 0; }
+.checkin-stat-main { text-align: center; padding: 8px 0; }
+.checkin-today { font-size: 26px; font-weight: 700; color: var(--primary-color); }
+.checkin-today span { font-size: 13px; font-weight: 400; color: var(--text-color-secondary); }
+.checkin-reward { font-size: 13px; color: var(--text-color-secondary, #666); margin-top: 6px; }
+.checkin-sub { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-color-secondary, #666); }
 </style>

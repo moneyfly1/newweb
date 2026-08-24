@@ -7,6 +7,7 @@
     :close-on-esc="closeOnEsc"
     :mask-closable="maskClosable"
     @update:show="(val: boolean) => emit('update:show', val)"
+    @after-leave="emit('after-leave')"
   >
     <n-drawer-content :title="title" :closable="closable" :body-content-style="bodyContentStyle" :footer-style="footerStyle" class="common-drawer-content">
       <template v-if="$slots.header" #header>
@@ -65,6 +66,7 @@ const emit = defineEmits<{
   'update:show': [value: boolean]
   'confirm': []
   'cancel': []
+  'after-leave': []
 }>()
 
 const appStore = useAppStore()

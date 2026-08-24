@@ -1,7 +1,6 @@
 package router
 
 import (
-	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -88,12 +87,6 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	api.GET("/payment/success", handlers.PaymentReturn)
 	api.POST("/payment/success", handlers.PaymentReturn)
 
-	// 测试回调端点（用于验证回调是否能到达）
-	api.Any("/payment/test-callback", func(c *gin.Context) {
-		log.Printf("[test-callback] 收到请求: method=%s, url=%s, remote=%s", c.Request.Method, c.Request.URL.String(), c.ClientIP())
-		c.String(200, "callback received")
-	})
-
 	api.GET("/payment/methods", handlers.GetPaymentMethods)
 
 	// 邀请码验证（公开）
@@ -131,7 +124,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		{
 			subs.GET("/user-subscription", handlers.GetUserSubscription)
 			subs.GET("/devices", handlers.GetSubscriptionDevices)
-			subs.POST("/reset-subscription", handlers.ResetSubscription)
+			subs.POST("/reset-subscription", middleware.RateLimit(3, 30*time.Minute), handlers.ResetSubscription)
 			subs.POST("/convert-to-balance", handlers.ConvertToBalance)
 			subs.POST("/send-subscription-email", handlers.SendSubscriptionEmail)
 			subs.DELETE("/devices/:id", handlers.DeleteSubscriptionDevice)
@@ -142,17 +135,17 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		orders := authorized.Group("/orders")
 		{
 			orders.GET("", handlers.ListOrders)
-			orders.POST("", handlers.CreateOrder)
-			orders.POST("/custom", handlers.CreateCustomOrder)
+			orders.POST("", middleware.RateLimit(10, time.Minute), handlers.CreateOrder)
+			orders.POST("/custom", middleware.RateLimit(10, time.Minute), handlers.CreateCustomOrder)
 			orders.POST("/upgrade/calc", handlers.CalcUpgradePrice)
-			orders.POST("/upgrade", handlers.CreateUpgradeOrder)
-			orders.POST("/:orderNo/pay", handlers.PayOrder)
+			orders.POST("/upgrade", middleware.RateLimit(10, time.Minute), handlers.CreateUpgradeOrder)
+			orders.POST("/:orderNo/pay", middleware.RateLimit(10, time.Minute), handlers.PayOrder)
 			orders.POST("/:orderNo/cancel", handlers.CancelOrder)
 			orders.GET("/:orderNo/status", handlers.GetOrderStatus)
 		}
 
 		// 支付
-		authorized.POST("/payment", handlers.CreatePayment)
+		authorized.POST("/payment", middleware.RateLimit(10, time.Minute), handlers.CreatePayment)
 		authorized.GET("/payment/status/:id", handlers.GetPaymentStatus)
 
 		// 卡密兑换（添加频率限制防暴力破解）
@@ -211,9 +204,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		recharge := authorized.Group("/recharge")
 		{
 			recharge.GET("", handlers.ListRechargeRecords)
-			recharge.POST("", handlers.CreateRecharge)
+			recharge.POST("", middleware.RateLimit(10, time.Minute), handlers.CreateRecharge)
 			recharge.GET("/:id/status", handlers.GetRechargeStatus)
-			recharge.POST("/:id/pay", handlers.CreateRechargePayment)
+			recharge.POST("/:id/pay", middleware.RateLimit(10, time.Minute), handlers.CreateRechargePayment)
 			recharge.POST("/:id/cancel", handlers.CancelRecharge)
 		}
 
@@ -282,6 +275,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		adminPkgs.Use(middleware.CSRFProtection())
 		{
 			adminPkgs.GET("", handlers.AdminListPackages)
+			adminPkgs.GET("/:id", handlers.AdminGetPackage)
 			adminPkgs.POST("", handlers.AdminCreatePackage)
 			adminPkgs.PUT("/:id", handlers.AdminUpdatePackage)
 			adminPkgs.DELETE("/:id", handlers.AdminDeletePackage)
@@ -292,6 +286,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		adminNodes.Use(middleware.CSRFProtection())
 		{
 			adminNodes.GET("", handlers.AdminListNodes)
+			adminNodes.GET("/:id", handlers.AdminGetNode)
 			adminNodes.POST("", handlers.AdminCreateNode)
 			adminNodes.PUT("/:id", handlers.AdminUpdateNode)
 			adminNodes.DELETE("/:id", handlers.AdminDeleteNode)
@@ -351,6 +346,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminSubs.PUT("/:id", handlers.AdminUpdateSubscription)
 			adminSubs.POST("/:id/send-email", handlers.AdminSendSubscriptionEmail)
 			adminSubs.POST("/:id/set-expire", handlers.AdminSetSubscriptionExpireTime)
+			adminSubs.POST("/:id/clear-devices", handlers.AdminClearSubscriptionDevices)
 		}
 
 		// 用户完全删除
@@ -437,6 +433,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/stats/payment/analysis", handlers.AdminPaymentAnalysis)
 
 		// 日志
+		admin.DELETE("/logs/:type", middleware.CSRFProtection(), handlers.AdminClearLogs)
 		admin.GET("/logs/audit", handlers.AdminAuditLogs)
 		admin.GET("/logs/login", handlers.AdminLoginLogs)
 		admin.GET("/logs/registration", handlers.AdminRegistrationLogs)

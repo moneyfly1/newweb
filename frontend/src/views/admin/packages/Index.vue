@@ -1,5 +1,11 @@
 <template>
-  <div class="admin-packages-page admin-page-shell">
+  <div class="admin-packages-page admin-page-shell" @touchstart.passive="pullTouchStart" @touchmove.passive="pullTouchMove" @touchend.passive="pullTouchEnd">
+    <transition name="fade">
+      <div v-if="pullDistance > 0 || pullRefreshing" class="pull-indicator" :style="{ transform: `translate(-50%, ${Math.min(pullDistance, 70) - 40}px)` }">
+        <n-spin v-if="pullRefreshing" size="small" />
+        <span v-else>{{ pullDistance >= 55 ? '释放刷新' : '下拉刷新' }}</span>
+      </div>
+    </transition>
     <div class="page-header">
       <div class="header-left">
         <h2 class="page-title">套餐管理</h2>
@@ -16,6 +22,10 @@
           >
             <template #prefix><n-icon :component="SearchOutline" /></template>
           </n-input>
+          <n-button type="primary" @click="handleSearch">
+            <template #icon><n-icon :component="SearchOutline" /></template>
+            搜索
+          </n-button>
           <n-button type="primary" @click="handleCreate">
             <template #icon><n-icon :component="AddOutline" /></template>
             新建套餐
@@ -28,7 +38,7 @@
 
       <!-- Batch operations -->
       <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-        <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
+        <span style="color: var(--text-color-secondary)">已选择 {{ checkedRowKeys.length }} 项</span>
         <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
         <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
       </n-space>
@@ -51,7 +61,7 @@
 
         <template v-else>
           <n-spin :show="loading">
-            <div v-if="packages.length === 0" style="text-align: center; padding: 40px 0; color: #999;">
+            <div v-if="packages.length === 0" style="text-align: center; padding: 40px 0; color: var(--text-color-secondary);">
               暂无数据
             </div>
             <div v-else class="mobile-card-list">
@@ -65,7 +75,7 @@
                 <div class="card-body">
                   <div class="card-row">
                     <span class="card-label">价格</span>
-                    <span style="color: #18a058; font-weight: 600;">{{ formatCurrency(pkg.price) }}</span>
+                    <span style="color: var(--success-color); font-weight: 600;">{{ formatCurrency(pkg.price) }}</span>
                   </div>
                   <div class="card-row">
                     <span class="card-label">有效期</span>
@@ -82,9 +92,9 @@
         </template>
 
         <n-pagination
-          v-model:page="currentPage"
-          v-model:page-size="pageSize"
-          :page-count="totalPages"
+          v-model:page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :item-count="pagination.itemCount"
           :page-sizes="[10, 20, 50, 100]"
           show-size-picker
           style="margin-top: 16px; justify-content: flex-end"
@@ -187,6 +197,8 @@ import { ref, reactive, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naive-ui'
 import { AddOutline, SearchOutline } from '@vicons/ionicons5'
 import { listAdminPackages, createPackage, updatePackage, deletePackage } from '@/api/admin'
+import { useTable } from '@/composables/useTable'
+import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
@@ -196,13 +208,17 @@ const appStore = useAppStore()
 const message = useMessage()
 const dialog = useDialog()
 
-const loading = ref(false)
-const packages = ref([])
-const currentPage = ref(1)
-const pageSize = ref(10)
-const totalPages = ref(0)
 const searchQuery = ref('')
-const checkedRowKeys = ref([])
+
+// 统一表格状态（含搜索参数）
+const { loading, tableData: packages, checkedRowKeys, pagination, loadData, reload } = useTable(listAdminPackages, {
+  getParams: () => ({ search: searchQuery.value || undefined }),
+})
+const fetchPackages = loadData
+
+// 下拉刷新（App 原生感）——此前只 import 未解构，导致移动端下拉刷新失效
+const { distance: pullDistance, refreshing: pullRefreshing, onTouchStart: pullTouchStart, onTouchMove: pullTouchMove, onTouchEnd: pullTouchEnd } =
+  usePullRefresh(loadData)
 
 const showEditDrawer = ref(false)
 const isCreating = ref(false)
@@ -251,7 +267,7 @@ const columns = [
     sorter: (a, b) => a.price - b.price,
     render: (row) => h(
       'span',
-      { style: 'color: #18a058; font-weight: 600' },
+      { style: 'color: var(--success-color); font-weight: 600' },
       formatCurrency(row.price)
     )
   },
@@ -316,37 +332,18 @@ const columns = [
   }
 ]
 
-const fetchPackages = async () => {
-  loading.value = true
-  try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize.value,
-      search: searchQuery.value || undefined
-    }
-    const response = await listAdminPackages(params)
-    packages.value = response.data.items || []
-    totalPages.value = Math.ceil((response.data.total || 0) / pageSize.value)
-  } catch (error) {
-    message.error('获取套餐列表失败：' + (error.message || '未知错误'))
-  } finally {
-    loading.value = false
-  }
-}
-
 const handleSearch = () => {
-  currentPage.value = 1
-  fetchPackages()
+  reload()
 }
 
 const handlePageChange = (page) => {
-  currentPage.value = page
+  pagination.page = page
   fetchPackages()
 }
 
 const handlePageSizeChange = (size) => {
-  pageSize.value = size
-  currentPage.value = 1
+  pagination.pageSize = size
+  pagination.page = 1
   fetchPackages()
 }
 
@@ -474,6 +471,28 @@ onMounted(() => {
 </script>
 
 <style scoped>
+
+.pull-indicator {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 96px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--bg-color, #fff);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  color: var(--text-color-secondary, #666);
+  transition: transform 0.15s ease;
+}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 .page-card {
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);

@@ -3,7 +3,7 @@
   :root {
     --admin-mobile-gutter: 12px;
     --admin-mobile-radius: 8px;
-    --admin-mobile-control-height: 36px;
+    --admin-mobile-control-height: 40px;
   }
 
   body {
@@ -257,7 +257,7 @@
   .admin-page-shell .mobile-card .card-actions .n-button {
     width: 100%;
     min-width: 0;
-    min-height: 34px;
+    min-height: 40px;
     max-height: none;
     padding: 0 8px;
     border-radius: 6px !important;

@@ -28,11 +28,11 @@ func (PaymentTransaction) TableName() string {
 
 type PaymentCallback struct {
 	ID                   uint      `gorm:"primaryKey" json:"id"`
-	PaymentTransactionID uint      `json:"payment_transaction_id"`
+	PaymentTransactionID uint      `gorm:"index:idx_payment_callbacks_tx,priority:1" json:"payment_transaction_id"`
 	CallbackType         string    `gorm:"type:varchar(50)" json:"callback_type"`
 	CallbackData         string    `gorm:"type:json" json:"callback_data"`
 	RawRequest           *string   `gorm:"type:text" json:"raw_request"`
-	Processed            bool      `gorm:"default:false" json:"processed"`
+	Processed            bool      `gorm:"default:false;index:idx_payment_callbacks_tx,priority:2" json:"processed"`
 	ProcessingResult     *string   `gorm:"type:varchar(50)" json:"processing_result"`
 	ErrorMessage         *string   `gorm:"type:text" json:"error_message"`
 	CreatedAt            time.Time `gorm:"autoCreateTime" json:"created_at"`
@@ -44,7 +44,7 @@ func (PaymentCallback) TableName() string {
 
 type PaymentConfig struct {
 	ID                   uint      `gorm:"primaryKey" json:"id"`
-	PayType              string    `gorm:"type:varchar(50)" json:"pay_type"`
+	PayType              string    `gorm:"type:varchar(50);uniqueIndex" json:"pay_type"`
 	AppID                *string   `gorm:"type:text" json:"app_id"`
 	MerchantPrivateKey   *string   `gorm:"type:text" json:"-"`
 	AlipayPublicKey      *string   `gorm:"type:text" json:"-"`
@@ -105,7 +105,3 @@ func RecordNonce(db *gorm.DB, transactionID string, callbackType string, externa
 	return db.Create(&nonce).Error
 }
 
-// CleanExpiredNonces 清理过期的 nonce 记录
-func CleanExpiredNonces(db *gorm.DB) error {
-	return db.Where("expires_at < ?", time.Now()).Delete(&PaymentNonce{}).Error
-}

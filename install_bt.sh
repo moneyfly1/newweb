@@ -507,8 +507,30 @@ update_code() {
         rm -rf frontend/dist frontend/node_modules
 
         export PATH=$PATH:/usr/local/go/bin
+        echo -e "\n${YELLOW}━━━ 步骤 1/3：构建后端 (go build) ━━━${NC}"
         go build -o cboard cmd/server/main.go
-        cd frontend && echo "loglevel=error" > .npmrc && npm install && npx vite build && cd ..
+        if [ $? -ne 0 ]; then
+            err "后端构建失败"; systemctl start ${SERVICE_NAME}; pause; return 1
+        fi
+        ok "后端构建完成"
+
+        echo -e "\n${YELLOW}━━━ 步骤 2/3：安装前端依赖 (npm install) ━━━${NC}"
+        cd frontend
+        npm install
+        if [ $? -ne 0 ]; then
+            err "前端依赖安装失败"; cd ..; systemctl start ${SERVICE_NAME}; pause; return 1
+        fi
+        ok "前端依赖安装完成"
+
+        echo -e "\n${YELLOW}━━━ 步骤 3/3：构建前端 (vite build) ━━━${NC}"
+        npx vite build
+        local fe_rc=$?
+        cd ..
+        if [ $fe_rc -ne 0 ]; then
+            err "前端构建失败"; systemctl start ${SERVICE_NAME}; pause; return 1
+        fi
+        ok "前端构建完成"
+
         chown -R www:www .
         systemctl start ${SERVICE_NAME}
     fi

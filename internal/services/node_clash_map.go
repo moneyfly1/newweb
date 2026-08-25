@@ -191,10 +191,13 @@ func VlessLinkToClashMap(link string, name string) (map[string]interface{}, erro
 			m["servername"] = sni
 		}
 		if sec == "reality" {
-			m["reality-opts"] = map[string]interface{}{
-				"public-key": q.Get("pbk"),
-				"short-id":   q.Get("sid"),
+			// short-id 为空或非法时省略字段（Clash Meta 空 short-id 合法，
+			// 但 "short-id: ''" 空字符串会报 invalid REALITY short ID）
+			opts := map[string]interface{}{"public-key": q.Get("pbk")}
+			if sid := sanitizeRealityShortID(q.Get("sid")); sid != "" {
+				opts["short-id"] = sid
 			}
+			m["reality-opts"] = opts
 		}
 		if fp := q.Get("fp"); fp != "" {
 			m["client-fingerprint"] = fp
@@ -971,3 +974,24 @@ func NodeConfigToClashMap(nodeType string, configLink string, nodeName string) (
 }
 
 // GenerateClashYAML generates a proper Clash YAML config from nodes.
+
+// sanitizeRealityShortID 校验并规范化 REALITY short-id：
+// Clash Meta 要求十六进制字符串（1-16 字节，通常 8 位）。
+// 空值或非法格式返回 ""，调用方应省略该字段（空 short-id 在 Clash 中合法，
+// 但 "short-id: ''" 空字符串会触发 "invalid REALITY short ID" 错误）。
+func sanitizeRealityShortID(sid string) string {
+	sid = strings.TrimSpace(sid)
+	if sid == "" {
+		return ""
+	}
+	// 必须为十六进制字符（大小写均可），且长度不超过 32（16 字节）
+	if len(sid) > 32 {
+		return ""
+	}
+	for _, ch := range sid {
+		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')) {
+			return ""
+		}
+	}
+	return sid
+}

@@ -213,7 +213,7 @@ func convertNonStandardToClashMap(link string, name string, nodeType string) (ma
 		if pbk := query.Get("pbk"); pbk != "" {
 			m["tls"] = true
 			realityOpts := map[string]interface{}{"public-key": pbk}
-			if sid := query.Get("sid"); sid != "" {
+			if sid := sanitizeRealityShortID(query.Get("sid")); sid != "" {
 				realityOpts["short-id"] = sid
 			}
 			m["reality-opts"] = realityOpts

@@ -274,9 +274,10 @@ func AdminImportCustomNodeLinks(c *gin.Context) {
 		return
 	}
 
-	nodes, err := services.ParseSubscriptionContent(req.Links)
+	// 统一导入流程（与节点导入共用 FetchAndParseImport/BuildCustomNodesFromNodes）
+	nodes, err := services.FetchAndParseImport(services.ImportSource{Type: "links", Links: req.Links})
 	if err != nil {
-		utils.BadRequest(c, "解析节点失败: "+err.Error())
+		utils.BadRequest(c, "导入失败: "+err.Error())
 		return
 	}
 	if len(nodes) == 0 {
@@ -285,33 +286,7 @@ func AdminImportCustomNodeLinks(c *gin.Context) {
 	}
 
 	db := database.GetDB()
-	customNodes := make([]models.CustomNode, 0, len(nodes))
-	for _, node := range nodes {
-		domain := ""
-		port := 443
-		if node.Config != nil && *node.Config != "" {
-			if extractedDomain, extractedPort, extractErr := services.ExtractDomainPortFromNodeLink(*node.Config); extractErr == nil {
-				domain = extractedDomain
-				if extractedPort > 0 {
-					port = extractedPort
-				}
-			}
-		}
-		customNode := models.CustomNode{
-			Name:        node.Name,
-			DisplayName: node.Name,
-			Protocol:    node.Type,
-			Domain:      domain,
-			Port:        port,
-			Config:      "",
-			IsActive:    true,
-		}
-		if node.Config != nil {
-			customNode.Config = *node.Config
-		}
-		customNodes = append(customNodes, customNode)
-	}
-
+	customNodes := services.BuildCustomNodesFromNodes(nodes)
 	result := db.CreateInBatches(customNodes, 100)
 	successCount := int(result.RowsAffected)
 

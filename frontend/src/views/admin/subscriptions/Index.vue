@@ -90,7 +90,12 @@
                   <n-button size="tiny" @click="inlineAddTime(row, 365)">+1年</n-button>
                   <n-button size="tiny" @click="inlineAddTime(row, 730)">+2年</n-button>
                 </div>
-                <n-date-picker v-model:value="row._expireTs" type="datetime" size="small" class="full-width date-picker-spacing" @update:value="(v) => inlineSetExpire(row, v)" clearable />
+                <template v-if="row._editingExpire">
+                  <n-date-picker v-model:value="row._expireTs" type="datetime" size="small" class="full-width date-picker-spacing" clearable @update:value="(v) => { inlineSetExpire(row, v); row._editingExpire = false }" />
+                </template>
+                <template v-else>
+                  <n-button size="tiny" quaternary block @click="row._editingExpire = true" class="date-picker-spacing">{{ formatDateTime(row.expire_time) }}</n-button>
+                </template>
               </div>
               <div class="sub-section" :class="{ 'section-overlimit': isOverlimit(row) }">
                 <div class="sub-section-row">
@@ -184,6 +189,7 @@ import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { formatDateTime } from '@/utils/date'
 import {
   listAdminSubscriptions, resetAdminSubscription,
   extendSubscription, updateSubscriptionDeviceLimit, sendSubscriptionEmail,
@@ -312,7 +318,8 @@ const columns = [
     sorter: (a, b) => new Date(a.expire_time || 0) - new Date(b.expire_time || 0),
     render: (row) => h('div', { class: isExpired(row) ? 'inline-cell cell-expired' : 'inline-cell' }, [
       h('div', { style: { color: getRemainingDaysColor(row.expire_time), fontWeight: 'bold', fontSize: '13px', marginBottom: '4px' } }, getRemainingDays(row.expire_time)),
-      h(NDatePicker, { value: row._expireTs, type: 'datetime', size: 'small', style: 'width:100%', clearable: true, onUpdateValue: (v) => inlineSetExpire(row, v) }),
+      // 懒渲染：默认显示日期文本，点击编辑才实例化 NDatePicker（避免每行重组件导致翻页卡顿）
+      row._editingExpire ? h(NDatePicker, { value: row._expireTs, type: 'datetime', size: 'small', style: 'width:100%', clearable: true, onUpdateValue: (v) => { inlineSetExpire(row, v); row._editingExpire = false } }) : h(NButton, { size: 'tiny', quaternary: true, onClick: () => { row._editingExpire = true } }, { default: () => formatDateTime(row.expire_time) }),
       h('div', { class: 'inline-quick-btns' }, [
         h(NButton, { size: 'tiny', onClick: () => inlineAddTime(row, 30) }, { default: () => '+1月' }),
         h(NButton, { size: 'tiny', onClick: () => inlineAddTime(row, 90) }, { default: () => '+3月' }),
@@ -327,7 +334,8 @@ const columns = [
     sorter: (a, b) => (a.device_limit || 0) - (b.device_limit || 0),
     render: (row) => h('div', { class: isOverlimit(row) ? 'inline-cell cell-overlimit' : 'inline-cell' }, [
       h('div', { style: 'font-size:13px;margin-bottom:4px' }, `在线 ${row.current_devices || 0} / 上限 ${row.device_limit || 0}`),
-      h(NInputNumber, { value: row.device_limit, min: 0, max: 999, size: 'small', style: 'width:100%', onUpdateValue: (v) => inlineSetDevice(row, v) }),
+      // 懒渲染：点击编辑才实例化 NInputNumber
+      row._editingDevice ? h(NInputNumber, { value: row.device_limit, min: 0, max: 999, size: 'small', style: 'width:100%', onUpdateValue: (v) => { inlineSetDevice(row, v); row._editingDevice = false } }) : h(NButton, { size: 'tiny', quaternary: true, onClick: () => { row._editingDevice = true } }, { default: () => `上限 ${row.device_limit || 0}` }),
       h('div', { class: 'inline-quick-btns' }, [
         h(NButton, { size: 'tiny', onClick: () => inlineAddDevice(row, 2) }, { default: () => '+2' }),
         h(NButton, { size: 'tiny', onClick: () => inlineAddDevice(row, 5) }, { default: () => '+5' }),
@@ -445,27 +453,47 @@ const handleSorterChange = (sorter) => {
   fetchData()
 }
 
-// Inline time operations
+// Inline time operations（本地更新行数据，避免整表刷新导致的重渲染卡顿）
 const inlineAddTime = async (row, days) => {
-  try { await extendSubscription(row.id, { days }); message.success(`已延长 ${days} 天`); fetchData() }
-  catch { message.error('延长失败') }
+  try {
+    const res = await extendSubscription(row.id, { days })
+    if (res.data?.new_expire_time) {
+      row.expire_time = res.data.new_expire_time
+      row._expireTs = new Date(res.data.new_expire_time).getTime()
+      row.is_active = true
+      row.status = 'active'
+    }
+    message.success(`已延长 ${days} 天`)
+  } catch { message.error('延长失败') }
 }
 const inlineSetExpire = async (row, ts) => {
   if (!ts) return
-  try { await setSubscriptionExpireTime(row.id, { expire_time: new Date(ts).toISOString() }); message.success('到期时间已设置'); fetchData() }
-  catch { message.error('设置失败') }
+  const iso = new Date(ts).toISOString()
+  try {
+    await setSubscriptionExpireTime(row.id, { expire_time: iso })
+    row.expire_time = iso
+    row._expireTs = ts
+    if (new Date(ts).getTime() > Date.now()) { row.is_active = true; row.status = 'active' }
+    message.success('到期时间已设置')
+  } catch { message.error('设置失败') }
 }
 
-// Inline device operations
+// Inline device operations（本地更新行数据）
 const inlineAddDevice = async (row, n) => {
   const newLimit = (row.device_limit || 0) + n
-  try { await updateSubscriptionDeviceLimit(row.id, { device_limit: newLimit }); message.success(`设备上限已设为 ${newLimit}`); fetchData() }
-  catch { message.error('更新失败') }
+  try {
+    await updateSubscriptionDeviceLimit(row.id, { device_limit: newLimit })
+    row.device_limit = newLimit
+    message.success(`设备上限已设为 ${newLimit}`)
+  } catch { message.error('更新失败') }
 }
 const inlineSetDevice = async (row, v) => {
   if (v == null || v === row.device_limit) return
-  try { await updateSubscriptionDeviceLimit(row.id, { device_limit: v }); message.success(`设备上限已设为 ${v}`); fetchData() }
-  catch { message.error('更新失败') }
+  try {
+    await updateSubscriptionDeviceLimit(row.id, { device_limit: v })
+    row.device_limit = v
+    message.success(`设备上限已设为 ${v}`)
+  } catch { message.error('更新失败') }
 }
 
 const handleViewDetail = (row) => {

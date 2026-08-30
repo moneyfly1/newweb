@@ -648,8 +648,8 @@ const handleSubmit = async () => {
 const handleToggleActive = async (row, value) => {
   try {
     await updateCustomNode(row.id, { is_active: value })
+    row.is_active = value // 本地更新，避免整表刷新卡顿
     message.success('更新状态成功')
-    fetchData()
   } catch (error) {
     message.error(error.message || '更新状态失败')
   }

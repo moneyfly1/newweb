@@ -160,65 +160,24 @@ func AdminImportNodes(c *gin.Context) {
 		return
 	}
 
-	var content string
-	var err error
-
-	switch req.Type {
-	case "subscription":
-		if req.URL == "" {
-			utils.BadRequest(c, "订阅URL不能为空")
-			return
-		}
-		content, err = services.FetchSubscriptionContent(req.URL)
-		if err != nil {
-			utils.BadRequest(c, "获取订阅内容失败: "+err.Error())
-			return
-		}
-	case "links":
-		if req.Links == "" {
-			utils.BadRequest(c, "节点链接不能为空")
-			return
-		}
-		content = req.Links
-	default:
-		utils.BadRequest(c, "不支持的导入类型")
-		return
-	}
-
-	nodes, err := services.ParseSubscriptionContent(content)
+	// 统一导入流程（与专线导入共用 FetchAndParseImport/FilterExistingNodesByName）
+	nodes, err := services.FetchAndParseImport(services.ImportSource{Type: req.Type, URL: req.URL, Links: req.Links})
 	if err != nil {
-		utils.BadRequest(c, "解析节点失败: "+err.Error())
+		utils.BadRequest(c, "导入失败: "+err.Error())
 		return
 	}
-
 	if len(nodes) == 0 {
 		utils.BadRequest(c, "未找到有效的节点")
 		return
 	}
 
 	db := database.GetDB()
-	// 预筛已存在的节点（按 name 判重），剩余批量写入（单事务）
-	var existingNames []string
-	names := make([]string, 0, len(nodes))
-	for _, n := range nodes {
-		names = append(names, n.Name)
+	sourceURL := ""
+	if req.Type == "subscription" {
+		sourceURL = req.URL
 	}
-	db.Where("name IN ?", names).Pluck("name", &existingNames)
-	existingSet := make(map[string]bool, len(existingNames))
-	for _, nm := range existingNames {
-		existingSet[nm] = true
-	}
-	toInsert := make([]models.Node, 0, len(nodes))
-	for _, node := range nodes {
-		if existingSet[node.Name] {
-			continue
-		}
-		node.IsManual = true // 管理员手动导入的节点，自动更新时不会被删除
-		if req.Type == "subscription" {
-			node.SourceURL = req.URL // 记录导入来源的订阅链接
-		}
-		toInsert = append(toInsert, node)
-	}
+	// 预筛已存在节点（按 name 判重），剩余批量写入（单事务）
+	toInsert := services.FilterExistingNodesByName(db, nodes, true, sourceURL)
 	successCount := 0
 	if len(toInsert) > 0 {
 		if err := db.CreateInBatches(toInsert, 200).Error; err == nil {

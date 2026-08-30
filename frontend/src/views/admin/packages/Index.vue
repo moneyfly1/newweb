@@ -13,19 +13,6 @@
       </div>
       <div class="header-right">
         <n-space>
-          <n-input
-            v-model:value="searchQuery"
-            placeholder="搜索套餐名称 / 描述"
-            clearable
-            style="width: 250px"
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix><n-icon :component="SearchOutline" /></template>
-          </n-input>
-          <n-button type="primary" @click="handleSearch">
-            <template #icon><n-icon :component="SearchOutline" /></template>
-            搜索
-          </n-button>
           <n-button type="primary" @click="handleCreate">
             <template #icon><n-icon :component="AddOutline" /></template>
             新建套餐
@@ -33,6 +20,14 @@
         </n-space>
       </div>
     </div>
+
+    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行） -->
+    <search-filter-bar
+      v-model:values="filterValues"
+      :filters="filterConfig"
+      search-placeholder="搜索套餐名称 / 描述"
+      @search="handleSearch"
+    />
 
     <n-card :bordered="false" class="page-card admin-main-card">
 
@@ -195,13 +190,14 @@
 <script setup>
 import { ref, reactive, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naive-ui'
-import { AddOutline, SearchOutline } from '@vicons/ionicons5'
+import { AddOutline } from '@vicons/ionicons5'
 import { listAdminPackages, createPackage, updatePackage, deletePackage } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import SearchFilterBar from '@/components/SearchFilterBar.vue'
 
 const appStore = useAppStore()
 
@@ -209,6 +205,12 @@ const message = useMessage()
 const dialog = useDialog()
 
 const searchQuery = ref('')
+
+// 统一筛选工具栏状态（值与原 refs 同步，保持业务逻辑不变）
+const filterValues = reactive({
+  search: '',
+})
+const filterConfig = []
 
 // 统一表格状态（含搜索参数）
 const { loading, tableData: packages, checkedRowKeys, pagination, loadData, reload } = useTable(listAdminPackages, {
@@ -333,6 +335,7 @@ const columns = [
 ]
 
 const handleSearch = () => {
+  searchQuery.value = filterValues.search || ''
   reload()
 }
 

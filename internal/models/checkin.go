@@ -2,6 +2,13 @@ package models
 
 import "time"
 
+// 兑换码状态
+const (
+	RedeemStatusUnused = "unused"
+	RedeemStatusUsed   = "used"
+	RedeemStatusActive = "active"
+)
+
 // CheckIn 签到记录
 type CheckIn struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`

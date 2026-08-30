@@ -208,7 +208,7 @@
             <div v-for="h in checkinHistory" :key="h.id" class="checkin-history-item">
               <div class="checkin-history-left">
                 <n-icon :size="14" :component="CalendarOutline" />
-                <span>{{ formatCheckinDate(h.created_at) }}</span>
+                <span>{{ formatDate(h.created_at) }}</span>
               </div>
               <span class="checkin-history-amount">+{{ formatAmount(h.amount) }} 元</span>
             </div>
@@ -302,6 +302,7 @@ import { listOrders } from '@/api/order'
 import { getSubscription } from '@/api/subscription'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatCurrency, formatAmount } from '@/utils/amount'
+import { formatDate } from '@/utils/date'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useCountUp } from '@/composables/useCountUp'
 
@@ -348,10 +349,6 @@ const loadCheckinHistory = async () => {
     const res: any = await getCheckInHistory({ page: 1, page_size: 5 })
     checkinHistory.value = res.data?.items || []
   } catch {}
-}
-const formatCheckinDate = (t: string) => {
-  if (!t) return ''
-  return new Date(t).toLocaleDateString('zh-CN')
 }
 const checkinLoading = ref(false)
 
@@ -611,8 +608,6 @@ const orderStatusText = (status: string) => {
   const map: Record<string, string> = { pending: '待支付', paid: '已支付', cancelled: '已取消', expired: '已过期', refunded: '已退款' }
   return map[status] || status
 }
-
-function formatDate(d: string) { if (!d) return ''; return new Date(d).toLocaleDateString('zh-CN') }
 
 async function copyText(text: string, label: string) {
   const ok = await clipboardCopy(text)

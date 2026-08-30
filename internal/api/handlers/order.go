@@ -169,7 +169,7 @@ func CreateOrder(c *gin.Context) {
 		UserID:         userID,
 		PackageID:      req.PackageID,
 		Amount:         amount,
-		Status:         "pending",
+		Status:         models.OrderStatusPending,
 		CouponID:       couponID,
 		DiscountAmount: &discountAmount,
 		FinalAmount:    &finalAmount,
@@ -253,7 +253,7 @@ func PayOrder(c *gin.Context) {
 	}
 	db := database.GetDB()
 	var order models.Order
-	if err := db.Where("order_no = ? AND user_id = ? AND status = ?", orderNo, userID, "pending").First(&order).Error; err != nil {
+	if err := db.Where("order_no = ? AND user_id = ? AND status = ?", orderNo, userID, models.OrderStatusPending).First(&order).Error; err != nil {
 		utils.NotFound(c, "订单不存在或状态不正确")
 		return
 	}
@@ -278,16 +278,16 @@ func PayOrder(c *gin.Context) {
 		// 用「条件更新 + RowsAffected 校验」代替「先读再改」，
 		// 防止并发余额支付时订单被处理两次（双扣款 + 订阅双倍延期）。
 		var freshOrder models.Order
-		if err := tx.Where("id = ? AND status = ?", order.ID, "pending").First(&freshOrder).Error; err != nil {
+		if err := tx.Where("id = ? AND status = ?", order.ID, models.OrderStatusPending).First(&freshOrder).Error; err != nil {
 			tx.Rollback()
 			utils.BadRequest(c, "订单已支付或已取消")
 			return
 		}
 		now := time.Now()
 		balanceStr := "balance"
-		claimRes := tx.Model(&models.Order{}).Where("id = ? AND status = ?", order.ID, "pending").
+		claimRes := tx.Model(&models.Order{}).Where("id = ? AND status = ?", order.ID, models.OrderStatusPending).
 			Updates(map[string]interface{}{
-				"status":              "paid",
+				"status":              models.OrderStatusPaid,
 				"payment_method_name": &balanceStr,
 				"payment_time":        &now,
 			})
@@ -378,7 +378,7 @@ func PayOrder(c *gin.Context) {
 				SubscriptionURL: utils.GenerateHexToken(),
 				DeviceLimit:     deviceLimit,
 				IsActive:        true,
-				Status:          "active",
+				Status:          models.SubStatusActive,
 				ExpireTime:      time.Now().AddDate(0, 0, durationDays),
 			}
 			if order.PackageID > 0 {
@@ -411,7 +411,7 @@ func PayOrder(c *gin.Context) {
 				}
 				if err := tx.Model(&sub).Updates(map[string]interface{}{
 					"is_active": true,
-					"status":    "active",
+					"status":    models.SubStatusActive,
 				}).Error; err != nil {
 					tx.Rollback()
 					utils.InternalError(c, "订阅升级失败")
@@ -431,7 +431,7 @@ func PayOrder(c *gin.Context) {
 				updates := map[string]interface{}{
 					"device_limit": deviceLimit,
 					"is_active":    true,
-					"status":       "active",
+					"status":       models.SubStatusActive,
 				}
 				if order.PackageID > 0 {
 					pkgID := int64(order.PackageID)
@@ -482,14 +482,14 @@ func CancelOrder(c *gin.Context) {
 	orderNo := c.Param("orderNo")
 	db := database.GetDB()
 	var order models.Order
-	if err := db.Where("order_no = ? AND user_id = ? AND status = ?", orderNo, userID, "pending").First(&order).Error; err != nil {
+	if err := db.Where("order_no = ? AND user_id = ? AND status = ?", orderNo, userID, models.OrderStatusPending).First(&order).Error; err != nil {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
 	// 条件更新：仅当订单仍为 pending 时才取消，防止覆盖并发支付回调刚置为 paid 的订单
 	cancelRes := db.Model(&models.Order{}).
-		Where("order_no = ? AND user_id = ? AND status = ?", orderNo, userID, "pending").
-		Update("status", "cancelled")
+		Where("order_no = ? AND user_id = ? AND status = ?", orderNo, userID, models.OrderStatusPending).
+		Update("status", models.OrderStatusCancelled)
 	if cancelRes.Error != nil {
 		utils.InternalError(c, "取消订单失败")
 		return
@@ -662,7 +662,7 @@ func CreateCustomOrder(c *gin.Context) {
 		UserID:         userID,
 		PackageID:      0,
 		Amount:         basePrice,
-		Status:         "pending",
+		Status:         models.OrderStatusPending,
 		CouponID:       couponID,
 		DiscountAmount: &totalDiscount,
 		FinalAmount:    &finalPrice,
@@ -752,7 +752,7 @@ func CalcUpgradePrice(c *gin.Context) {
 
 	now := time.Now()
 	// 订阅已到期不允许升级，必须先续费或重新购买套餐
-	if !sub.ExpireTime.After(now) || !sub.IsActive || sub.Status == "expired" {
+	if !sub.ExpireTime.After(now) || !sub.IsActive || sub.Status == models.SubStatusExpired {
 		utils.BadRequest(c, "订阅已到期，无法升级。请先续费或购买套餐后再升级设备")
 		return
 	}
@@ -830,7 +830,7 @@ func CreateUpgradeOrder(c *gin.Context) {
 
 	now := time.Now()
 	// 订阅已到期不允许升级，必须先续费或重新购买套餐
-	if !sub.ExpireTime.After(now) || !sub.IsActive || sub.Status == "expired" {
+	if !sub.ExpireTime.After(now) || !sub.IsActive || sub.Status == models.SubStatusExpired {
 		utils.BadRequest(c, "订阅已到期，无法升级。请先续费或购买套餐后再升级设备")
 		return
 	}
@@ -900,7 +900,7 @@ func CreateUpgradeOrder(c *gin.Context) {
 		UserID:         userID,
 		PackageID:      0,
 		Amount:         basePrice,
-		Status:         "pending",
+		Status:         models.OrderStatusPending,
 		CouponID:       couponID,
 		DiscountAmount: &totalDiscount,
 		FinalAmount:    &finalPrice,

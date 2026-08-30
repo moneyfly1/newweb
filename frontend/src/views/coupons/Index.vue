@@ -18,7 +18,7 @@
             <div class="coupon-code" v-if="c.code">券码 {{ c.code }}</div>
             <div class="coupon-meta">
               <span v-if="c.order_no">订单 {{ c.order_no }}</span>
-              <span>{{ formatTime(c.used_at) }}</span>
+              <span>{{ formatFullDateTime(c.used_at) }}</span>
             </div>
           </div>
           <n-tag size="small" :type="c.coupon_status === 'active' ? 'success' : 'default'" :bordered="false">
@@ -34,6 +34,7 @@
 import { ref, onMounted } from 'vue'
 import { getMyCoupons } from '@/api/common'
 import { formatAmount } from '@/utils/amount'
+import { formatFullDateTime } from '@/utils/date'
 
 const loading = ref(false)
 const coupons = ref<any[]>([])
@@ -48,11 +49,6 @@ const loadCoupons = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const formatTime = (t: string) => {
-  if (!t) return ''
-  return new Date(t).toLocaleString('zh-CN', { hour12: false })
 }
 
 onMounted(loadCoupons)

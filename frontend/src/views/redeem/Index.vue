@@ -24,7 +24,7 @@
             </div>
             <div class="card-body">
               <div class="card-row"><span class="card-label">兑换值</span><span>{{ item.value }}</span></div>
-              <div class="card-row"><span class="card-label">时间</span><span>{{ formatDate(item.created_at) }}</span></div>
+              <div class="card-row"><span class="card-label">时间</span><span>{{ formatDateTime(item.created_at) }}</span></div>
             </div>
           </div>
         </div>
@@ -50,6 +50,7 @@ import { NTag } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { redeemCode, getRedeemHistory } from '@/api/common'
 import { useMessage } from 'naive-ui'
+import { formatDateTime } from '@/utils/date'
 
 const appStore = useAppStore()
 const message = useMessage()
@@ -67,14 +68,8 @@ const columns = [
   { title: '兑换码', key: 'code' },
   { title: '类型', key: 'type', render: (row: any) => h(NTag, { type: row.type === 'balance' ? 'success' : 'info', size: 'small' }, { default: () => row.type === 'balance' ? '余额' : '套餐' }) },
   { title: '兑换值', key: 'value' },
-  { title: '兑换时间', key: 'created_at', render: (row: any) => formatDate(row.created_at) },
+  { title: '兑换时间', key: 'created_at', render: (row: any) => formatDateTime(row.created_at) },
 ]
-
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
 
 const handleRedeem = async () => {
   if (!code.value.trim()) return

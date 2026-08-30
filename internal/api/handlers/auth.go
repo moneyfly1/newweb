@@ -309,7 +309,7 @@ func Register(c *gin.Context) {
 		SubscriptionURL: subURL,
 		DeviceLimit:     deviceLimit,
 		IsActive:        subscribeDays > 0,
-		Status:          "active",
+		Status:          models.SubStatusActive,
 		ExpireTime:      expireTime,
 	}
 	if err := tx.Create(&subscription).Error; err != nil {

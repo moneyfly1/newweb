@@ -6,6 +6,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// 支付事务状态
+const (
+	PayStatusPending  = "pending"
+	PayStatusPaid     = "paid"
+	PayStatusRefunded = "refunded"
+)
+
 type PaymentTransaction struct {
 	ID                    uint      `gorm:"primaryKey" json:"id"`
 	OrderID               uint      `gorm:"index" json:"order_id"`

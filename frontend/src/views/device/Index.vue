@@ -63,7 +63,7 @@
               </div>
               <div class="card-row">
                 <span class="label">最后访问</span>
-                <span class="value">{{ device.last_access ? new Date(device.last_access).toLocaleString('zh-CN') : '-' }}</span>
+                <span class="value">{{ formatFullDateTime(device.last_access) }}</span>
               </div>
               <div class="card-actions">
                 <n-button size="small" type="error" @click="handleDelete(device.id)">删除</n-button>
@@ -104,6 +104,7 @@ import { NButton, NTime, NInput, useMessage } from 'naive-ui'
 import { getSubscriptionDevices, deleteDevice, updateDeviceRemark } from '@/api/subscription'
 import { useAppStore } from '@/stores/app'
 import { parseDeviceInfo, formatLocation } from '@/utils/i18n'
+import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 interface Device {

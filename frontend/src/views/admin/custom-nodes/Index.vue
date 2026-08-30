@@ -98,7 +98,7 @@
               </div>
               <div class="card-row">
                 <span class="card-label">过期时间</span>
-                <span>{{ row.expire_time ? formatDate(row.expire_time) : '-' }}</span>
+                <span>{{ row.expire_time ? formatFullDateTime(row.expire_time) : '-' }}</span>
               </div>
             </div>
             <div class="card-actions">
@@ -354,6 +354,7 @@ import {
 } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
@@ -462,7 +463,7 @@ const columns = [
     key: 'expire_time',
     width: 160,
     resizable: true,
-    render: (row) => row.expire_time ? formatDate(row.expire_time) : '-'
+    render: (row) => row.expire_time ? formatFullDateTime(row.expire_time) : '-'
   },
   {
     title: '操作',
@@ -500,11 +501,6 @@ const columns = [
     }
   }
 ]
-
-const formatDate = (date) => {
-  if (!date) return '-'
-  return new Date(date).toLocaleString('zh-CN')
-}
 
 const fetchData = async () => {
   loading.value = true

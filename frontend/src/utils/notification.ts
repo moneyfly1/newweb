@@ -6,7 +6,7 @@ export function initNotification() {
   notification = useNotification()
 }
 
-export function showNotification(title: string, content: string, type: 'success' | 'info' | 'warning' | 'error' = 'info') {
+function showNotification(title: string, content: string, type: 'success' | 'info' | 'warning' | 'error' = 'info') {
   if (!notification) return
 
   notification[type]({

@@ -114,7 +114,7 @@ func deactivateExpiredTask() {
 	db := database.GetDB()
 	result := db.Model(&models.Subscription{}).
 		Where("is_active = ? AND expire_time < ?", true, time.Now()).
-		Updates(map[string]interface{}{"is_active": false, "status": "expired"})
+		Updates(map[string]interface{}{"is_active": false, "status": models.SubStatusExpired})
 	if result.RowsAffected > 0 {
 		log.Printf("[Scheduler] 已停用 %d 个过期订阅", result.RowsAffected)
 		utils.SysInfo("scheduler", fmt.Sprintf("已停用 %d 个过期订阅", result.RowsAffected))
@@ -126,8 +126,8 @@ func checkExpiryStatusTask() {
 	db := database.GetDB()
 	db.Model(&models.Subscription{}).
 		Where("is_active = ? AND status = ? AND expire_time BETWEEN ? AND ?",
-			true, "active", time.Now(), time.Now().Add(24*time.Hour)).
-		Update("status", "expiring")
+			true, models.SubStatusActive, time.Now(), time.Now().Add(24*time.Hour)).
+		Update("status", models.SubStatusExpiring)
 }
 
 // sendExpiryRemindersTask sends reminder emails for expiring subscriptions.
@@ -185,7 +185,7 @@ func sendExpiryRemindersTask() {
 		Select("users.email, subscriptions.expire_time").
 		Joins("JOIN users ON users.id = subscriptions.user_id").
 		Where("subscriptions.status = ? AND subscriptions.expire_time BETWEEN ? AND ? AND users.email_notifications = ?",
-			"expired", now.Add(-1*time.Hour), now, true).
+			models.SubStatusExpired, now.Add(-1*time.Hour), now, true).
 		Scan(&expired)
 	for _, r := range expired {
 		subject, body := RenderEmail("expiry_notice", map[string]string{
@@ -216,8 +216,8 @@ func cleanExpiredCodesTask() {
 func cancelExpiredOrdersTask() {
 	db := database.GetDB()
 	result := db.Model(&models.Order{}).
-		Where("status = ? AND expire_time < ?", "pending", time.Now()).
-		Update("status", "expired")
+		Where("status = ? AND expire_time < ?", models.OrderStatusPending, time.Now()).
+		Update("status", models.OrderStatusExpired)
 	if result.RowsAffected > 0 {
 		log.Printf("[Scheduler] 已取消 %d 个过期订单", result.RowsAffected)
 		utils.SysInfo("scheduler", fmt.Sprintf("已取消 %d 个过期订单", result.RowsAffected))
@@ -258,7 +258,7 @@ func sendUnpaidOrderRemindersTask() {
 		Select("orders.order_no, orders.user_id, users.username, users.email, orders.amount, orders.final_amount, orders.package_id").
 		Joins("JOIN users ON users.id = orders.user_id").
 		Where("orders.status = ? AND orders.created_at BETWEEN ? AND ? AND users.email_notifications = ?",
-			"pending", now.Add(-20*time.Minute), now.Add(-15*time.Minute), true).
+			models.OrderStatusPending, now.Add(-20*time.Minute), now.Add(-15*time.Minute), true).
 		Scan(&orders)
 
 	// 批量加载所有涉及的套餐名称，避免循环内逐条查询

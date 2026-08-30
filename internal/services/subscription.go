@@ -116,7 +116,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 				"device_limit": newLimit,
 				"expire_time":  newExpire,
 				"is_active":    true,
-				"status":       "active",
+				"status":       models.SubStatusActive,
 			}).Error; err != nil {
 				return fmt.Errorf("更新升级订阅失败: %w", err)
 			}
@@ -173,7 +173,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			SubscriptionURL: utils.GenerateHexToken(),
 			DeviceLimit:     deviceLimit,
 			IsActive:        true,
-			Status:          "active",
+			Status:          models.SubStatusActive,
 			ExpireTime:      time.Now().AddDate(0, 0, durationDays),
 		}
 		if order.PackageID > 0 {
@@ -199,7 +199,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			"device_limit": deviceLimit,
 			"expire_time":  newExpire,
 			"is_active":    true,
-			"status":       "active",
+			"status":       models.SubStatusActive,
 		}
 		if order.PackageID > 0 {
 			pkgID := int64(order.PackageID)
@@ -227,7 +227,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 				"device_limit": deviceLimit,
 				"expire_time":  newExpire2,
 				"is_active":    true,
-				"status":       "active",
+				"status":       models.SubStatusActive,
 			}
 			if order.PackageID > 0 {
 				pkgID := int64(order.PackageID)

@@ -2,6 +2,15 @@ package models
 
 import "time"
 
+// 订阅状态
+const (
+	SubStatusActive    = "active"
+	SubStatusExpired   = "expired"
+	SubStatusExpiring  = "expiring"
+	SubStatusDisabled  = "disabled"
+	SubStatusCancelled = "cancelled"
+)
+
 type Subscription struct {
 	ID                uint      `gorm:"primaryKey" json:"id"`
 	UserID            uint      `gorm:"index:idx_user_status" json:"user_id"`

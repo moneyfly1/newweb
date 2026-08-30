@@ -5,9 +5,7 @@ import (
 )
 
 const (
-	CouponStatusActive   = "active"
-	CouponStatusInactive = "inactive"
-	CouponStatusExpired  = "expired"
+	CouponStatusActive = "active"
 
 	CouponTypeDiscount = "discount"
 	CouponTypeFixed    = "fixed"

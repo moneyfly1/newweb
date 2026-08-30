@@ -209,6 +209,7 @@ import { useAppStore } from '@/stores/app'
 import { safeRedirect } from '@/utils/security'
 import { formatAmount, formatCurrency } from '@/utils/amount'
 import { getErrorMessage } from '@/utils/error'
+import { formatDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
@@ -257,11 +258,6 @@ const isCodepayPayType = (payType?: string) => {
 const isCodepayMethod = (methodId?: number | null) => {
   const method = paymentMethods.value.find(pm => pm.id === methodId)
   return isCodepayPayType(method?.pay_type)
-}
-
-const formatDateTime = (d: string) => {
-  if (!d) return '-'
-  return new Date(d).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 const loadData = async () => {

@@ -81,7 +81,7 @@
               <div class="card-body">
                 <div class="card-row"><span class="card-label">奖品价值</span><span>{{ item.prize_value }}</span></div>
                 <div class="card-row"><span class="card-label">消费</span><span>{{ item.cost }} 元</span></div>
-                <div class="card-row"><span class="card-label">时间</span><span>{{ formatDate(item.created_at) }}</span></div>
+                <div class="card-row"><span class="card-label">时间</span><span>{{ formatDateTime(item.created_at) }}</span></div>
               </div>
             </div>
           </div>
@@ -120,6 +120,7 @@ import { ref, reactive, h, onMounted } from 'vue'
 import { NTag, useMessage, NTooltip } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { getMysteryBoxPools, openMysteryBox, getMysteryBoxHistory } from '@/api/common'
+import { formatDateTime } from '@/utils/date'
 
 const appStore = useAppStore()
 const message = useMessage()
@@ -173,17 +174,12 @@ const getPrizeProbability = (pool: any, prize: any) => {
   return ((prize.weight / totalWeight) * 100).toFixed(1) + '%'
 }
 
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
 const historyColumns = [
   { title: '奖品', key: 'prize_name' },
   { title: '类型', key: 'prize_type', width: 100, render: (row: any) => h(NTag, { type: prizeTagType(row.prize_type), size: 'small' }, { default: () => prizeTypeLabel(row.prize_type) }) },
   { title: '价值', key: 'prize_value', width: 100 },
   { title: '消费', key: 'cost', width: 100, render: (row: any) => `${row.cost} 元` },
-  { title: '时间', key: 'created_at', width: 160, render: (row: any) => formatDate(row.created_at) },
+  { title: '时间', key: 'created_at', width: 160, render: (row: any) => formatDateTime(row.created_at) },
 ]
 
 const loadPools = async () => {

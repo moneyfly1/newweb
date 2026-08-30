@@ -47,7 +47,7 @@ func CreateRecharge(c *gin.Context) {
 		UserID:    userID,
 		OrderNo:   orderNo,
 		Amount:    req.Amount,
-		Status:    "pending",
+		Status:    models.RechargeStatusPending,
 		CreatedAt: time.Now(),
 	}
 	if err := db.Create(&record).Error; err != nil {
@@ -67,7 +67,7 @@ func CreateRecharge(c *gin.Context) {
 				Amount:          record.Amount,
 				Currency:        "CNY",
 				TransactionID:   &txID,
-				Status:          "pending",
+				Status:          models.PayStatusPending,
 				PaymentData:     &paymentData,
 			}
 			if err := db.Create(&transaction).Error; err == nil {
@@ -174,10 +174,10 @@ func GetRechargeStatus(c *gin.Context) {
 		return
 	}
 
-	if record.Status == "pending" && record.PaymentTransactionID != nil && *record.PaymentTransactionID != "" {
+	if record.Status == models.RechargeStatusPending && record.PaymentTransactionID != nil && *record.PaymentTransactionID != "" {
 		var transaction models.PaymentTransaction
 		if err := db.Where("transaction_id = ? AND user_id = ?", *record.PaymentTransactionID, userID).First(&transaction).Error; err == nil {
-			if transaction.Status == "pending" {
+			if transaction.Status == models.PayStatusPending {
 				if _, _, err := tryCompensateAlipayPayment(db, &transaction, "recharge_status_poll"); err != nil {
 					utils.LogError("[Recharge] 状态轮询补偿失败: tx_id=%s error=%v", *record.PaymentTransactionID, err)
 				}
@@ -205,14 +205,14 @@ func CancelRecharge(c *gin.Context) {
 	id := c.Param("id")
 	db := database.GetDB()
 	var record models.RechargeRecord
-	if err := db.Where("id = ? AND user_id = ? AND status = ?", id, userID, "pending").First(&record).Error; err != nil {
+	if err := db.Where("id = ? AND user_id = ? AND status = ?", id, userID, models.RechargeStatusPending).First(&record).Error; err != nil {
 		utils.NotFound(c, "充值记录不存在")
 		return
 	}
 	// 条件更新：仅当仍为 pending 时才取消，防止覆盖并发支付回调刚置为 paid 的充值
 	cancelRes := db.Model(&models.RechargeRecord{}).
-		Where("id = ? AND user_id = ? AND status = ?", id, userID, "pending").
-		Update("status", "cancelled")
+		Where("id = ? AND user_id = ? AND status = ?", id, userID, models.RechargeStatusPending).
+		Update("status", models.RechargeStatusCancelled)
 	if cancelRes.Error != nil {
 		utils.InternalError(c, "取消充值失败")
 		return

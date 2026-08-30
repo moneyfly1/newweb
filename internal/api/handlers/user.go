@@ -339,11 +339,11 @@ func GetDashboardInfo(c *gin.Context) {
 		// Public nodes
 		var publicOnline int64
 		db.Model(&models.Node{}).Where("is_active = ?", true).Count(&nodeTotal)
-		db.Model(&models.Node{}).Where("is_active = ? AND status = ?", true, "online").Count(&publicOnline)
+		db.Model(&models.Node{}).Where("is_active = ? AND status = ?", true, models.NodeStatusOnline).Count(&publicOnline)
 		nodeTotal += int64(len(customNodes))
 		nodeOnline = publicOnline
 		for _, cn := range customNodes {
-			if cn.Status == "online" {
+			if cn.Status == models.NodeStatusOnline {
 				nodeOnline++
 			}
 		}

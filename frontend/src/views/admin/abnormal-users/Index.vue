@@ -68,7 +68,7 @@
                 </div>
                 <div class="card-row">
                   <span class="card-label">最后活跃</span>
-                  <span>{{ row.last_active ? new Date(row.last_active).toLocaleString('zh-CN') : '-' }}</span>
+                  <span>{{ formatFullDateTime(row.last_active) }}</span>
                 </div>
               </div>
               <div class="card-actions">
@@ -109,6 +109,7 @@ import { useRouter } from 'vue-router'
 import { getAbnormalUsers } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
 import { useAppStore } from '@/stores/app'
+import { formatFullDateTime } from '@/utils/date'
 
 const message = useMessage()
 const router = useRouter()
@@ -171,7 +172,7 @@ const columns = [
     key: 'last_active',
     width: 170,
     resizable: true,
-    render: (row) => row.last_active ? new Date(row.last_active).toLocaleString('zh-CN') : '-'
+    render: (row) => formatFullDateTime(row.last_active)
   },
   {
     title: '操作',

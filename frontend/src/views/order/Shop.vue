@@ -751,7 +751,7 @@ onMounted(() => {
 
 .package-card {
   background: var(--bg-color, #fff); border-radius: 12px; padding: 24px;
-  border: 2px solid var(--border-color, #e8e8e8); transition: all 0.3s ease;
+  border: 2px solid var(--border-color, #e8e8e8); transition: border-color 0.3s ease, box-shadow 0.3s ease;
   cursor: pointer; position: relative; height: 100%;
   display: flex; flex-direction: column;
 }
@@ -807,7 +807,7 @@ onMounted(() => {
   border-radius: 12px;
   background: var(--bg-color, #fff);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   min-width: 0;
   outline: none;
 }
@@ -835,7 +835,7 @@ onMounted(() => {
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; color: transparent;
   border: 2px solid var(--border-color, #ddd);
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .pm-card.selected .pm-check {
   background: var(--pm-brand); border-color: var(--pm-brand); color: #fff;
@@ -857,7 +857,7 @@ onMounted(() => {
   .subtitle { font-size: 14px; }
   .packages-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .package-card { min-height: 100%; padding: 16px 14px; border-radius: 16px; }
-  .package-card:active { transform: scale(0.98); }
+  
   .package-card:hover { transform: none; }
   .card-header { margin-bottom: 14px; }
   .package-name { font-size: 16px; line-height: 1.3; margin-bottom: 8px; word-break: break-word; }

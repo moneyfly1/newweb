@@ -498,7 +498,7 @@ onMounted(() => { loadData() })
 .pending-title { font-size: 14px; font-weight: 600; color: #b76e00; }
 .pending-list { display: flex; flex-direction: column; gap: 10px; }
 .pending-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--bg-color); border-radius: 12px; border: 1px solid var(--warning-color); }
-.pending-item:active { transform: scale(0.98); }
+
 .pending-info { display: flex; flex-direction: column; gap: 2px; }
 .pending-amount { font-size: 16px; font-weight: 700; color: var(--success-color); }
 .pending-time { font-size: 12px; color: var(--text-color-secondary); }

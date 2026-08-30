@@ -77,14 +77,8 @@
   }
 
   /* 卡片按压反馈（原生感） */
-  .mobile-card:active,
-  .quick-action:active,
-  .qs-main:active,
-  .client-card:active {
-    transform: scale(0.98);
-  }
   .mobile-card {
-    transition: transform 0.12s ease, box-shadow 0.2s ease;
+    transition: box-shadow 0.2s ease;
   }
 
   /* 统一移动端卡片圆角（App 风格 14px） */
@@ -331,18 +325,8 @@
   }
 }
 
-/* 按压缩放统一 0.98（本项目自定义可点元素） */
-.mobile-card:active,
-.page-card:active,
-.admin-main-card:active,
-.main-card:active,
-.stat-card:active,
-.quick-action:active,
-.client-card:active,
-.qs-main:active,
-.quick-sub-item:active {
-  transform: scale(0.98);
-}
+/* 注：容器按压缩放已移除——scale 容器导致点击时整卡晃动，
+   干扰 checkbox/按钮点击。按钮按压反馈由 Naive 组件自带。 */
 
 /* 暗色主题兜底：卡片背景跟随 --bg-color 变量（防御性；本项目卡片本就用变量，
    此处仅覆盖任何遗漏的硬编码浅色背景） */

@@ -27,9 +27,9 @@ func AdminRevenueStats(c *gin.Context) {
 	var orderCount int64
 	db.Model(&models.Order{}).Where("status IN ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}).Count(&orderCount)
 	utils.Success(c, gin.H{
-		"total_revenue":     roundToTwoDecimals(totalRevenue),
-		"today_revenue":     roundToTwoDecimals(todayRevenue),
-		"monthly_revenue":   roundToTwoDecimals(monthRevenue),
+		"total_revenue":     utils.Round2(totalRevenue),
+		"today_revenue":     utils.Round2(todayRevenue),
+		"monthly_revenue":   utils.Round2(monthRevenue),
 		"paid_orders_count": orderCount,
 	})
 }
@@ -132,12 +132,12 @@ func AdminFinancialReport(c *gin.Context) {
 		Count(&newSubscriptions)
 
 	summary := gin.H{
-		"total_revenue":        roundToTwoDecimals(totalRevenue),
+		"total_revenue":        utils.Round2(totalRevenue),
 		"total_orders":         totalOrders,
 		"paid_orders":          paidOrders,
 		"refunded_orders":      refundedOrders,
-		"average_order_amount": roundToTwoDecimals(avgOrderAmount),
-		"total_recharge":       roundToTwoDecimals(totalRecharge),
+		"average_order_amount": utils.Round2(avgOrderAmount),
+		"total_recharge":       utils.Round2(totalRecharge),
 		"total_recharge_count": totalRechargeCount,
 		"new_users":            newUsers,
 		"new_subscriptions":    newSubscriptions,

@@ -47,8 +47,6 @@ export const extendSubscription = (id: number, data: { days: number }) =>
   request.post(`/admin/subscriptions/${id}/extend`, data)
 export const updateSubscriptionDeviceLimit = (id: number, data: any) =>
   request.put(`/admin/subscriptions/${id}`, data)
-export const updateSubscriptionProtocolFilter = (id: number, protocolFilter: string) =>
-  request.put(`/admin/subscriptions/${id}`, { protocol_filter: protocolFilter })
 export const sendSubscriptionEmail = (id: number) =>
   request.post(`/admin/subscriptions/${id}/send-email`)
 export const setSubscriptionExpireTime = (id: number, data: { expire_time: string }) =>
@@ -153,7 +151,6 @@ export const listBackups = () => request.get('/admin/backup')
 export const restoreBackup = (data: { path: string }) => request.post('/admin/backup/restore', data)
 export const listGitHubBackups = () => request.get('/admin/backup/github')
 export const restoreGitHubBackup = (data: { path: string, download_url: string }) => request.post('/admin/backup/restore-github', data)
-export const testGitHubConnection = (data?: any) => request.post('/admin/backup/test-github', data)
 export const updateGeoIPFiles = () => request.post('/admin/settings/update-geoip')
 export const cleanOldLogs = () => request.post('/admin/settings/clean-logs')
 export const backfillLocations = () => request.post('/admin/settings/backfill-locations')
@@ -184,7 +181,6 @@ export const toggleAdminInviteCode = (id: number) => request.post(`/admin/invite
 
 // Payment Gateways
 export const listPaymentGateways = () => request.get('/admin/payment-gateways')
-export const getPaymentGateway = (type: string) => request.get(`/admin/payment-gateways/${type}`)
 export const testPaymentGateway = (type: string) => request.post(`/admin/payment-gateways/${type}/test`)
 
 // Payment Stats

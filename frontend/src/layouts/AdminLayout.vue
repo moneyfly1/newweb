@@ -38,7 +38,9 @@
             <suspense>
               <template #default>
                 <transition name="page-slide" mode="out-in">
-                  <component :is="Component" :key="route.fullPath" />
+                  <keep-alive :include="adminCachedViews">
+                    <component :is="Component" />
+                  </keep-alive>
                 </transition>
               </template>
               <template #fallback><loading-screen /></template>
@@ -71,7 +73,9 @@
           <suspense>
             <template #default>
               <transition name="page-slide" mode="out-in">
-                <component :is="Component" :key="route.fullPath" />
+                <keep-alive :include="adminCachedViews">
+                  <component :is="Component" />
+                </keep-alive>
               </transition>
             </template>
             <template #fallback><loading-screen /></template>
@@ -157,6 +161,15 @@ const appStore = useAppStore()
 const userStore = useUserStore()
 const message = useMessage()
 const showDrawer = ref(false)
+
+// 管理端页面缓存名单：切换菜单时不销毁组件，返回时即时显示（配合各页 onActivated 静默刷新数据）
+const adminCachedViews = [
+  'AdminDashboard', 'AdminUsers', 'AdminAbnormalUsers', 'AdminOrders',
+  'AdminPackages', 'AdminNodes', 'AdminCustomNodes', 'AdminConfigUpdate',
+  'AdminSubscriptions', 'AdminCoupons', 'AdminTickets', 'AdminLevels',
+  'AdminRedeem', 'AdminInvites', 'AdminMysteryBox', 'AdminSettings',
+  'AdminAnnouncements', 'AdminStats', 'AdminLogs', 'AdminEmailQueue',
+]
 
 // 初始化通知并启动轮询
 onMounted(() => {

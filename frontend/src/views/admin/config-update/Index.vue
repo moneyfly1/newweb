@@ -129,7 +129,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onActivated, onMounted, onUnmounted, nextTick } from 'vue'
 import { useMessage } from 'naive-ui'
 import { RefreshOutline, PlayOutline, ReorderThreeOutline } from '@vicons/ionicons5'
 import Sortable from 'sortablejs'
@@ -320,6 +320,12 @@ onMounted(async () => {
   startPolling()
   await nextTick()
   initSortable()
+})
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
+  fetchConfig()
+  fetchLogs()
 })
 
 onUnmounted(() => {

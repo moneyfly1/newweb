@@ -188,7 +188,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, h, onMounted } from 'vue'
+import { ref, reactive, h, onActivated, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naive-ui'
 import { AddOutline } from '@vicons/ionicons5'
 import { listAdminPackages, createPackage, updatePackage, deletePackage } from '@/api/admin'
@@ -469,6 +469,11 @@ const handleBatchDisable = async () => {
 }
 
 onMounted(() => {
+  fetchPackages()
+})
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
   fetchPackages()
 })
 </script>

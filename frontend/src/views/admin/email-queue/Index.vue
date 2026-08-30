@@ -187,7 +187,7 @@
 </template>
 
 <script setup>
-import { ref, h, onMounted, computed } from 'vue'
+import { ref, h, onActivated, onMounted, computed } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NText, useMessage, useDialog } from 'naive-ui'
 import {
   MailOutline,
@@ -458,6 +458,11 @@ onMounted(() => {
   listEmailQueue({ page: 1, page_size: 1 }) .then((res) => {
     if (res?.data?.stats) queueStats.value = res.data.stats
   }).catch(() => {})
+})
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
+  fetchEmails()
 })
 </script>
 

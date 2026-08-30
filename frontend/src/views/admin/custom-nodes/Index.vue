@@ -334,7 +334,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, h, onMounted } from 'vue'
+import { ref, reactive, h, onActivated, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage } from 'naive-ui'
 import {
@@ -799,6 +799,11 @@ const handleCopyLink = async () => {
 }
 
 onMounted(() => {
+  fetchData()
+})
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
   fetchData()
 })
 </script>

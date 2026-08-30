@@ -299,7 +299,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, h, onMounted, computed } from 'vue'
+import { ref, reactive, h, onActivated, onMounted, computed } from 'vue'
 import { NButton, NTag, NIcon, NDropdown, NSpin, useMessage, useDialog } from 'naive-ui'
 import { AddOutline, RefreshOutline, EllipsisVertical, DownloadOutline, CloudUploadOutline } from '@vicons/ionicons5'
 import {
@@ -873,6 +873,11 @@ onMounted(async () => {
     const user = users.value.find(u => u.id === Number(userId))
     handleViewDetail(user || { id: Number(userId) })
   }
+})
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
+  fetchUsers()
 })
 </script>
 

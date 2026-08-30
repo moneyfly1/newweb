@@ -40,6 +40,20 @@ func AdminGithubNodesTest(c *gin.Context) {
 	req.Branch = strings.TrimSpace(req.Branch)
 	req.Path = strings.TrimSpace(req.Path)
 
+	// 掩码占位符（**** 前缀）或空值：回退到已保存设置，避免把掩码当真实 Token 提交给 GitHub
+	if req.Token == "" || strings.HasPrefix(req.Token, "****") {
+		req.Token = strings.TrimSpace(utils.GetSetting("gh_nodes_token"))
+	}
+	if req.Repo == "" || strings.HasPrefix(req.Repo, "****") {
+		req.Repo = strings.TrimSpace(utils.GetSetting("gh_nodes_repo"))
+	}
+	if req.Branch == "" || strings.HasPrefix(req.Branch, "****") {
+		req.Branch = strings.TrimSpace(utils.GetSetting("gh_nodes_branch"))
+	}
+	if req.Path == "" || strings.HasPrefix(req.Path, "****") {
+		req.Path = strings.TrimSpace(utils.GetSetting("gh_nodes_path"))
+	}
+
 	if req.Token == "" {
 		utils.BadRequest(c, "GitHub Token 不能为空")
 		return

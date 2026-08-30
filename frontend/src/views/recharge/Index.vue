@@ -241,6 +241,7 @@ import { getPaymentMethods, createRecharge, listRechargeRecords, getRechargeStat
 import { getDashboardInfo } from '@/api/user'
 import { useAppStore } from '@/stores/app'
 import { safeRedirect } from '@/utils/security'
+import { isQrCodeUrl, isCodepayPayType, isCodepayPageUrl } from '@/utils/payment'
 import { formatAmount, formatCurrency } from '@/utils/amount'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/date'
@@ -290,10 +291,6 @@ const getPaymentLabel = (payType: string) => {
   return labels[payType] || payType
 }
 
-const isCodepayPayType = (payType?: string) => {
-  return !!payType && (payType === 'codepay' || payType.startsWith('codepay_'))
-}
-
 const isCodepayMethod = (methodId?: number | null) => {
   const method = paymentMethods.value.find(pm => pm.id === methodId)
   return isCodepayPayType(method?.pay_type)
@@ -320,24 +317,6 @@ const loadData = async () => {
   } finally {
     endLoad()
   }
-}
-
-const isQrCodeUrl = (url: string) => {
-  // 支付宝二维码
-  if (url.includes('qr.alipay.com')) return true
-  // 通用二维码链接（短链接）
-  if (url.startsWith('https://qr.') && url.length < 200) return true
-  // 码支付二维码（通常是短链接或包含特定关键词）
-  if (url.includes('qrcode') || url.includes('qr_code')) return true
-  // 微信支付二维码
-  if (url.includes('wxpay') && url.startsWith('weixin://')) return true
-  // 其他常见二维码模式：短链接（长度小于100）且以 http 开头
-  if ((url.startsWith('http://') || url.startsWith('https://')) && url.length < 100) return true
-  return false
-}
-
-const isCodepayPageUrl = (url: string) => {
-  return url.includes('/submit.php') || url.includes('/xpay/epay/submit.php')
 }
 
 const openCodepayWindow = () => {

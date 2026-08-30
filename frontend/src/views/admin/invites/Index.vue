@@ -121,7 +121,7 @@
 </template>
 
 <script setup>
-import { ref, h, onMounted } from 'vue'
+import { ref, h, onActivated, onMounted } from 'vue'
 import { NButton, NTag, NIcon, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, RefreshOutline } from '@vicons/ionicons5'
 import { listAdminInviteCodes, getAdminInviteStats, listAdminInviteRelations, deleteAdminInviteCode, toggleAdminInviteCode } from '@/api/admin'
@@ -252,6 +252,9 @@ const relColumns = [
 ]
 
 onMounted(() => { fetchStats(); fetchCodes(); fetchRelations() })
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => { fetchStats(); fetchCodes(); fetchRelations() })
 </script>
 
 <style scoped>

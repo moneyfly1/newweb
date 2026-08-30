@@ -219,7 +219,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, h, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, reactive, h, onActivated, onMounted, onBeforeUnmount, computed } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage, useDialog, type DataTableColumns, type FormInst, type TagProps } from 'naive-ui'
 import {
   CloudDownloadOutline, LinkOutline, RefreshOutline,
@@ -548,6 +548,12 @@ onMounted(() => {
     }
   }, 60000)
 })
+
+// KeepAlive 缓存激活时立即静默刷新一次（切回页面无需等 60s 定时器）
+onActivated(() => {
+  fetchData()
+})
+
 onBeforeUnmount(() => {
   if (autoRefreshTimer) {
     clearInterval(autoRefreshTimer)

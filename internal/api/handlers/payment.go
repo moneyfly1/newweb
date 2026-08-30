@@ -462,6 +462,8 @@ func amountsMatch(expected float64, callbackAmount string) bool {
 }
 
 func GetPaymentMethods(c *gin.Context) {
+	// 60s CDN 边缘缓存：支付方式低频变更
+	c.Header("Cache-Control", "public, max-age=60")
 	db := database.GetDB()
 	var configs []models.PaymentConfig
 	db.Where("status = ?", 1).Order("sort_order ASC").Find(&configs)

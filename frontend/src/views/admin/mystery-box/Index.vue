@@ -84,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, h, onMounted } from 'vue'
+import { ref, reactive, computed, h, onActivated, onMounted } from 'vue'
 import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
@@ -295,6 +295,9 @@ const handleDeletePrize = (id: number) => {
 }
 
 onMounted(() => { loadPools(); loadStats() })
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => { loadPools(); loadStats() })
 </script>
 
 <style scoped>

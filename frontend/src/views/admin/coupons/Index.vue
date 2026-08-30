@@ -188,7 +188,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, h, onMounted } from 'vue'
+import { ref, reactive, h, onActivated, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NTooltip, NSpin, useMessage, useDialog } from 'naive-ui'
 import { AddOutline, CreateOutline, TrashOutline, CopyOutline } from '@vicons/ionicons5'
 import { listAdminCoupons, createCoupon, updateCoupon, deleteCoupon } from '@/api/admin'
@@ -531,6 +531,11 @@ const handleBatchDelete = () => {
 }
 
 onMounted(() => {
+  loadData()
+})
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
   loadData()
 })
 </script>

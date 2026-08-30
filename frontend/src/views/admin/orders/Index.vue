@@ -260,7 +260,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, h, onMounted, watch } from 'vue'
+import { ref, reactive, h, onActivated, onMounted, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, NIcon, NSelect, useMessage, useDialog, type DataTableColumns, type TagProps } from 'naive-ui'
 import { RefreshOutline, ReceiptOutline, TimeOutline, MailOutline, LayersOutline } from '@vicons/ionicons5'
@@ -631,6 +631,11 @@ watch(() => route.query.search, (searchVal) => {
 })
 
 onMounted(() => fetchOrders())
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
+  fetchOrders()
+})
 </script>
 
 <style scoped>

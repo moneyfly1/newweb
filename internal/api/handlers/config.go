@@ -11,6 +11,9 @@ import (
 // ── Public config ──
 
 func GetPublicConfig(c *gin.Context) {
+	// 60s 内存缓存 + CDN 边缘缓存（Cache-Control）：公共配置高频访问且低频变更，
+	// 让 Cloudflare 等 CDN 在边缘直接命中，避免每次经回源链路
+	c.Header("Cache-Control", "public, max-age=60")
 	// 60s 内存缓存：公共配置高访问，避免每次查库
 	if cached := utils.GetPublicCache("public_config"); cached != nil {
 		utils.Success(c, cached)
@@ -46,6 +49,8 @@ func GetPublicConfig(c *gin.Context) {
 }
 
 func ListPackages(c *gin.Context) {
+	// 60s 内存缓存 + CDN 边缘缓存
+	c.Header("Cache-Control", "public, max-age=60")
 	// 60s 内存缓存
 	if cached := utils.GetPublicCache("public_packages"); cached != nil {
 		utils.Success(c, cached)

@@ -41,7 +41,7 @@ func createPaymentTransaction(db *gorm.DB, userID uint, paymentMethodID uint, ta
 		Amount:          target.PayAmount,
 		Currency:        "CNY",
 		TransactionID:   &txID,
-		Status:          "pending",
+		Status:          models.PayStatusPending,
 	}
 	if target.Order != nil {
 		transaction.OrderID = target.Order.ID
@@ -272,7 +272,7 @@ func createNonAlipayPayment(db *gorm.DB, payConfig models.PaymentConfig, target 
 
 func loadOrderPaymentTarget(db *gorm.DB, userID uint, orderID uint) (*paymentTarget, error) {
 	var order models.Order
-	if err := db.Where("id = ? AND user_id = ? AND status = ?", orderID, userID, "pending").First(&order).Error; err != nil {
+	if err := db.Where("id = ? AND user_id = ? AND status = ?", orderID, userID, models.OrderStatusPending).First(&order).Error; err != nil {
 		return nil, err
 	}
 	payAmount := order.Amount
@@ -296,7 +296,7 @@ func loadOrderPaymentTarget(db *gorm.DB, userID uint, orderID uint) (*paymentTar
 
 func loadRechargePaymentTarget(db *gorm.DB, userID uint, rechargeID uint) (*paymentTarget, error) {
 	var record models.RechargeRecord
-	if err := db.Where("id = ? AND user_id = ? AND status = ?", rechargeID, userID, "pending").First(&record).Error; err != nil {
+	if err := db.Where("id = ? AND user_id = ? AND status = ?", rechargeID, userID, models.RechargeStatusPending).First(&record).Error; err != nil {
 		return nil, err
 	}
 	return &paymentTarget{
@@ -381,10 +381,10 @@ func handleFormGatewayNotify(c *gin.Context, db *gorm.DB, callbackType string, c
 		Processed:            true,
 	}
 
-	if transaction.Status == "pending" {
+	if transaction.Status == models.PayStatusPending {
 		err := db.Transaction(func(tx *gorm.DB) error {
 			var txn models.PaymentTransaction
-			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
+			if err := tx.Where("id = ? AND status = ?", transaction.ID, models.PayStatusPending).First(&txn).Error; err != nil {
 				return err
 			}
 			if callbackMoney == "" {
@@ -401,7 +401,7 @@ func handleFormGatewayNotify(c *gin.Context, db *gorm.DB, callbackType string, c
 				return fmt.Errorf("记录 nonce 失败: %w", err)
 			}
 			callbackJSON := rawStr
-			updates := map[string]interface{}{"status": "paid", "callback_data": &callbackJSON}
+			updates := map[string]interface{}{"status": models.PayStatusPaid, "callback_data": &callbackJSON}
 			if tradeNo != "" {
 				updates["external_transaction_id"] = &tradeNo
 			}
@@ -745,7 +745,7 @@ func GetPaymentStatus(c *gin.Context) {
 		utils.NotFound(c, "支付记录不存在")
 		return
 	}
-	if tx.Status == "pending" {
+	if tx.Status == models.PayStatusPending {
 		if status, _, err := tryCompensateAlipayPayment(db, &tx, "status_poll"); err != nil {
 			utils.LogError("[Alipay] 状态轮询补偿失败: tx_id=%s error=%v", safeTransactionID(tx.TransactionID), err)
 		} else {
@@ -769,7 +769,7 @@ func buildAlipayCallbackPayload(result *services.AlipayTradeQueryResult) string 
 
 func finalizeAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, tradeNo, totalAmount, source string) (string, bool, error) {
 	if transaction == nil || transaction.TransactionID == nil || *transaction.TransactionID == "" {
-		return "pending", false, fmt.Errorf("支付事务缺少 transaction_id")
+		return models.PayStatusPending, false, fmt.Errorf("支付事务缺少 transaction_id")
 	}
 	outTradeNo := *transaction.TransactionID
 
@@ -789,7 +789,7 @@ func finalizeAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, 
 			return err
 		}
 		finalStatus = txn.Status
-		if txn.Status != "pending" {
+		if txn.Status != models.PayStatusPending {
 			return nil
 		}
 		if !amountsMatch(txn.Amount, totalAmount) {
@@ -805,7 +805,7 @@ func finalizeAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, 
 		callbackJSON := fmt.Sprintf(`{"out_trade_no":"%s","trade_no":"%s","trade_status":"TRADE_SUCCESS","total_amount":"%s","source":"%s"}`,
 			outTradeNo, tradeNo, totalAmount, source)
 		updates := map[string]interface{}{
-			"status":        "paid",
+			"status":        models.PayStatusPaid,
 			"callback_data": &callbackJSON,
 		}
 		if tradeNo != "" {
@@ -827,19 +827,19 @@ func finalizeAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, 
 		default:
 			return fmt.Errorf("无法识别支付业务类型")
 		}
-		finalStatus = "paid"
+		finalStatus = models.PayStatusPaid
 		return nil
 	})
 	if err != nil {
-		return "pending", false, err
+		return models.PayStatusPending, false, err
 	}
-	return finalStatus, finalStatus == "paid", nil
+	return finalStatus, finalStatus == models.PayStatusPaid, nil
 }
 
 func tryCompensateAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, source string) (string, bool, error) {
-	if transaction == nil || transaction.Status != "pending" || transaction.TransactionID == nil || *transaction.TransactionID == "" {
+	if transaction == nil || transaction.Status != models.PayStatusPending || transaction.TransactionID == nil || *transaction.TransactionID == "" {
 		if transaction == nil {
-			return "pending", false, nil
+			return models.PayStatusPending, false, nil
 		}
 		return transaction.Status, false, nil
 	}
@@ -877,7 +877,7 @@ func tryCompensateAlipayPayment(db *gorm.DB, transaction *models.PaymentTransact
 		CallbackType:         "alipay_query_" + source,
 		CallbackData:         callbackJSON,
 		RawRequest:           &callbackJSON,
-		Processed:            compensated || status == "paid",
+		Processed:            compensated || status == models.PayStatusPaid,
 	}
 	resultText := status
 	callback.ProcessingResult = &resultText
@@ -982,13 +982,13 @@ func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransact
 
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var record models.RechargeRecord
-		if err := tx.Where("payment_transaction_id = ? AND status = ?", txID, "pending").First(&record).Error; err != nil {
+		if err := tx.Where("payment_transaction_id = ? AND status = ?", txID, models.RechargeStatusPending).First(&record).Error; err != nil {
 			return err // Already processed or not found
 		}
 
 		now := time.Now()
 		if err := tx.Model(&record).Updates(map[string]interface{}{
-			"status":  "paid",
+			"status":  models.RechargeStatusPaid,
 			"paid_at": &now,
 		}).Error; err != nil {
 			return err
@@ -1037,7 +1037,7 @@ func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction
 func handleGatewayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction, paymentMethod string) error {
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var order models.Order
-		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, "pending").First(&order).Error; err != nil {
+		if err := tx.Where("id = ? AND status = ?", transaction.OrderID, models.OrderStatusPending).First(&order).Error; err != nil {
 			return err // Already processed or not found
 		}
 
@@ -1047,7 +1047,7 @@ func handleGatewayOrderCallback(db *gorm.DB, transaction *models.PaymentTransact
 			txIDStr = *transaction.TransactionID
 		}
 		if err := tx.Model(&order).Updates(map[string]interface{}{
-			"status":                 "paid",
+			"status":                 models.OrderStatusPaid,
 			"payment_method_name":    &paymentMethod,
 			"payment_time":           &now,
 			"payment_transaction_id": &txIDStr,
@@ -1181,7 +1181,7 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 		Processed:            true,
 	}
 
-	if transaction.Status == "pending" {
+	if transaction.Status == models.PayStatusPending {
 		status, _, finalizeErr := finalizeAlipayPayment(db, &transaction, tradeNo, notification.TotalAmount, "notify")
 		if finalizeErr != nil {
 			if strings.Contains(finalizeErr.Error(), "金额不匹配") {
@@ -1336,10 +1336,10 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 		Processed:            true,
 	}
 
-	if transaction.Status == "pending" {
+	if transaction.Status == models.PayStatusPending {
 		err := db.Transaction(func(tx *gorm.DB) error {
 			var txn models.PaymentTransaction
-			if err := tx.Where("id = ? AND status = ?", transaction.ID, "pending").First(&txn).Error; err != nil {
+			if err := tx.Where("id = ? AND status = ?", transaction.ID, models.PayStatusPending).First(&txn).Error; err != nil {
 				return err
 			}
 
@@ -1378,7 +1378,7 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 
 			callbackJSON := rawStr
 			updates := map[string]interface{}{
-				"status":        "paid",
+				"status":        models.PayStatusPaid,
 				"callback_data": &callbackJSON,
 			}
 			if extTxID != "" {
@@ -1448,7 +1448,7 @@ func PaymentReturn(c *gin.Context) {
 		// 先尝试通过 transaction_id 查找
 		var transaction models.PaymentTransaction
 		if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err == nil {
-			if transaction.Status == "pending" {
+			if transaction.Status == models.PayStatusPending {
 				if _, _, err := tryCompensateAlipayPayment(db, &transaction, "sync_return"); err != nil {
 					utils.LogError("[Alipay] 同步返回补偿失败: out_trade_no=%s error=%v", outTradeNo, err)
 				}

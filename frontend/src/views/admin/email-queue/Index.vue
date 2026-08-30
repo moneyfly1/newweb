@@ -110,8 +110,8 @@
               <div class="card-body">
                 <div class="card-row"><span class="card-label">主题:</span><span>{{ item.subject }}</span></div>
                 <div class="card-row"><span class="card-label">重试次数:</span><span>{{ item.retry_count || 0 }}</span></div>
-                <div class="card-row"><span class="card-label">创建时间:</span><span>{{ item.created_at ? new Date(item.created_at).toLocaleString('zh-CN') : '-' }}</span></div>
-                <div class="card-row"><span class="card-label">发送时间:</span><span>{{ item.sent_at ? new Date(item.sent_at).toLocaleString('zh-CN') : '-' }}</span></div>
+                <div class="card-row"><span class="card-label">创建时间:</span><span>{{ formatFullDateTime(item.created_at) }}</span></div>
+                <div class="card-row"><span class="card-label">发送时间:</span><span>{{ formatFullDateTime(item.sent_at) }}</span></div>
               </div>
               <div class="card-actions">
                 <n-button size="small" type="info" quaternary @click="handleDetail(item)">
@@ -158,9 +158,9 @@
           <n-descriptions-item label="邮件类型">{{ translateEmailType(detailItem.email_type) || '-' }}</n-descriptions-item>
           <n-descriptions-item label="内容类型">{{ detailItem.content_type === 'html' ? 'HTML' : '纯文本' }}</n-descriptions-item>
           <n-descriptions-item label="重试次数">{{ detailItem.retry_count || 0 }} / {{ detailItem.max_retries || 3 }}</n-descriptions-item>
-          <n-descriptions-item label="创建时间">{{ formatTime(detailItem.created_at) }}</n-descriptions-item>
-          <n-descriptions-item label="发送时间">{{ formatTime(detailItem.sent_at) }}</n-descriptions-item>
-          <n-descriptions-item label="更新时间">{{ formatTime(detailItem.updated_at) }}</n-descriptions-item>
+          <n-descriptions-item label="创建时间">{{ formatFullDateTime(detailItem.created_at) }}</n-descriptions-item>
+          <n-descriptions-item label="发送时间">{{ formatFullDateTime(detailItem.sent_at) }}</n-descriptions-item>
+          <n-descriptions-item label="更新时间">{{ formatFullDateTime(detailItem.updated_at) }}</n-descriptions-item>
           <n-descriptions-item v-if="detailItem.error_message" label="错误信息" :span="2">
             <n-text type="error" style="word-break: break-all;">{{ detailItem.error_message }}</n-text>
           </n-descriptions-item>
@@ -202,6 +202,7 @@ import { listEmailQueue, retryEmail, deleteEmail } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
 import { useAppStore } from '@/stores/app'
 import { translateEmailType } from '@/utils/i18n'
+import { formatFullDateTime } from '@/utils/date'
 import DOMPurify from 'dompurify'
 
 const appStore = useAppStore()
@@ -219,8 +220,6 @@ const { loading, tableData: emails, checkedRowKeys, pagination, loadData, reload
   getParams: () => ({ status: statusFilter.value === 'all' ? undefined : statusFilter.value }),
 })
 const fetchEmails = loadData
-
-const formatTime = (t) => t ? new Date(t).toLocaleString('zh-CN') : '-'
 
 // 使用 DOMPurify 安全清理 HTML，防止 XSS
 const sanitizeHtml = (html) => {
@@ -313,7 +312,7 @@ const columns = [
     width: 170,
     resizable: true,
     sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    render: (row) => row.created_at ? new Date(row.created_at).toLocaleString('zh-CN') : '-'
+    render: (row) => formatFullDateTime(row.created_at)
   },
   {
     title: '发送时间',
@@ -321,7 +320,7 @@ const columns = [
     width: 170,
     resizable: true,
     sorter: (a, b) => new Date(a.sent_at || 0).getTime() - new Date(b.sent_at || 0).getTime(),
-    render: (row) => row.sent_at ? new Date(row.sent_at).toLocaleString('zh-CN') : '-'
+    render: (row) => formatFullDateTime(row.sent_at)
   },
   {
     title: '操作',

@@ -4,20 +4,13 @@ import "time"
 
 const (
 	TicketStatusPending    = "pending"
+	TicketStatusOpen       = "open" // 兼容历史遗留值
 	TicketStatusProcessing = "processing"
-	TicketStatusResolved   = "resolved"
 	TicketStatusClosed     = "closed"
-	TicketStatusCancelled  = "cancelled"
 
-	TicketTypeTechnical = "technical"
-	TicketTypeBilling   = "billing"
-	TicketTypeAccount   = "account"
-	TicketTypeOther     = "other"
+	TicketTypeOther = "other"
 
-	TicketPriorityLow    = "low"
 	TicketPriorityNormal = "normal"
-	TicketPriorityHigh   = "high"
-	TicketPriorityUrgent = "urgent"
 )
 
 type Ticket struct {

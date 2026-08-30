@@ -106,7 +106,7 @@
                       <div class="card-row"><span class="card-label">邀请码</span><span style="font-family:monospace">{{ rel.invite_code }}</span></div>
                       <div class="card-row"><span class="card-label">邀请人奖励</span><span>{{ formatCurrency(rel.inviter_reward_amount) }} {{ rel.inviter_reward_given ? '✓' : '✗' }}</span></div>
                       <div class="card-row"><span class="card-label">受邀人奖励</span><span>{{ formatCurrency(rel.invitee_reward_amount) }} {{ rel.invitee_reward_given ? '✓' : '✗' }}</span></div>
-                      <div class="card-row"><span class="card-label">时间</span><span>{{ fmtDate(rel.created_at) }}</span></div>
+                      <div class="card-row"><span class="card-label">时间</span><span>{{ formatFullDateTime(rel.created_at) }}</span></div>
                     </div>
                   </div>
                 </div>
@@ -127,6 +127,7 @@ import { SearchOutline, RefreshOutline } from '@vicons/ionicons5'
 import { listAdminInviteCodes, getAdminInviteStats, listAdminInviteRelations, deleteAdminInviteCode, toggleAdminInviteCode } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
+import { formatFullDateTime } from '@/utils/date'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -145,7 +146,6 @@ const relTotalPages = ref(0)
 const pageSize = 20
 const checkedRowKeys = ref([])
 
-const fmtDate = (d) => d ? new Date(d).toLocaleString('zh-CN') : '-'
 const statusType = (s) => ({ active: 'success', expired: 'warning', exhausted: 'default', disabled: 'error' }[s] || 'default')
 const statusText = (s) => ({ active: '有效', expired: '已过期', exhausted: '已用完', disabled: '已禁用' }[s] || s)
 
@@ -229,8 +229,8 @@ const codeColumns = [
   { title: '邀请人奖励', key: 'inviter_reward', width: 100, render: (r) => formatCurrency(r.inviter_reward) },
   { title: '受邀人奖励', key: 'invitee_reward', width: 100, render: (r) => formatCurrency(r.invitee_reward) },
   { title: '状态', key: 'status', width: 80, render: (r) => h(NTag, { type: statusType(r.status), size: 'small' }, { default: () => statusText(r.status) }) },
-  { title: '过期时间', key: 'expires_at', width: 160, render: (r) => fmtDate(r.expires_at) },
-  { title: '创建时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) },
+  { title: '过期时间', key: 'expires_at', width: 160, render: (r) => formatFullDateTime(r.expires_at) },
+  { title: '创建时间', key: 'created_at', width: 160, render: (r) => formatFullDateTime(r.created_at) },
   {
     title: '操作', key: 'actions', width: 140,
     render: (r) => h(NButton.Group, null, {
@@ -248,7 +248,7 @@ const relColumns = [
   { title: '邀请码', key: 'invite_code', width: 100, render: (r) => h('span', { style: 'font-family:monospace' }, r.invite_code) },
   { title: '邀请人奖励', key: 'inviter_reward_amount', width: 110, render: (r) => h('span', null, [formatCurrency(r.inviter_reward_amount) + ' ', h(NTag, { type: r.inviter_reward_given ? 'success' : 'default', size: 'tiny', bordered: false }, { default: () => r.inviter_reward_given ? '已发' : '未发' })]) },
   { title: '受邀人奖励', key: 'invitee_reward_amount', width: 110, render: (r) => h('span', null, [formatCurrency(r.invitee_reward_amount) + ' ', h(NTag, { type: r.invitee_reward_given ? 'success' : 'default', size: 'tiny', bordered: false }, { default: () => r.invitee_reward_given ? '已发' : '未发' })]) },
-  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) },
+  { title: '时间', key: 'created_at', width: 160, render: (r) => formatFullDateTime(r.created_at) },
 ]
 
 onMounted(() => { fetchStats(); fetchCodes(); fetchRelations() })

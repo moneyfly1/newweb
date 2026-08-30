@@ -49,7 +49,7 @@ func AdminPaymentStats(c *gin.Context) {
 	var methodStats []PaymentMethodStat
 	db.Model(&models.Order{}).
 		Select("payment_method, COUNT(*) as order_count, SUM(COALESCE(final_amount, amount)) as total_amount, "+
-			"SUM(CASE WHEN status IN ('paid', 'completed') THEN 1 ELSE 0 END) as success_count").
+			"SUM(CASE WHEN status IN ('" + models.OrderStatusPaid + "', '" + models.OrderStatusCompleted + "') THEN 1 ELSE 0 END) as success_count").
 		Where("DATE(created_at) BETWEEN ? AND ?", startDate, endDate).
 		Group("payment_method").
 		Scan(&methodStats)
@@ -71,7 +71,7 @@ func AdminPaymentStats(c *gin.Context) {
 	var dailyStats []DailyPaymentStat
 	db.Model(&models.Order{}).
 		Select("DATE(payment_time) as date, COUNT(*) as order_count, SUM(COALESCE(final_amount, amount)) as total_amount").
-		Where("status IN ? AND DATE(payment_time) BETWEEN ? AND ?", []string{"paid", "completed"}, startDate, endDate).
+		Where("status IN ? AND DATE(payment_time) BETWEEN ? AND ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}, startDate, endDate).
 		Group("DATE(payment_time)").
 		Order("date ASC").
 		Scan(&dailyStats)
@@ -85,7 +85,7 @@ func AdminPaymentStats(c *gin.Context) {
 	var failureStats []FailureReasonStat
 	db.Model(&models.Order{}).
 		Select("COALESCE(failure_reason, '未知原因') as reason, COUNT(*) as count").
-		Where("status = ? AND DATE(created_at) BETWEEN ? AND ?", "failed", startDate, endDate).
+		Where("status = ? AND DATE(created_at) BETWEEN ? AND ?", models.OrderStatusFailed, startDate, endDate).
 		Group("failure_reason").
 		Order("count DESC").
 		Limit(10).
@@ -105,10 +105,10 @@ func AdminPaymentStats(c *gin.Context) {
 	var overall OverallStat
 	db.Model(&models.Order{}).
 		Select("COUNT(*) as total_orders, "+
-			"SUM(CASE WHEN status IN ('paid', 'completed') THEN 1 ELSE 0 END) as success_orders, "+
-			"SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_orders, "+
-			"SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_orders, "+
-			"SUM(CASE WHEN status IN ('paid', 'completed') THEN COALESCE(final_amount, amount) ELSE 0 END) as total_amount").
+			"SUM(CASE WHEN status IN ('" + models.OrderStatusPaid + "', '" + models.OrderStatusCompleted + "') THEN 1 ELSE 0 END) as success_orders, "+
+			"SUM(CASE WHEN status = '" + models.OrderStatusFailed + "' THEN 1 ELSE 0 END) as failed_orders, "+
+			"SUM(CASE WHEN status = '" + models.OrderStatusPending + "' THEN 1 ELSE 0 END) as pending_orders, "+
+			"SUM(CASE WHEN status IN ('" + models.OrderStatusPaid + "', '" + models.OrderStatusCompleted + "') THEN COALESCE(final_amount, amount) ELSE 0 END) as total_amount").
 		Where("DATE(created_at) BETWEEN ? AND ?", startDate, endDate).
 		Scan(&overall)
 
@@ -222,7 +222,7 @@ func AdminPaymentAnalysis(c *gin.Context) {
 	var hourlyStats []HourlyStat
 	db.Model(&models.Order{}).
 		Select(hourExpr(db, "created_at")+" as hour, COUNT(*) as order_count, "+
-			"SUM(CASE WHEN status IN ('paid', 'completed') THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate").
+			"SUM(CASE WHEN status IN ('" + models.OrderStatusPaid + "', '" + models.OrderStatusCompleted + "') THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate").
 		Where("payment_method = ? AND DATE(created_at) BETWEEN ? AND ?", paymentMethod, startDate, endDate).
 		Group(hourExpr(db, "created_at")).
 		Order("hour ASC").
@@ -262,7 +262,7 @@ func AdminPaymentAnalysis(c *gin.Context) {
 
 	// 最近失败订单
 	var recentFailures []models.Order
-	db.Where("payment_method = ? AND status = ?", paymentMethod, "failed").
+	db.Where("payment_method = ? AND status = ?", paymentMethod, models.OrderStatusFailed).
 		Order("created_at DESC").
 		Limit(10).
 		Find(&recentFailures)

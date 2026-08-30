@@ -142,7 +142,7 @@
                 </div>
                 <div class="card-row">
                   <span class="label">注册时间</span>
-                  <span class="value">{{ new Date(invite.registered_at).toLocaleString('zh-CN') }}</span>
+                  <span class="value">{{ formatFullDateTime(invite.registered_at) }}</span>
                 </div>
                 <div class="card-row">
                   <span class="label">购买</span>
@@ -240,6 +240,7 @@ import { listInviteCodes, createInviteCode, getInviteStats, deleteInviteCode, ge
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatCurrency } from '@/utils/amount'
+import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 interface InviteCode {

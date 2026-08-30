@@ -2,6 +2,12 @@ package models
 
 import "time"
 
+// 节点状态
+const (
+	NodeStatusOnline  = "online"
+	NodeStatusOffline = "offline"
+)
+
 type Node struct {
 	ID            uint       `gorm:"primaryKey" json:"id"`
 	Name          string     `gorm:"type:varchar(100)" json:"name"`

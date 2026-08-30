@@ -68,24 +68,6 @@ func LogError(format string, args ...interface{}) {
 	fmt.Printf("[ERROR] %s\n", msg)
 }
 
-// LogWarn 记录警告日志
-func LogWarn(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	if appLogger != nil {
-		appLogger.Printf("[WARN] %s", msg)
-	}
-	fmt.Printf("[WARN] %s\n", msg)
-}
-
-// LogDebug 记录调试日志
-func LogDebug(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	if appLogger != nil {
-		appLogger.Printf("[DEBUG] %s", msg)
-	}
-	fmt.Printf("[DEBUG] %s\n", msg)
-}
-
 // LogPayment 记录支付相关日志
 func LogPayment(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)

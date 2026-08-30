@@ -306,7 +306,7 @@
                             <td>{{ item.name || item.filename }}</td>
                             <td><n-tag size="small" :bordered="false" :type="restoreSource === 'github' ? 'success' : 'info'">{{ item.folder }}</n-tag></td>
                             <td>{{ formatSize(item.size) }}</td>
-                            <td v-if="restoreSource === 'local'">{{ formatDate(item.created_at) }}</td>
+                            <td v-if="restoreSource === 'local'">{{ formatDateTime(item.created_at) }}</td>
                             <td>
                               <n-button size="small" type="warning" :loading="restoringPath === item.rel_path" :disabled="restoringPath !== '' && restoringPath !== item.rel_path" @click="handleRestore(item)">
                                 恢复
@@ -502,6 +502,7 @@ import {
   FunnelOutline, CloudDownloadOutline, DownloadOutline, GitBranchOutline
 } from '@vicons/ionicons5'
 import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs } from '@/api/admin'
+import { formatDateTime } from '@/utils/date'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -920,11 +921,6 @@ const formatSize = (bytes: number) => {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / 1024 / 1024).toFixed(2) + ' MB'
-}
-
-const formatDate = (dateStr: string) => {
-  const d = new Date(dateStr)
-  return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 const handleCleanOldLogs = async () => {

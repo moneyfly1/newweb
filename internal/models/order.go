@@ -4,6 +4,25 @@ import (
 	"time"
 )
 
+// 订单状态
+const (
+	OrderStatusPending   = "pending"
+	OrderStatusPaid      = "paid"
+	OrderStatusCompleted = "completed"
+	OrderStatusCancelled = "cancelled"
+	OrderStatusRefunded  = "refunded"
+	OrderStatusRefunding = "refunding"
+	OrderStatusExpired   = "expired"
+	OrderStatusFailed    = "failed"
+)
+
+// 充值记录状态
+const (
+	RechargeStatusPending   = "pending"
+	RechargeStatusPaid      = "paid"
+	RechargeStatusCancelled = "cancelled"
+)
+
 type Order struct {
 	ID                   uint       `gorm:"primaryKey" json:"id"`
 	OrderNo              string     `gorm:"type:varchar(50);uniqueIndex" json:"order_no"`

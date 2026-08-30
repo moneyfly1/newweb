@@ -317,7 +317,7 @@ func findOrderPaymentTransaction(db *gorm.DB, order models.Order) (*models.Payme
 			return &txn, nil
 		}
 	}
-	if err := db.Where("order_id = ? AND status = ?", order.ID, "paid").Order("id DESC").First(&txn).Error; err == nil {
+	if err := db.Where("order_id = ? AND status = ?", order.ID, models.PayStatusPaid).Order("id DESC").First(&txn).Error; err == nil {
 		return &txn, nil
 	}
 	return nil, gorm.ErrRecordNotFound
@@ -399,7 +399,7 @@ func AdminRefundOrder(c *gin.Context) {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
-	if order.Status != "paid" && order.Status != "completed" {
+	if order.Status != models.OrderStatusPaid && order.Status != models.OrderStatusCompleted {
 		utils.BadRequest(c, "只能退款已支付或已完成的订单")
 		return
 	}
@@ -407,8 +407,8 @@ func AdminRefundOrder(c *gin.Context) {
 	// 原子抢占退款状态：仅当订单仍为 paid/completed 时置为 refunding，
 	// 防止并发退款请求同时通过状态检查，导致网关双退或余额双倍入账。
 	claim := db.Model(&models.Order{}).
-		Where("id = ? AND status IN ('paid','completed')", order.ID).
-		Update("status", "refunding")
+		Where("id = ? AND status IN ?", order.ID, []string{models.OrderStatusPaid, models.OrderStatusCompleted}).
+		Update("status", models.OrderStatusRefunding)
 	if claim.Error != nil {
 		utils.InternalError(c, "锁定订单退款状态失败")
 		return
@@ -421,7 +421,7 @@ func AdminRefundOrder(c *gin.Context) {
 	// 任一步骤失败时恢复原状态，允许重试
 	defer func() {
 		if !refundSettled {
-			db.Model(&models.Order{}).Where("id = ? AND status = 'refunding'", order.ID).
+			db.Model(&models.Order{}).Where("id = ? AND status = ?", order.ID, models.OrderStatusRefunding).
 				Update("status", order.Status)
 		}
 	}()
@@ -495,8 +495,8 @@ func AdminRefundOrder(c *gin.Context) {
 	// 防双退：网关退款已成功，先持久化订单退款状态（独立提交），
 	// 即使后续余额/订阅回滚失败也不重试网关退款
 	markRefunded := db.Model(&models.Order{}).
-		Where("id = ? AND status = ?", order.ID, "refunding").
-		Update("status", "refunded")
+		Where("id = ? AND status = ?", order.ID, models.OrderStatusRefunding).
+		Update("status", models.OrderStatusRefunded)
 	if markRefunded.Error != nil {
 		utils.InternalError(c, "更新订单退款状态失败")
 		return
@@ -519,7 +519,7 @@ func AdminRefundOrder(c *gin.Context) {
 	}
 
 	if txn != nil && txn.ID > 0 {
-		if err := tx.Model(txn).Update("status", "refunded").Error; err != nil {
+		if err := tx.Model(txn).Update("status", models.PayStatusRefunded).Error; err != nil {
 			tx.Rollback()
 			utils.InternalError(c, "退款失败")
 			return
@@ -539,7 +539,7 @@ func AdminRefundOrder(c *gin.Context) {
 		if shouldCancel {
 			if err := tx.Model(&sub).Updates(map[string]interface{}{
 				"is_active": false,
-				"status":    "cancelled",
+				"status":    models.SubStatusCancelled,
 			}).Error; err != nil {
 				tx.Rollback()
 				utils.InternalError(c, "退款失败")
@@ -576,7 +576,7 @@ func AdminCancelOrder(c *gin.Context) {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
-	if order.Status != "pending" && order.Status != "expired" {
+	if order.Status != models.OrderStatusPending && order.Status != models.OrderStatusExpired {
 		utils.BadRequest(c, "只能取消待支付或已过期的订单")
 		return
 	}
@@ -584,8 +584,8 @@ func AdminCancelOrder(c *gin.Context) {
 	// 条件更新：仅当订单仍为 pending/expired 时置为 cancelled，
 	// 防止取消请求覆盖并发支付回调刚置为 paid 的订单（已扣款却显示已取消）。
 	cancelRes := db.Model(&models.Order{}).
-		Where("id = ? AND status IN ('pending','expired')", order.ID).
-		Update("status", "cancelled")
+		Where("id = ? AND status IN ?", order.ID, []string{models.OrderStatusPending, models.OrderStatusExpired}).
+		Update("status", models.OrderStatusCancelled)
 	if cancelRes.Error != nil {
 		utils.InternalError(c, "取消订单失败")
 		return
@@ -612,7 +612,7 @@ func AdminMarkOrderPaid(c *gin.Context) {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
-	if order.Status != "pending" && order.Status != "expired" && order.Status != "cancelled" {
+	if order.Status != models.OrderStatusPending && order.Status != models.OrderStatusExpired && order.Status != models.OrderStatusCancelled {
 		utils.BadRequest(c, "只能将待支付、已过期或已取消的套餐订单标记为已付款")
 		return
 	}
@@ -627,7 +627,7 @@ func AdminMarkOrderPaid(c *gin.Context) {
 	paymentMethodName := "管理员手动确认"
 	transactionID := fmt.Sprintf("ADMIN-%s-%d", order.OrderNo, now.Unix())
 	updates := map[string]interface{}{
-		"status":                 "paid",
+		"status":                 models.OrderStatusPaid,
 		"payment_time":           &now,
 		"payment_method_name":    &paymentMethodName,
 		"payment_transaction_id": &transactionID,
@@ -635,7 +635,7 @@ func AdminMarkOrderPaid(c *gin.Context) {
 	// 条件更新 + 行数校验：仅当订单仍为 pending/expired/cancelled 时才置为 paid，
 	// 防止并发重复标记导致订阅被多次叠加开通（免费权益）。
 	markRes := tx.Model(&models.Order{}).
-		Where("id = ? AND status IN ('pending','expired','cancelled')", order.ID).
+		Where("id = ? AND status IN ?", order.ID, []string{models.OrderStatusPending, models.OrderStatusExpired, models.OrderStatusCancelled}).
 		Updates(updates)
 	if markRes.Error != nil {
 		tx.Rollback()
@@ -647,7 +647,7 @@ func AdminMarkOrderPaid(c *gin.Context) {
 		utils.BadRequest(c, "订单状态已变化，无法标记为已付款")
 		return
 	}
-	order.Status = "paid"
+	order.Status = models.OrderStatusPaid
 	order.PaymentTime = &now
 	order.PaymentMethodName = &paymentMethodName
 	order.PaymentTransactionID = &transactionID
@@ -679,12 +679,12 @@ func AdminCompleteOrder(c *gin.Context) {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
-	if order.Status != "paid" {
+	if order.Status != models.OrderStatusPaid {
 		utils.BadRequest(c, "只能完成已支付的订单")
 		return
 	}
 
-	if err := db.Model(&order).Update("status", "completed").Error; err != nil {
+	if err := db.Model(&order).Update("status", models.OrderStatusCompleted).Error; err != nil {
 		utils.InternalError(c, "完成订单失败")
 		return
 	}
@@ -714,7 +714,7 @@ func AdminBatchOrderAction(c *gin.Context) {
 		}
 		switch req.Action {
 		case "mark_paid":
-			if order.Status != "pending" && order.Status != "expired" && order.Status != "cancelled" {
+			if order.Status != models.OrderStatusPending && order.Status != models.OrderStatusExpired && order.Status != models.OrderStatusCancelled {
 				failed++
 				continue
 			}
@@ -724,9 +724,9 @@ func AdminBatchOrderAction(c *gin.Context) {
 			transactionID := fmt.Sprintf("ADMIN-%s-%d", order.OrderNo, now.Unix())
 			// 条件更新 + 行数校验，防止重复标记导致订阅叠加开通
 			markRes := tx.Model(&models.Order{}).
-				Where("id = ? AND status IN ('pending','expired','cancelled')", order.ID).
+				Where("id = ? AND status IN ?", order.ID, []string{models.OrderStatusPending, models.OrderStatusExpired, models.OrderStatusCancelled}).
 				Updates(map[string]interface{}{
-					"status":                 "paid",
+					"status":                 models.OrderStatusPaid,
 					"payment_time":           &now,
 					"payment_method_name":    &paymentMethodName,
 					"payment_transaction_id": &transactionID,
@@ -736,7 +736,7 @@ func AdminBatchOrderAction(c *gin.Context) {
 				failed++
 				continue
 			}
-			order.Status = "paid"
+			order.Status = models.OrderStatusPaid
 			order.PaymentTime = &now
 			order.PaymentMethodName = &paymentMethodName
 			order.PaymentTransactionID = &transactionID
@@ -751,27 +751,27 @@ func AdminBatchOrderAction(c *gin.Context) {
 			}
 			success++
 		case "cancel":
-			if order.Status != "pending" && order.Status != "expired" {
+			if order.Status != models.OrderStatusPending && order.Status != models.OrderStatusExpired {
 				failed++
 				continue
 			}
-			if err := db.Model(&order).Update("status", "cancelled").Error; err != nil {
+			if err := db.Model(&order).Update("status", models.OrderStatusCancelled).Error; err != nil {
 				failed++
 				continue
 			}
 			success++
 		case "complete":
-			if order.Status != "paid" {
+			if order.Status != models.OrderStatusPaid {
 				failed++
 				continue
 			}
-			if err := db.Model(&order).Update("status", "completed").Error; err != nil {
+			if err := db.Model(&order).Update("status", models.OrderStatusCompleted).Error; err != nil {
 				failed++
 				continue
 			}
 			success++
 		case "delete":
-			if order.Status != "cancelled" && order.Status != "refunded" {
+			if order.Status != models.OrderStatusCancelled && order.Status != models.OrderStatusRefunded {
 				failed++
 				continue
 			}
@@ -802,7 +802,7 @@ func AdminDeleteOrder(c *gin.Context) {
 		utils.NotFound(c, "订单不存在")
 		return
 	}
-	if order.Status != "cancelled" && order.Status != "refunded" {
+	if order.Status != models.OrderStatusCancelled && order.Status != models.OrderStatusRefunded {
 		utils.BadRequest(c, "只能删除已取消或已退款的订单")
 		return
 	}

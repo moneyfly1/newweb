@@ -133,7 +133,7 @@
               <div v-for="(record, idx) in loginHistory" :key="idx" class="mobile-card">
                 <div class="card-row">
                   <span class="label">时间</span>
-                  <span class="value">{{ new Date(record.login_time).toLocaleString('zh-CN') }}</span>
+                  <span class="value">{{ formatFullDateTime(record.login_time) }}</span>
                 </div>
                 <div class="card-row">
                   <span class="label">IP 地址</span>
@@ -184,6 +184,7 @@ import { updateProfile, changePassword, getNotificationSettings, updateNotificat
 import { getPublicConfig } from '@/api/common'
 import { translateLoginStatus, parseDeviceInfo, formatLocation } from '@/utils/i18n'
 import { getErrorMessage } from '@/utils/error'
+import { formatFullDateTime } from '@/utils/date'
 
 const message = useMessage()
 const userStore = useUserStore()
@@ -235,7 +236,7 @@ const tzOptions = [
 ]
 
 const historyColumns = [
-  { title: '登录时间', key: 'login_time', render: (row: any) => new Date(row.login_time).toLocaleString('zh-CN') },
+  { title: '登录时间', key: 'login_time', render: (row: any) => formatFullDateTime(row.login_time) },
   { title: 'IP 地址', key: 'ip_address', render: (row: any) => row.ip_address || '-' },
   { title: '位置', key: 'location', render: (row: any) => formatLocation(row.location) },
   { title: '设备', key: 'user_agent', ellipsis: { tooltip: true }, render: (row: any) => parseDeviceInfo(row.user_agent) },

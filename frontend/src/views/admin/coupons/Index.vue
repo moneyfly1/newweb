@@ -76,7 +76,7 @@
                 </div>
                 <div class="card-row">
                   <span class="card-label">失效时间</span>
-                  <span>{{ formatDateTime(coupon.valid_until) }}</span>
+                  <span>{{ formatFullDateTime(coupon.valid_until) }}</span>
                 </div>
               </div>
               <div class="card-actions">
@@ -196,6 +196,7 @@ import { useTable } from '@/composables/useTable'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
@@ -271,12 +272,6 @@ const getDiscountPlaceholder = () => {
 const copyToClipboard = async (text) => {
   const ok = await clipboardCopy(text)
   ok ? message.success('已复制到剪贴板') : message.error('复制失败')
-}
-
-const formatDateTime = (timestamp) => {
-  if (!timestamp) return '-'
-  const date = new Date(timestamp)
-  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 const columns = [
@@ -359,7 +354,7 @@ const columns = [
     width: 180,
     resizable: true,
     sorter: (a, b) => new Date(a.valid_from).getTime() - new Date(b.valid_from).getTime(),
-    render: (row) => formatDateTime(row.valid_from)
+    render: (row) => formatFullDateTime(row.valid_from)
   },
   {
     title: '失效时间',
@@ -367,7 +362,7 @@ const columns = [
     width: 180,
     resizable: true,
     sorter: (a, b) => new Date(a.valid_until).getTime() - new Date(b.valid_until).getTime(),
-    render: (row) => formatDateTime(row.valid_until)
+    render: (row) => formatFullDateTime(row.valid_until)
   },
   {
     title: '操作',

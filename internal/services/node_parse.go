@@ -353,7 +353,7 @@ func buildNode(name string, defaultName string, nodeType string, link string) *m
 		Name:     resolvedName,
 		Region:   region,
 		Type:     nodeType,
-		Status:   "online",
+		Status:   models.NodeStatusOnline,
 		Config:   &config,
 		IsActive: true,
 		IsManual: false,

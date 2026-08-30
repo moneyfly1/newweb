@@ -45,11 +45,11 @@ func ListNodes(c *gin.Context) {
 		now := time.Now()
 		var activeSub int64
 		// 有效订阅：status=active 且 is_active=1 且未过期（与订阅接口判定一致，防止免费/过期账号读取节点真实配置）
-		db.Model(&models.Subscription{}).Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, "active", true, now).Count(&activeSub)
+		db.Model(&models.Subscription{}).Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, models.SubStatusActive, true, now).Count(&activeSub)
 		hasActiveSub = activeSub > 0
 		if hasActiveSub {
 			var sub models.Subscription
-			if err := db.Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, "active", true, now).First(&sub).Error; err == nil {
+			if err := db.Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, models.SubStatusActive, true, now).First(&sub).Error; err == nil {
 				customNodes, isDedicatedOnly, _ = fetchUserCustomNodes(db, userID, sub.ExpireTime)
 			}
 		}
@@ -72,7 +72,7 @@ func ListNodes(c *gin.Context) {
 	var onlineCount int64
 	regionSet := make(map[string]struct{})
 	for _, n := range allNodes {
-		if n.Status == "online" {
+		if n.Status == models.NodeStatusOnline {
 			onlineCount++
 		}
 		if n.Region != "" {
@@ -147,7 +147,7 @@ func GetNodeStats(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	if userID > 0 {
 		var sub models.Subscription
-		if err := db.Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, "active", true, time.Now()).First(&sub).Error; err == nil {
+		if err := db.Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, models.SubStatusActive, true, time.Now()).First(&sub).Error; err == nil {
 			customNodes, _, _ := fetchUserCustomNodes(db, userID, sub.ExpireTime)
 			allNodes = append(allNodes, customNodes...)
 		}
@@ -199,7 +199,7 @@ func GetNode(c *gin.Context) {
 	hasActiveSub := false
 	if userID > 0 {
 		var activeSub int64
-		db.Model(&models.Subscription{}).Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, "active", true, time.Now()).Count(&activeSub)
+		db.Model(&models.Subscription{}).Where("user_id = ? AND status = ? AND is_active = ? AND expire_time > ?", userID, models.SubStatusActive, true, time.Now()).Count(&activeSub)
 		hasActiveSub = activeSub > 0
 	}
 	if !hasActiveSub {
@@ -316,9 +316,9 @@ func TestNode(c *gin.Context) {
 
 	latency, reachable := testNodeConnectivity(*node.Config)
 	now := time.Now()
-	status := "offline"
+	status := models.NodeStatusOffline
 	if reachable {
-		status = "online"
+		status = models.NodeStatusOnline
 	}
 	// 仅管理员测试结果回写全局节点状态；普通用户测试只读不写库，
 	// 防止任意登录用户批量探测/篡改共享节点状态（越权写面）。
@@ -376,9 +376,9 @@ func BatchTestNodes(c *gin.Context) {
 			defer wg.Done()
 			defer func() { <-sem }()
 			latency, reachable := testNodeConnectivity(*n.Config)
-			status := "offline"
+			status := models.NodeStatusOffline
 			if reachable {
-				status = "online"
+				status = models.NodeStatusOnline
 			}
 			// 普通用户批量测速不写库（防止任意登录用户篡改全局节点状态），仅管理员可回写
 			if user, exists := c.Get("user"); exists {

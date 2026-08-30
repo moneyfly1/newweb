@@ -125,7 +125,7 @@ func createInfoNode(name string) models.Node {
 	return models.Node{
 		Name:     name,
 		Type:     "ss",
-		Status:   "online",
+		Status:   models.NodeStatusOnline,
 		Config:   &config,
 		IsActive: true,
 	}
@@ -178,7 +178,7 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	ctx.DeviceLimit = sub.DeviceLimit
 	ctx.CurrentDevices = sub.CurrentDevices
 
-	if !sub.IsActive || sub.Status != "active" {
+	if !sub.IsActive || sub.Status != models.SubStatusActive {
 		ctx.Status = subStatusInactive
 		return ctx
 	}
@@ -212,7 +212,7 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		if hasDedicated {
 			nodes = customNodes
 		} else {
-			db.Where("is_active = ? AND status = ?", true, "online").Order("order_index ASC").Find(&nodes)
+			db.Where("is_active = ? AND status = ?", true, models.NodeStatusOnline).Order("order_index ASC").Find(&nodes)
 			nodes = append(customNodes, nodes...)
 		}
 		ctx.HasDedicatedOnly = hasDedicated
@@ -231,7 +231,7 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		ctx.Nodes = customNodes
 	} else {
 		var publicNodes []models.Node
-		db.Where("is_active = ? AND status = ?", true, "online").Order("order_index ASC").Find(&publicNodes)
+		db.Where("is_active = ? AND status = ?", true, models.NodeStatusOnline).Order("order_index ASC").Find(&publicNodes)
 		ctx.Nodes = append(customNodes, publicNodes...)
 	}
 	ctx.HasUnlimitedDevices = hasUnlimited
@@ -458,7 +458,7 @@ func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) (no
 		nodes = append(nodes, models.Node{
 			Name:      "⭐ " + displayName,
 			Type:      row.Protocol,
-			Status:    "online",
+			Status:    models.NodeStatusOnline,
 			Config:    &config,
 			IsActive:  true,
 			UpdatedAt: row.UpdatedAt,
@@ -946,7 +946,7 @@ func ConvertToBalance(c *gin.Context) {
 
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var sub models.Subscription
-		if err := tx.Where("user_id = ? AND status = ?", userID, "active").First(&sub).Error; err != nil {
+		if err := tx.Where("user_id = ? AND status = ?", userID, models.SubStatusActive).First(&sub).Error; err != nil {
 			return fmt.Errorf("no_sub")
 		}
 		remaining := time.Until(sub.ExpireTime).Hours() / 24
@@ -967,8 +967,8 @@ func ConvertToBalance(c *gin.Context) {
 		now := time.Now()
 		// 条件更新 + RowsAffected 校验：仅当订阅仍为 active 时才置为 disabled，
 		// 防止并发请求对同一订阅重复折现（双倍入账）。
-		disableRes := tx.Model(&sub).Where("status = ?", "active").Updates(map[string]interface{}{
-			"status": "disabled", "is_active": false, "expire_time": now, "package_id": nil,
+		disableRes := tx.Model(&sub).Where("status = ?", models.SubStatusActive).Updates(map[string]interface{}{
+			"status": models.SubStatusDisabled, "is_active": false, "expire_time": now, "package_id": nil,
 		})
 		if disableRes.Error != nil {
 			return disableRes.Error

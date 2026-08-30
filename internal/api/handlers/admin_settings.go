@@ -58,7 +58,7 @@ func AdminCreateRedeemCodes(c *gin.Context) {
 			Type:      req.Type,
 			Value:     req.Value,
 			PackageID: req.PackageID,
-			Status:    "unused",
+			Status:    models.RedeemStatusUnused,
 			CreatedBy: adminID,
 		})
 	}
@@ -121,7 +121,7 @@ func AdminRetryEmail(c *gin.Context) {
 		return
 	}
 	if err := db.Model(&models.EmailQueue{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"status": "pending",
+		"status": models.EmailStatusPending,
 	}).Error; err != nil {
 		utils.InternalError(c, "重试邮件失败")
 		return

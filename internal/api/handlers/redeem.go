@@ -39,7 +39,7 @@ func RedeemCode(c *gin.Context) {
 		if err := tx.Where("code = ?", req.Code).First(&code).Error; err != nil {
 			return errRedeemNotFound
 		}
-		if code.Status != "unused" && code.Status != "active" {
+		if code.Status != models.RedeemStatusUnused && code.Status != models.RedeemStatusActive {
 			return errRedeemUsed
 		}
 		if code.ExpiresAt != nil && time.Now().After(*code.ExpiresAt) {
@@ -55,10 +55,10 @@ func RedeemCode(c *gin.Context) {
 		newCount := code.UsedCount + 1
 		newStatus := code.Status
 		if newCount >= code.MaxUses {
-			newStatus = "used"
+			newStatus = models.RedeemStatusUsed
 		}
 		claimRes := tx.Model(&models.RedeemCode{}).
-			Where("id = ? AND status IN ('unused','active') AND used_count = ?", code.ID, code.UsedCount).
+			Where("id = ? AND status IN ? AND used_count = ?", []string{models.RedeemStatusUnused, models.RedeemStatusActive}, code.ID, code.UsedCount).
 			Updates(map[string]interface{}{"used_count": newCount, "status": newStatus})
 		if claimRes.Error != nil {
 			return claimRes.Error
@@ -105,7 +105,7 @@ func RedeemCode(c *gin.Context) {
 					SubscriptionURL: subURL,
 					DeviceLimit:     3,
 					IsActive:        true,
-					Status:          "active",
+					Status:          models.SubStatusActive,
 					ExpireTime:      time.Now().AddDate(0, 0, int(code.Value)),
 				}
 				if code.PackageID != nil {
@@ -138,7 +138,7 @@ func RedeemCode(c *gin.Context) {
 					return err
 				}
 				if err := tx.Model(&sub).Updates(map[string]interface{}{
-					"is_active": true, "status": "active",
+					"is_active": true, "status": models.SubStatusActive,
 				}).Error; err != nil {
 					return err
 				}

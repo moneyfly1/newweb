@@ -228,7 +228,6 @@ const lineTypeOptions = [
 ]
 const getStatusType = (s) => ({ active: 'success', expiring: 'warning', expired: 'error', disabled: 'default' }[s] || 'default')
 const getStatusText = (s) => ({ active: '活跃', expiring: '即将到期', expired: '已过期', disabled: '已禁用' }[s] || s || '-')
-const formatDate = (d) => d ? new Date(d).toLocaleString('zh-CN') : '-'
 const isExpired = (row) => row.expire_time && new Date(row.expire_time) < Date.now()
 const isOverlimit = (row) => (row.current_devices || 0) > (row.device_limit || 0)
 const getRemainingDays = (t) => {

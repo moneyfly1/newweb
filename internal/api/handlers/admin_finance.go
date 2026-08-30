@@ -15,17 +15,17 @@ import (
 func AdminRevenueStats(c *gin.Context) {
 	db := database.GetDB()
 	var totalRevenue float64
-	db.Model(&models.Order{}).Where("status IN ?", []string{"paid", "completed"}).Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&totalRevenue)
+	db.Model(&models.Order{}).Where("status IN ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}).Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&totalRevenue)
 	var todayRevenue float64
 	today := time.Now().Format("2006-01-02")
-	db.Model(&models.Order{}).Where("status IN ? AND DATE(payment_time) = ?", []string{"paid", "completed"}, today).
+	db.Model(&models.Order{}).Where("status IN ? AND DATE(payment_time) = ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}, today).
 		Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&todayRevenue)
 	var monthRevenue float64
 	monthStart := time.Now().Format("2006-01") + "-01"
-	db.Model(&models.Order{}).Where("status IN ? AND payment_time >= ?", []string{"paid", "completed"}, monthStart).
+	db.Model(&models.Order{}).Where("status IN ? AND payment_time >= ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}, monthStart).
 		Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&monthRevenue)
 	var orderCount int64
-	db.Model(&models.Order{}).Where("status IN ?", []string{"paid", "completed"}).Count(&orderCount)
+	db.Model(&models.Order{}).Where("status IN ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}).Count(&orderCount)
 	utils.Success(c, gin.H{
 		"total_revenue":     roundToTwoDecimals(totalRevenue),
 		"today_revenue":     roundToTwoDecimals(todayRevenue),
@@ -44,7 +44,7 @@ func AdminUserStats(c *gin.Context) {
 	today := time.Now().Format("2006-01-02")
 	db.Model(&models.User{}).Where("DATE(created_at) = ?", today).Count(&todayNew)
 	var paidUsers int64
-	db.Model(&models.Order{}).Where("status = ?", "paid").Distinct("user_id").Count(&paidUsers)
+	db.Model(&models.Order{}).Where("status = ?", models.OrderStatusPaid).Distinct("user_id").Count(&paidUsers)
 	utils.Success(c, gin.H{
 		"total_users":     totalUsers,
 		"active_users":    activeUsers,
@@ -89,7 +89,7 @@ func AdminFinancialReport(c *gin.Context) {
 	// ---- Summary ----
 	var totalRevenue float64
 	db.Model(&models.Order{}).
-		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", "paid", startStr, endStr).
+		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", models.OrderStatusPaid, startStr, endStr).
 		Select("COALESCE(SUM(amount), 0)").Scan(&totalRevenue)
 
 	var totalOrders int64
@@ -99,11 +99,11 @@ func AdminFinancialReport(c *gin.Context) {
 
 	var paidOrders int64
 	db.Model(&models.Order{}).
-		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", "paid", startStr, endStr).
+		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", models.OrderStatusPaid, startStr, endStr).
 		Count(&paidOrders)
 	var refundedOrders int64
 	db.Model(&models.Order{}).
-		Where("status = ? AND DATE(updated_at) >= ? AND DATE(updated_at) <= ?", "refunded", startStr, endStr).
+		Where("status = ? AND DATE(updated_at) >= ? AND DATE(updated_at) <= ?", models.OrderStatusRefunded, startStr, endStr).
 		Count(&refundedOrders)
 
 	var avgOrderAmount float64
@@ -113,12 +113,12 @@ func AdminFinancialReport(c *gin.Context) {
 
 	var totalRecharge float64
 	db.Model(&models.RechargeRecord{}).
-		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", "paid", startStr, endStr).
+		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", models.RechargeStatusPaid, startStr, endStr).
 		Select("COALESCE(SUM(amount), 0)").Scan(&totalRecharge)
 
 	var totalRechargeCount int64
 	db.Model(&models.RechargeRecord{}).
-		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", "paid", startStr, endStr).
+		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", models.RechargeStatusPaid, startStr, endStr).
 		Count(&totalRechargeCount)
 
 	var newUsers int64
@@ -161,7 +161,7 @@ func AdminFinancialReport(c *gin.Context) {
 	}
 	var revenueChart []ChartPoint
 	db.Model(&models.Order{}).
-		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", "paid", startStr, endStr).
+		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", models.OrderStatusPaid, startStr, endStr).
 		Select(dateExpr + " as date, COALESCE(SUM(amount), 0) as revenue, COUNT(*) as orders").
 		Group(dateExpr).
 		Order("date ASC").
@@ -182,7 +182,7 @@ func AdminFinancialReport(c *gin.Context) {
 		rechargeDateExpr = "strftime('%Y-%m', paid_at)"
 	}
 	db.Model(&models.RechargeRecord{}).
-		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", "paid", startStr, endStr).
+		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", models.RechargeStatusPaid, startStr, endStr).
 		Select(rechargeDateExpr + " as date, COALESCE(SUM(amount), 0) as recharge").
 		Group(rechargeDateExpr).
 		Order("date ASC").
@@ -216,7 +216,7 @@ func AdminFinancialReport(c *gin.Context) {
 	}
 	var paymentMethodStats []PaymentMethodStat
 	db.Model(&models.Order{}).
-		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ? AND payment_method_name IS NOT NULL", "paid", startStr, endStr).
+		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ? AND payment_method_name IS NOT NULL", models.OrderStatusPaid, startStr, endStr).
 		Select("COALESCE(payment_method_name, '未知') as method, COUNT(*) as count, COALESCE(SUM(amount), 0) as amount").
 		Group("payment_method_name").
 		Order("amount DESC").
@@ -230,7 +230,7 @@ func AdminFinancialReport(c *gin.Context) {
 	var packageStats []PackageStat
 	db.Model(&models.Order{}).
 		Joins("LEFT JOIN packages ON packages.id = orders.package_id").
-		Where("orders.status = ? AND DATE(orders.payment_time) >= ? AND DATE(orders.payment_time) <= ?", "paid", startStr, endStr).
+		Where("orders.status = ? AND DATE(orders.payment_time) >= ? AND DATE(orders.payment_time) <= ?", models.OrderStatusPaid, startStr, endStr).
 		Select("COALESCE(packages.name, '未知套餐') as package_name, COUNT(*) as count, COALESCE(SUM(orders.amount), 0) as amount").
 		Group("orders.package_id").
 		Order("amount DESC").
@@ -246,7 +246,7 @@ func AdminFinancialReport(c *gin.Context) {
 	var topUsers []TopUser
 	db.Model(&models.Order{}).
 		Joins("LEFT JOIN users ON users.id = orders.user_id").
-		Where("orders.status = ? AND DATE(orders.payment_time) >= ? AND DATE(orders.payment_time) <= ?", "paid", startStr, endStr).
+		Where("orders.status = ? AND DATE(orders.payment_time) >= ? AND DATE(orders.payment_time) <= ?", models.OrderStatusPaid, startStr, endStr).
 		Select("orders.user_id, COALESCE(users.username, '未知') as username, COALESCE(SUM(orders.amount), 0) as total_spent, COUNT(*) as order_count").
 		Group("orders.user_id").
 		Order("total_spent DESC").
@@ -311,7 +311,7 @@ func AdminExportFinancialReport(c *gin.Context) {
 	}
 	var rows []Row
 	db.Model(&models.Order{}).
-		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", "paid", startStr, endStr).
+		Where("status = ? AND DATE(payment_time) >= ? AND DATE(payment_time) <= ?", models.OrderStatusPaid, startStr, endStr).
 		Select(dateExpr + " as date, COALESCE(SUM(amount), 0) as revenue, COUNT(*) as orders").
 		Group(dateExpr).
 		Order("date ASC").
@@ -333,7 +333,7 @@ func AdminExportFinancialReport(c *gin.Context) {
 	}
 	var rrows []RRow
 	db.Model(&models.RechargeRecord{}).
-		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", "paid", startStr, endStr).
+		Where("status = ? AND DATE(paid_at) >= ? AND DATE(paid_at) <= ?", models.RechargeStatusPaid, startStr, endStr).
 		Select(rechargeDateExpr + " as date, COALESCE(SUM(amount), 0) as recharge").
 		Group(rechargeDateExpr).
 		Order("date ASC").

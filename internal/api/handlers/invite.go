@@ -271,9 +271,9 @@ func GetInviteStats(c *gin.Context) {
 	var recentInvites []recentInvite
 	for _, r := range relations {
 		user := inviteeMap[r.InviteeID]
-		status := "pending"
+		status := models.InviteRewardStatusPending
 		if r.InviterRewardGiven {
-			status = "paid"
+			status = models.InviteRewardStatusPaid
 		}
 		recentInvites = append(recentInvites, recentInvite{
 			ID: r.ID, InviteeUsername: user.Username, InviteeEmail: user.Email,
@@ -328,13 +328,13 @@ func ValidateInviteCode(c *gin.Context) {
 
 func inviteCodeStatus(code models.InviteCode) string {
 	if code.ExpiresAt != nil && time.Now().After(*code.ExpiresAt) {
-		return "expired"
+		return models.InviteCodeStatusExpired
 	}
 	if code.MaxUses != nil && code.UsedCount >= int(*code.MaxUses) {
-		return "exhausted"
+		return models.InviteCodeStatusExhausted
 	}
 	if !code.IsActive {
-		return "disabled"
+		return models.InviteCodeStatusDisabled
 	}
-	return "active"
+	return models.InviteCodeStatusActive
 }

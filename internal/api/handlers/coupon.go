@@ -31,7 +31,7 @@ func ValidateAndApplyCoupon(code string, userID uint, orderAmount float64, packa
 
 	db := database.GetDB()
 	var coupon models.Coupon
-	if err := db.Where("code = ? AND status = ?", code, "active").First(&coupon).Error; err != nil {
+	if err := db.Where("code = ? AND status = ?", code, models.CouponStatusActive).First(&coupon).Error; err != nil {
 		return &CouponValidationResult{Error: "优惠券不存在或已失效"}
 	}
 
@@ -71,12 +71,12 @@ func ValidateAndApplyCoupon(code string, userID uint, orderAmount float64, packa
 
 	var discountAmount float64
 	switch coupon.Type {
-	case "discount":
+	case models.CouponTypeDiscount:
 		// 百分比折扣：value 为百分数（如 10 = 10%），按分位舍入防浮点误差
 		discountAmount = math.Round(orderAmount*coupon.DiscountValue) / 100
-	case "fixed":
+	case models.CouponTypeFixed:
 		discountAmount = coupon.DiscountValue
-	case "free_days":
+	case models.CouponTypeFreeDays:
 		discountAmount = 0
 	}
 

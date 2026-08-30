@@ -1,18 +1,14 @@
 package handlers
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"net"
-	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -209,93 +205,6 @@ func GetNode(c *gin.Context) {
 	utils.Success(c, node)
 }
 
-// extractHostPort tries to extract host:port from a node config link.
-func extractHostPort(config string) (string, error) {
-	config = strings.TrimSpace(config)
-
-	// vmess:// is base64-encoded JSON
-	if strings.HasPrefix(config, "vmess://") {
-		raw := strings.TrimPrefix(config, "vmess://")
-		raw = strings.SplitN(raw, "#", 2)[0]
-		decoded, err := base64.RawStdEncoding.DecodeString(raw)
-		if err != nil {
-			decoded, err = base64.StdEncoding.DecodeString(raw)
-		}
-		if err != nil {
-			return "", fmt.Errorf("vmess base64 decode failed")
-		}
-		var obj map[string]interface{}
-		if err := json.Unmarshal(decoded, &obj); err != nil {
-			return "", err
-		}
-		host, _ := obj["add"].(string)
-		port := fmt.Sprintf("%v", obj["port"])
-		if host == "" {
-			return "", fmt.Errorf("vmess: no host")
-		}
-		return net.JoinHostPort(host, port), nil
-	}
-
-	// vless://, trojan://, ss:// — standard URI format
-	for _, prefix := range []string{"vless://", "trojan://", "ss://"} {
-		if strings.HasPrefix(config, prefix) {
-			// ss:// may have base64-encoded userinfo
-			if prefix == "ss://" {
-				raw := strings.TrimPrefix(config, "ss://")
-				// Remove fragment
-				raw = strings.SplitN(raw, "#", 2)[0]
-				// Try to find @ separator
-				if idx := strings.LastIndex(raw, "@"); idx >= 0 {
-					hostPort := raw[idx+1:]
-					hostPort = strings.SplitN(hostPort, "?", 2)[0]
-					hostPort = strings.SplitN(hostPort, "/", 2)[0]
-					if _, _, err := net.SplitHostPort(hostPort); err == nil {
-						return hostPort, nil
-					}
-				}
-			}
-			u, err := url.Parse(config)
-			if err != nil {
-				return "", err
-			}
-			host := u.Hostname()
-			port := u.Port()
-			if port == "" {
-				port = "443"
-			}
-			if host == "" {
-				return "", fmt.Errorf("no host in URL")
-			}
-			return net.JoinHostPort(host, port), nil
-		}
-	}
-
-	return "", fmt.Errorf("unsupported protocol")
-}
-
-func extractNodeAddressForTest(config string) string {
-	addr, err := extractHostPort(config)
-	if err != nil {
-		return ""
-	}
-	return addr
-}
-
-// testNodeConnectivity performs a TCP dial to the node and returns latency.
-func testNodeConnectivity(config string) (latencyMs int, reachable bool) {
-	addr, err := extractHostPort(config)
-	if err != nil {
-		return 0, false
-	}
-	start := time.Now()
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
-	if err != nil {
-		return 0, false
-	}
-	_ = conn.Close()
-	return int(time.Since(start).Milliseconds()), true
-}
-
 // TestNode performs a connectivity test on a single node.
 func TestNode(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -314,7 +223,7 @@ func TestNode(c *gin.Context) {
 		return
 	}
 
-	latency, reachable := testNodeConnectivity(*node.Config)
+	latency, reachable := services.TestNodeConnectivity(*node.Config)
 	now := time.Now()
 	status := models.NodeStatusOffline
 	if reachable {
@@ -375,7 +284,7 @@ func BatchTestNodes(c *gin.Context) {
 		go func(n models.Node) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			latency, reachable := testNodeConnectivity(*n.Config)
+			latency, reachable := services.TestNodeConnectivity(*n.Config)
 			status := models.NodeStatusOffline
 			if reachable {
 				status = models.NodeStatusOnline

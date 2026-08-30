@@ -6,9 +6,11 @@ import (
 	"html"
 	"log"
 	"mime"
+	"net"
 	"net/smtp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -70,6 +72,9 @@ func SendEmail(to, subject, body string) error {
 	return SendEmailWithConfig(cfg, to, subject, body)
 }
 
+// smtpDialTimeout 控制 SMTP TCP 连接超时，防止不可达的邮件服务器挂死队列任务
+const smtpDialTimeout = 10 * time.Second
+
 // SendEmailWithConfig sends an email using the provided SMTP config.
 func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
 	headerFrom := cfg.From
@@ -86,11 +91,11 @@ func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
 	msg := buildMIME(headerFrom, to, subject, body)
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
+	dialer := &net.Dialer{Timeout: smtpDialTimeout}
 
 	if cfg.Port == 465 {
 		// Implicit TLS
-		tlsCfg := &tls.Config{ServerName: cfg.Host}
-		conn, err := tls.Dial("tcp", addr, tlsCfg)
+		conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: cfg.Host})
 		if err != nil {
 			return fmt.Errorf("TLS 连接失败: %w", err)
 		}
@@ -120,8 +125,38 @@ func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
 		return w.Close()
 	}
 
-	// STARTTLS (port 587 / 25)
-	return smtp.SendMail(addr, auth, envelopeFrom, []string{to}, []byte(msg))
+	// STARTTLS (port 587 / 25) — 使用带超时的自定义客户端，替代 smtp.SendMail（其内部 dial 无超时）
+	conn, err := dialer.Dial("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("SMTP 连接失败: %w", err)
+	}
+	client, err := smtp.NewClient(conn, cfg.Host)
+	if err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("SMTP 客户端创建失败: %w", err)
+	}
+	defer client.Close()
+	if err = client.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
+		return fmt.Errorf("STARTTLS 失败: %w", err)
+	}
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP 认证失败: %w", err)
+	}
+	if err = client.Mail(envelopeFrom); err != nil {
+		return err
+	}
+	if err = client.Rcpt(to); err != nil {
+		return err
+	}
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
+	_, err = w.Write([]byte(msg))
+	if err != nil {
+		return err
+	}
+	return w.Close()
 }
 
 // sanitizeHeader 清除 MIME header 中的换行符，防止邮件头注入
@@ -165,7 +200,11 @@ func QueueEmail(toEmail, subject, content, emailType string) {
 	}
 }
 
+// emailSendConcurrency 控制邮件队列并发发送数（SMTP 是网络 IO，串行发送批量邮件极慢）
+const emailSendConcurrency = 4
+
 // ProcessEmailQueue tries to send all pending emails in the queue.
+// 使用有界并发：网络发信并行，DB 状态回写在主循环串行，避免 SQLite 写竞争。
 func ProcessEmailQueue() {
 	db := database.GetDB()
 	var emails []models.EmailQueue
@@ -177,12 +216,30 @@ func ProcessEmailQueue() {
 	}
 	log.Printf("[EmailQueue] 发现 %d 封待发送邮件", len(emails))
 
+	type sendResult struct {
+		idx int
+		err error
+	}
+	results := make([]sendResult, len(emails))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, emailSendConcurrency)
+
 	for i := range emails {
-		eq := &emails[i]
-		err := SendEmail(eq.ToEmail, eq.Subject, eq.Content)
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(idx int) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			results[idx] = sendResult{idx: idx, err: SendEmail(emails[idx].ToEmail, emails[idx].Subject, emails[idx].Content)}
+		}(i)
+	}
+	wg.Wait()
+
+	for _, r := range results {
+		eq := &emails[r.idx]
 		now := time.Now()
-		if err != nil {
-			errMsg := err.Error()
+		if r.err != nil {
+			errMsg := r.err.Error()
 			eq.ErrorMessage = &errMsg
 			eq.RetryCount++
 			if eq.RetryCount >= eq.MaxRetries {

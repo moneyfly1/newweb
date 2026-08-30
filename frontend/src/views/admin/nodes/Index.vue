@@ -219,7 +219,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, h, onMounted, computed } from 'vue'
+import { ref, reactive, h, onMounted, onBeforeUnmount, computed } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage, useDialog, type DataTableColumns, type FormInst, type TagProps } from 'naive-ui'
 import {
   CloudDownloadOutline, LinkOutline, RefreshOutline,
@@ -527,6 +527,8 @@ const handleMobileAction = (key: string, row: any) => {
   }
 }
 
+// 节点状态由后端定时健康检查刷新（5分钟），前端页面停留时静默同步，避免手动刷新
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   fetchData()
   // 加载节点更新配置中的订阅链接，作为「来源」筛选选项
@@ -534,6 +536,19 @@ onMounted(() => {
     const urls: string[] = (res.data?.urls || []).map((u: string) => String(u).trim()).filter((u: string) => u && u !== '__MANUAL_NODES__')
     configUrls.value = urls
   }).catch(() => {})
+
+  // 页面可见时每 60s 静默刷新状态（useTable 保留旧行，无遮罩闪烁）
+  autoRefreshTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && !submitting.value && !importing.value) {
+      fetchData()
+    }
+  }, 60000)
+})
+onBeforeUnmount(() => {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+    autoRefreshTimer = null
+  }
 })
 </script>
 

@@ -10,6 +10,10 @@
           <n-input v-model:value="searchQuery" placeholder="搜索用户/邮箱/备注/订阅地址" clearable class="search-input" @keyup.enter="handleSearch">
             <template #prefix><n-icon><SearchOutline /></n-icon></template>
           </n-input>
+          <n-button type="primary" @click="handleSearch">
+            <template #icon><n-icon><SearchOutline /></n-icon></template>
+            搜索
+          </n-button>
           <n-select v-model:value="statusFilter" :options="statusOptions" class="status-select" @update:value="handleSearch" />
           <n-select v-model:value="lineFilter" :options="lineOptions" class="status-select" @update:value="handleSearch" />
           <n-button @click="handleRefresh" secondary>
@@ -615,6 +619,10 @@ watch(() => route.query.search, (searchVal) => {
 })
 </script>
 <style scoped>
+/* 桌面端搜索区：搜索框稍收窄以容纳搜索按钮，避免溢出换行 */
+@media (min-width: 768px) {
+  .search-input { width: 200px; }
+}
 /* Desktop inline cells */
 :deep(.inline-cell) { padding: 6px; border-radius: 6px; }
 :deep(.cell-expired) { background: #fef0f0; border: 1px solid #f56c6c; }

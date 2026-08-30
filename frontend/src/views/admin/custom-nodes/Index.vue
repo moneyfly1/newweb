@@ -11,11 +11,15 @@
             v-model:value="searchKeyword"
             clearable
             placeholder="搜索邮箱/域名/节点名称"
-            style="width: 250px"
+            style="width: 200px"
             @keyup.enter="handleSearch"
           >
             <template #prefix><n-icon :component="SearchOutline" /></template>
           </n-input>
+          <n-button type="primary" @click="handleSearch">
+            <template #icon><n-icon><SearchOutline /></n-icon></template>
+            搜索
+          </n-button>
           <n-dropdown
             trigger="click"
             :options="[

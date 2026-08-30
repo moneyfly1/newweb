@@ -855,8 +855,10 @@ const loadGithubNodesLogs = async () => {
 const handleTestGithubNodes = async () => {
   testingGithubNodes.value = true
   try {
+    // 表单中可能是掩码占位（****），此时不传 token，让后端使用已保存的真实值
+    const tokenVal = form.value.gh_nodes_token.startsWith('****') ? '' : form.value.gh_nodes_token
     const res = await testGithubNodes({
-      token: form.value.gh_nodes_token,
+      token: tokenVal,
       repo: form.value.gh_nodes_repo,
       branch: form.value.gh_nodes_branch,
       path: form.value.gh_nodes_path

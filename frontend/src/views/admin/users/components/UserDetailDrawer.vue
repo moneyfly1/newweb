@@ -11,8 +11,8 @@
           <n-tag v-if="userDetail.is_admin" type="warning" size="small" class="tag-spacing">管理员</n-tag>
         </n-descriptions-item>
         <n-descriptions-item label="等级">{{ userDetail.level_name || '无' }}</n-descriptions-item>
-        <n-descriptions-item label="注册时间">{{ fmtDate(userDetail.created_at) }}</n-descriptions-item>
-        <n-descriptions-item label="最后登录">{{ fmtDate(userDetail.last_login) }}</n-descriptions-item>
+        <n-descriptions-item label="注册时间">{{ formatFullDateTime(userDetail.created_at) }}</n-descriptions-item>
+        <n-descriptions-item label="最后登录">{{ formatFullDateTime(userDetail.last_login) }}</n-descriptions-item>
       </n-descriptions>
 
       <n-divider>订阅信息</n-divider>
@@ -24,7 +24,7 @@
             <n-tag v-if="!userDetail.subscription.is_active" type="error" size="small" class="tag-spacing">已停用</n-tag>
           </n-descriptions-item>
           <n-descriptions-item label="设备">{{ userDetail.subscription.current_devices || 0 }} / {{ userDetail.subscription.device_limit || 0 }}</n-descriptions-item>
-          <n-descriptions-item label="到期时间">{{ fmtDate(userDetail.subscription.expire_time) }}</n-descriptions-item>
+          <n-descriptions-item label="到期时间">{{ formatFullDateTime(userDetail.subscription.expire_time) }}</n-descriptions-item>
         </n-descriptions>
         <div v-if="userDetail.subscription_urls" class="url-section">
           <div v-for="item in getPrimarySubscriptionUrlRows()" :key="item.key" class="url-row">
@@ -157,6 +157,8 @@ import {
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
 import { parseDeviceInfo, translateBalanceChangeType, translateLoginStatus } from '@/utils/i18n'
+import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { formatFullDateTime } from '@/utils/date'
 
 const appStore = useAppStore()
 const message = useMessage()
@@ -204,7 +206,6 @@ const open = async (userOrId) => {
 
 defineExpose({ open })
 
-const fmtDate = (d) => d ? new Date(d).toLocaleString('zh-CN') : '-'
 const subStatusType = (s) => ({ active: 'success', expiring: 'warning', expired: 'error' }[s] || 'default')
 const subStatusText = (s) => ({ active: '活跃', expiring: '即将到期', expired: '已过期', disabled: '已禁用' }[s] || s || '-')
 
@@ -252,24 +253,8 @@ const getMoreSubscriptionUrlRows = () => getSubscriptionUrlRows(false)
 
 const copySubscriptionUrl = async (url, label) => {
   if (!url) return
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url)
-    } else {
-      const textarea = document.createElement('textarea')
-      textarea.value = url
-      textarea.setAttribute('readonly', '')
-      textarea.style.position = 'fixed'
-      textarea.style.left = '-9999px'
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-    }
-    message.success(`${label}订阅地址已复制`)
-  } catch {
-    message.error('复制失败，请手动复制')
-  }
+  const ok = await clipboardCopy(url)
+  ok ? message.success(`${label}订阅地址已复制`) : message.error('复制失败，请手动复制')
 }
 
 const getNodeName = (row) => row.node?.display_name || row.node?.name || row.display_name || row.name || '-'
@@ -467,15 +452,15 @@ const customNodeCols = [
   { title: '地址', key: 'endpoint', width: 190, ellipsis: { tooltip: true }, render: (r) => getNodeEndpoint(r) },
   { title: '显示模式', key: 'dedicated_only', width: 120, render: (r) => r.dedicated_only ? '仅专线' : '全部节点' },
   { title: '设备限制', key: 'limit_devices', width: 120, render: (r) => r.limit_devices ? '跟随系统' : '不限制' },
-  { title: '独立到期', key: 'expires_at', width: 160, render: (r) => fmtDate(r.expires_at) },
-  { title: '分配时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) },
+  { title: '独立到期', key: 'expires_at', width: 160, render: (r) => formatFullDateTime(r.expires_at) },
+  { title: '分配时间', key: 'created_at', width: 160, render: (r) => formatFullDateTime(r.created_at) },
   { title: '操作', key: 'actions', width: 90, fixed: 'right', render: (r) => h(NButton, { size: 'small', type: 'error', secondary: true, onClick: () => handleUnassignCustomNode(r) }, { default: () => '解除' }) }
 ]
 const orderCols = [
   { title: '订单号', key: 'order_no', width: 180, ellipsis: { tooltip: true } },
   { title: '金额', key: 'final_amount', width: 90, render: (r) => formatCurrency(r.final_amount ?? r.amount ?? 0) },
   { title: '状态', key: 'status', width: 80 },
-  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
+  { title: '时间', key: 'created_at', width: 160, render: (r) => formatFullDateTime(r.created_at) }
 ]
 const deviceCols = [
   { title: '设备名', key: 'device_name', width: 120, ellipsis: { tooltip: true }, render: (r) => r.device_name || '未知设备' },
@@ -486,7 +471,7 @@ const deviceCols = [
   { title: '订阅类型', key: 'subscription_type', width: 90, render: (r) => r.subscription_type || '-' },
   { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
   { title: '地区', key: 'region', width: 100, render: (r) => formatCountryOnly(r.location || r.region) },
-  { title: '最后活跃', key: 'last_access', width: 150, render: (r) => fmtDate(r.last_access || r.updated_at) },
+  { title: '最后活跃', key: 'last_access', width: 150, render: (r) => formatFullDateTime(r.last_access || r.updated_at) },
   { title: '操作', key: 'actions', width: 80, render: (r) => h(NButton, { size: 'small', type: 'error', secondary: true, onClick: () => handleDeleteDevice(r) }, { default: () => '删除' }) }
 ]
 const loginCols = [
@@ -494,7 +479,7 @@ const loginCols = [
   { title: '位置', key: 'location', width: 150, render: (r) => formatCountryOnly(r.location) },
   { title: '设备', key: 'user_agent', width: 180, ellipsis: { tooltip: true }, render: (r) => parseDeviceInfo(r.user_agent) },
   { title: '状态', key: 'login_status', width: 70, render: (r) => h(NTag, { type: r.login_status === 'success' ? 'success' : 'error', size: 'small' }, { default: () => translateLoginStatus(r.login_status) }) },
-  { title: '时间', key: 'login_time', width: 160, render: (r) => fmtDate(r.login_time) }
+  { title: '时间', key: 'login_time', width: 160, render: (r) => formatFullDateTime(r.login_time) }
 ]
 const resetCols = [
   { title: '操作者', key: 'reset_by', width: 80, render: (r) => r.reset_by || '-' },
@@ -503,20 +488,20 @@ const resetCols = [
   { title: '新订阅地址', key: 'new_subscription_url', width: 180, ellipsis: { tooltip: true }, render: (r) => r.new_subscription_url || '-' },
   { title: '设备(前/后)', key: 'devices', width: 90, render: (r) => `${r.device_count_before ?? 0} → ${r.device_count_after ?? 0}` },
   { title: '原因', key: 'reason', ellipsis: { tooltip: true } },
-  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
+  { title: '时间', key: 'created_at', width: 160, render: (r) => formatFullDateTime(r.created_at) }
 ]
 const balanceCols = [
   { title: '类型', key: 'change_type', width: 110, render: (r) => translateBalanceChangeType(r.change_type) },
   { title: '金额', key: 'amount', width: 90, render: (r) => formatCurrency(r.amount) },
   { title: '变动后', key: 'balance_after', width: 90, render: (r) => formatCurrency(r.balance_after) },
   { title: '说明', key: 'description', ellipsis: { tooltip: true }, render: (r) => r.description || '-' },
-  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
+  { title: '时间', key: 'created_at', width: 160, render: (r) => formatFullDateTime(r.created_at) }
 ]
 const rechargeCols = [
   { title: '金额', key: 'amount', width: 90, render: (r) => formatCurrency(r.amount) },
   { title: '方式', key: 'payment_method', width: 100 },
   { title: '状态', key: 'status', width: 80 },
-  { title: '时间', key: 'created_at', width: 160, render: (r) => fmtDate(r.created_at) }
+  { title: '时间', key: 'created_at', width: 160, render: (r) => formatFullDateTime(r.created_at) }
 ]
 </script>
 

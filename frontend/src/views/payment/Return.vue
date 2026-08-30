@@ -42,6 +42,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { getOrderStatus } from '@/api/order'
+import { formatDateTime } from '@/utils/date'
 
 const route = useRoute()
 const router = useRouter()
@@ -97,14 +98,6 @@ const resultDesc = computed(() => {
   if (status.value === 'fail') return '支付未完成、已取消，或系统确认超时，请稍后重试或联系客服'
   return '已收到支付结果，正在等待系统最终确认，请稍候...'
 })
-
-const formatDateTime = (dateStr: string) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  })
-}
 
 const startRedirectCountdown = () => {
   if (!shouldAutoRedirect.value) return

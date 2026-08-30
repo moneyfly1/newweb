@@ -4,6 +4,13 @@ import (
 	"time"
 )
 
+// 邮件队列状态
+const (
+	EmailStatusPending = "pending"
+	EmailStatusSent    = "sent"
+	EmailStatusFailed  = "failed"
+)
+
 type Notification struct {
 	ID        uint       `gorm:"primaryKey" json:"id"`
 	UserID    *int64     `gorm:"index" json:"user_id"`

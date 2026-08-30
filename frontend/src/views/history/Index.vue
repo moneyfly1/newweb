@@ -81,6 +81,7 @@ import { NTag, useMessage } from 'naive-ui'
 import { getLoginHistory } from '@/api/user'
 import { useAppStore } from '@/stores/app'
 import { formatLocation } from '@/utils/i18n'
+import { formatDateTime } from '@/utils/date'
 
 const appStore = useAppStore()
 const message = useMessage()
@@ -110,14 +111,6 @@ const stats = computed(() => {
   const last = records.value.length > 0 ? formatDateTime(records.value[0].login_time) : '--'
   return { total, uniqueIps: ips.size, lastLogin: last }
 })
-
-const formatDateTime = (dateStr: string) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  })
-}
 
 const columns = [
   {

@@ -7,29 +7,6 @@
       </div>
       <div class="header-right">
         <n-space>
-          <n-input
-            v-model:value="searchQuery"
-            placeholder="搜索邮箱/用户名/订阅地址"
-            clearable
-            class="search-input"
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix>
-              <n-icon :component="SearchOutline" />
-            </template>
-          </n-input>
-          <n-button type="primary" @click="handleSearch">
-            <template #icon><n-icon :component="SearchOutline" /></template>
-            搜索
-          </n-button>
-          <n-select
-            v-model:value="statusFilter"
-            placeholder="状态"
-            clearable
-            class="status-select"
-            :options="statusOptions"
-            @update:value="handleSearch"
-          />
           <n-button type="primary" @click="openCreateModal">
             <template #icon><n-icon :component="AddOutline" /></template>
             新增用户
@@ -42,6 +19,14 @@
       </div>
     </div>
 
+    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行） -->
+    <search-filter-bar
+      v-model:values="filterValues"
+      :filters="filterConfig"
+      search-placeholder="搜索邮箱 / 用户名 / 订阅地址"
+      @search="handleSearch"
+    />
+
     <n-card :bordered="false" class="page-card admin-main-card">
       <n-space vertical :size="16">
 
@@ -49,38 +34,10 @@
         <div v-if="appStore.isMobile" class="mobile-toolbar">
           <div class="mobile-toolbar-title">用户管理</div>
           <div class="mobile-toolbar-controls">
-            <div class="mobile-toolbar-search">
-              <n-input
-                v-model:value="searchQuery"
-                placeholder="搜索邮箱或用户名"
-                clearable
-                size="small"
-                @keyup.enter="handleSearch"
-              >
-                <template #prefix>
-                  <n-icon :component="SearchOutline" />
-                </template>
-              </n-input>
-              <n-button size="small" type="primary" @click="handleSearch">
-                <template #icon><n-icon :component="SearchOutline" /></template>
-                搜索
-              </n-button>
-            </div>
             <div class="mobile-toolbar-row">
-              <n-select
-                v-model:value="statusFilter"
-                placeholder="状态筛选"
-                clearable
-                size="small"
-                class="flex-1"
-                :options="statusOptions"
-                @update:value="handleSearch"
-              />
-              <n-button size="small" type="info" @click="handleSearch">
-                <template #icon><n-icon :component="SearchOutline" /></template>
-              </n-button>
               <n-button size="small" @click="fetchUsers">
                 <template #icon><n-icon :component="RefreshOutline" /></template>
+                刷新
               </n-button>
             </div>
             <div class="mobile-toolbar-row">
@@ -185,7 +142,7 @@
                 </div>
                 <div class="card-row">
                   <span class="card-label">注册时间</span>
-                  <span class="card-value">{{ row.created_at ? new Date(row.created_at).toLocaleString('zh-CN') : '-' }}</span>
+                  <span class="card-value">{{ formatFullDateTime(row.created_at) }}</span>
                 </div>
               </div>
               <div class="card-actions">
@@ -343,7 +300,7 @@
 <script setup>
 import { ref, reactive, h, onMounted, computed } from 'vue'
 import { NButton, NTag, NIcon, NDropdown, NSpin, useMessage, useDialog } from 'naive-ui'
-import { SearchOutline, AddOutline, RefreshOutline, EllipsisVertical, DownloadOutline, CloudUploadOutline } from '@vicons/ionicons5'
+import { AddOutline, RefreshOutline, EllipsisVertical, DownloadOutline, CloudUploadOutline } from '@vicons/ionicons5'
 import {
   listUsers, updateUser, deleteUser, toggleUserActive,
   createUser, resetUserPassword,
@@ -356,7 +313,9 @@ import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { useRoute } from 'vue-router'
 import { formatCurrency } from '@/utils/amount'
+import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import SearchFilterBar from '@/components/SearchFilterBar.vue'
 import UserDetailDrawer from './components/UserDetailDrawer.vue'
 import '@/styles/admin-common.css'
 
@@ -422,6 +381,15 @@ const statusOptions = [
   { label: '激活', value: 'active' },
   { label: '禁用', value: 'inactive' },
   { label: '管理员', value: 'admin' }
+]
+
+// 统一筛选工具栏状态（值与原 refs 同步，保持业务逻辑不变）
+const filterValues = reactive({
+  search: '',
+  status: null,
+})
+const filterConfig = [
+  { key: 'status', placeholder: '状态', options: statusOptions },
 ]
 const lineTypeOptions = [
   { label: '普通线路', key: 'normal' },
@@ -515,14 +483,14 @@ const columns = [
     key: 'created_at',
     width: 170, resizable: true,
     sorter: (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0),
-    render: (row) => row.created_at ? new Date(row.created_at).toLocaleString('zh-CN') : '-'
+    render: (row) => formatFullDateTime(row.created_at)
   },
   {
     title: '最后登录',
     key: 'last_login',
     width: 170, resizable: true,
     sorter: (a, b) => new Date(a.last_login || 0) - new Date(b.last_login || 0),
-    render: (row) => row.last_login ? new Date(row.last_login).toLocaleString('zh-CN') : '-'
+    render: (row) => formatFullDateTime(row.last_login)
   },
   {
     title: '操作',
@@ -539,7 +507,11 @@ const columns = [
     ])
   }
 ]
-const handleSearch = () => { reload() }
+const handleSearch = () => {
+  searchQuery.value = filterValues.search || ''
+  statusFilter.value = filterValues.status
+  reload()
+}
 const handlePageChange = (page) => { pagination.page = page; fetchUsers() }
 const handlePageSizeChange = (size) => { pagination.pageSize = size; pagination.page = 1; fetchUsers() }
 const handleCheck = (keys) => { checkedRowKeys.value = keys }

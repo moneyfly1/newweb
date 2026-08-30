@@ -126,25 +126,25 @@ func AdminDashboard(c *gin.Context) {
 	go func() {
 		runQuery(func() error {
 			return db.Model(&models.Order{}).
-				Where("status IN ? AND payment_time >= ? AND payment_time < ?", []string{"paid", "completed"}, todayStart, tomorrowStart).
+				Where("status IN ? AND payment_time >= ? AND payment_time < ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}, todayStart, tomorrowStart).
 				Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&revenueToday).Error
 		})
 	}()
 	go func() {
 		runQuery(func() error {
 			return db.Model(&models.Order{}).
-				Where("status IN ? AND payment_time >= ?", []string{"paid", "completed"}, monthStart).
+				Where("status IN ? AND payment_time >= ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}, monthStart).
 				Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&revenueMonth).Error
 		})
 	}()
 	go func() {
 		runQuery(func() error {
-			return db.Model(&models.Order{}).Where("status = ?", "pending").Count(&pendingOrders).Error
+			return db.Model(&models.Order{}).Where("status = ?", models.OrderStatusPending).Count(&pendingOrders).Error
 		})
 	}()
 	go func() {
 		runQuery(func() error {
-			return db.Model(&models.Ticket{}).Where("status IN ?", []string{"pending", "open"}).Count(&pendingTickets).Error
+			return db.Model(&models.Ticket{}).Where("status IN ?", []string{models.TicketStatusPending, models.TicketStatusOpen}).Count(&pendingTickets).Error
 		})
 	}()
 	go func() {
@@ -169,13 +169,13 @@ func AdminDashboard(c *gin.Context) {
 	}()
 	go func() {
 		runQuery(func() error {
-			return db.Where("status IN ?", []string{"pending", "open"}).Order("created_at DESC").Limit(5).Find(&ticketList).Error
+			return db.Where("status IN ?", []string{models.TicketStatusPending, models.TicketStatusOpen}).Order("created_at DESC").Limit(5).Find(&ticketList).Error
 		})
 	}()
 	go func() {
 		runQuery(func() error {
 			return db.Model(&models.Order{}).
-				Where("status IN ? AND payment_time >= ?", []string{"paid", "completed"}, thirtyDaysAgo).
+				Where("status IN ? AND payment_time >= ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}, thirtyDaysAgo).
 				Select("DATE(payment_time) as date, COALESCE(SUM(COALESCE(final_amount, amount)), 0) as value").
 				Group("DATE(payment_time)").
 				Order("date ASC").
@@ -253,7 +253,7 @@ func AdminStats(c *gin.Context) {
 	go func() { runQuery(func() error { return db.Model(&models.Order{}).Count(&orderCount).Error }) }()
 	go func() {
 		runQuery(func() error {
-			return db.Model(&models.Order{}).Where("status = ?", "paid").Count(&paidOrderCount).Error
+			return db.Model(&models.Order{}).Where("status = ?", models.OrderStatusPaid).Count(&paidOrderCount).Error
 		})
 	}()
 	go func() { runQuery(func() error { return db.Model(&models.Subscription{}).Count(&subCount).Error }) }()
@@ -267,7 +267,7 @@ func AdminStats(c *gin.Context) {
 	}()
 	go func() {
 		runQuery(func() error {
-			return db.Model(&models.Order{}).Where("status = ?", "paid").Select("COALESCE(SUM(amount), 0)").Scan(&totalRevenue).Error
+			return db.Model(&models.Order{}).Where("status = ?", models.OrderStatusPaid).Select("COALESCE(SUM(amount), 0)").Scan(&totalRevenue).Error
 		})
 	}()
 	go func() {
@@ -313,9 +313,9 @@ func AdminMonitoring(c *gin.Context) {
 	var activeSubCount int64
 	db.Model(&models.Subscription{}).Where("is_active = ? AND expire_time > ?", true, time.Now()).Count(&activeSubCount)
 	var pendingTickets int64
-	db.Model(&models.Ticket{}).Where("status = ?", "pending").Count(&pendingTickets)
+	db.Model(&models.Ticket{}).Where("status = ?", models.TicketStatusPending).Count(&pendingTickets)
 	var pendingOrders int64
-	db.Model(&models.Order{}).Where("status = ?", "pending").Count(&pendingOrders)
+	db.Model(&models.Order{}).Where("status = ?", models.OrderStatusPending).Count(&pendingOrders)
 	utils.Success(c, gin.H{
 		"user_count":           userCount,
 		"node_count":           nodeCount,

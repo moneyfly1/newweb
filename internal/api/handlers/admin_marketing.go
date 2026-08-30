@@ -70,7 +70,7 @@ func AdminCreateCoupon(c *gin.Context) {
 		ApplicablePackages: req.ApplicablePackages,
 	}
 	if coupon.Status == "" {
-		coupon.Status = "active"
+		coupon.Status = models.CouponStatusActive
 	}
 	if coupon.MaxUsesPerUser == 0 {
 		coupon.MaxUsesPerUser = 1

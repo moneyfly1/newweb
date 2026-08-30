@@ -58,7 +58,7 @@
               </div>
               <div class="card-row">
                 <span class="card-label">创建时间</span>
-                <span>{{ formatDate(row.created_at) }}</span>
+                <span>{{ formatFullDateTime(row.created_at) }}</span>
               </div>
             </div>
             <div class="card-actions">
@@ -174,6 +174,7 @@ import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { listRedeemCodes, createRedeemCodes, deleteRedeemCode } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
@@ -275,7 +276,7 @@ const columns = [
     }
   },
   { title: '使用次数', key: 'used_count', width: 100, resizable: true, render: (row: any) => `${row.used_count || 0} / ${row.max_uses || 1}` },
-  { title: '创建时间', key: 'created_at', width: 160, resizable: true, render: (row: any) => formatDate(row.created_at) },
+  { title: '创建时间', key: 'created_at', width: 160, resizable: true, render: (row: any) => formatFullDateTime(row.created_at) },
   {
     title: '操作',
     key: 'actions',
@@ -291,11 +292,6 @@ const columns = [
     }
   }
 ]
-
-const formatDate = (date: string) => {
-  if (!date) return '-'
-  return new Date(date).toLocaleString('zh-CN')
-}
 
 const loadCodes = async () => {
   loading.value = true

@@ -513,15 +513,15 @@ func AdminUpdateUser(c *gin.Context) {
 					if expireTime.After(now) {
 						// 未过期
 						if time.Until(expireTime) <= 7*24*time.Hour {
-							subscriptionUpdates["status"] = "expiring"
+							subscriptionUpdates["status"] = models.SubStatusExpiring
 						} else {
-							subscriptionUpdates["status"] = "active"
+							subscriptionUpdates["status"] = models.SubStatusActive
 						}
 						// 确保 is_active 为 true
 						subscriptionUpdates["is_active"] = true
 					} else {
 						// 已过期
-						subscriptionUpdates["status"] = "expired"
+						subscriptionUpdates["status"] = models.SubStatusExpired
 					}
 				}
 			}
@@ -718,9 +718,9 @@ func AdminToggleUserActive(c *gin.Context) {
 		if db.Where("user_id = ?", id).First(&sub).Error == nil {
 			updates := map[string]interface{}{"is_active": true}
 			if sub.ExpireTime.After(time.Now()) {
-				updates["status"] = "active"
+				updates["status"] = models.SubStatusActive
 			} else {
-				updates["status"] = "expired"
+				updates["status"] = models.SubStatusExpired
 			}
 			if err := db.Model(&sub).Updates(updates).Error; err != nil {
 				utils.InternalError(c, "同步订阅状态失败")
@@ -731,7 +731,7 @@ func AdminToggleUserActive(c *gin.Context) {
 		// Disable: set subscription to disabled
 		if err := db.Model(&models.Subscription{}).Where("user_id = ?", id).Updates(map[string]interface{}{
 			"is_active": false,
-			"status":    "disabled",
+			"status":    models.SubStatusDisabled,
 		}).Error; err != nil {
 			utils.InternalError(c, "同步订阅状态失败")
 			return
@@ -1140,7 +1140,7 @@ func AdminCreateUser(c *gin.Context) {
 		SubscriptionURL: subURL,
 		DeviceLimit:     deviceLimit,
 		IsActive:        true,
-		Status:          "active",
+		Status:          models.SubStatusActive,
 		ExpireTime:      expireTime,
 	}
 	if err := db.Create(&subscription).Error; err != nil {
@@ -1318,7 +1318,7 @@ func AdminBatchUserAction(c *gin.Context) {
 		}
 		if len(activeIDs) > 0 {
 			if err := db.Model(&models.Subscription{}).Where("id IN ?", activeIDs).Updates(map[string]interface{}{
-				"is_active": true, "status": "active",
+				"is_active": true, "status": models.SubStatusActive,
 			}).Error; err != nil {
 				utils.InternalError(c, "同步订阅状态失败")
 				return
@@ -1326,7 +1326,7 @@ func AdminBatchUserAction(c *gin.Context) {
 		}
 		if len(expiredIDs) > 0 {
 			if err := db.Model(&models.Subscription{}).Where("id IN ?", expiredIDs).Updates(map[string]interface{}{
-				"is_active": true, "status": "expired",
+				"is_active": true, "status": models.SubStatusExpired,
 			}).Error; err != nil {
 				utils.InternalError(c, "同步订阅状态失败")
 				return
@@ -1336,7 +1336,7 @@ func AdminBatchUserAction(c *gin.Context) {
 		result := db.Model(&models.User{}).Where("id IN ? AND is_admin = ?", req.UserIDs, false).Update("is_active", false)
 		affected = result.RowsAffected
 		if err := db.Model(&models.Subscription{}).Where("user_id IN ?", req.UserIDs).Updates(map[string]interface{}{
-			"is_active": false, "status": "disabled",
+			"is_active": false, "status": models.SubStatusDisabled,
 		}).Error; err != nil {
 			utils.InternalError(c, "同步订阅状态失败")
 			return
@@ -1683,7 +1683,7 @@ func AdminImportUsersCSV(c *gin.Context) {
 				SubscriptionURL: subURL,
 				DeviceLimit:     deviceLimit,
 				IsActive:        true,
-				Status:          "active",
+				Status:          models.SubStatusActive,
 				ExpireTime:      expireTime,
 			},
 		})

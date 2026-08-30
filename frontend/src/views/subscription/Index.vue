@@ -70,7 +70,7 @@
                   <span>共 {{ daysTotal }} 天</span>
                 </div>
               </div>
-              <div class="days-expire">到期：{{ formatDateShort(subscription.expire_time) }}</div>
+              <div class="days-expire">到期：{{ formatDate(subscription.expire_time) }}</div>
             </div>
             <!-- 到期时间 -->
             <div class="stat-item">
@@ -79,7 +79,7 @@
               </div>
               <div class="stat-content">
                 <span class="stat-label">到期时间</span>
-                <span class="stat-value stat-date">{{ formatDate(subscription.expire_time) }}</span>
+                <span class="stat-value stat-date">{{ formatDateTime(subscription.expire_time) }}</span>
               </div>
             </div>
             <!-- 设备数（当前/上限） -->
@@ -290,7 +290,7 @@
               </div>
               <div class="device-info-row">
                 <span class="device-label">最后在线</span>
-                <span class="device-value">{{ dev.last_active ? formatDate(dev.last_active) : '-' }}</span>
+                <span class="device-value">{{ dev.last_active ? formatDateTime(dev.last_active) : '-' }}</span>
               </div>
             </div>
           </div>
@@ -344,9 +344,9 @@
             <span class="up-after">{{ previewDeviceLimit }} 台</span>
           </n-descriptions-item>
           <n-descriptions-item label="到期时间">
-            <span class="up-before">{{ formatDateShort(subscription?.expire_time) }}</span>
+            <span class="up-before">{{ formatDate(subscription?.expire_time) }}</span>
             <n-icon :component="ArrowForwardOutline" class="up-arrow" />
-            <span class="up-after">{{ formatDateShort(previewExpireTime) }}</span>
+            <span class="up-after">{{ formatDate(previewExpireTime) }}</span>
           </n-descriptions-item>
           <n-descriptions-item label="应付金额">
             <span style="color: #18a058; font-size: 20px; font-weight: bold;">{{ formatCurrency(upgradeOrderInfo?.final_amount ?? upgradeOrderInfo?.amount ?? 0) }}</span>
@@ -470,7 +470,7 @@
           </div>
           <div class="uc-item">
             <span class="uc-label">当前到期时间</span>
-            <span class="uc-value">{{ formatDate(subscription?.expire_time) }}</span>
+            <span class="uc-value">{{ formatDateTime(subscription?.expire_time) }}</span>
           </div>
           <div class="uc-item">
             <span class="uc-label">剩余天数</span>
@@ -497,9 +497,9 @@
           <div class="up-row">
             <span class="up-label">到期时间</span>
             <span class="up-change">
-              <span class="up-before">{{ formatDateShort(subscription?.expire_time) }}</span>
+              <span class="up-before">{{ formatDate(subscription?.expire_time) }}</span>
               <n-icon :component="ArrowForwardOutline" class="up-arrow" />
-              <span class="up-after">{{ formatDateShort(previewExpireTime) }}</span>
+              <span class="up-after">{{ formatDate(previewExpireTime) }}</span>
             </span>
           </div>
         </div>
@@ -537,9 +537,9 @@
             <span class="up-after">{{ upgradeSuccessInfo.deviceLimit }} 台</span>
           </n-descriptions-item>
           <n-descriptions-item label="到期时间">
-            <span class="up-before">{{ formatDateShort(upgradeSuccessInfo.beforeExpireTime) }}</span>
+            <span class="up-before">{{ formatDate(upgradeSuccessInfo.beforeExpireTime) }}</span>
             <n-icon :component="ArrowForwardOutline" class="up-arrow" />
-            <span class="up-after">{{ formatDateShort(upgradeSuccessInfo.expireTime) }}</span>
+            <span class="up-after">{{ formatDate(upgradeSuccessInfo.expireTime) }}</span>
           </n-descriptions-item>
           <n-descriptions-item label="本次支付金额">{{ formatCurrency(upgradeSuccessInfo.amount) }}</n-descriptions-item>
         </n-descriptions>
@@ -571,6 +571,7 @@ import { getErrorMessage, silentCatch } from '@/utils/error'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
+import { formatDate, formatDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
@@ -592,7 +593,7 @@ const deviceColumns = [
   { title: '设备型号', key: 'device_model', width: 150 },
   { title: '订阅类型', key: 'subscription_type', width: 100 },
   { title: '地区', key: 'region', width: 120, render: (row: any) => formatCountryOnly(row.location || row.region) },
-  { title: '最后访问', key: 'last_access', width: 150, render: (row: any) => formatDateTime(row.last_access) }
+  { title: '最后访问', key: 'last_access', width: 150, render: (row: any) => formatRelativeTime(row.last_access) }
 ]
 const loading = ref(false)
 const showSubUrls = ref(false)
@@ -916,18 +917,7 @@ const openUpgradeModal = () => {
   showUpgradeModal.value = true
 }
 
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return 'N/A'
-  return new Date(dateStr).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-  })
-}
-// 简短日期（仅年月日），用于「升级前 → 升级后」紧凑展示
-const formatDateShort = (dateStr: string) => {
-  if (!dateStr) return 'N/A'
-  return new Date(dateStr).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
-}
-const formatDateTime = (dateStr: string) => {
+const formatRelativeTime = (dateStr: string) => {
   if (!dateStr) return '-'
   const date = new Date(dateStr)
   const now = new Date()
@@ -981,7 +971,7 @@ const detectBrowserOS = (): string => {
 
 const showQrCode = async (url: string, label: string, mode: 'shadowrocket' | 'raw' = 'raw') => {
   if (!url) { message.warning('暂无可用订阅'); return }
-  const expiry = subscription.value?.expire_time ? formatDate(subscription.value.expire_time) : ''
+  const expiry = subscription.value?.expire_time ? formatDateTime(subscription.value.expire_time) : ''
   qrTitle.value = expiry ? `${label} (到期: ${expiry})` : label
   qrHint.value = mode === 'shadowrocket'
     ? '请直接使用 Shadowrocket 扫描二维码，一键添加订阅'

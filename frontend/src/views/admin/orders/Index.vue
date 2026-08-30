@@ -7,23 +7,6 @@
       </div>
       <div class="header-right">
         <n-space>
-          <n-input
-            v-model:value="searchQuery"
-            placeholder="订单号 / 用户ID / 邮箱"
-            clearable
-            class="search-input"
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix><n-icon :component="SearchOutline" /></template>
-          </n-input>
-          <n-select
-            v-model:value="statusFilter"
-            placeholder="所有状态"
-            clearable
-            class="status-select"
-            :options="statusOptions"
-            @update:value="handleSearch"
-          />
           <n-button secondary @click="fetchOrders">
             <template #icon><n-icon><refresh-outline /></n-icon></template>
             刷新
@@ -35,25 +18,7 @@
     <div v-else class="mobile-toolbar">
       <div class="mobile-toolbar-title">订单管理</div>
       <div class="mobile-toolbar-controls">
-        <n-input
-          v-model:value="searchQuery"
-          placeholder="订单号 / 用户ID / 邮箱"
-          clearable
-          size="small"
-          @keyup.enter="handleSearch"
-        >
-          <template #prefix><n-icon :component="SearchOutline" /></template>
-        </n-input>
         <div class="mobile-toolbar-row">
-          <n-select
-            v-model:value="statusFilter"
-            placeholder="所有状态"
-            clearable
-            size="small"
-            :options="statusOptions"
-            @update:value="handleSearch"
-          />
-          <n-button size="small" type="primary" @click="handleSearch">搜索</n-button>
           <n-button size="small" @click="fetchOrders">
             <template #icon><n-icon><refresh-outline /></n-icon></template>
             刷新
@@ -61,6 +26,14 @@
         </div>
       </div>
     </div>
+
+    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行） -->
+    <search-filter-bar
+      v-model:values="filterValues"
+      :filters="filterConfig"
+      search-placeholder="订单号 / 用户ID / 邮箱"
+      @search="handleSearch"
+    />
 
     <!-- Stats Summary - Desktop & Mobile -->
     <div class="stats-summary">
@@ -185,7 +158,7 @@
                   </div>
                   <div class="card-row">
                     <span class="card-label">创建时间</span>
-                    <span>{{ formatDate(order.created_at) }}</span>
+                    <span>{{ formatDateTime(order.created_at) }}</span>
                   </div>
                 </div>
                 <div class="card-actions" @click.stop>
@@ -265,9 +238,9 @@
               <n-button size="tiny" quaternary @click="copyToClipboard(currentOrder.gateway_trade_no)">复制</n-button>
             </div>
           </n-descriptions-item>
-          <n-descriptions-item label="创建时间">{{ formatFullDate(currentOrder.created_at) }}</n-descriptions-item>
+          <n-descriptions-item label="创建时间">{{ formatFullDateTime(currentOrder.created_at) }}</n-descriptions-item>
           <n-descriptions-item label="支付时间" v-if="currentOrder.payment_time">
-            {{ formatFullDate(currentOrder.payment_time) }}
+            {{ formatFullDateTime(currentOrder.payment_time) }}
           </n-descriptions-item>
         </n-descriptions>
 
@@ -289,12 +262,15 @@
 <script setup lang="ts">
 import { ref, reactive, h, onMounted, watch } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSelect, useMessage, useDialog, type DataTableColumns, type TagProps } from 'naive-ui'
-import { SearchOutline, RefreshOutline, ReceiptOutline, TimeOutline, MailOutline, LayersOutline } from '@vicons/ionicons5'
+import { RefreshOutline, ReceiptOutline, TimeOutline, MailOutline, LayersOutline } from '@vicons/ionicons5'
 import { listAdminOrders, refundOrder, cancelOrder, completeOrder, deleteOrder, markOrderPaid, batchOrderAction, getAdminDashboard } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import SearchFilterBar from '@/components/SearchFilterBar.vue'
 import { useRoute } from 'vue-router'
 import { formatCurrency } from '@/utils/amount'
+import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
+import { formatDateTime, formatFullDateTime } from '@/utils/date'
 import '@/styles/admin-common.css'
 
 const message = useMessage()
@@ -320,6 +296,16 @@ const statusOptions = [
   { label: '已过期', value: 'expired' },
   { label: '已取消', value: 'cancelled' },
   { label: '已退款', value: 'refunded' }
+]
+
+// 统一筛选工具栏状态（值与原 refs 同步，保持业务逻辑不变）
+// searchQuery 可能来自 URL 参数（route.query.search），filterValues 初始值需保持一致
+const filterValues = reactive({
+  search: searchQuery.value,
+  status: null,
+})
+const filterConfig = [
+  { key: 'status', placeholder: '所有状态', options: statusOptions },
 ]
 
 const getStatusType = (s: string): TagProps['type'] => {
@@ -412,7 +398,7 @@ const columns: DataTableColumns<any> = [
     width: 180,
     render: (row: any) => h('div', { class: 'cell-inline time-text left-text' }, [
       h(NIcon, { component: TimeOutline, size: 14, class: 'inline-icon' }),
-      h('span', formatDate(row.created_at))
+      h('span', formatDateTime(row.created_at))
     ])
   },
   {
@@ -439,7 +425,12 @@ const fetchOrders = async () => {
   }
 }
 
-const handleSearch = () => { pagination.page = 1; fetchOrders() }
+const handleSearch = () => {
+  searchQuery.value = filterValues.search || ''
+  statusFilter.value = filterValues.status
+  pagination.page = 1
+  fetchOrders()
+}
 const handleViewDetail = (row: any) => { currentOrder.value = row; showDetailDrawer.value = true }
 
 const handleRefund = (row: any) => {
@@ -611,17 +602,15 @@ const handleBatchDelete = () => {
   })
 }
 
-const formatDate = (d: string) => d ? new Date(d).toLocaleDateString('zh-CN') + ' ' + new Date(d).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '-'
-const formatFullDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'
-
-const copyToClipboard = (text: string) => {
-  navigator.clipboard.writeText(text)
-  message.success('已复制到剪贴板')
+const copyToClipboard = async (text: string) => {
+  const ok = await clipboardCopy(text)
+  ok ? message.success('已复制到剪贴板') : message.error('复制失败')
 }
 
 watch(() => route.query.search, (searchVal) => {
   if (typeof searchVal === 'string' && searchVal !== searchQuery.value) {
     searchQuery.value = searchVal
+    filterValues.search = searchVal
     handleSearch()
   }
 })

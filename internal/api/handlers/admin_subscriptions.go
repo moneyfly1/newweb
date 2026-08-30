@@ -137,9 +137,9 @@ func AdminListSubscriptions(c *gin.Context) {
 		// 仍在有效期内时，以到期时间为准纠正 status，避免显示"已过期"
 		if sub.IsActive && sub.ExpireTime.After(time.Now()) {
 			if time.Until(sub.ExpireTime) <= 7*24*time.Hour {
-				item.Status = "expiring"
+				item.Status = models.SubStatusExpiring
 			} else {
-				item.Status = "active"
+				item.Status = models.SubStatusActive
 			}
 		}
 		items = append(items, item)
@@ -340,7 +340,7 @@ func AdminExtendSubscription(c *gin.Context) {
 	}
 	if err := db.Model(&sub).Updates(map[string]interface{}{
 		"is_active": true,
-		"status":    "active",
+		"status":    models.SubStatusActive,
 	}).Error; err != nil {
 		utils.InternalError(c, "延长订阅失败")
 		return
@@ -402,9 +402,9 @@ func AdminUpdateSubscription(c *gin.Context) {
 		if expireTime.After(now) {
 			// 未过期
 			if time.Until(expireTime) <= 7*24*time.Hour {
-				updates["status"] = "expiring"
+				updates["status"] = models.SubStatusExpiring
 			} else {
-				updates["status"] = "active"
+				updates["status"] = models.SubStatusActive
 			}
 			// 确保 is_active 为 true
 			if _, hasIsActive := updates["is_active"]; !hasIsActive {
@@ -412,7 +412,7 @@ func AdminUpdateSubscription(c *gin.Context) {
 			}
 		} else {
 			// 已过期
-			updates["status"] = "expired"
+			updates["status"] = models.SubStatusExpired
 		}
 	}
 
@@ -504,7 +504,7 @@ func AdminSetSubscriptionExpireTime(c *gin.Context) {
 	updates := map[string]interface{}{"expire_time": expireTime}
 	if expireTime.After(time.Now()) {
 		updates["is_active"] = true
-		updates["status"] = "active"
+		updates["status"] = models.SubStatusActive
 	}
 	if err := db.Model(&sub).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "设置订阅到期时间失败")

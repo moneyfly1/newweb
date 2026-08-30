@@ -254,9 +254,9 @@ func AdminTestNode(c *gin.Context) {
 
 	latency, reachable := testNodeConnectivity(*node.Config)
 	now := time.Now()
-	status := "offline"
+	status := models.NodeStatusOffline
 	if reachable {
-		status = "online"
+		status = models.NodeStatusOnline
 	}
 	if err := db.Model(&node).Updates(map[string]interface{}{
 		"status": status, "latency": latency, "last_test": &now,
@@ -303,10 +303,10 @@ func AdminBatchNodeAction(c *gin.Context) {
 		result := db.Model(&models.Node{}).Where("id IN ?", req.IDs).Update("is_active", false)
 		affected = result.RowsAffected
 	case "online":
-		result := db.Model(&models.Node{}).Where("id IN ?", req.IDs).Update("status", "online")
+		result := db.Model(&models.Node{}).Where("id IN ?", req.IDs).Update("status", models.NodeStatusOnline)
 		affected = result.RowsAffected
 	case "offline":
-		result := db.Model(&models.Node{}).Where("id IN ?", req.IDs).Update("status", "offline")
+		result := db.Model(&models.Node{}).Where("id IN ?", req.IDs).Update("status", models.NodeStatusOffline)
 		affected = result.RowsAffected
 	case "delete":
 		result := db.Where("id IN ?", req.IDs).Delete(&models.Node{})

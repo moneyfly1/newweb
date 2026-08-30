@@ -4,6 +4,20 @@ import (
 	"time"
 )
 
+// 邀请码展示状态（前端契约，由 inviteCodeStatus 计算得出，非数据库字段）
+const (
+	InviteCodeStatusActive    = "active"
+	InviteCodeStatusDisabled  = "disabled"
+	InviteCodeStatusExpired   = "expired"
+	InviteCodeStatusExhausted = "exhausted"
+)
+
+// 邀请返佣展示状态（前端契约，非数据库字段）
+const (
+	InviteRewardStatusPending = "pending"
+	InviteRewardStatusPaid    = "paid"
+)
+
 type InviteCode struct {
 	ID             uint       `gorm:"primaryKey" json:"id"`
 	Code           string     `gorm:"type:varchar(20);uniqueIndex" json:"code"`

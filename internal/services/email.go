@@ -158,7 +158,7 @@ func QueueEmail(toEmail, subject, content, emailType string) {
 		Content:     content,
 		ContentType: "html",
 		EmailType:   emailType,
-		Status:      "pending",
+		Status:      models.EmailStatusPending,
 		MaxRetries:  3,
 	}).Error; err != nil {
 		utils.SysError("email", fmt.Sprintf("写入邮件队列失败: to=%s type=%s err=%v", toEmail, emailType, err))
@@ -169,7 +169,7 @@ func QueueEmail(toEmail, subject, content, emailType string) {
 func ProcessEmailQueue() {
 	db := database.GetDB()
 	var emails []models.EmailQueue
-	db.Where("status = ? AND retry_count < max_retries", "pending").
+	db.Where("status = ? AND retry_count < max_retries", models.EmailStatusPending).
 		Order("created_at ASC").Limit(50).Find(&emails)
 
 	if len(emails) == 0 {
@@ -186,7 +186,7 @@ func ProcessEmailQueue() {
 			eq.ErrorMessage = &errMsg
 			eq.RetryCount++
 			if eq.RetryCount >= eq.MaxRetries {
-				eq.Status = "failed"
+				eq.Status = models.EmailStatusFailed
 			}
 			if saveErr := db.Save(eq).Error; saveErr != nil {
 				utils.SysError("email", fmt.Sprintf("更新邮件队列失败: id=%d err=%v", eq.ID, saveErr))
@@ -194,7 +194,7 @@ func ProcessEmailQueue() {
 			log.Printf("[EmailQueue] 发送失败 #%d -> %s: %s", eq.ID, eq.ToEmail, errMsg)
 			utils.SysError("email", fmt.Sprintf("发送失败 -> %s", eq.ToEmail), errMsg)
 		} else {
-			eq.Status = "sent"
+			eq.Status = models.EmailStatusSent
 			eq.SentAt = &now
 			if saveErr := db.Save(eq).Error; saveErr != nil {
 				utils.SysError("email", fmt.Sprintf("更新邮件队列失败: id=%d err=%v", eq.ID, saveErr))

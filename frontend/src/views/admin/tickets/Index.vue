@@ -78,7 +78,7 @@
                   </div>
                   <div class="card-row">
                     <span class="card-label">创建时间</span>
-                    <span>{{ formatDate(ticket.created_at) }}</span>
+                    <span>{{ formatFullDateTime(ticket.created_at) }}</span>
                   </div>
                 </div>
                 <div class="card-actions">
@@ -125,7 +125,7 @@
               </n-tag>
             </n-descriptions-item>
             <n-descriptions-item label="创建时间" :span="2">
-              {{ formatDate(currentTicket.created_at) }}
+              {{ formatFullDateTime(currentTicket.created_at) }}
             </n-descriptions-item>
           </n-descriptions>
 
@@ -141,7 +141,7 @@
                 <n-tag :type="reply.is_admin ? 'success' : 'info'" size="small">
                   {{ reply.is_admin ? '管理员' : '用户' }}
                 </n-tag>
-                <span class="message-time">{{ formatDate(reply.created_at) }}</span>
+                <span class="message-time">{{ formatFullDateTime(reply.created_at) }}</span>
               </div>
               <div class="message-content">{{ reply.content }}</div>
             </div>
@@ -179,6 +179,7 @@ import { ref, reactive, h, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NSpin, NSelect, useMessage, useDialog } from 'naive-ui'
 import { listAdminTickets, getAdminTicket, updateTicket, replyAdminTicket } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
@@ -269,7 +270,7 @@ const columns = [
     width: 160,
     resizable: true,
     sorter: (a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(),
-    render: (row: any) => formatDate(row.created_at)
+    render: (row: any) => formatFullDateTime(row.created_at)
   },
   {
     title: '操作',
@@ -349,11 +350,6 @@ const getPriorityTagType = (priority: string) => {
     urgent: 'error'
   }
   return map[priority] || 'default'
-}
-
-const formatDate = (date: string) => {
-  if (!date) return '-'
-  return new Date(date).toLocaleString('zh-CN')
 }
 
 const loadTickets = async () => {

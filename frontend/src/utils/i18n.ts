@@ -1,7 +1,7 @@
 // 中文化翻译工具
 
 // 邮件类型翻译
-export const emailTypeMap: Record<string, string> = {
+const emailTypeMap: Record<string, string> = {
   verification: '验证码',
   reset_password: '重置密码',
   welcome: '欢迎邮件',
@@ -22,7 +22,7 @@ export const emailTypeMap: Record<string, string> = {
 }
 
 // 余额变动类型翻译
-export const balanceChangeTypeMap: Record<string, string> = {
+const balanceChangeTypeMap: Record<string, string> = {
   recharge: '充值',
   purchase: '购买套餐',
   refund: '退款',
@@ -37,21 +37,21 @@ export const balanceChangeTypeMap: Record<string, string> = {
 }
 
 // 佣金类型翻译
-export const commissionTypeMap: Record<string, string> = {
+const commissionTypeMap: Record<string, string> = {
   purchase: '购买佣金',
   recharge: '充值佣金',
   invite: '邀请佣金'
 }
 
 // 登录状态翻译
-export const loginStatusMap: Record<string, string> = {
+const loginStatusMap: Record<string, string> = {
   success: '成功',
   failed: '失败',
   error: '错误'
 }
 
 // 设备类型解析
-export function parseDeviceType(userAgent: string): string {
+function parseDeviceType(userAgent: string): string {
   if (!userAgent) return '未知设备'
 
   const ua = userAgent.toLowerCase()
@@ -87,7 +87,7 @@ export function parseDeviceType(userAgent: string): string {
 }
 
 // 浏览器类型解析
-export function parseBrowserType(userAgent: string): string {
+function parseBrowserType(userAgent: string): string {
   if (!userAgent) return '未知浏览器'
 
   const ua = userAgent.toLowerCase()

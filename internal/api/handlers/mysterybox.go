@@ -383,7 +383,7 @@ func OpenMysteryBox(c *gin.Context) {
 			if err := tx.Where("user_id = ?", userID).First(&sub).Error; err != nil {
 				sub = models.Subscription{
 					UserID: userID, SubscriptionURL: utils.GenerateHexToken(),
-					DeviceLimit: 3, IsActive: true, Status: "active",
+					DeviceLimit: 3, IsActive: true, Status: models.SubStatusActive,
 					ExpireTime: time.Now().AddDate(0, 0, days),
 				}
 				if err := tx.Create(&sub).Error; err != nil {
@@ -395,7 +395,7 @@ func OpenMysteryBox(c *gin.Context) {
 					return err
 				}
 				if err := tx.Model(&sub).Updates(map[string]interface{}{
-					"is_active": true, "status": "active",
+					"is_active": true, "status": models.SubStatusActive,
 				}).Error; err != nil {
 					return err
 				}
@@ -408,9 +408,9 @@ func OpenMysteryBox(c *gin.Context) {
 			coupon := models.Coupon{
 				Code: couponCode, Name: fmt.Sprintf("盲盒奖品-%s", prize.Name),
 				Description: fmt.Sprintf("盲盒「%s」获得的优惠券", pool.Name),
-				Type:        "fixed", DiscountValue: prize.Value,
+				Type:        models.CouponTypeFixed, DiscountValue: prize.Value,
 				ValidFrom: validFrom, ValidUntil: validUntil,
-				MaxUsesPerUser: 1, Status: "active", TotalQuantity: &qty,
+				MaxUsesPerUser: 1, Status: models.CouponStatusActive, TotalQuantity: &qty,
 			}
 			if err := tx.Create(&coupon).Error; err != nil {
 				return err

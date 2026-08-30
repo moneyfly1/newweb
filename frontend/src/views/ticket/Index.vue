@@ -128,12 +128,13 @@ import { AddOutline } from '@vicons/ionicons5'
 import { listTickets, createTicket } from '@/api/ticket'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const router = useRouter()
 const message = useMessage()
 const appStore = useAppStore()
 
-const loading = ref(false)
+const { loading, beginLoad, endLoad } = usePageLoading()
 const submitting = ref(false)
 const showCreateModal = ref(false)
 const tickets = ref([])
@@ -272,7 +273,7 @@ const columns = [
 ]
 
 const loadTickets = async () => {
-  loading.value = true
+  beginLoad(tickets.value.length > 0)
   try {
     const res = await listTickets({
       page: pagination.page,
@@ -283,7 +284,7 @@ const loadTickets = async () => {
   } catch (error) {
     message.error(error.message || '加载工单列表失败')
   } finally {
-    loading.value = false
+    endLoad()
   }
 }
 

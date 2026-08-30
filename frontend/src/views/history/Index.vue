@@ -82,10 +82,11 @@ import { getLoginHistory } from '@/api/user'
 import { useAppStore } from '@/stores/app'
 import { formatLocation } from '@/utils/i18n'
 import { formatDateTime } from '@/utils/date'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const appStore = useAppStore()
 const message = useMessage()
-const loading = ref(false)
+const { loading, beginLoad, endLoad } = usePageLoading()
 const records = ref<any[]>([])
 
 const pagination = reactive({
@@ -142,7 +143,7 @@ const columns = [
 ]
 
 const loadHistory = async () => {
-  loading.value = true
+  beginLoad(records.value.length > 0)
   try {
     const res = await getLoginHistory({ page: pagination.page, page_size: pagination.pageSize })
     records.value = res.data?.items || []
@@ -150,7 +151,7 @@ const loadHistory = async () => {
   } catch (error: any) {
     message.error(error.message || '获取登录历史失败')
   } finally {
-    loading.value = false
+    endLoad()
   }
 }
 

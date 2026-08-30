@@ -106,6 +106,7 @@ import { useAppStore } from '@/stores/app'
 import { parseDeviceInfo, formatLocation } from '@/utils/i18n'
 import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 interface Device {
   id: number
@@ -128,7 +129,7 @@ interface Device {
 
 const appStore = useAppStore()
 const message = useMessage()
-const loading = ref(false)
+const { loading, beginLoad, endLoad } = usePageLoading()
 const devices = ref<Device[]>([])
 const showDeleteModal = ref(false)
 const deleteDeviceId = ref<number | null>(null)
@@ -242,7 +243,7 @@ const columns = [
 ]
 
 const fetchDevices = async () => {
-  loading.value = true
+  beginLoad(devices.value.length > 0)
   try {
     const res = await getSubscriptionDevices({ page: currentPage.value, page_size: pageSize.value })
     const data = res.data
@@ -256,7 +257,7 @@ const fetchDevices = async () => {
   } catch (error: any) {
     message.error(error.message || '获取设备列表失败')
   } finally {
-    loading.value = false
+    endLoad()
   }
 }
 

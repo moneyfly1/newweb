@@ -176,6 +176,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, h, onMounted } from 'vue'
+import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, NSpin, NSelect, useMessage, useDialog } from 'naive-ui'
 import { listAdminTickets, getAdminTicket, updateTicket, replyAdminTicket } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -187,7 +188,7 @@ const appStore = useAppStore()
 const message = useMessage()
 const dialog = useDialog()
 
-const loading = ref(false)
+const { loading, beginLoad, endLoad } = usePageLoading()
 const detailLoading = ref(false)
 const replyLoading = ref(false)
 const tickets = ref<any[]>([])
@@ -353,7 +354,7 @@ const getPriorityTagType = (priority: string) => {
 }
 
 const loadTickets = async () => {
-  loading.value = true
+  beginLoad(tickets.value.length > 0)
   try {
     const params: any = { ...filters, sort: sortState.value.sort, order: sortState.value.order }
     if (!params.status) delete params.status
@@ -365,7 +366,7 @@ const loadTickets = async () => {
   } catch (error: any) {
     message.error(error.message || '加载工单列表失败')
   } finally {
-    loading.value = false
+    endLoad()
   }
 }
 

@@ -669,3 +669,29 @@
 ### 商业化成熟度提升预估
 - UX 63→预计 75+（信任层/品牌化/订阅架构/动效/空态统一落地）
 - 性能 72→75+（KeepAlive 消除切 tab 重挂载+重拉 7 接口）
+
+## 全面代码去冗余与一致性重构（2025-08-30，4 子代理并行）
+
+### 子代理 A：前端工具收敛
+- 9 页本地 formatDate/formatFullDate → 统一 @/utils/date（formatDate/formatDateTime/formatFullDateTime），22 视图共用
+- orders/UserDetailDrawer 本地 clipboard → @/utils/clipboard
+- 全站 toLocaleString 散落调用收敛；删除死导出 formatTime；i18n map 私有化
+
+### 子代理 B：SearchFilterBar 推广
+- 推广到 users/orders/packages（filterValues + filterConfig 模式，保留业务数据流）
+- 跳过 tickets/subscriptions（并发修改中）/announcements/redeem/levels（无搜索+筛选）
+- 评估后放弃 UnifiedMobileCardList（卡片骨架已全局共享，字段差异过大）
+
+### 子代理 C：后端状态常量
+- 8 组 28 个状态常量（OrderStatus/SubStatus/NodeStatus/PayStatus/RedeemStatus/EmailStatus/TicketStatus/InviteStatus）
+- 221 处魔法字符串替换 + 原始 SQL 参数化
+- 删 21 个死函数（audit_logs.go/log_helpers.go）+ 无引用常量
+
+### 子代理 D：前后端一致性核查（只读，/tmp/audit_consistency.md）
+- 确认：前端 URL→handler 全匹配、page/page_size/search 参数名一致、错误码规范、CSRF/token 正常
+- **P0 记录**：POST /payment 的 use_balance/balance_amount 前端发送但后端未处理（余额抵扣静默失效，待修）
+- P1：/subscriptions/devices 返回裸数组；/coupons/verify 忽略 package_id
+
+### 验证
+- go build + go test 全绿、go vet 无告警；vue-tsc 0 错误；npm build 通过
+- 63 文件改动，提交 90ee17f 已推送

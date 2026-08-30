@@ -594,6 +594,8 @@ func AdminCancelOrder(c *gin.Context) {
 		utils.BadRequest(c, "订单状态已变化，无法取消")
 		return
 	}
+	// 退还余额抵扣（若有）
+	refundBalanceDeduct(db, &order)
 
 	utils.CreateAuditLog(c, "cancel_order", "order", uint(id), fmt.Sprintf("取消订单: %s", order.OrderNo))
 	utils.SuccessMessage(c, "订单已取消")

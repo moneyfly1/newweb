@@ -142,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, h, onMounted } from 'vue'
+import { ref, reactive, h, onActivated, onMounted } from 'vue'
 import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { listUserLevels, createUserLevel, updateUserLevel, deleteUserLevel } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
@@ -335,6 +335,11 @@ const handleBatchDelete = () => {
 }
 
 onMounted(() => {
+  loadLevels()
+})
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
   loadLevels()
 })
 </script>

@@ -489,6 +489,8 @@ func AdminDeleteAnnouncement(c *gin.Context) {
 }
 
 func ListPublicAnnouncements(c *gin.Context) {
+	// 60s CDN 边缘缓存：公告低频变更
+	c.Header("Cache-Control", "public, max-age=60")
 	// 60s 内存缓存
 	if cached := utils.GetPublicCache("public_announcements"); cached != nil {
 		utils.Success(c, cached)

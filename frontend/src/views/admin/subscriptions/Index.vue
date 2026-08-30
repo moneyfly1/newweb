@@ -181,7 +181,7 @@
   </div>
 </template>
 <script setup>
-import { ref, h, onMounted, nextTick, watch } from 'vue'
+import { ref, h, onActivated, onMounted, nextTick, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NDatePicker, NInputNumber, NInput, NDropdown, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, RefreshOutline, PersonOutline, MailOutline, PowerOutline, TrashOutline, CopyOutline, QrCodeOutline } from '@vicons/ionicons5'
@@ -599,6 +599,11 @@ const handleBatchDelete = () => {
 }
 
 onMounted(() => fetchData())
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
+  fetchData()
+})
 
 // URL 带 search 参数时（如 Dashboard 跳转）自动应用搜索
 watch(() => route.query.search, (searchVal) => {

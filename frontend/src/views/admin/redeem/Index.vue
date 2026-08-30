@@ -169,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, h, onMounted } from 'vue'
+import { ref, reactive, h, onActivated, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { listRedeemCodes, createRedeemCodes, deleteRedeemCode } from '@/api/admin'
@@ -412,6 +412,11 @@ const handleBatchDelete = () => {
 }
 
 onMounted(() => {
+  loadCodes()
+})
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
   loadCodes()
 })
 </script>

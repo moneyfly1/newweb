@@ -102,7 +102,7 @@
 </template>
 
 <script setup>
-import { ref, h, onMounted } from 'vue'
+import { ref, h, onActivated, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NIcon, useMessage } from 'naive-ui'
 import { SearchOutline, RefreshOutline, PersonOutline } from '@vicons/ionicons5'
 import { useRouter } from 'vue-router'
@@ -203,6 +203,11 @@ const handleViewUser = (userId) => {
 }
 
 onMounted(() => {
+  loadData()
+})
+
+// KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
+onActivated(() => {
   loadData()
 })
 </script>

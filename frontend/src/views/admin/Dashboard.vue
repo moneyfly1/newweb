@@ -394,7 +394,7 @@ onMounted(() => {
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
   transition: transform 0.12s ease;
 }
-.metric-card:active { transform: scale(0.97); }
+
 
 .metric-primary { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
 .metric-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }

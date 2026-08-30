@@ -207,7 +207,7 @@ onMounted(() => {
   position: relative;
   transition: transform 0.12s ease;
 }
-.notif-item:active { transform: scale(0.98); }
+
 .notif-item.unread { background: var(--primary-color-soft, rgba(79, 70, 229, 0.04)); }
 .notif-dot {
   width: 8px;

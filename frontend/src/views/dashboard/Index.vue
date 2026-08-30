@@ -692,8 +692,8 @@ async function loadFullDashboardData() {
   ordersLoading.value = false
   if (checkinRes.status === 'fulfilled') { const res: any = checkinRes.value; if (res.data) checkinStatus.value = res.data }
   loadCheckinHistory()
-  // 数据就绪：触发卡片依次入场（仅一次性）
-  loaded.value = true
+  // 数据就绪：触发卡片依次入场（仅首次置 true，KeepAlive 激活刷新不重播动画）
+  if (!loaded.value) loaded.value = true
 }
 
 onMounted(() => {

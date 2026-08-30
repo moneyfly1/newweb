@@ -58,7 +58,7 @@ func RedeemCode(c *gin.Context) {
 			newStatus = models.RedeemStatusUsed
 		}
 		claimRes := tx.Model(&models.RedeemCode{}).
-			Where("id = ? AND status IN ? AND used_count = ?", []string{models.RedeemStatusUnused, models.RedeemStatusActive}, code.ID, code.UsedCount).
+			Where("id = ? AND status IN ? AND used_count = ?", code.ID, []string{models.RedeemStatusUnused, models.RedeemStatusActive}, code.UsedCount).
 			Updates(map[string]interface{}{"used_count": newCount, "status": newStatus})
 		if claimRes.Error != nil {
 			return claimRes.Error

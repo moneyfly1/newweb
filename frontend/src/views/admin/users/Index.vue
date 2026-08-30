@@ -86,6 +86,7 @@
             :checked-row-keys="checkedRowKeys"
             :row-props="getRowProps"
             @update:checked-row-keys="handleCheck"
+            @update:sorter="handleSorterChange"
           />
         </template>
 
@@ -332,7 +333,7 @@ const searchQuery = ref('')
 const statusFilter = ref(null)
 
 // 统一表格状态（含搜索/状态筛选）
-const { loading, tableData: users, checkedRowKeys, pagination, loadData, reload } = useTable(listUsers, {
+const { loading, tableData: users, checkedRowKeys, pagination, loadData, reload, handleSorterChange } = useTable(listUsers, {
   getParams: () => ({
     search: searchQuery.value || undefined,
     is_active: statusFilter.value === 'active' ? true : statusFilter.value === 'inactive' ? false : undefined,
@@ -469,7 +470,7 @@ const columns = [
     title: '余额',
     key: 'balance',
     width: 100, resizable: true,
-    sorter: (a, b) => a.balance - b.balance,
+    sorter: 'default',
     render: (row) => formatCurrency(row.balance)
   },
   {
@@ -482,14 +483,14 @@ const columns = [
     title: '注册时间',
     key: 'created_at',
     width: 170, resizable: true,
-    sorter: (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0),
+    sorter: 'default',
     render: (row) => formatFullDateTime(row.created_at)
   },
   {
     title: '最后登录',
     key: 'last_login',
     width: 170, resizable: true,
-    sorter: (a, b) => new Date(a.last_login || 0) - new Date(b.last_login || 0),
+    sorter: 'default',
     render: (row) => formatFullDateTime(row.last_login)
   },
   {
@@ -536,7 +537,9 @@ const handleLineTypeChange = async (row, lineType) => {
 const getRowProps = (row) => ({
   style: 'cursor: pointer',
   onClick: (e) => {
-    if (e.target.closest('.n-button, .n-dropdown, .n-checkbox')) return
+    // 排除交互元素：按钮/下拉/复选框/开关/输入/链接，避免误触打开详情
+    const t = e.target.closest('.n-button, .n-dropdown, .n-checkbox, .n-switch, .n-input, .n-select, a, .line-type-trigger')
+    if (t) return
     handleViewDetail(row)
   }
 })
@@ -606,8 +609,13 @@ const handleSaveUser = async () => {
       is_admin: editForm.is_admin,
       is_active: editForm.is_active,
       notes: editForm.notes,
-      expire_time: editForm.expire_time ? new Date(editForm.expire_time).toISOString() : null,
-      device_limit: editForm.device_limit
+    }
+    // 仅当编辑了到期时间/设备上限时才提交，避免 null 覆盖订阅数据（后端亦防御）
+    if (editForm.expire_time) {
+      userData.expire_time = new Date(editForm.expire_time).toISOString()
+    }
+    if (editForm.device_limit != null) {
+      userData.device_limit = editForm.device_limit
     }
 
     if (isCreate.value) {

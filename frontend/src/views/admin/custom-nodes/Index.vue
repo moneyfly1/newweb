@@ -26,6 +26,10 @@
           >
             <n-button secondary :disabled="checkedRowKeys.length === 0">批量操作 ({{ checkedRowKeys.length }})</n-button>
           </n-dropdown>
+          <n-button type="primary" @click="handleCreate">
+            <template #icon><n-icon><AddOutline /></n-icon></template>
+            新建节点
+          </n-button>
           <n-button type="primary" @click="showImportDrawer = true">
             <template #icon><n-icon><CloudUploadOutline /></n-icon></template>
             导入链接
@@ -52,6 +56,7 @@
           <n-button type="info" @click="handleSearch">搜索</n-button>
         </div>
         <div class="mobile-toolbar-row">
+          <n-button size="small" type="primary" @click="handleCreate">新建</n-button>
           <n-button size="small" type="primary" @click="showImportDrawer = true">导入</n-button>
           <n-button size="small" secondary @click="handleResetSearch">刷新</n-button>
         </div>
@@ -334,6 +339,7 @@ import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage } from 'naive-ui'
 import {
   CreateOutline,
+  AddOutline,
   TrashOutline,
   PeopleOutline,
   CloudUploadOutline,

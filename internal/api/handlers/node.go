@@ -52,15 +52,46 @@ func ListNodes(c *gin.Context) {
 	}
 
 	// --- Determine full node list and stats ---
+	// 过滤条件（region/status/protocol）应用到完整列表，保证分页与统计一致
+	region := c.Query("region")
+	statusFilter := c.Query("status")
+	protocol := c.Query("protocol")
+	applyFilters := func(ns []models.Node) []models.Node {
+		out := make([]models.Node, 0, len(ns))
+		for _, n := range ns {
+			if region != "" && n.Region != region {
+				continue
+			}
+			if statusFilter != "" && n.Status != statusFilter {
+				continue
+			}
+			if protocol != "" && n.Type != protocol {
+				continue
+			}
+			out = append(out, n)
+		}
+		return out
+	}
+
 	var allNodes []models.Node
 	if isDedicatedOnly {
 		// Dedicated-only mode: only custom nodes, no public nodes
-		allNodes = customNodes
+		allNodes = applyFilters(customNodes)
 	} else {
 		// Normal mode: custom nodes first, then public nodes
 		var allPublic []models.Node
-		db.Model(&models.Node{}).Where("is_active = ?", true).Order("order_index ASC").Find(&allPublic)
-		allNodes = append(customNodes, allPublic...)
+		pubListQuery := db.Model(&models.Node{}).Where("is_active = ?", true)
+		if region != "" {
+			pubListQuery = pubListQuery.Where("region = ?", region)
+		}
+		if statusFilter != "" {
+			pubListQuery = pubListQuery.Where("status = ?", statusFilter)
+		}
+		if protocol != "" {
+			pubListQuery = pubListQuery.Where("type = ?", protocol)
+		}
+		pubListQuery.Order("order_index ASC").Find(&allPublic)
+		allNodes = append(applyFilters(customNodes), allPublic...)
 	}
 
 	// Compute global stats from full node list

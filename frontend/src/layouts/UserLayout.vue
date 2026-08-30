@@ -157,7 +157,7 @@ const unreadCount = ref(0)
 const showMobileMore = ref(false)
 
 onMounted(async () => {
-  try { const res: any = await getUnreadCount(); unreadCount.value = res.data?.count || 0 } catch {}
+  try { const res: any = await getUnreadCount(); unreadCount.value = res.data?.unread_count ?? res.data?.count ?? 0 } catch {}
 })
 
 function renderIcon(icon: any) { return () => h(NIcon, null, { default: () => h(icon) }) }

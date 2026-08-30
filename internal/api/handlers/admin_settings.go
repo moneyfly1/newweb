@@ -36,6 +36,12 @@ func AdminCreateRedeemCodes(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	// 防御：套餐兑换码必须携带 package_id（前端旧版/直接调 API 可能遗漏，
+	// 缺失时兑换会把套餐ID当作订阅天数，产生错误结果）
+	if req.Type == "package" && req.PackageID == nil {
+		utils.BadRequest(c, "套餐兑换码必须指定 package_id")
+		return
+	}
 	adminID := c.GetUint("user_id")
 	db := database.GetDB()
 	qty := req.Quantity
@@ -100,7 +106,20 @@ func AdminListEmailQueue(c *gin.Context) {
 	}
 	db.Count(&total)
 	db.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&items)
-	utils.SuccessPage(c, items, total, p.Page, p.PageSize)
+	// 附带全队列分状态统计（供前端统计卡展示，避免用当前页数据误算）
+	var pendingCount, sentCount, failedCount int64
+	database.GetDB().Model(&models.EmailQueue{}).Where("status = ?", "pending").Count(&pendingCount)
+	database.GetDB().Model(&models.EmailQueue{}).Where("status = ?", "sent").Count(&sentCount)
+	database.GetDB().Model(&models.EmailQueue{}).Where("status = ?", "failed").Count(&failedCount)
+	utils.Success(c, gin.H{
+		"items": items,
+		"total": total, "page": p.Page, "page_size": p.PageSize,
+		"stats": gin.H{
+			"pending": pendingCount,
+			"sent":    sentCount,
+			"failed":  failedCount,
+		},
+	})
 }
 
 func AdminRetryEmail(c *gin.Context) {
@@ -200,8 +219,12 @@ func AdminUpdateSettings(c *gin.Context) {
 			return
 		}
 		strVal := fmt.Sprintf("%v", v)
-		// 值长度限制（防止注入超长文本）
-		if len(strVal) > 4096 {
+		// 值长度限制（防止注入超长文本）；site_icon 为 base64 图片数据，单独放宽
+		limit := 4096
+		if k == "site_icon" {
+			limit = 32768
+		}
+		if len(strVal) > limit {
 			utils.BadRequest(c, fmt.Sprintf("设置项 %s 的值过长", k))
 			return
 		}

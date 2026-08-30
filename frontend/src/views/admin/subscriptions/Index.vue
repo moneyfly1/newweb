@@ -181,18 +181,18 @@
   </div>
 </template>
 <script setup>
-import { ref, h, onMounted, nextTick } from 'vue'
+import { ref, h, onMounted, nextTick, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NDatePicker, NInputNumber, NInput, NDropdown, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, RefreshOutline, PersonOutline, MailOutline, PowerOutline, TrashOutline, CopyOutline, QrCodeOutline } from '@vicons/ionicons5'
 import QRCode from 'qrcode'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatDateTime } from '@/utils/date'
 import {
-  listAdminSubscriptions, resetAdminSubscription,
+  listAdminSubscriptions, resetAdminSubscription, clearSubscriptionDevices,
   extendSubscription, updateSubscriptionDeviceLimit, sendSubscriptionEmail,
   setSubscriptionExpireTime, deleteUserFull, toggleUserActive, loginAsUser,
   updateUserNotes, updateUserLineType
@@ -203,11 +203,12 @@ import '@/styles/admin-common.css'
 const message = useMessage()
 const dialog = useDialog()
 const router = useRouter()
+const route = useRoute()
 const appStore = useAppStore()
 const userStore = useUserStore()
 
 const { loading, beginLoad, endLoad } = usePageLoading()
-const searchQuery = ref('')
+const searchQuery = ref(String(route.query.search || ''))
 const statusFilter = ref(null)
 const lineFilter = ref(null)
 const tableData = ref([])
@@ -543,7 +544,7 @@ const handleDeleteUser = (row) => {
 }
 const handleClearDevices = (row) => {
   dialog.warning({ title: '确认清理', content: '清除该订阅下所有设备记录？', positiveText: '确定', negativeText: '取消',
-    onPositiveClick: async () => { try { await resetAdminSubscription(row.id); message.success('已清理'); fetchData() } catch { message.error('清理失败') } }
+    onPositiveClick: async () => { try { await clearSubscriptionDevices(row.id); message.success('已清理'); fetchData() } catch { message.error('清理失败') } }
   })
 }
 
@@ -598,6 +599,15 @@ const handleBatchDelete = () => {
 }
 
 onMounted(() => fetchData())
+
+// URL 带 search 参数时（如 Dashboard 跳转）自动应用搜索
+watch(() => route.query.search, (searchVal) => {
+  const v = String(searchVal || '')
+  if (v && v !== searchQuery.value) {
+    searchQuery.value = v
+    fetchData()
+  }
+})
 </script>
 <style scoped>
 /* Desktop inline cells */

@@ -91,6 +91,8 @@
               :page-sizes="loginPagination.pageSizes"
               show-size-picker
               style="margin-top: 16px; justify-content: flex-end"
+              @update:page="(p: number) => { loginPagination.page = p; loadLoginLogs() }"
+              @update:page-size="(ps: number) => { loginPagination.pageSize = ps; loginPagination.page = 1; loadLoginLogs() }"
             />
           </template>
         </n-tab-pane>
@@ -128,6 +130,8 @@
               :page-sizes="registrationPagination.pageSizes"
               show-size-picker
               style="margin-top: 16px; justify-content: flex-end"
+              @update:page="(p: number) => { registrationPagination.page = p; loadRegistrationLogs() }"
+              @update:page-size="(ps: number) => { registrationPagination.pageSize = ps; registrationPagination.page = 1; loadRegistrationLogs() }"
             />
           </template>
         </n-tab-pane>
@@ -165,6 +169,8 @@
               :page-sizes="subscriptionPagination.pageSizes"
               show-size-picker
               style="margin-top: 16px; justify-content: flex-end"
+              @update:page="(p: number) => { subscriptionPagination.page = p; loadSubscriptionLogs() }"
+              @update:page-size="(ps: number) => { subscriptionPagination.pageSize = ps; subscriptionPagination.page = 1; loadSubscriptionLogs() }"
             />
           </template>
         </n-tab-pane>
@@ -204,6 +210,8 @@
               :page-sizes="balancePagination.pageSizes"
               show-size-picker
               style="margin-top: 16px; justify-content: flex-end"
+              @update:page="(p: number) => { balancePagination.page = p; loadBalanceLogs() }"
+              @update:page-size="(ps: number) => { balancePagination.pageSize = ps; balancePagination.page = 1; loadBalanceLogs() }"
             />
           </template>
         </n-tab-pane>
@@ -242,6 +250,8 @@
               :page-sizes="commissionPagination.pageSizes"
               show-size-picker
               style="margin-top: 16px; justify-content: flex-end"
+              @update:page="(p: number) => { commissionPagination.page = p; loadCommissionLogs() }"
+              @update:page-size="(ps: number) => { commissionPagination.pageSize = ps; commissionPagination.page = 1; loadCommissionLogs() }"
             />
           </template>
         </n-tab-pane>
@@ -283,6 +293,8 @@
               :page-sizes="systemPagination.pageSizes"
               show-size-picker
               style="margin-top: 16px; justify-content: flex-end"
+              @update:page="(p: number) => { systemPagination.page = p; loadSystemLogs() }"
+              @update:page-size="(ps: number) => { systemPagination.pageSize = ps; systemPagination.page = 1; loadSystemLogs() }"
             />
           </template>
         </n-tab-pane>

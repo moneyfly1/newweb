@@ -26,7 +26,7 @@
 
       <n-card :bordered="false">
         <!-- Desktop table -->
-        <n-data-table v-if="!appStore.isMobile"
+        <n-data-table v-if="!appStore.isMobile" remote
           :columns="columns"
           :data="records"
           :loading="loading"

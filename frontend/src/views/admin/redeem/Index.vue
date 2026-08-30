@@ -340,7 +340,12 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
-    const res = await createRedeemCodes(formData)
+    // 套餐兑换码必须携带 package_id，否则兑换时会把套餐ID当作天数（后端防御见 AdminCreateRedeemCodes）
+    const payload: any = { ...formData }
+    if (payload.type === 'package') {
+      payload.package_id = payload.value
+    }
+    const res = await createRedeemCodes(payload)
     message.success('生成成功')
     
     generatedCodes.value = res.data.codes || []
@@ -385,6 +390,12 @@ const handleDelete = (id: number) => {
 }
 
 const handleBatchDelete = () => {
+  // 与单条删除一致：已使用的兑换码不可删除
+  const used = codes.value.filter((c: any) => checkedRowKeys.value.includes(c.id) && c.used_count > 0)
+  if (used.length > 0) {
+    message.warning(`选中中有 ${used.length} 个已使用的兑换码，不可删除`)
+    return
+  }
   dialog.warning({
     title: '批量删除',
     content: `确定要删除选中的 ${checkedRowKeys.value.length} 个兑换码吗？`,

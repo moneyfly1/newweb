@@ -54,13 +54,13 @@
         <n-grid-item>
           <div class="mini-stat-card">
             <div class="stat-label">待支付订单</div>
-            <div class="stat-value text-warning">{{ orderStats.pending_count || 0 }}</div>
+            <div class="stat-value text-warning">{{ orderStats.pending_orders ?? orderStats.pending_count ?? 0 }}</div>
           </div>
         </n-grid-item>
         <n-grid-item>
           <div class="mini-stat-card">
             <div class="stat-label">退款订单</div>
-            <div class="stat-value text-error">{{ orderStats.refunded_count || 0 }}</div>
+            <div class="stat-value text-error">{{ orderStats.refunded_count ?? 0 }}</div>
           </div>
         </n-grid-item>
       </n-grid>
@@ -81,13 +81,13 @@
         <n-grid-item>
           <div class="mini-stat-card mobile-stat">
             <div class="stat-label">待支付</div>
-            <div class="stat-value text-warning">{{ orderStats.pending_count || 0 }}</div>
+            <div class="stat-value text-warning">{{ orderStats.pending_orders ?? orderStats.pending_count ?? 0 }}</div>
           </div>
         </n-grid-item>
         <n-grid-item>
           <div class="mini-stat-card mobile-stat">
             <div class="stat-label">退款</div>
-            <div class="stat-value text-error">{{ orderStats.refunded_count || 0 }}</div>
+            <div class="stat-value text-error">{{ orderStats.refunded_count ?? 0 }}</div>
           </div>
         </n-grid-item>
       </n-grid>
@@ -440,10 +440,12 @@ const handleRefund = (row: any) => {
     content: `订单 ${row.order_no} 将退款 ${formatCurrency(row.final_amount || row.amount)}。线上支付会原路退回支付渠道，余额支付才退回用户余额。`,
     positiveText: '确认退款',
     onPositiveClick: async () => {
-      await refundOrder(row.id)
-      message.success('已退款')
-      showDetailDrawer.value = false
-      fetchOrders()
+      try {
+        await refundOrder(row.id)
+        message.success('已退款')
+        showDetailDrawer.value = false
+        fetchOrders()
+      } catch (e: any) { message.error(e?.message || '退款失败') }
     }
   })
 }
@@ -454,10 +456,12 @@ const handleCancel = (row: any) => {
     content: '确定要取消此订单吗？取消后用户不能继续支付此订单。',
     positiveText: '确定',
     onPositiveClick: async () => {
-      await cancelOrder(row.id)
-      message.success('已取消')
-      showDetailDrawer.value = false
-      fetchOrders()
+      try {
+        await cancelOrder(row.id)
+        message.success('已取消')
+        showDetailDrawer.value = false
+        fetchOrders()
+      } catch (e: any) { message.error(e?.message || '取消失败') }
     }
   })
 }
@@ -468,10 +472,12 @@ const handleMarkPaid = (row: any) => {
     content: `确认订单 ${row.order_no} 已线下收款或需要人工放行？系统会立即开通/续期/升级对应订阅权限。`,
     positiveText: '确认开通',
     onPositiveClick: async () => {
-      await markOrderPaid(row.id)
-      message.success('已标记付款并开通权限')
-      showDetailDrawer.value = false
-      fetchOrders()
+      try {
+        await markOrderPaid(row.id)
+        message.success('已标记付款并开通权限')
+        showDetailDrawer.value = false
+        fetchOrders()
+      } catch (e: any) { message.error(e?.message || '操作失败') }
     }
   })
 }
@@ -482,10 +488,12 @@ const handleComplete = (row: any) => {
     content: '此操作只将已支付订单标记为完成，不会重复开通订阅。',
     positiveText: '确定完成',
     onPositiveClick: async () => {
-      await completeOrder(row.id)
-      message.success('已标记为完成')
-      showDetailDrawer.value = false
-      fetchOrders()
+      try {
+        await completeOrder(row.id)
+        message.success('已标记为完成')
+        showDetailDrawer.value = false
+        fetchOrders()
+      } catch (e: any) { message.error(e?.message || '操作失败') }
     }
   })
 }
@@ -496,10 +504,12 @@ const handleDelete = (row: any) => {
     content: `确定删除订单 ${row.order_no} 吗？只能删除已取消或已退款的订单记录。`,
     positiveText: '删除',
     onPositiveClick: async () => {
-      await deleteOrder(row.id)
-      message.success('订单记录已删除')
-      showDetailDrawer.value = false
-      fetchOrders()
+      try {
+        await deleteOrder(row.id)
+        message.success('订单记录已删除')
+        showDetailDrawer.value = false
+        fetchOrders()
+      } catch (e: any) { message.error(e?.message || '删除失败') }
     }
   })
 }
@@ -575,8 +585,12 @@ const handleBatchRefund = () => {
     positiveText: '确定退款',
     onPositiveClick: async () => {
       try {
-        await Promise.all(refundable.map(o => refundOrder(o.id)))
-        message.success('批量退款完成')
+        let ok = 0, fail = 0
+        for (const o of refundable) {
+          try { await refundOrder(o.id); ok++ } catch { fail++ }
+        }
+        if (ok > 0) message.success(`批量退款完成：成功 ${ok} 笔`)
+        if (fail > 0) message.error(`批量退款部分失败：${fail} 笔未成功`)
         checkedRowKeys.value = []
         fetchOrders()
       } catch { message.error('批量退款失败') }

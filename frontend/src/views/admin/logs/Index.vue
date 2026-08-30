@@ -50,6 +50,8 @@
               :page-sizes="auditPagination.pageSizes"
               show-size-picker
               style="margin-top: 16px; justify-content: flex-end"
+              @update:page="(p: number) => { auditPagination.page = p; loadAuditLogs() }"
+              @update:page-size="(ps: number) => { auditPagination.pageSize = ps; auditPagination.page = 1; loadAuditLogs() }"
             />
           </template>
         </n-tab-pane>

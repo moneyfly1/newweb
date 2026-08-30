@@ -13,10 +13,6 @@ import (
 	"gorm.io/gorm"
 )
 
-func roundToTwoDecimals(value float64) float64 {
-	return float64(int(value*100+0.5)) / 100
-}
-
 type userCustomNodeSummary struct {
 	Count         int  `json:"custom_node_count"`
 	DedicatedOnly bool `json:"dedicated_only"`
@@ -209,8 +205,8 @@ func AdminDashboard(c *gin.Context) {
 	resultData := gin.H{
 		"total_users":          userCount,
 		"active_subscriptions": subCount,
-		"today_revenue":        roundToTwoDecimals(revenueToday),
-		"month_revenue":        roundToTwoDecimals(revenueMonth),
+		"today_revenue":        utils.Round2(revenueToday),
+		"month_revenue":        utils.Round2(revenueMonth),
 		"pending_orders":       pendingOrders,
 		"refunded_count":       refundedOrders,
 		"pending_tickets":      pendingTickets,
@@ -302,7 +298,7 @@ func AdminStats(c *gin.Context) {
 		"subscription_count": subCount,
 		"active_sub_count":   activeSubCount,
 		"node_count":         nodeCount,
-		"total_revenue":      roundToTwoDecimals(totalRevenue),
+		"total_revenue":      utils.Round2(totalRevenue),
 	}
 
 	cache.SetDashboardCache("admin_stats_overview", resultData, 60*time.Second)

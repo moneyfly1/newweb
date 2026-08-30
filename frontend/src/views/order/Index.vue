@@ -427,6 +427,7 @@ import { listOrders, payOrder, cancelOrder, createPayment, getOrderStatus } from
 import { listRechargeRecords, cancelRecharge, getPaymentMethods, getRechargeStatus, createRechargePayment } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 import { safeRedirect } from '@/utils/security'
+import { isQrCodeUrl, isCodepayPayType, isCodepayPageUrl } from '@/utils/payment'
 import { getErrorMessage, silentCatch } from '@/utils/error'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
@@ -499,10 +500,6 @@ const pmMeta = (payType: string): PmMeta =>
     payType, label: payType, brand: 'var(--primary-color)',
     icon: (payType[0] || '?').toUpperCase(), desc: '在线支付',
   }
-
-const isCodepayPayType = (payType?: string) => {
-  return !!payType && (payType === 'codepay' || payType.startsWith('codepay_'))
-}
 
 const isCodepayMethodValue = (methodValue?: string) => {
   if (!methodValue?.startsWith('pm_')) return false
@@ -645,24 +642,6 @@ const handleTabChange = (tab: string) => {
 }
 
 // ===== 支付公共逻辑 =====
-const isQrCodeUrl = (url: string) => {
-  // 支付宝二维码
-  if (url.includes('qr.alipay.com')) return true
-  // 通用二维码链接（短链接）
-  if (url.startsWith('https://qr.') && url.length < 200) return true
-  // 码支付二维码（通常是短链接或包含特定关键词）
-  if (url.includes('qrcode') || url.includes('qr_code')) return true
-  // 微信支付二维码
-  if (url.includes('wxpay') && url.startsWith('weixin://')) return true
-  // 其他常见二维码模式：短链接（长度小于100）且以 http 开头
-  if ((url.startsWith('http://') || url.startsWith('https://')) && url.length < 100) return true
-  return false
-}
-
-const isCodepayPageUrl = (url: string) => {
-  return url.includes('/submit.php') || url.includes('/xpay/epay/submit.php')
-}
-
 const openCodepayWindow = () => {
   if (codepayUrl.value) {
     window.open(codepayUrl.value, '_blank', 'width=800,height=700,scrollbars=yes,resizable=yes')

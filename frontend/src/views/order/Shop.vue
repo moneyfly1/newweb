@@ -309,6 +309,7 @@ import { listPackages, verifyCoupon, getPaymentMethods, getPublicConfig } from '
 import { createOrder, payOrder, createPayment, getOrderStatus, createCustomOrder } from '@/api/order'
 import { getDashboardInfo } from '@/api/user'
 import { safeRedirect } from '@/utils/security'
+import { isQrCodeUrl, isCodepayPayType, isCodepayPageUrl } from '@/utils/payment'
 import { formatCurrency } from '@/utils/amount'
 import { getErrorMessage, silentCatch } from '@/utils/error'
 import CommonDrawer from '@/components/CommonDrawer.vue'
@@ -468,10 +469,6 @@ const handleSelectPayment = (value: string) => {
   paymentMethod.value = value
 }
 
-const isCodepayPayType = (payType?: string) => {
-  return !!payType && (payType === 'codepay' || payType.startsWith('codepay_'))
-}
-
 const isCodepayPaymentMethod = () => {
   if (!paymentMethod.value.startsWith('pm_')) return false
   const methodId = parseInt(paymentMethod.value.replace('pm_', ''))
@@ -541,25 +538,6 @@ const handleBuy = async (pkg: any) => {
   } catch (e: any) {
     message.error(getErrorMessage(e, '创建订单失败'))
   } finally { buyingId.value = null }
-}
-
-const isQrCodeUrl = (url: string) => {
-  // 支付宝二维码
-  if (url.includes('qr.alipay.com')) return true
-  // 通用二维码链接（短链接）
-  if (url.startsWith('https://qr.') && url.length < 200) return true
-  // 码支付二维码（通常是短链接或包含特定关键词）
-  if (url.includes('qrcode') || url.includes('qr_code')) return true
-  // 微信支付二维码
-  if (url.includes('wxpay') && url.startsWith('weixin://')) return true
-  // 其他常见二维码模式：短链接（长度小于100）且以 http 开头
-  if ((url.startsWith('http://') || url.startsWith('https://')) && url.length < 100) return true
-  return false
-}
-
-const isCodepayPageUrl = (url: string) => {
-  // 码支付的submit.php页面（需要在iframe中显示）
-  return url.includes('/xpay/epay/submit.php') || url.includes('/submit.php')
 }
 
 const goToPurchaseSuccess = (orderNo: string) => {

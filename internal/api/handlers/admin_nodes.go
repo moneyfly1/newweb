@@ -211,7 +211,7 @@ func AdminTestNode(c *gin.Context) {
 		return
 	}
 
-	latency, reachable := testNodeConnectivity(*node.Config)
+	latency, reachable := services.TestNodeConnectivity(*node.Config)
 	now := time.Now()
 	status := models.NodeStatusOffline
 	if reachable {
@@ -231,7 +231,7 @@ func AdminTestNode(c *gin.Context) {
 		"status":    status,
 		"latency":   latency,
 		"reachable": reachable,
-		"address":   extractNodeAddressForTest(*node.Config),
+		"address":   services.ExtractNodeAddressForTest(*node.Config),
 	})
 }
 

@@ -31,8 +31,6 @@
           :row-key="(row: any) => row.id"
           :checked-row-keys="checkedRowKeys"
           @update:checked-row-keys="updateChecked"
-          @update:page="(p) => { pagination.page = p; loadData() }"
-          @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; loadData() }"
           @update:sorter="handleSorterChange"
         />
       </template>
@@ -72,6 +70,16 @@
             </div>
           </div>
         </n-spin>
+        <n-pagination
+          v-if="tableData.length > 0"
+          v-model:page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :item-count="pagination.itemCount"
+          :page-sizes="pagination.pageSizes || [10, 20, 50, 100]"
+          style="margin-top: 16px; justify-content: flex-end"
+          @update:page="(p: number) => { pagination.page = p; loadData() }"
+          @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; loadData() }"
+        />
       </template>
     </n-card>
 

@@ -111,9 +111,13 @@ func AdminUpdateCustomNode(c *gin.Context) {
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {
-		if allowed[k] {
-			updates[k] = v
+		if !allowed[k] {
+			continue
 		}
+		if v == nil {
+			continue // null 剔除，防 GORM Updates(map) 写 SQL NULL 清空字段
+		}
+		updates[k] = v
 	}
 	if len(updates) == 0 {
 		utils.BadRequest(c, "无有效更新字段")

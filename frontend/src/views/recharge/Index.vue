@@ -126,6 +126,40 @@
       </div>
     </common-drawer>
 
+    <!-- 加密货币支付 Drawer -->
+    <common-drawer
+      v-model:show="showCryptoDrawer"
+      title="加密货币支付"
+      :width="480"
+      :mask-closable="false"
+      show-footer
+      confirm-text="我已转账"
+      @confirm="handleCryptoTransferred"
+      @cancel="showCryptoDrawer = false"
+      @after-leave="stopPolling"
+    >
+      <div v-if="cryptoInfo" style="text-align: left;">
+        <p style="margin-bottom: 16px; color: var(--text-color-secondary);">请转账以下金额到指定钱包地址</p>
+        <n-descriptions :column="1" bordered size="small">
+          <n-descriptions-item label="网络">{{ cryptoInfo.network }}</n-descriptions-item>
+          <n-descriptions-item label="币种">{{ cryptoInfo.currency }}</n-descriptions-item>
+          <n-descriptions-item label="转账金额">
+            <span style="color: var(--danger-color); font-size: 18px; font-weight: bold;">{{ cryptoInfo.amount_usdt }} {{ cryptoInfo.currency }}</span>
+          </n-descriptions-item>
+          <n-descriptions-item label="收款地址">
+            <div style="word-break: break-all; font-family: monospace; font-size: 13px;">{{ cryptoInfo.wallet_address }}</div>
+          </n-descriptions-item>
+        </n-descriptions>
+        <div style="margin-top: 16px; text-align: center;">
+          <canvas ref="cryptoQrCanvas" style="margin: 0 auto;"></canvas>
+        </div>
+        <n-alert type="warning" :bordered="false" style="margin-top: 12px;" size="small">
+          请务必确认网络和币种正确，转账错误无法找回。转账完成后请点击下方按钮，管理员将在确认到账后为您充值。
+        </n-alert>
+        <n-spin v-if="pollingStatus" size="small" style="margin-top: 8px;" />
+      </div>
+    </common-drawer>
+
     <!-- 手机支付 Drawer -->
     <common-drawer
       v-model:show="showMobilePayModal"
@@ -199,7 +233,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, onUnmounted } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import { useMessage, useDialog } from 'naive-ui'
 import { TimeOutline } from '@vicons/ionicons5'
 import QRCode from 'qrcode'
@@ -242,6 +276,10 @@ const qrCanvas = ref<HTMLCanvasElement | null>(null)
 const mobilePayUrl = ref('')
 const codepayUrl = ref('')
 const pollingStatus = ref(false)
+// 加密货币支付
+const showCryptoDrawer = ref(false)
+const cryptoInfo = ref<any>(null)
+const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollingRecordId = 0
 let pollAttempts = 0
@@ -365,6 +403,23 @@ const stopPolling = () => {
   if (pollTimer) { clearTimeout(pollTimer); pollTimer = null }
 }
 
+// 加密货币支付：打开时渲染钱包地址二维码
+watch(showCryptoDrawer, async (val) => {
+  if (val && cryptoInfo.value?.wallet_address) {
+    await nextTick()
+    if (cryptoQrCanvas.value) {
+      QRCode.toCanvas(cryptoQrCanvas.value, cryptoInfo.value.wallet_address, { width: 200, margin: 2 })
+    }
+  }
+})
+
+const handleCryptoTransferred = () => {
+  message.success('已记录，管理员确认到账后将为您充值')
+  showCryptoDrawer.value = false
+  stopPolling()
+  loadData()
+}
+
 const handlePayUrl = async (payUrl: string, recordId: number, paymentMode?: 'qrcode' | 'page' | 'redirect', forceCodepayPopup = false) => {
   if (forceCodepayPopup && (paymentMode === 'qrcode' || isQrCodeUrl(payUrl))) {
     if (appStore.isMobile) {
@@ -402,7 +457,7 @@ const handlePayUrl = async (payUrl: string, recordId: number, paymentMode?: 'qrc
     startPolling(recordId)
     return
   }
-  safeRedirect(payUrl)
+  safeRedirect(payUrl, () => { window.open(payUrl, '_blank', 'noopener'); message.info('正在新窗口打开支付页面，请完成支付') })
 }
 
 const handleRecharge = async () => {
@@ -418,6 +473,12 @@ const handleRecharge = async () => {
     const payUrl = data?.payment_url || data?.record?.payment_url
     const paymentMode = data?.payment_mode
     const recordId = data?.record?.id || data?.id || 0
+    if (data?.pay_type === 'crypto' && data?.crypto_info) {
+      cryptoInfo.value = data.crypto_info
+      showCryptoDrawer.value = true
+      startPolling(recordId)
+      return
+    }
     if (payUrl) {
       await handlePayUrl(payUrl, recordId, paymentMode, isCodepayMethod(paymentMethodId.value) || isCodepayPayType(data?.pay_type))
     } else {
@@ -450,6 +511,12 @@ const handlePendingPay = async () => {
     showPayDrawer.value = false
     const payUrl = res.data?.payment_url
     const paymentMode = res.data?.payment_mode
+    if (res.data?.pay_type === 'crypto' && res.data?.crypto_info) {
+      cryptoInfo.value = res.data.crypto_info
+      showCryptoDrawer.value = true
+      startPolling(pendingTarget.value.id)
+      return
+    }
     if (payUrl) {
       await handlePayUrl(payUrl, pendingTarget.value.id, paymentMode, isCodepayMethod(pendingPayMethodId.value) || isCodepayPayType(res.data?.pay_type))
     } else {

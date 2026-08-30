@@ -104,7 +104,7 @@ function startCountdown() {
 }
 
 async function sendCode() {
-  if (step.value === 1) await emailFormRef.value?.validate()
+  if (step.value === 1) { try { await emailFormRef.value?.validate() } catch { return } }
   sending.value = true
   try {
     await forgotPassword({ email: form.value.email })
@@ -119,7 +119,7 @@ async function sendCode() {
 }
 
 async function doReset() {
-  await resetFormRef.value?.validate()
+  try { await resetFormRef.value?.validate() } catch { return } // 校验失败不继续
   resetting.value = true
   try {
     await resetPassword({ email: form.value.email, code: form.value.code, password: form.value.password })

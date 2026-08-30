@@ -43,8 +43,8 @@
     <!-- Filters -->
     <div class="filter-bar">
       <n-space :wrap="true" :size="10" align="center">
-        <n-select v-model:value="filterRegion" :options="regionOptions" placeholder="筛选地区" clearable style="width: 160px;" />
-        <n-select v-model:value="filterProtocol" :options="protocolOptions" placeholder="筛选协议" clearable style="width: 140px;" />
+        <n-select v-model:value="filterRegion" :options="regionOptions" placeholder="筛选地区" clearable style="width: 160px;" @update:value="handleFilterChange" />
+        <n-select v-model:value="filterProtocol" :options="protocolOptions" placeholder="筛选协议" clearable style="width: 140px;" @update:value="handleFilterChange" />
         <n-button size="small" :loading="loading" @click="fetchNodes">刷新</n-button>
       </n-space>
       <span class="filter-result-count">共 {{ totalNodes }} 个节点</span>
@@ -176,6 +176,12 @@ const loading = ref(false)
 const nodes = ref<Node[]>([])
 const filterRegion = ref<string | null>(null)
 const filterProtocol = ref<string | null>(null)
+
+// 筛选变化时回到第 1 页并重新请求（服务端过滤全量节点）
+const handleFilterChange = () => {
+  currentPage.value = 1
+  fetchNodes()
+}
 const testingNodes = ref<Record<number, boolean>>({})
 const testResults = ref<Record<number, string>>({})
 const currentPage = ref(1)
@@ -204,6 +210,7 @@ const protocolOptions = computed(() => {
   const protocols = [...new Set(nodes.value.map(n => n.protocol).filter(Boolean))]
   return protocols.sort().map(p => ({ label: p.toUpperCase(), value: p }))
 })
+// 筛选已下沉到后端（fetchNodes 传 region/protocol），此处保持兼容兜底
 const filteredNodes = computed(() => {
   return nodes.value.filter(node => {
     if (filterRegion.value && node.region !== filterRegion.value) return false
@@ -284,7 +291,13 @@ const handleTestNode = async (node: Node) => {
 const fetchNodes = async () => {
   loading.value = true
   try {
-    const res = await listNodes({ page: currentPage.value, page_size: pageSize.value })
+    // 筛选参数下沉到后端，保证筛选作用于全部节点而不是当前页
+    const res = await listNodes({
+      page: currentPage.value,
+      page_size: pageSize.value,
+      region: filterRegion.value || undefined,
+      protocol: filterProtocol.value || undefined,
+    })
     const data = res.data || {}
     const items = data.items || data || []
     totalNodes.value = data.total || items.length

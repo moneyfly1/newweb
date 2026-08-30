@@ -115,7 +115,9 @@ const inviteRequired = computed(() => {
   const v = siteConfig.value['register_invite_required']
   return v === 'true' || v === '1'
 })
-const inviteEnabled = computed(() => inviteRequired.value)
+// 邀请码输入框在「必填或选填」都显示（后端支持选填并发放奖励）；
+// 是否必填由 inviteRequired 单独控制（见 rules）
+const inviteEnabled = computed(() => siteConfig.value['register_invite_required'] !== undefined || inviteRequired.value)
 
 const form = ref({ username: '', email: '', password: '', confirmPassword: '', invite_code: '', verification_code: '' })
 const rules = computed(() => ({
@@ -171,7 +173,7 @@ async function handleRegister() {
     message.warning('请先阅读并同意《服务条款》')
     return
   }
-  await formRef.value?.validate()
+  try { await formRef.value?.validate() } catch { return } // 校验失败不继续
   loading.value = true
   try {
     await register(form.value)

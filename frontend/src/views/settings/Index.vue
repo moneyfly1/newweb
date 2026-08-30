@@ -201,7 +201,7 @@ const historyTotal = ref(0)
 
 const profileForm = ref({
   username: userStore.userInfo?.username || '',
-  nickname: '',
+  nickname: userStore.userInfo?.nickname || '',
   theme: appStore.currentTheme,
   language: 'zh-CN',
   timezone: 'Asia/Shanghai',
@@ -255,7 +255,7 @@ async function saveProfile() {
 }
 
 async function savePw() {
-  await pwFormRef.value?.validate()
+  try { await pwFormRef.value?.validate() } catch { return } // 校验失败不继续
   savingPw.value = true
   try {
     await changePassword({ old_password: pwForm.value.old_password, new_password: pwForm.value.new_password })

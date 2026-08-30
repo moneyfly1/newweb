@@ -236,6 +236,7 @@ func CreateInviteCode(c *gin.Context) {
 func GetInviteStats(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	db := database.GetDB()
+	p := utils.GetPagination(c)
 	var totalInvites int64
 	db.Model(&models.InviteRelation{}).Where("inviter_id = ?", userID).Count(&totalInvites)
 	var purchasedInvites int64
@@ -243,8 +244,9 @@ func GetInviteStats(c *gin.Context) {
 	var totalReward float64
 	db.Model(&models.InviteRelation{}).Where("inviter_id = ? AND inviter_reward_given = ?", userID, true).
 		Select("COALESCE(SUM(inviter_reward_amount), 0)").Scan(&totalReward)
+	// 最近邀请记录支持分页（修复：原先硬编码 Limit(20)，翻页重复显示同一批数据）
 	var relations []models.InviteRelation
-	db.Where("inviter_id = ?", userID).Order("created_at DESC").Limit(20).Find(&relations)
+	db.Where("inviter_id = ?", userID).Order("created_at DESC").Offset(p.Offset()).Limit(p.PageSize).Find(&relations)
 	type recentInvite struct {
 		ID                uint    `json:"id"`
 		InviteeUsername   string  `json:"invitee_username"`
@@ -284,7 +286,8 @@ func GetInviteStats(c *gin.Context) {
 	}
 	utils.Success(c, gin.H{
 		"total_invites": totalInvites, "registered_invites": totalInvites,
-		"purchased_invites": purchasedInvites, "total_reward": totalReward, "recent_invites": recentInvites,
+		"purchased_invites": purchasedInvites, "total_reward": totalReward,
+		"recent_invites": recentInvites, "total": totalInvites, "page": p.Page, "page_size": p.PageSize,
 	})
 }
 

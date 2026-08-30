@@ -25,7 +25,7 @@ instance.interceptors.request.use((config: any) => {
 })
 
 const requestCache = new Map<string, { data: any; timestamp: number }>()
-const CACHE_DURATION = 3 * 60 * 1000 // 3分钟
+const CACHE_DURATION = 10 * 1000 // 10秒：防重复请求尖峰，又保证列表操作后基本实时可见
 
 // 只缓存这些列表接口（精确路径匹配，避免 /packages 误配 /admin/packages、/settings 误配 /notification-settings 等）
 const CACHEABLE_URLS = [
@@ -245,7 +245,11 @@ instance.interceptors.response.use(
     }
     const serverMsg = error.response?.data?.message
     if (serverMsg) {
-      return Promise.reject(new Error(serverMsg))
+      // 保留 response 引用（status/data），供调用方用 e?.response?.status 判断业务分支（如 404 空态）
+      const err: any = new Error(serverMsg)
+      err.response = error.response
+      err.status = error.response?.status
+      return Promise.reject(err)
     }
     // 网络错误重试：仅对幂等的 GET/HEAD 自动重试。
     // 写请求（POST/PUT/DELETE）不重试，防止超时/断网后自动重发导致重复下单/重复扣款。

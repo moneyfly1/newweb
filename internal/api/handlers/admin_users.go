@@ -460,10 +460,17 @@ func AdminUpdateUser(c *gin.Context) {
 	subscriptionUpdates := make(map[string]interface{})
 
 	for k, v := range req {
+		if !allowed[k] && k != "expire_time" && k != "device_limit" {
+			continue
+		}
+		if v == nil {
+			// null 值剔除：GORM Updates(map) 会把 JSON null 写成 SQL NULL，
+			// 非空列（如 balance）被写 NULL 会造成数据损坏
+			continue
+		}
 		if allowed[k] {
 			updates[k] = v
-		} else if k == "expire_time" || k == "device_limit" {
-			// These fields belong to subscription table
+		} else {
 			subscriptionUpdates[k] = v
 		}
 	}
@@ -500,7 +507,19 @@ func AdminUpdateUser(c *gin.Context) {
 	}
 
 	// Update subscription fields if provided
+	// 注意：expire_time/device_limit 为 null 时必须从更新中剔除，
+	// 否则 GORM Updates(map) 会把订阅到期时间/设备上限写成 NULL（数据损坏）。
 	if len(subscriptionUpdates) > 0 {
+		for k, v := range subscriptionUpdates {
+			if v == nil {
+				delete(subscriptionUpdates, k)
+			}
+		}
+		if len(subscriptionUpdates) == 0 {
+			utils.CreateAuditLog(c, "update_user", "user", uint(id), fmt.Sprintf("更新用户: %s", user.Username))
+			utils.Success(c, user)
+			return
+		}
 		var subscription models.Subscription
 		if err := db.Where("user_id = ?", user.ID).First(&subscription).Error; err == nil {
 			// 处理 expire_time 的时间格式转换

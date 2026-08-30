@@ -145,7 +145,7 @@
             <n-button class="coupon-verify-btn" type="primary" size="small" :loading="verifying" @click="handleVerifyCoupon" ghost>验证</n-button>
           </div>
           <n-alert v-if="couponInfo" type="success" :bordered="false" style="margin-top: 8px;" size="small">
-            优惠码有效：{{ couponInfo.description }}
+            优惠码有效：{{ couponInfo.name || couponInfo.description || couponInfo.code }}
           </n-alert>
         </div>
 
@@ -534,6 +534,9 @@ const handleBuy = async (pkg: any) => {
     if (couponCode.value.trim()) payload.coupon_code = couponCode.value
     const res = await createOrder(payload)
     orderInfo.value = res.data
+    // 优惠码一次性使用：下单成功后清空，避免残留带入下一次购买
+    couponCode.value = ''
+    couponInfo.value = null
     showPaymentModal.value = true
   } catch (e: any) {
     message.error(getErrorMessage(e, '创建订单失败'))
@@ -682,13 +685,13 @@ const handlePay = async () => {
         } else if (data?.payment_mode === 'qrcode') {
           await showQrPayment(data.payment_url, orderInfo.value.order_no)
         } else if (data?.payment_mode === 'redirect') {
-          safeRedirect(data.payment_url)
+          safeRedirect(data.payment_url, () => { window.open(data.payment_url, '_blank', 'noopener'); message.info('正在新窗口打开支付页面，请完成支付') })
         } else if (isCodepayPageUrl(data.payment_url)) {
           await showCodepayPayment(data.payment_url, orderInfo.value.order_no)
         } else if (isQrCodeUrl(data.payment_url)) {
           await showQrPayment(data.payment_url, orderInfo.value.order_no)
         } else {
-          safeRedirect(data.payment_url)
+          safeRedirect(data.payment_url, () => { window.open(data.payment_url, '_blank', 'noopener'); message.info('正在新窗口打开支付页面，请完成支付') })
         }
       } else {
         message.info('支付已创建，请等待处理')

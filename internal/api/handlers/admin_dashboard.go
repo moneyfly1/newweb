@@ -92,6 +92,7 @@ func AdminDashboard(c *gin.Context) {
 
 	var userCount, orderCount, subCount int64
 	var pendingOrders, pendingTickets, newUsersToday int64
+	var refundedOrders int64
 	var revenueToday, revenueMonth float64
 	var recentUsers []models.User
 	var recentOrders []struct {
@@ -114,7 +115,7 @@ func AdminDashboard(c *gin.Context) {
 			errCh <- err
 		}
 	}
-	wg.Add(12)
+	wg.Add(13)
 
 	go func() { runQuery(func() error { return db.Model(&models.User{}).Count(&userCount).Error }) }()
 	go func() { runQuery(func() error { return db.Model(&models.Order{}).Count(&orderCount).Error }) }()
@@ -140,6 +141,11 @@ func AdminDashboard(c *gin.Context) {
 	go func() {
 		runQuery(func() error {
 			return db.Model(&models.Order{}).Where("status = ?", models.OrderStatusPending).Count(&pendingOrders).Error
+		})
+	}()
+	go func() {
+		runQuery(func() error {
+			return db.Model(&models.Order{}).Where("status = ?", models.OrderStatusRefunded).Count(&refundedOrders).Error
 		})
 	}()
 	go func() {
@@ -206,6 +212,7 @@ func AdminDashboard(c *gin.Context) {
 		"today_revenue":        roundToTwoDecimals(revenueToday),
 		"month_revenue":        roundToTwoDecimals(revenueMonth),
 		"pending_orders":       pendingOrders,
+		"refunded_count":       refundedOrders,
 		"pending_tickets":      pendingTickets,
 		"new_users_today":      newUsersToday,
 		"recent_users":         recentUsers,

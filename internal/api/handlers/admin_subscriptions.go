@@ -378,17 +378,19 @@ func AdminUpdateSubscription(c *gin.Context) {
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {
-		if allowed[k] {
-			// 处理 expire_time 的时间格式转换
-			if k == "expire_time" {
-				if expireTimeStr, ok := v.(string); ok && expireTimeStr != "" {
-					if expireTime, err := time.Parse(time.RFC3339, expireTimeStr); err == nil {
-						updates[k] = expireTime
-					}
+		if !allowed[k] || v == nil {
+			// null 剔除，防 Updates(map) 写 SQL NULL（device_limit/is_active/protocol_filter）
+			continue
+		}
+		// 处理 expire_time 的时间格式转换
+		if k == "expire_time" {
+			if expireTimeStr, ok := v.(string); ok && expireTimeStr != "" {
+				if expireTime, err := time.Parse(time.RFC3339, expireTimeStr); err == nil {
+					updates[k] = expireTime
 				}
-			} else {
-				updates[k] = v
 			}
+		} else {
+			updates[k] = v
 		}
 	}
 	if len(updates) == 0 {

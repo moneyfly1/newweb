@@ -692,7 +692,11 @@ const handleSave = async () => {
         const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement
         if (link) link.href = form.value.site_icon
       }
+    } else {
+      message.error(res.message || '保存失败')
     }
+  } catch (e: any) {
+    message.error(e?.message || '保存失败')
   } finally {
     saving.value = false
   }

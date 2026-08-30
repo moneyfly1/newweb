@@ -318,9 +318,20 @@ func GetDashboardInfo(c *gin.Context) {
 	db := database.GetDB()
 
 	var user models.User
-	if err := db.Select("id", "balance").First(&user, userID).Error; err != nil {
+	if err := db.Select("id", "balance", "username", "user_level_id").First(&user, userID).Error; err != nil {
 		utils.InternalError(c, "获取仪表盘信息失败")
 		return
+	}
+
+	// 用户等级（供前端等级徽章/折扣标签展示）
+	var levelName string
+	var discountRate float64
+	if user.UserLevelID != nil {
+		var level models.UserLevel
+		if err := db.First(&level, *user.UserLevelID).Error; err == nil && level.IsActive {
+			levelName = level.LevelName
+			discountRate = level.DiscountRate / 100
+		}
 	}
 
 	var sub models.Subscription
@@ -350,6 +361,9 @@ func GetDashboardInfo(c *gin.Context) {
 	}
 	utils.Success(c, gin.H{
 		"balance":          user.Balance,
+		"username":         user.Username,
+		"level_name":       levelName,
+		"discount_rate":    discountRate,
 		"has_subscription": hasSub,
 		"subscription":     sub,
 		"order_count":      orderCount,

@@ -81,7 +81,7 @@ const rules = {
 }
 
 async function handleLogin() {
-  await formRef.value?.validate()
+  try { await formRef.value?.validate() } catch { return } // 校验失败不继续
   loading.value = true
   try {
     await userStore.login(form.value.email, form.value.password)

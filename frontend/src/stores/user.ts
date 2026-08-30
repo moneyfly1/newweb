@@ -12,6 +12,7 @@ export interface UserInfo {
   balance: number
   level: number
   is_active: boolean
+  nickname?: string
   telegram_username?: string
 }
 

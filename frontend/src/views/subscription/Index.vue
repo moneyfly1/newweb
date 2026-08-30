@@ -1233,7 +1233,7 @@ const handleUpgradePaymentUrl = async (payUrl: string, orderNo: string, paymentM
     return
   }
   if (paymentMode === 'redirect') {
-    safeRedirect(payUrl)
+    safeRedirect(payUrl, () => { window.open(payUrl, '_blank', 'noopener'); message.info('正在新窗口打开支付页面，请完成支付') })
     return
   }
   if (paymentMode === 'qrcode' || isQrCodeUrl(payUrl)) {
@@ -1248,7 +1248,7 @@ const handleUpgradePaymentUrl = async (payUrl: string, orderNo: string, paymentM
     startPayPolling(orderNo)
     return
   }
-  safeRedirect(payUrl)
+  safeRedirect(payUrl, () => { window.open(payUrl, '_blank', 'noopener'); message.info('正在新窗口打开支付页面，请完成支付') })
 }
 
 const handleUpgradePay = async () => {

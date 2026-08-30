@@ -317,7 +317,7 @@ const goToUserSubscription = (user: any) => {
 }
 
 const goToOrder = (order: any) => {
-  router.push({ path: '/admin/orders', query: { order_no: order.order_no } })
+  router.push({ path: '/admin/orders', query: { search: order.order_no } })
 }
 
 // 下拉刷新（App 原生感）

@@ -125,6 +125,7 @@ interface Device {
   device_fingerprint: string
   last_access: string
   created_at: string
+  _origRemark?: string
 }
 
 const appStore = useAppStore()
@@ -254,6 +255,8 @@ const fetchDevices = async () => {
       devices.value = data?.items || []
       totalDevices.value = data?.total || 0
     }
+    // 记录原始备注，供失焦保存时做变更检测
+    devices.value.forEach((d: any) => { d._origRemark = d.remark || '' })
   } catch (error: any) {
     message.error(error.message || '获取设备列表失败')
   } finally {
@@ -293,8 +296,12 @@ const handleConfirmDelete = async () => {
 }
 
 const saveRemark = async (row: Device) => {
+  const newVal = row.remark || ''
+  // 未修改则不发请求
+  if (newVal === (row._origRemark || '')) return
   try {
-    await updateDeviceRemark(row.id, row.remark || '')
+    await updateDeviceRemark(row.id, newVal)
+    row._origRemark = newVal
     message.success('备注已保存')
   } catch (error: any) {
     message.error(error.message || '保存备注失败')

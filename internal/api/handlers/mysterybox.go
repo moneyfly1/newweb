@@ -29,29 +29,24 @@ func AdminListMysteryBoxPools(c *gin.Context) {
 
 // AdminCreateMysteryBoxPool POST /admin/mystery-box/pools
 func AdminCreateMysteryBoxPool(c *gin.Context) {
-	var req struct {
-		Name           string  `json:"name" binding:"required"`
-		Description    string  `json:"description"`
-		Price          float64 `json:"price" binding:"required,gt=0"`
-		IsActive       *bool   `json:"is_active"`
-		SortOrder      int     `json:"sort_order"`
-		MaxOpensPerDay *int    `json:"max_opens_per_day"`
-	}
+	var req models.MysteryBoxPool
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	if req.Name == "" {
+		utils.BadRequest(c, "请输入奖池名称")
+		return
+	}
+	if req.Price <= 0 {
+		utils.BadRequest(c, "价格必须大于 0")
+		return
+	}
 	pool := models.MysteryBoxPool{
-		Name: req.Name, Price: req.Price,
-		SortOrder: req.SortOrder, MaxOpensPerDay: req.MaxOpensPerDay,
-	}
-	if req.Description != "" {
-		pool.Description = &req.Description
-	}
-	if req.IsActive != nil {
-		pool.IsActive = *req.IsActive
-	} else {
-		pool.IsActive = true
+		Name: req.Name, Description: req.Description, Price: req.Price,
+		IsActive: req.IsActive, SortOrder: req.SortOrder, MinLevel: req.MinLevel,
+		MinBalance: req.MinBalance, MaxOpensPerDay: req.MaxOpensPerDay,
+		MaxOpensTotal: req.MaxOpensTotal, StartTime: req.StartTime, EndTime: req.EndTime,
 	}
 	if err := database.GetDB().Create(&pool).Error; err != nil {
 		utils.InternalError(c, "创建奖池失败")

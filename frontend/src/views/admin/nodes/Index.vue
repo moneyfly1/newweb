@@ -381,12 +381,13 @@ const filterValues = reactive({
   region: null,
   status: null,
 })
-const filterConfig = [
+// computed：来源/地区选项随表格数据动态更新（普通数组在 setup 时求值为空快照，导致桌面端下拉永远无选项）
+const filterConfig = computed(() => [
   { key: 'source', placeholder: '来源', options: sourceOptions.value },
   { key: 'manual', placeholder: '手动/自动', options: [{ label: '手动添加', value: '1' }, { label: '自动采集', value: '0' }] },
   { key: 'region', placeholder: '地区', options: regionOptions.value },
   { key: 'status', placeholder: '状态', options: [{ label: '在线', value: 'online' }, { label: '离线', value: 'offline' }] },
-]
+])
 const handleFilterSearch = () => {
   searchQuery.value = filterValues.search || ''
   filterSource.value = filterValues.source
@@ -407,7 +408,7 @@ const handleToggleActive = async (row: any, v: boolean) => {
     await updateNode(row.id, { is_active: v })
     message.success(`${v ? '启用' : '禁用'}成功`)
     row.is_active = v
-  } catch {}
+  } catch (e: any) { message.error(e?.message || `${v ? '启用' : '禁用'}失败`) }
 }
 
 const handleTest = async (row: any) => {
@@ -421,7 +422,7 @@ const handleTest = async (row: any) => {
     } else {
       message.warning(`${row.name} 离线：当前测速仅检测服务器到节点 ${res.data.address || ''} 的 TCP 连通性`)
     }
-  } catch {}
+  } catch (e: any) { message.error(e?.message || '测速失败') }
 }
 
 const handleBatchTest = async () => {
@@ -442,7 +443,7 @@ const handleBatchAction = async (action: string) => {
     message.success(`批量处理完成, 影响 ${res.data.affected} 个节点`)
     checkedRowKeys.value = []
     fetchData()
-  } catch {}
+  } catch (e: any) { message.error(e?.message || '批量操作失败') }
 }
 
 const handleBatchDelete = () => {
@@ -467,7 +468,10 @@ const handleSubmit = async () => {
     message.success('节点信息已更新')
     showEditDrawer.value = false
     fetchData()
-  } catch {}
+  } catch (e: any) {
+    // 表单校验失败时 validate() reject，无需提示
+    if (e?.message) message.error(e.message)
+  }
 }
 
 const handleDelete = (row: any) => {

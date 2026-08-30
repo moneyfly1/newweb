@@ -24,6 +24,19 @@ func AdminListCoupons(c *gin.Context) {
 	utils.SuccessPage(c, coupons, total, p.Page, p.PageSize)
 }
 
+// parseCouponTime 解析优惠券生效/失效时间（RFC3339 或 2006-01-02）
+func parseCouponTime(s string) (time.Time, error) {
+	t, err := time.Parse(time.RFC3339, s)
+	if err == nil {
+		return t, nil
+	}
+	t, err = time.Parse("2006-01-02", s)
+	if err == nil {
+		return t, nil
+	}
+	return t, err
+}
+
 func AdminCreateCoupon(c *gin.Context) {
 	var req struct {
 		Code               string   `json:"code" binding:"required"`
@@ -109,13 +122,29 @@ func AdminUpdateCoupon(c *gin.Context) {
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {
-		if allowed[k] {
-			updates[k] = v
+		if !allowed[k] {
+			continue
 		}
+		if v == nil {
+			// 时间字段为 null 时跳过，避免把非空 time.Time 列写成 NULL 导致保存失败
+			continue
+		}
+		updates[k] = v
 	}
 	if len(updates) == 0 {
 		utils.BadRequest(c, "无有效更新字段")
 		return
+	}
+	// 日期字符串统一转 time.Time（前端提交 RFC3339 字符串）
+	if v, ok := updates["valid_from"].(string); ok && v != "" {
+		if t, err := parseCouponTime(v); err == nil {
+			updates["valid_from"] = t
+		}
+	}
+	if v, ok := updates["valid_until"].(string); ok && v != "" {
+		if t, err := parseCouponTime(v); err == nil {
+			updates["valid_until"] = t
+		}
 	}
 	if err := db.Model(&coupon).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新优惠券失败")
@@ -203,9 +232,10 @@ func AdminUpdateTicket(c *gin.Context) {
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {
-		if allowed[k] {
-			updates[k] = v
+		if !allowed[k] || v == nil {
+			continue // null 剔除，防 Updates(map) 写 SQL NULL
 		}
+		updates[k] = v
 	}
 	if len(updates) == 0 {
 		utils.BadRequest(c, "无有效更新字段")
@@ -332,14 +362,16 @@ func AdminUpdateUserLevel(c *gin.Context) {
 		return
 	}
 	allowed := map[string]bool{
-		"name": true, "level_order": true, "discount_rate": true,
-		"description": true, "required_exp": true, "is_active": true,
+		"level_name": true, "level_order": true, "discount_rate": true,
+		"min_consumption": true, "benefits": true, "icon_url": true,
+		"color": true, "is_active": true,
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {
-		if allowed[k] {
-			updates[k] = v
+		if !allowed[k] || v == nil {
+			continue // null 剔除，防 Updates(map) 写 SQL NULL
 		}
+		updates[k] = v
 	}
 	if len(updates) == 0 {
 		utils.BadRequest(c, "无有效更新字段")
@@ -423,9 +455,10 @@ func AdminUpdateAnnouncement(c *gin.Context) {
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {
-		if allowed[k] {
-			updates[k] = v
+		if !allowed[k] || v == nil {
+			continue // null 剔除，防 Updates(map) 写 SQL NULL
 		}
+		updates[k] = v
 	}
 	if len(updates) == 0 {
 		utils.BadRequest(c, "无有效更新字段")

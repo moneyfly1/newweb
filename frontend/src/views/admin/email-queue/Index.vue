@@ -241,8 +241,17 @@ const handleDetail = (row) => {
   showDetail.value = true
 }
 
-// Stats
+// Stats：优先使用后端全队列统计（列表接口附带 stats），回退当前页估算
+const queueStats = ref<any>(null)
 const stats = computed(() => {
+  if (queueStats.value) {
+    return {
+      total: queueStats.value.pending + queueStats.value.sent + queueStats.value.failed,
+      pending: queueStats.value.pending,
+      sent: queueStats.value.sent,
+      failed: queueStats.value.failed,
+    }
+  }
   return {
     total: pagination.itemCount,
     pending: emails.value.filter(e => e.status === 'pending').length,
@@ -445,6 +454,10 @@ const handleBatchDelete = () => {
 
 onMounted(() => {
   fetchEmails()
+  // 单独获取全队列统计（列表接口附带 stats 字段）
+  listEmailQueue({ page: 1, page_size: 1 }) .then((res) => {
+    if (res?.data?.stats) queueStats.value = res.data.stats
+  }).catch(() => {})
 })
 </script>
 

@@ -170,6 +170,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, h, onMounted } from 'vue'
+import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { listRedeemCodes, createRedeemCodes, deleteRedeemCode } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
@@ -181,7 +182,7 @@ const message = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
 
-const loading = ref(false)
+const { loading, beginLoad, endLoad } = usePageLoading()
 const submitting = ref(false)
 const codes = ref<any[]>([])
 const checkedRowKeys = ref<any[]>([])
@@ -294,7 +295,7 @@ const columns = [
 ]
 
 const loadCodes = async () => {
-  loading.value = true
+  beginLoad(codes.value.length > 0)
   try {
     const res = await listRedeemCodes({
       page: pagination.page,
@@ -307,7 +308,7 @@ const loadCodes = async () => {
   } catch (error: any) {
     message.error(error.message || '加载兑换码列表失败')
   } finally {
-    loading.value = false
+    endLoad()
   }
 }
 

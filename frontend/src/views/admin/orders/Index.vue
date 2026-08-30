@@ -261,6 +261,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, h, onMounted, watch } from 'vue'
+import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, NIcon, NSelect, useMessage, useDialog, type DataTableColumns, type TagProps } from 'naive-ui'
 import { RefreshOutline, ReceiptOutline, TimeOutline, MailOutline, LayersOutline } from '@vicons/ionicons5'
 import { listAdminOrders, refundOrder, cancelOrder, completeOrder, deleteOrder, markOrderPaid, batchOrderAction, getAdminDashboard } from '@/api/admin'
@@ -278,7 +279,7 @@ const dialog = useDialog()
 const appStore = useAppStore()
 const route = useRoute()
 
-const loading = ref(false)
+const { loading, beginLoad, endLoad } = usePageLoading()
 const orders = ref<any[]>([])
 const orderStats = ref<any>({})
 const searchQuery = ref((route.query.search as string) || '')
@@ -411,7 +412,7 @@ const columns: DataTableColumns<any> = [
 ]
 
 const fetchOrders = async () => {
-  loading.value = true
+  beginLoad(orders.value.length > 0)
   try {
     const res = await listAdminOrders({ page: pagination.page, page_size: pagination.pageSize, search: searchQuery.value || undefined, status: statusFilter.value })
     orders.value = res.data.items || []
@@ -421,7 +422,7 @@ const fetchOrders = async () => {
       orderStats.value = dashRes.data
     }
   } finally {
-    loading.value = false
+    endLoad()
   }
 }
 

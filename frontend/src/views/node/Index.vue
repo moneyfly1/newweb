@@ -397,7 +397,7 @@ onMounted(() => { fetchNodes() })
   .desktop-table { display: none; }
   .mobile-cards { display: block; }
   .mobile-node-card { border-radius: 14px; padding: 12px; }
-  .mobile-node-card:active { transform: scale(0.98); }
+  
   .mobile-card-info { grid-template-columns: 1fr; gap: 4px; }
   .mobile-info-item { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: center; }
   .mobile-info-item > :last-child { min-width: 0; text-align: right; word-break: break-word; }

@@ -22,12 +22,9 @@ html {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   border: 1px solid var(--border-color, #e5e7eb);
-  transition: all 0.2s ease;
+  transition: box-shadow 0.2s ease;
 }
 
-.mobile-card:active {
-  transform: scale(0.98);
-}
 
 .mobile-card.clickable {
   cursor: pointer;
@@ -461,16 +458,5 @@ html {
   }
 }
 
-/* 可点元素按压缩放（按钮 / 卡片统一 0.98） */
-.page-card:active,
-.admin-main-card:active,
-.main-card:active,
-.mobile-card:active,
-.stat-card:active,
-.quick-action:active,
-.client-card:active,
-.qs-main:active,
-.quick-sub-item:active {
-  transform: scale(0.98);
-}
-
+/* 注：容器按压缩放已移除——scale 容器会导致点击时整卡晃动，
+   干扰 checkbox/按钮点击（如全选误触）。按钮按压反馈由 Naive 组件自带。 */

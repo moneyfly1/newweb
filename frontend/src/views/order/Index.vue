@@ -885,7 +885,7 @@ onActivated(() => { loadOrders(); loadPaymentMethods() })
   border-radius: 12px;
   background: var(--bg-color, #fff);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   min-width: 0;
   outline: none;
 }
@@ -910,7 +910,7 @@ onActivated(() => { loadOrders(); loadPaymentMethods() })
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; color: transparent;
   border: 2px solid var(--border-color, #ddd);
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .pm-card.selected .pm-check {
   background: var(--pm-brand); border-color: var(--pm-brand); color: #fff;

@@ -42,6 +42,7 @@ export function useTable(
 ) {
   const message = useMessage()
   const loading = ref(false)
+  const initialLoading = ref(false) // 首载/筛选用；翻页不触发全表遮罩，避免闪烁卡顿
   const tableData = ref<any[]>([])
   const checkedRowKeys = ref<any[]>([])
   const sortState = ref(options.defaultSort || { sort: 'id', order: 'desc' })
@@ -68,7 +69,10 @@ export function useTable(
 
   async function loadData() {
     const seq = ++reqSeq
-    loading.value = true
+    // 首次加载（tableData 为空）显示全表遮罩；翻页/刷新时保留旧数据，
+    // 不触发遮罩（避免整表消失→遮罩→新表的闪烁卡顿）
+    const isFirst = tableData.value.length === 0
+    if (isFirst) { loading.value = true; initialLoading.value = true }
     try {
       const res = await fetcher({
         page: pagination.page,
@@ -88,7 +92,7 @@ export function useTable(
       if (seq !== reqSeq) return
       message.error(error.message || '加载失败')
     } finally {
-      if (seq === reqSeq) loading.value = false
+      if (seq === reqSeq) { loading.value = false; initialLoading.value = false }
     }
   }
 
@@ -115,5 +119,5 @@ export function useTable(
     checkedRowKeys.value = []
   }
 
-  return { loading, tableData, checkedRowKeys, sortState, pagination, loadData, reload, handleSorterChange, resetSelection }
+  return { loading, initialLoading, tableData, checkedRowKeys, sortState, pagination, loadData, reload, handleSorterChange, resetSelection }
 }

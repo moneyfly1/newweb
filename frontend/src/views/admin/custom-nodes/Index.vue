@@ -330,6 +330,7 @@
 
 <script setup>
 import { ref, reactive, h, onMounted } from 'vue'
+import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage } from 'naive-ui'
 import {
   CreateOutline,
@@ -360,7 +361,7 @@ import CommonDrawer from '@/components/CommonDrawer.vue'
 const message = useMessage()
 const appStore = useAppStore()
 
-const loading = ref(false)
+const { loading, beginLoad, endLoad } = usePageLoading()
 const submitting = ref(false)
 const assigning = ref(false)
 const loadingUsers = ref(false)
@@ -503,7 +504,7 @@ const columns = [
 ]
 
 const fetchData = async () => {
-  loading.value = true
+  beginLoad(tableData.value.length > 0)
   try {
     const res = await listCustomNodes({
       page: pagination.page,
@@ -517,7 +518,7 @@ const fetchData = async () => {
   } catch (error) {
     message.error(error.message || '获取专线节点列表失败')
   } finally {
-    loading.value = false
+    endLoad()
   }
 }
 

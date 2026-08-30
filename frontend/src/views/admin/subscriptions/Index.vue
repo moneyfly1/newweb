@@ -182,6 +182,7 @@
 </template>
 <script setup>
 import { ref, h, onMounted, nextTick } from 'vue'
+import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NDatePicker, NInputNumber, NInput, NDropdown, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, RefreshOutline, PersonOutline, MailOutline, PowerOutline, TrashOutline, CopyOutline, QrCodeOutline } from '@vicons/ionicons5'
 import QRCode from 'qrcode'
@@ -205,7 +206,7 @@ const router = useRouter()
 const appStore = useAppStore()
 const userStore = useUserStore()
 
-const loading = ref(false)
+const { loading, beginLoad, endLoad } = usePageLoading()
 const searchQuery = ref('')
 const statusFilter = ref(null)
 const lineFilter = ref(null)
@@ -402,7 +403,7 @@ const columns = [
 
 // Fetch data
 const fetchData = async () => {
-  loading.value = true
+  beginLoad(tableData.value.length > 0)
   try {
     const params = {
       page: pagination.value.page,
@@ -419,7 +420,7 @@ const fetchData = async () => {
     tableData.value = items
     pagination.value.itemCount = res.data.total || 0
   } catch { message.error('获取订阅列表失败') }
-  finally { loading.value = false }
+  finally { endLoad() }
 }
 const handleSearch = () => { pagination.value.page = 1; fetchData() }
 const handleRefresh = () => fetchData()

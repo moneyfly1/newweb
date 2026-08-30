@@ -242,6 +242,7 @@ import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatCurrency } from '@/utils/amount'
 import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 interface InviteCode {
   id: number
@@ -277,7 +278,7 @@ interface Stats {
 const message = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
-const loading = ref(false)
+const { loading, beginLoad, endLoad } = usePageLoading()
 const loadingRecent = ref(false)
 const creating = ref(false)
 const showCreateModal = ref(false)
@@ -570,7 +571,7 @@ const recentColumns = [
 ]
 
 const fetchInviteCodes = async () => {
-  loading.value = true
+  beginLoad(inviteCodes.value.length > 0)
   try {
     const res = await listInviteCodes({ page: codePage.value, page_size: codePageSize.value })
     const data = res.data
@@ -584,7 +585,7 @@ const fetchInviteCodes = async () => {
   } catch (error: any) {
     message.error(error.message || '获取邀请码列表失败')
   } finally {
-    loading.value = false
+    endLoad()
   }
 }
 

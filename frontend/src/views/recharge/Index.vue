@@ -211,12 +211,13 @@ import { formatAmount, formatCurrency } from '@/utils/amount'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const message = useMessage()
 const dialog = useDialog()
 const appStore = useAppStore()
 
-const loading = ref(false)
+const { loading, beginLoad, endLoad } = usePageLoading()
 const submitting = ref(false)
 const showRechargeSuccess = ref(false)
 const rechargeSuccessInfo = ref<{ amount: number; balance: string } | null>(null)
@@ -261,7 +262,7 @@ const isCodepayMethod = (methodId?: number | null) => {
 }
 
 const loadData = async () => {
-  loading.value = true
+  beginLoad(paymentMethods.value.length > 0)
   try {
     const [dashRes, pmRes, rcRes] = await Promise.all([
       getDashboardInfo(),
@@ -279,7 +280,7 @@ const loadData = async () => {
   } catch (e: any) {
     message.error(getErrorMessage(e, '加载数据失败'))
   } finally {
-    loading.value = false
+    endLoad()
   }
 }
 

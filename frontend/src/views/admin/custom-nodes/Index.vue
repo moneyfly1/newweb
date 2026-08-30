@@ -223,10 +223,14 @@
           <n-select
             v-model:value="assignUserIds"
             multiple
+            remote
             filterable
-            placeholder="请选择要分配的用户"
+            clearable
+            placeholder="输入邮箱/用户名搜索并选择用户"
             :options="userOptions"
             :loading="loadingUsers"
+            :show-arrow="true"
+            @search="handleUserSearch"
           />
         </n-form-item>
         <n-form-item label="专线独立到期时间（可选）">
@@ -533,19 +537,34 @@ const handleSorterChange = (sorter) => {
   fetchData()
 }
 
-const fetchUsers = async () => {
+// 加载用户选项（支持远程搜索：有关键词调后端 search，无关键词加载默认前 50 个）
+const fetchUsers = async (keyword = '') => {
   loadingUsers.value = true
   try {
-    const res = await listUsers({ page: 1, page_size: 1000 })
-    userOptions.value = (res.data.items || []).map(user => ({
-      label: `${user.email} (ID: ${user.id})`,
+    const params = { page: 1, page_size: 50 }
+    if (String(keyword).trim()) params.search = String(keyword).trim()
+    const res = await listUsers(params)
+    const newOptions = (res.data.items || []).map(user => ({
+      label: `${user.email}${user.username ? ' · ' + user.username : ''} (ID: ${user.id})`,
       value: user.id
     }))
+    // 保留已选中的用户选项（远程搜索切换时已选的不消失）
+    const selected = new Set(assignUserIds.value)
+    const merged = [...userOptions.value.filter(o => selected.has(o.value)), ...newOptions]
+    const seen = new Set()
+    userOptions.value = merged.filter(o => (seen.has(o.value) ? false : seen.add(o.value)))
   } catch (error) {
     message.error(error.message || '获取用户列表失败')
   } finally {
     loadingUsers.value = false
   }
+}
+
+// 远程搜索用户（输入关键词触发，300ms 防抖）
+let userSearchTimer = null
+const handleUserSearch = (query) => {
+  if (userSearchTimer) clearTimeout(userSearchTimer)
+  userSearchTimer = setTimeout(() => fetchUsers(query), 300)
 }
 
 const handlePageChange = (page) => {
@@ -658,9 +677,8 @@ const handleAssign = (row) => {
   assignDedicatedOnly.value = false
   assignLimitDevices.value = false
   showAssignDrawer.value = true
-  if (userOptions.value.length === 0) {
-    fetchUsers()
-  }
+  // 每次打开刷新默认用户列表（前 50 个），支持输入关键词远程搜索更多
+  fetchUsers()
 }
 
 const handleBatchAssign = () => {
@@ -672,9 +690,8 @@ const handleBatchAssign = () => {
   assignDedicatedOnly.value = false
   assignLimitDevices.value = false
   showAssignDrawer.value = true
-  if (userOptions.value.length === 0) {
-    fetchUsers()
-  }
+  // 每次打开刷新默认用户列表（前 50 个），支持输入关键词远程搜索更多
+  fetchUsers()
 }
 
 const handleAssignSubmit = async () => {

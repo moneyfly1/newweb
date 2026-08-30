@@ -47,6 +47,7 @@ func (s *Scheduler) Start() {
 	utils.SysInfo("scheduler", "后台任务调度器已启动")
 
 	s.startLoop("EmailQueue", 30*time.Second, processEmailQueueTask)
+	s.startLoop("NodeHealthCheck", 5*time.Minute, nodeHealthCheckTask)
 	s.startLoop("DeactivateExpired", 30*time.Minute, deactivateExpiredTask)
 	s.startLoop("ExpiryCheck", 1*time.Hour, checkExpiryStatusTask)
 	s.startLoop("ExpiryReminder", 6*time.Hour, sendExpiryRemindersTask)
@@ -107,6 +108,14 @@ func safeRun(name string, fn func()) {
 // processEmailQueueTask processes pending emails in the queue.
 func processEmailQueueTask() {
 	ProcessEmailQueue()
+}
+
+// nodeHealthCheckTask auto-refreshes active node status (like Xboard's node reporting).
+func nodeHealthCheckTask() {
+	tested, online := AutoTestActiveNodes()
+	if tested > 0 {
+		utils.SysInfo("scheduler", fmt.Sprintf("节点健康检查完成: 已测 %d 个, 在线 %d 个", tested, online))
+	}
 }
 
 // deactivateExpiredTask marks expired subscriptions as inactive.

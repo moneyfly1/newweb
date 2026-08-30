@@ -97,7 +97,8 @@ func ValidateAndApplyCoupon(code string, userID uint, orderAmount float64, packa
 // VerifyCoupon checks whether a coupon code is valid and returns discount info.
 func VerifyCoupon(c *gin.Context) {
 	var req struct {
-		Code string `json:"code" binding:"required"`
+		Code      string `json:"code" binding:"required"`
+		PackageID uint   `json:"package_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -128,6 +129,23 @@ func VerifyCoupon(c *gin.Context) {
 	if coupon.TotalQuantity != nil && coupon.UsedQuantity >= int(*coupon.TotalQuantity) {
 		utils.BadRequest(c, "优惠券已被领完")
 		return
+	}
+
+	// 套餐限定校验：若指定了 package_id，确认优惠券适用于该套餐
+	if req.PackageID > 0 && coupon.ApplicablePackages != "" {
+		allowed := strings.Split(coupon.ApplicablePackages, ",")
+		matched := false
+		pkgStr := fmt.Sprintf("%d", req.PackageID)
+		for _, a := range allowed {
+			if strings.TrimSpace(a) == pkgStr {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			utils.BadRequest(c, "此优惠券不适用于该套餐")
+			return
+		}
 	}
 
 	// Check per-user usage if authenticated

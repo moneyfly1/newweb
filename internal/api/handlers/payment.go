@@ -587,9 +587,11 @@ func isEnabled(val string) bool {
 
 func CreatePayment(c *gin.Context) {
 	var req struct {
-		OrderID         uint `json:"order_id" binding:"required"`
-		PaymentMethodID uint `json:"payment_method_id" binding:"required"`
-		IsMobile        bool `json:"is_mobile"`
+		OrderID         uint    `json:"order_id" binding:"required"`
+		PaymentMethodID uint    `json:"payment_method_id" binding:"required"`
+		IsMobile        bool    `json:"is_mobile"`
+		UseBalance      bool    `json:"use_balance"`
+		BalanceAmount   float64 `json:"balance_amount"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.LogError("[CreatePayment] 参数错误: %v", err)
@@ -598,8 +600,8 @@ func CreatePayment(c *gin.Context) {
 	}
 
 	userID := c.GetUint("user_id")
-	utils.LogPayment("[CreatePayment] 开始创建支付 - user_id=%d, order_id=%d, payment_method_id=%d, is_mobile=%v",
-		userID, req.OrderID, req.PaymentMethodID, req.IsMobile)
+	utils.LogPayment("[CreatePayment] 开始创建支付 - user_id=%d, order_id=%d, payment_method_id=%d, is_mobile=%v, use_balance=%v, balance_amount=%.2f",
+		userID, req.OrderID, req.PaymentMethodID, req.IsMobile, req.UseBalance, req.BalanceAmount)
 
 	db := database.GetDB()
 	target, err := loadOrderPaymentTarget(db, userID, req.OrderID)
@@ -611,6 +613,60 @@ func CreatePayment(c *gin.Context) {
 	order := target.Order
 	utils.LogPayment("[CreatePayment] 找到订单 - order_no=%s, package_id=%d, amount=%.2f",
 		order.OrderNo, order.PackageID, target.PayAmount)
+
+	// 余额抵扣：先扣余额，剩余部分走支付网关（条件更新防超扣/竞态）
+	if req.UseBalance && req.BalanceAmount > 0 {
+		// 校验余额抵扣不超过实付金额
+		if req.BalanceAmount > target.PayAmount+0.005 {
+			utils.BadRequest(c, "余额抵扣金额超过订单金额")
+			return
+		}
+		balEnabled := utils.GetSetting("pay_balance_enabled")
+		if balEnabled == "false" || balEnabled == "0" {
+			utils.BadRequest(c, "余额抵扣已关闭")
+			return
+		}
+		// 条件扣款：仅当余额充足才扣（防并发超扣）
+		deductRes := db.Model(&models.User{}).
+			Where("id = ? AND balance >= ?", userID, req.BalanceAmount).
+			UpdateColumn("balance", gorm.Expr("balance - ?", req.BalanceAmount))
+		if deductRes.Error != nil {
+			utils.InternalError(c, "余额抵扣失败")
+			return
+		}
+		if deductRes.RowsAffected == 0 {
+			utils.BadRequest(c, "余额不足，无法抵扣")
+			return
+		}
+		// 记录余额抵扣到订单 ExtraData（回调激活时读取，避免重复扣/漏扣）
+		var extraData map[string]interface{}
+		if order.ExtraData != nil {
+			_ = json.Unmarshal([]byte(*order.ExtraData), &extraData)
+		}
+		if extraData == nil {
+			extraData = make(map[string]interface{})
+		}
+		extraData["balance_deducted"] = utils.Round2(req.BalanceAmount)
+		extraJSON, _ := json.Marshal(extraData)
+		if err := db.Model(&models.Order{}).Where("id = ?", order.ID).Update("extra_data", string(extraJSON)).Error; err != nil {
+			utils.InternalError(c, "记录余额抵扣失败")
+			return
+		}
+		// 记录余额流水（读取扣款前后余额）
+		var balUser models.User
+		if err := db.Select("balance").First(&balUser, userID).Error; err == nil {
+			balAfter := balUser.Balance
+			balBefore := utils.Round2(balAfter + req.BalanceAmount)
+			db.Create(&models.BalanceLog{
+				UserID: userID, ChangeType: "order_balance_deduct", Amount: -utils.Round2(req.BalanceAmount),
+				BalanceBefore: balBefore, BalanceAfter: balAfter,
+				Description: &[]string{fmt.Sprintf("订单 %s 余额抵扣", order.OrderNo)}[0],
+			})
+		}
+		// 剩余支付金额
+		target.PayAmount = utils.Round2(target.PayAmount - req.BalanceAmount)
+		utils.LogPayment("[CreatePayment] 余额抵扣 %.2f，剩余支付 %.2f", req.BalanceAmount, target.PayAmount)
+	}
 
 	var payConfig models.PaymentConfig
 	if err := db.Where("id = ? AND status = ?", req.PaymentMethodID, 1).First(&payConfig).Error; err != nil {

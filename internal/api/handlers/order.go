@@ -477,6 +477,31 @@ func PayOrder(c *gin.Context) {
 	utils.BadRequest(c, "暂不支持该支付方式，请使用余额支付或通过支付接口创建支付")
 }
 
+// refundBalanceDeduct 退还订单余额抵扣金额（取消订单时调用，幂等）
+func refundBalanceDeduct(db *gorm.DB, order *models.Order) {
+	if order == nil || order.ExtraData == nil {
+		return
+	}
+	var extra map[string]interface{}
+	if err := json.Unmarshal([]byte(*order.ExtraData), &extra); err != nil {
+		return
+	}
+	deducted, ok := extra["balance_deducted"].(float64)
+	if !ok || deducted <= 0 {
+		return
+	}
+	// 从订单状态机看：取消前订单必为 pending，余额在 CreatePayment 时已扣。
+	// 退款前先清除 ExtraData 标记（幂等：防止重复退款）
+	if err := db.Model(&models.Order{}).Where("id = ?", order.ID).
+		Update("extra_data", gorm.Expr("NULL")).Error; err != nil {
+		return
+	}
+	if err := db.Model(&models.User{}).Where("id = ?", order.UserID).
+		UpdateColumn("balance", gorm.Expr("balance + ?", deducted)).Error; err == nil {
+		utils.SysInfo("balance", fmt.Sprintf("取消订单退还余额抵扣 %.2f -> user=%d order=%s", deducted, order.UserID, order.OrderNo))
+	}
+}
+
 func CancelOrder(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	orderNo := c.Param("orderNo")
@@ -498,6 +523,8 @@ func CancelOrder(c *gin.Context) {
 		utils.BadRequest(c, "订单状态已变化，无法取消")
 		return
 	}
+	// 退还余额抵扣（若有）
+	refundBalanceDeduct(db, &order)
 	utils.LogOrder("订单已取消: order_no=%s user_id=%d ip=%s", orderNo, userID, utils.GetRealClientIP(c))
 	utils.SuccessMessage(c, "订单已取消")
 }

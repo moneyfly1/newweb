@@ -95,6 +95,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	// 软件下载解析（公开）：GitHub Release 直链 + 国内加速镜像 302
 	api.GET("/download/resolve", handlers.ResolveDownload)
 	api.GET("/download/gh", handlers.GitHubResolve)
+	// 软件版本（公开，前台显示"最新版"）
+	api.GET("/software/versions", handlers.SoftwareVersions)
 
 	// ===== 需要认证的路由 =====
 	authorized := api.Group("")
@@ -399,6 +401,13 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/email-queue", handlers.AdminListEmailQueue)
 		admin.POST("/email-queue/:id/retry", middleware.CSRFProtection(), handlers.AdminRetryEmail)
 		admin.DELETE("/email-queue/:id", middleware.CSRFProtection(), handlers.AdminDeleteEmail)
+
+		// 软件同步（版本自动检测）
+		admin.GET("/software-sync/status", middleware.CSRFProtection(), handlers.SoftwareSyncStatus)
+		admin.POST("/software-sync/run", middleware.CSRFProtection(), handlers.SoftwareSyncRun)
+		admin.GET("/software-sync/config", middleware.CSRFProtection(), handlers.SoftwareSyncConfigGet)
+		admin.POST("/software-sync/config", middleware.CSRFProtection(), handlers.SoftwareSyncConfigSave)
+		admin.GET("/software-sync/check", middleware.CSRFProtection(), handlers.SoftwareVersionCheck)
 
 		// 系统设置
 		settings := admin.Group("/settings")

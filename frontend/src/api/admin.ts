@@ -187,3 +187,10 @@ export const testPaymentGateway = (type: string) => request.post(`/admin/payment
 export const getPaymentStats = (params?: any) => request.get('/admin/stats/payment', { params })
 export const getPaymentMethodComparison = (params?: any) => request.get('/admin/stats/payment/comparison', { params })
 export const getPaymentAnalysis = (params?: any) => request.get('/admin/stats/payment/analysis', { params })
+
+// 软件同步（版本自动检测）
+export const runSoftwareSync = () => request.post('/admin/software-sync/run')
+export const getSoftwareSyncStatus = () => request.get('/admin/software-sync/status')
+export const checkSoftwareVersions = () => request.get('/admin/software-sync/check')
+export const getSoftwareSyncConfig = () => request.get('/admin/software-sync/config')
+export const saveSoftwareSyncConfig = (data: any) => request.post('/admin/software-sync/config', data)

@@ -408,85 +408,53 @@
                 <div v-else-if="activeTab === 'downloads'" key="downloads">
                   <n-alert type="info" style="margin-bottom: 24px;">
                     配置后会显示在用户端仪表盘的软件下载区域和帮助页面。留空的客户端不会对用户展示。
-                    <br />支持 <b>GitHub 自动下载</b>：点击「自动」按钮为支持的客户端填入 <n-text code>pan://</n-text> 标记，
-                    用户点击时将自动从 GitHub 最新 Release 解析对应平台/架构的安装包并经国内加速镜像下载。
+                    <br />支持 <b>GitHub 全自动下载</b>：点击「自动」按钮（或一键配置）为支持的客户端填入 <n-text code>pan://</n-text> 标记，
+                    用户点击下载时将自动检测最新版本并匹配对应平台/架构的安装包，经国内加速镜像直接下载。
+                    macOS 区分 <b>Apple 芯片</b> 与 <b>Intel 芯片</b> 两个版本。
                   </n-alert>
 
-                  <n-space style="margin-bottom: 16px;">
+                  <n-space style="margin-bottom: 16px;" :wrap="true">
                     <n-button type="primary" :loading="autoConfigAll" @click="handleAutoConfigAll">
                       <template #icon><n-icon><DownloadOutline /></n-icon></template>
                       一键自动配置全部支持项
                     </n-button>
-                    <n-text depth="3">（自动项可单独改回手动链接）</n-text>
+                    <n-button :loading="softwareSyncing" @click="handleSoftwareSync">
+                      <template #icon><n-icon><RefreshOutline /></n-icon></template>
+                      立即检测 GitHub 最新版
+                    </n-button>
+                    <n-text depth="3" v-if="softwareSyncInfo">{{ softwareSyncInfo }}</n-text>
                   </n-space>
 
                   <n-collapse arrow-placement="right" :default-expanded-names="['windows', 'android', 'macos', 'ios', 'linux']">
-                    <n-collapse-item title="Windows 客户端" name="windows">
+                    <n-collapse-item v-for="group in softwareGroups" :key="group.name" :title="group.title" :name="group.name">
                       <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                        <n-form-item-gi label="Clash for Windows"><n-input v-model:value="form.client_clash_windows_url" placeholder="https://..." /></n-form-item-gi>
-                        <n-form-item-gi label="V2rayN">
-                          <n-input v-model:value="form.client_v2rayn_url" placeholder="https://... 或点自动" />
-                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_v2rayn_url')">自动</n-button></template>
+                        <n-form-item-gi v-for="item in group.items" :key="item.key" :label="item.label">
+                          <n-input v-model:value="form[item.key]" :placeholder="item.auto ? 'https://... 或点自动' : 'https://...'" clearable>
+                            <template #suffix>
+                              <n-button v-if="item.auto" size="tiny" quaternary type="primary" @click="autoFill(item.key)">自动</n-button>
+                            </template>
+                          </n-input>
                         </n-form-item-gi>
-                        <n-form-item-gi label="Clash Party">
-                          <n-input v-model:value="form.client_clashparty_windows_url" placeholder="https://... 或点自动" />
-                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_clashparty_windows_url')">自动</n-button></template>
-                        </n-form-item-gi>
-                        <n-form-item-gi label="Hiddify">
-                          <n-input v-model:value="form.client_hiddify_windows_url" placeholder="https://... 或点自动" />
-                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_hiddify_windows_url')">自动</n-button></template>
-                        </n-form-item-gi>
-                        <n-form-item-gi label="FlClash">
-                          <n-input v-model:value="form.client_flclash_windows_url" placeholder="https://... 或点自动" />
-                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_flclash_windows_url')">自动</n-button></template>
-                        </n-form-item-gi>
-                      </n-grid>
-                    </n-collapse-item>
-
-                    <n-collapse-item title="Android 客户端" name="android">
-                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                        <n-form-item-gi label="Clash Meta">
-                          <n-input v-model:value="form.client_clash_android_url" placeholder="https://... 或点自动" />
-                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_clash_android_url')">自动</n-button></template>
-                        </n-form-item-gi>
-                        <n-form-item-gi label="V2rayNG">
-                          <n-input v-model:value="form.client_v2rayng_url" placeholder="https://... 或点自动" />
-                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_v2rayng_url')">自动</n-button></template>
-                        </n-form-item-gi>
-                        <n-form-item-gi label="Hiddify">
-                          <n-input v-model:value="form.client_hiddify_android_url" placeholder="https://... 或点自动" />
-                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_hiddify_android_url')">自动</n-button></template>
-                        </n-form-item-gi>
-                      </n-grid>
-                    </n-collapse-item>
-
-                    <n-collapse-item title="macOS 客户端" name="macos">
-                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                        <n-form-item-gi label="FlClash">
-                          <n-input v-model:value="form.client_flclash_macos_url" placeholder="https://... 或点自动" />
-                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_flclash_macos_url')">自动</n-button></template>
-                        </n-form-item-gi>
-                        <n-form-item-gi label="Clash Party">
-                          <n-input v-model:value="form.client_clashparty_macos_url" placeholder="https://... 或点自动" />
-                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_clashparty_macos_url')">自动</n-button></template>
-                        </n-form-item-gi>
-                      </n-grid>
-                    </n-collapse-item>
-
-                    <n-collapse-item title="iOS 客户端" name="ios">
-                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                        <n-form-item-gi label="Shadowrocket"><n-input v-model:value="form.client_shadowrocket_url" placeholder="https://..." /></n-form-item-gi>
-                        <n-form-item-gi label="Stash"><n-input v-model:value="form.client_stash_url" placeholder="https://..." /></n-form-item-gi>
-                      </n-grid>
-                    </n-collapse-item>
-
-                    <n-collapse-item title="Linux / 通用客户端" name="linux">
-                      <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                        <n-form-item-gi label="Clash"><n-input v-model:value="form.client_clash_linux_url" placeholder="https://..." /></n-form-item-gi>
-                        <n-form-item-gi label="Sing-box"><n-input v-model:value="form.client_singbox_url" placeholder="https://..." /></n-form-item-gi>
                       </n-grid>
                     </n-collapse-item>
                   </n-collapse>
+
+                  <n-divider />
+                  <n-h3 prefix="bar">版本检测（GitHub 最新版 ↔ 已检出）</n-h3>
+                  <n-alert type="info" :bordered="false" style="margin-bottom: 12px;">
+                    点击「立即检测 GitHub 最新版」后，后台查询各软件仓库的最新 Release；有更新时自动更新下载链接并在此列出。
+                  </n-alert>
+                  <n-data-table
+                    v-if="versionRows.length"
+                    :columns="versionColumns"
+                    :data="versionRows"
+                    :loading="versionChecking"
+                    :pagination="false"
+                    :bordered="false"
+                    size="small"
+                    :scroll-x="900"
+                  />
+                  <n-empty v-else-if="!versionChecking" description="尚未检测版本，点击上方按钮开始" style="padding: 24px 0" />
                 </div>
 
                 <!-- 协议过滤 -->
@@ -531,14 +499,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useMessage, useDialog } from 'naive-ui'
+import { ref, computed, onMounted, onBeforeUnmount, watch, h } from 'vue'
+import { useMessage, useDialog, NTag } from 'naive-ui'
 import {
   SaveOutline, SettingsOutline, RocketOutline, CardOutline,
   MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline,
   FunnelOutline, CloudDownloadOutline, DownloadOutline, GitBranchOutline
 } from '@vicons/ionicons5'
-import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs } from '@/api/admin'
+import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs, runSoftwareSync, checkSoftwareVersions } from '@/api/admin'
 import { formatDateTime } from '@/utils/date'
 import { useAppStore } from '@/stores/app'
 
@@ -655,7 +623,15 @@ const form = ref<Record<string, any>>({
   client_clash_windows_url: '', client_v2rayn_url: '', client_clashparty_windows_url: '',
   client_hiddify_windows_url: '', client_flclash_windows_url: '',
   client_clash_android_url: '', client_v2rayng_url: '', client_hiddify_android_url: '',
-  client_flclash_macos_url: '', client_clashparty_macos_url: '',
+  client_flclash_macos_url: '', client_flclash_macos_arm_url: '',
+  client_clashparty_macos_url: '', client_clashparty_macos_arm_url: '',
+  client_clashverge_windows_url: '', client_clashverge_macos_url: '', client_clashverge_macos_arm_url: '',
+  client_v2rayn_macos_url: '', client_v2rayn_macos_arm_url: '',
+  client_hiddify_macos_url: '', client_hiddify_macos_arm_url: '',
+  client_hiddify_linux_url: '', client_hiddify_linux_arm_url: '',
+  client_flclash_linux_url: '', client_flclash_linux_arm_url: '',
+  client_clashverge_linux_url: '', client_clashverge_linux_arm_url: '',
+  client_flclash_android_url: '',
   client_shadowrocket_url: '', client_stash_url: '',
   client_clash_linux_url: '', client_singbox_url: ''
 })
@@ -719,9 +695,123 @@ const loadSettings = async () => {
 // 可自动配置的下载键（对应 GitHub Release 仓库，值为 pan://<键> 时自动解析）
 const AUTO_DOWNLOAD_KEYS = [
   'client_v2rayn_url', 'client_clashparty_windows_url', 'client_hiddify_windows_url',
-  'client_flclash_windows_url', 'client_clash_android_url', 'client_v2rayng_url',
-  'client_hiddify_android_url', 'client_flclash_macos_url', 'client_clashparty_macos_url',
+  'client_flclash_windows_url', 'client_clashverge_windows_url',
+  'client_clash_android_url', 'client_v2rayng_url', 'client_hiddify_android_url',
+  'client_flclash_android_url',
+  'client_flclash_macos_url', 'client_flclash_macos_arm_url',
+  'client_clashparty_macos_url', 'client_clashparty_macos_arm_url',
+  'client_clashverge_macos_url', 'client_clashverge_macos_arm_url',
+  'client_v2rayn_macos_url', 'client_v2rayn_macos_arm_url',
+  'client_hiddify_macos_url', 'client_hiddify_macos_arm_url',
+  'client_hiddify_linux_url', 'client_hiddify_linux_arm_url',
+  'client_flclash_linux_url', 'client_flclash_linux_arm_url',
+  'client_clashverge_linux_url', 'client_clashverge_linux_arm_url',
 ]
+
+// 软件下载配置分组（完整覆盖：软件 × 平台 × 架构，macOS 区分 Intel/Apple 芯片）
+const softwareGroups = [
+  {
+    name: 'windows', title: 'Windows 客户端',
+    items: [
+      { key: 'client_clash_windows_url', label: 'Clash for Windows', auto: false },
+      { key: 'client_v2rayn_url', label: 'V2rayN', auto: true },
+      { key: 'client_clashparty_windows_url', label: 'Clash Party', auto: true },
+      { key: 'client_clashverge_windows_url', label: 'Clash Verge', auto: true },
+      { key: 'client_hiddify_windows_url', label: 'Hiddify', auto: true },
+      { key: 'client_flclash_windows_url', label: 'FlClash', auto: true },
+    ],
+  },
+  {
+    name: 'android', title: 'Android 客户端',
+    items: [
+      { key: 'client_clash_android_url', label: 'Clash Meta', auto: true },
+      { key: 'client_v2rayng_url', label: 'V2rayNG', auto: true },
+      { key: 'client_hiddify_android_url', label: 'Hiddify', auto: true },
+      { key: 'client_flclash_android_url', label: 'FlClash', auto: true },
+    ],
+  },
+  {
+    name: 'macos', title: 'macOS 客户端（Intel / Apple 芯片）',
+    items: [
+      { key: 'client_flclash_macos_url', label: 'FlClash (Intel)', auto: true },
+      { key: 'client_flclash_macos_arm_url', label: 'FlClash (Apple 芯片)', auto: true },
+      { key: 'client_clashparty_macos_url', label: 'Clash Party (Intel)', auto: true },
+      { key: 'client_clashparty_macos_arm_url', label: 'Clash Party (Apple 芯片)', auto: true },
+      { key: 'client_clashverge_macos_url', label: 'Clash Verge (Intel)', auto: true },
+      { key: 'client_clashverge_macos_arm_url', label: 'Clash Verge (Apple 芯片)', auto: true },
+      { key: 'client_v2rayn_macos_url', label: 'V2rayN (Intel)', auto: true },
+      { key: 'client_v2rayn_macos_arm_url', label: 'V2rayN (Apple 芯片)', auto: true },
+      { key: 'client_hiddify_macos_url', label: 'Hiddify (Intel)', auto: true },
+      { key: 'client_hiddify_macos_arm_url', label: 'Hiddify (Apple 芯片)', auto: true },
+    ],
+  },
+  {
+    name: 'ios', title: 'iOS 客户端',
+    items: [
+      { key: 'client_shadowrocket_url', label: 'Shadowrocket', auto: false },
+      { key: 'client_stash_url', label: 'Stash', auto: false },
+    ],
+  },
+  {
+    name: 'linux', title: 'Linux / 通用客户端',
+    items: [
+      { key: 'client_clash_linux_url', label: 'Clash', auto: false },
+      { key: 'client_singbox_url', label: 'Sing-box', auto: false },
+      { key: 'client_flclash_linux_url', label: 'FlClash (x64)', auto: true },
+      { key: 'client_flclash_linux_arm_url', label: 'FlClash (arm64)', auto: true },
+      { key: 'client_hiddify_linux_url', label: 'Hiddify (x64)', auto: true },
+      { key: 'client_hiddify_linux_arm_url', label: 'Hiddify (arm64)', auto: true },
+      { key: 'client_clashverge_linux_url', label: 'Clash Verge (x64)', auto: true },
+      { key: 'client_clashverge_linux_arm_url', label: 'Clash Verge (arm64)', auto: true },
+    ],
+  },
+]
+
+// 版本检测状态
+const softwareSyncing = ref(false)
+const softwareSyncInfo = ref('')
+const versionChecking = ref(false)
+const versionRows = ref<any[]>([])
+const versionColumns = [
+  { title: '软件', key: 'name', width: 110 },
+  { title: '平台/架构', key: 'label', width: 170 },
+  { title: 'GitHub 版本', key: 'github_version', width: 110, render: (row: any) => row.github_version ? `v${row.github_version}` : h(NTag, { type: 'error', size: 'small' }, { default: () => '获取失败' }) },
+  { title: '已检出版本', key: 'checked_version', width: 110, render: (row: any) => row.checked_version ? `v${row.checked_version}` : '未检出' },
+  { title: '匹配文件', key: 'file_name', minWidth: 220, ellipsis: { tooltip: true } },
+  { title: '状态', key: 'status', width: 100, render: (row: any) => {
+    if (row.custom) return h(NTag, { type: 'warning', size: 'small' }, { default: () => '自定义链接' })
+    if (row.up_to_date) return h(NTag, { type: 'success', size: 'small' }, { default: () => '已是最新' })
+    if (row.checked_version) return h(NTag, { type: 'warning', size: 'small' }, { default: () => '待更新' })
+    return h(NTag, { type: 'info', size: 'small' }, { default: () => '待检出' })
+  } },
+]
+
+// 立即检测 GitHub 最新版
+const handleSoftwareSync = async () => {
+  softwareSyncing.value = true
+  softwareSyncInfo.value = '正在检测 GitHub 最新版本...'
+  try {
+    await runSoftwareSync()
+    softwareSyncInfo.value = '检测完成'
+    message.success('版本检测完成')
+    await loadVersionCheck()
+  } catch (e: any) {
+    softwareSyncInfo.value = ''
+    message.error(e?.message || '检测失败')
+  } finally {
+    softwareSyncing.value = false
+  }
+}
+
+// 加载版本对照
+const loadVersionCheck = async () => {
+  versionChecking.value = true
+  try {
+    const res = await checkSoftwareVersions()
+    versionRows.value = res.data?.list || []
+  } catch { /* 忽略 */ }
+  finally { versionChecking.value = false }
+}
 
 // 自动填入单个配置项（pan:// 标记）
 const autoFill = (key: string) => {
@@ -1016,7 +1106,7 @@ const handleUpdateGeoIP = async () => {
   } catch {}
 }
 
-onMounted(() => { loadSettings(); loadProtocolFilter() })
+onMounted(() => { loadSettings(); loadProtocolFilter(); loadVersionCheck() })
 
 watch(activeTab, (tab) => {
   if (tab === 'backup') loadBackupList()

@@ -11,6 +11,7 @@ import (
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/services/software_sync"
 	"cboard/v2/internal/utils"
 )
 
@@ -48,6 +49,7 @@ func (s *Scheduler) Start() {
 
 	s.startLoop("EmailQueue", 30*time.Second, processEmailQueueTask)
 	s.startLoop("NodeHealthCheck", 5*time.Minute, nodeHealthCheckTask)
+	s.startLoop("SoftwareSync", 1*time.Hour, softwareSyncTask)
 	s.startLoop("DeactivateExpired", 30*time.Minute, deactivateExpiredTask)
 	s.startLoop("ExpiryCheck", 1*time.Hour, checkExpiryStatusTask)
 	s.startLoop("ExpiryReminder", 6*time.Hour, sendExpiryRemindersTask)
@@ -116,6 +118,15 @@ func nodeHealthCheckTask() {
 	if tested > 0 {
 		utils.SysInfo("scheduler", fmt.Sprintf("节点健康检查完成: 已测 %d 个, 在线 %d 个", tested, online))
 	}
+}
+
+// softwareSyncTask 软件版本自动检测：按配置间隔检查 GitHub 最新版（启用时）
+func softwareSyncTask() {
+	cfg := software_sync.LoadSyncConfig()
+	if !cfg.Enabled {
+		return
+	}
+	software_sync.TriggerAsync()
 }
 
 // deactivateExpiredTask marks expired subscriptions as inactive.

@@ -92,6 +92,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	// 邀请码验证（公开）
 	api.GET("/invites/validate/:code", handlers.ValidateInviteCode)
 
+	// 软件下载解析（公开）：GitHub Release 直链 + 国内加速镜像 302
+	api.GET("/download/resolve", handlers.ResolveDownload)
+	api.GET("/download/gh", handlers.GitHubResolve)
+
 	// ===== 需要认证的路由 =====
 	authorized := api.Group("")
 	authorized.Use(middleware.AuthRequired(), middleware.CSRFProtection())

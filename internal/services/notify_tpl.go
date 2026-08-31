@@ -32,7 +32,9 @@ func GetNotifyTemplate(eventType string) *NotifyTemplate {
 				{"👤", "用户", "username"},
 				{"📦", "套餐", "package_name"},
 				{"💰", "金额", "amount"},
+				{"💳", "支付方式", "payment_method"},
 			},
+			Footer: "⏳ 等待用户完成支付",
 		},
 		"payment_success": {
 			Emoji: "🎉",
@@ -42,6 +44,7 @@ func GetNotifyTemplate(eventType string) *NotifyTemplate {
 				{"👤", "用户", "username"},
 				{"📦", "套餐", "package_name"},
 				{"💰", "金额", "amount"},
+				{"💳", "支付方式", "payment_method"},
 			},
 			Footer: "✅ 订单已自动处理\n📦 订阅已激活",
 		},
@@ -52,7 +55,9 @@ func GetNotifyTemplate(eventType string) *NotifyTemplate {
 				{"🆔", "充值单号", "order_no"},
 				{"👤", "用户", "username"},
 				{"💰", "金额", "amount"},
+				{"💳", "支付方式", "payment_method"},
 			},
+			Footer: "✅ 余额已到账",
 		},
 		"new_ticket": {
 			Emoji: "🎫",
@@ -63,6 +68,17 @@ func GetNotifyTemplate(eventType string) *NotifyTemplate {
 				{"📧", "邮箱", "email"},
 				{"📝", "标题", "title"},
 			},
+			Footer: "🎫 请及时回复处理",
+		},
+		"ticket_reply": {
+			Emoji: "💬",
+			Title: "工单有新回复",
+			Fields: []NotifyField{
+				{"🆔", "工单号", "ticket_no"},
+				{"👤", "用户", "username"},
+				{"📝", "标题", "title"},
+				{"💬", "回复内容", "reply"},
+			},
 		},
 		"new_user": {
 			Emoji: "👋",
@@ -71,7 +87,7 @@ func GetNotifyTemplate(eventType string) *NotifyTemplate {
 				{"👤", "用户名", "username"},
 				{"📧", "邮箱", "email"},
 			},
-			Footer: "✅ 已自动创建默认订阅",
+			Footer: "👋 欢迎新用户",
 		},
 		"admin_create_user": {
 			Emoji: "📋",
@@ -98,6 +114,7 @@ func GetNotifyTemplate(eventType string) *NotifyTemplate {
 				{"🌐", "IP", "ip"},
 				{"📍", "位置", "location"},
 			},
+			Footer: "🚨 若非本人操作请及时修改密码",
 		},
 		"unpaid_order": {
 			Emoji: "⏳",
@@ -107,13 +124,29 @@ func GetNotifyTemplate(eventType string) *NotifyTemplate {
 				{"👤", "用户", "username"},
 				{"💰", "金额", "amount"},
 			},
+			Footer: "⏳ 订单即将过期，提醒用户尽快支付",
 		},
 		"expiry_reminder": {
 			Emoji: "⏰",
 			Title: "订阅到期提醒",
 			Fields: []NotifyField{
 				{"👤", "用户", "username"},
+				{"📦", "套餐", "package_name"},
 				{"⏰", "到期时间", "expire_time"},
+			},
+		},
+		"account_disabled": {
+			Emoji: "🚫",
+			Title: "用户被禁用",
+			Fields: []NotifyField{
+				{"👤", "用户", "username"},
+			},
+		},
+		"account_enabled": {
+			Emoji: "✅",
+			Title: "用户已恢复",
+			Fields: []NotifyField{
+				{"👤", "用户", "username"},
 			},
 		},
 		"security_alert": {

@@ -192,7 +192,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useMessage } from 'naive-ui'
 import { DownloadOutline, ChevronDownOutline, ChevronUpOutline, MailOutline, ChatbubblesOutline, SendOutline } from '@vicons/ionicons5'
 import { getPublicConfig } from '@/api/common'
-import { getClientDownloadUrl, resolvePanDownloadUrl } from '@/utils/githubDownload'
+import { resolvePanDownloadUrl } from '@/utils/githubDownload'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -427,14 +427,13 @@ const hasAnyClient = computed(() =>
 // 自动客户端点击：动态解析 GitHub 最新版直链
 const downloadingKey = ref('')
 async function handleClientClick(c: any) {
-  if (c.auto && c.clientKey) {
-    if (downloadingKey.value) return
+  if (downloadingKey.value) return
+  // 无配置或 pan:// 标记：交给后端 /download/gh 解析（VPS 查 GitHub 最新版 + 加速镜像）
+  const needAuto = !c.url || String(c.url).startsWith('pan://')
+  if (needAuto) {
     downloadingKey.value = c.key
     try {
-      const resolved = await getClientDownloadUrl(c.clientKey, config.value, c.forcedArch)
-      window.open(resolved, '_blank')
-    } catch (e: any) {
-      message.error(e?.message || '获取下载链接失败，请稍后重试')
+      window.open(`/api/v1/download/gh?key=${encodeURIComponent(c.key)}`, '_blank')
     } finally {
       downloadingKey.value = ''
     }

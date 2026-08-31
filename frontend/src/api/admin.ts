@@ -194,3 +194,6 @@ export const getSoftwareSyncStatus = () => request.get('/admin/software-sync/sta
 export const checkSoftwareVersions = () => request.get('/admin/software-sync/check')
 export const getSoftwareSyncConfig = () => request.get('/admin/software-sync/config')
 export const saveSoftwareSyncConfig = (data: any) => request.post('/admin/software-sync/config', data)
+
+// 专线节点导入（订阅/链接，订阅支持同步更新）
+export const importCustomNodes = (data: { type: string, url?: string, links?: string }) => request.post('/admin/custom-nodes/import', data)

@@ -291,7 +291,7 @@
     <!-- Import Links Drawer -->
     <common-drawer
       v-model:show="showImportDrawer"
-      title="导入节点链接"
+      title="导入专线节点"
       :width="600"
       show-footer
       :loading="importing"
@@ -299,14 +299,38 @@
       @cancel="showImportDrawer = false"
     >
       <n-form label-placement="top">
-        <n-form-item label="节点链接">
-          <n-input
-            v-model:value="importLinks"
-            type="textarea"
-            placeholder="每行一个节点链接，支持 vmess:// vless:// trojan:// ss://"
-            :rows="8"
-          />
+        <n-form-item label="导入方式">
+          <n-radio-group v-model:value="importType" @update:value="importTypeChanged">
+            <n-radio-button value="subscription">订阅地址</n-radio-button>
+            <n-radio-button value="links">节点链接</n-radio-button>
+          </n-radio-group>
         </n-form-item>
+
+        <template v-if="importType === 'subscription'">
+          <n-alert type="info" :bordered="false" style="margin-bottom: 16px;">
+            订阅导入采用<b>同步更新</b>模式：同一订阅地址重新导入时，
+            按节点名称更新配置（<b>已分配给用户的节点保持分配不变</b>）；
+            新节点自动加入；原订阅中已消失的节点将停用（不删除）。
+          </n-alert>
+          <n-form-item label="订阅地址">
+            <n-input
+              v-model:value="importUrl"
+              placeholder="https://example.com/sub?token=xxx"
+              @keyup.enter="handleImportSubmit"
+            />
+          </n-form-item>
+        </template>
+
+        <template v-else>
+          <n-form-item label="节点链接">
+            <n-input
+              v-model:value="importLinks"
+              type="textarea"
+              placeholder="每行一个节点链接，支持 vmess:// vless:// trojan:// ss://"
+              :rows="8"
+            />
+          </n-form-item>
+        </template>
       </n-form>
     </common-drawer>
 
@@ -340,7 +364,7 @@
 <script setup>
 import { ref, reactive, h, onActivated, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
-import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NSwitch, NRadioGroup, NRadioButton, useMessage } from 'naive-ui'
 import {
   CreateOutline,
   AddOutline,
@@ -360,6 +384,7 @@ import {
   batchAssignCustomNodes,
   listUsers,
   importCustomNodeLinks,
+  importCustomNodes,
   batchDeleteCustomNodes,
   getCustomNodeLink
 } from '@/api/admin'
@@ -390,6 +415,8 @@ const userOptions = ref([])
 const showImportDrawer = ref(false)
 const showLinkModal = ref(false)
 const importing = ref(false)
+const importType = ref('subscription')
+const importUrl = ref('')
 const importLinks = ref('')
 const checkedRowKeys = ref([])
 const linkData = reactive({ link: '', name: '', protocol: '' })
@@ -755,15 +782,29 @@ const handleAssignSubmit = async () => {
 }
 
 const handleImportSubmit = async () => {
-  if (!importLinks.value.trim()) {
+  if (importType.value === 'subscription') {
+    if (!importUrl.value.trim()) {
+      message.warning('请输入订阅地址')
+      return
+    }
+  } else if (!importLinks.value.trim()) {
     message.warning('请输入节点链接')
     return
   }
   importing.value = true
   try {
-    const res = await importCustomNodeLinks({ links: importLinks.value })
-    message.success(`导入完成: 成功 ${res.data.success}/${res.data.total} 个`)
+    const payload = importType.value === 'subscription'
+      ? { type: 'subscription', url: importUrl.value.trim() }
+      : { type: 'links', links: importLinks.value }
+    const res = await importCustomNodes(payload)
+    const d = res.data
+    if (importType.value === 'subscription') {
+      message.success(`同步完成: 新增 ${d.inserted || 0}, 更新 ${d.updated || 0}, 停用 ${d.deactivated || 0}`)
+    } else {
+      message.success(`导入完成: 成功 ${d.success || 0}/${d.total || 0} 个`)
+    }
     showImportDrawer.value = false
+    importUrl.value = ''
     importLinks.value = ''
     fetchData()
   } catch (error) {
@@ -772,6 +813,8 @@ const handleImportSubmit = async () => {
     importing.value = false
   }
 }
+
+const importTypeChanged = () => { /* 切换方式时无需清理 */ }
 
 const handleBatchDelete = async () => {
   if (checkedRowKeys.value.length === 0) return

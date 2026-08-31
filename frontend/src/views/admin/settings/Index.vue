@@ -884,6 +884,8 @@ const handleSendTestEmail = async () => {
   try {
     await sendTestEmail({ email: testEmail.value })
     message.success('测试邮件已发出')
+  } catch (e: any) {
+    message.error(e?.response?.data?.message || e?.message || '测试邮件发送失败')
   } finally { sendingTest.value = false }
 }
 

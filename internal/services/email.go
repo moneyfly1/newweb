@@ -20,17 +20,18 @@ import (
 
 // SMTPConfig holds SMTP connection parameters
 type SMTPConfig struct {
-	Host     string
-	Port     int
-	Username string
-	Password string
-	From     string
+	Host       string
+	Port       int
+	Username   string
+	Password   string
+	From       string
+	Encryption string // "ssl" | "tls" (STARTTLS) | "none"
 }
 
 // GetSMTPConfig reads SMTP settings from system_configs table,
 // falling back to app config env vars.
 func GetSMTPConfig() (*SMTPConfig, error) {
-	m := utils.GetSettings("smtp_host", "smtp_port", "smtp_username", "smtp_password", "smtp_from", "smtp_from_email", "smtp_from_name")
+	m := utils.GetSettings("smtp_host", "smtp_port", "smtp_username", "smtp_password", "smtp_from", "smtp_from_email", "smtp_from_name", "smtp_encryption")
 
 	host := m["smtp_host"]
 	if host == "" {
@@ -53,12 +54,23 @@ func GetSMTPConfig() (*SMTPConfig, error) {
 		from = fmt.Sprintf("%s <%s>", mime.QEncoding.Encode("UTF-8", name), from)
 	}
 
+	// 加密方式：优先用配置值（smtp_encryption），缺省按端口推断（465=ssl, 其他=tls）
+	encryption := strings.ToLower(strings.TrimSpace(m["smtp_encryption"]))
+	if encryption == "" {
+		if port == 465 {
+			encryption = "ssl"
+		} else {
+			encryption = "tls"
+		}
+	}
+
 	return &SMTPConfig{
-		Host:     host,
-		Port:     port,
-		Username: m["smtp_username"],
-		Password: m["smtp_password"],
-		From:     from,
+		Host:       host,
+		Port:       port,
+		Username:   m["smtp_username"],
+		Password:   m["smtp_password"],
+		From:       from,
+		Encryption: encryption,
 	}, nil
 }
 
@@ -92,9 +104,12 @@ func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
 	dialer := &net.Dialer{Timeout: smtpDialTimeout}
+	encryption := strings.ToLower(cfg.Encryption)
 
-	if cfg.Port == 465 {
-		// Implicit TLS
+	// 加密方式三态：ssl（隐式 TLS）/ tls（STARTTLS）/ none（明文，通常仅本机/内网）
+	switch encryption {
+	case "ssl":
+		// Implicit TLS (通常 465)
 		conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: cfg.Host})
 		if err != nil {
 			return fmt.Errorf("TLS 连接失败: %w", err)
@@ -123,40 +138,74 @@ func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
 			return err
 		}
 		return w.Close()
-	}
 
-	// STARTTLS (port 587 / 25) — 使用带超时的自定义客户端，替代 smtp.SendMail（其内部 dial 无超时）
-	conn, err := dialer.Dial("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("SMTP 连接失败: %w", err)
+	case "tls":
+		// STARTTLS（通常 587 / 25）
+		conn, err := dialer.Dial("tcp", addr)
+		if err != nil {
+			return fmt.Errorf("SMTP 连接失败: %w", err)
+		}
+		client, err := smtp.NewClient(conn, cfg.Host)
+		if err != nil {
+			_ = conn.Close()
+			return fmt.Errorf("SMTP 客户端创建失败: %w", err)
+		}
+		defer client.Close()
+		if err = client.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
+			return fmt.Errorf("STARTTLS 失败: %w", err)
+		}
+		if err = client.Auth(auth); err != nil {
+			return fmt.Errorf("SMTP 认证失败: %w", err)
+		}
+		if err = client.Mail(envelopeFrom); err != nil {
+			return err
+		}
+		if err = client.Rcpt(to); err != nil {
+			return err
+		}
+		w, err := client.Data()
+		if err != nil {
+			return err
+		}
+		_, err = w.Write([]byte(msg))
+		if err != nil {
+			return err
+		}
+		return w.Close()
+
+	default:
+		// none：明文直连（本地 SMTP 或可信内网），不加密不认证
+		conn, err := dialer.Dial("tcp", addr)
+		if err != nil {
+			return fmt.Errorf("SMTP 连接失败: %w", err)
+		}
+		client, err := smtp.NewClient(conn, cfg.Host)
+		if err != nil {
+			_ = conn.Close()
+			return fmt.Errorf("SMTP 客户端创建失败: %w", err)
+		}
+		defer client.Close()
+		if cfg.Username != "" {
+			if err = client.Auth(auth); err != nil {
+				return fmt.Errorf("SMTP 认证失败: %w", err)
+			}
+		}
+		if err = client.Mail(envelopeFrom); err != nil {
+			return err
+		}
+		if err = client.Rcpt(to); err != nil {
+			return err
+		}
+		w, err := client.Data()
+		if err != nil {
+			return err
+		}
+		_, err = w.Write([]byte(msg))
+		if err != nil {
+			return err
+		}
+		return w.Close()
 	}
-	client, err := smtp.NewClient(conn, cfg.Host)
-	if err != nil {
-		_ = conn.Close()
-		return fmt.Errorf("SMTP 客户端创建失败: %w", err)
-	}
-	defer client.Close()
-	if err = client.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
-		return fmt.Errorf("STARTTLS 失败: %w", err)
-	}
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("SMTP 认证失败: %w", err)
-	}
-	if err = client.Mail(envelopeFrom); err != nil {
-		return err
-	}
-	if err = client.Rcpt(to); err != nil {
-		return err
-	}
-	w, err := client.Data()
-	if err != nil {
-		return err
-	}
-	_, err = w.Write([]byte(msg))
-	if err != nil {
-		return err
-	}
-	return w.Close()
 }
 
 // sanitizeHeader 清除 MIME header 中的换行符，防止邮件头注入

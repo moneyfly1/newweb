@@ -302,7 +302,7 @@
                           </tr>
                         </thead>
                         <tbody>
-                          <tr v-for="item in filteredBackupList" :key="item.rel_path">
+                          <tr v-for="item in pagedBackupList" :key="item.rel_path">
                             <td>{{ item.name || item.filename }}</td>
                             <td><n-tag size="small" :bordered="false" :type="restoreSource === 'github' ? 'success' : 'info'">{{ item.folder }}</n-tag></td>
                             <td>{{ formatSize(item.size) }}</td>
@@ -316,6 +316,17 @@
                         </tbody>
                       </n-table>
                       <n-empty v-else description="当前筛选条件下暂无备份文件" style="padding: 40px 0" />
+                      <n-pagination
+                        v-if="filteredBackupList.length > backupPageSize"
+                        v-model:page="backupPage"
+                        :page-size="backupPageSize"
+                        :item-count="filteredBackupList.length"
+                        :page-sizes="[10, 20, 50, 100]"
+                        :show-size-picker="true"
+                        style="margin-top: 16px; justify-content: flex-end"
+                        @update:page="backupPage = $event"
+                        @update:page-size="(ps: number) => { backupPageSize = ps; backupPage = 1 }"
+                      />
                     </n-spin>
                   </n-space>
                 </div>
@@ -530,6 +541,9 @@ const githubBackupList = ref<any[]>([])
 const githubBackupListLoading = ref(false)
 const filterYear = ref<string | null>(null)
 const filterMonth = ref<string | null>(null)
+// 备份列表分页（备份历史可能很多，翻页避免拉长页面）
+const backupPage = ref(1)
+const backupPageSize = ref(10)
 
 const activeBackupList = computed(() => {
   if (restoreSource.value === 'github') {
@@ -569,6 +583,15 @@ const filteredBackupList = computed(() => {
     return true
   })
 })
+
+// 备份列表分页切片（与全站列表分页一致：翻页保留数据、无闪烁）
+const pagedBackupList = computed(() => {
+  const start = (backupPage.value - 1) * backupPageSize.value
+  return filteredBackupList.value.slice(start, start + backupPageSize.value)
+})
+
+// 筛选变化时回到第 1 页
+watch([filterYear, filterMonth, restoreSource], () => { backupPage.value = 1 })
 
 const menuOptions = [
   { label: '基础设置', key: 'basic', icon: SettingsOutline },

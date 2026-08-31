@@ -49,9 +49,20 @@ func rx(patterns ...string) []*regexp.Regexp {
 
 // 通用匹配（已对照各仓库真实资产名）
 var apkAny = rx(`(?i)\.apk$`)
-var apkPreferredArm = rx(`(?i)(arm64|arm64[-_]?v8a)[^.]*\.apk$`)
-var dmgIntel = rx(`(?i)^.*(intel|x64|amd64|_x64|-64)\.(dmg|pkg)$`)
-var dmgApple = rx(`(?i)^.*(apple|silicon|m[0-9]+|arm64|aarch64|_aarch64).*\.(dmg|pkg)$`)
+var apkPreferredArm = rx(`(?i)(arm64[-_]?v8a|arm64)[^.]*\.apk$`)
+// macOS 安装包通用正则（macos/darwin 前缀优先，排除 catalina 旧版兼容资产）
+var dmgIntel = rx(
+	`(?i)^.*(macos|darwin).*[-_.](x64|amd64|intel|-64)[^.]*\.(dmg|pkg)$`,
+	`(?i)^.*[-_.](x64|amd64|intel)[^.]*\.(dmg|pkg)$`,
+)
+var dmgApple = rx(
+	`(?i)^.*(macos|darwin).*[-_.](arm64|aarch64|apple|silicon|m[0-9]+)[^.]*\.(dmg|pkg)$`,
+	`(?i)^.*[-_.](arm64|aarch64)[^.]*\.(dmg|pkg)$`,
+)
+// Clash Party 专用：macos 前缀精确匹配（排除 catalina 兼容包），
+// 资产形如 clash-party-macos-2.0.2-arm64.pkg / clash-party-macos-2.0.2-x64.pkg
+var clashPartyMacIntel = rx(`(?i)^(clash-party|mihomo-party)-macos.*[-_.](x64|amd64|intel)[^.]*\.(dmg|pkg)$`)
+var clashPartyMacApple = rx(`(?i)^(clash-party|mihomo-party)-macos.*[-_.](arm64|aarch64)[^.]*\.(dmg|pkg)$`)
 
 // Catalog 软件目录：配置键与 CBoard 现有 client_*_url 保持一致
 var Catalog = []Software{
@@ -88,8 +99,8 @@ var Catalog = []Software{
 		Key: "clash-part", Name: "Clash Party", Repo: "mihomo-party-org/clash-party",
 		Targets: []Target{
 			{ConfigKey: "client_clashparty_windows_url", OS: "windows", Arch: "x64", Label: "Windows x64", Patterns: rx(`(?i)^.*windows.*(x64|[^a-z]64).*\.exe$`)},
-			{ConfigKey: "client_clashparty_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: dmgIntel},
-			{ConfigKey: "client_clashparty_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: dmgApple},
+			{ConfigKey: "client_clashparty_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: clashPartyMacIntel},
+			{ConfigKey: "client_clashparty_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: clashPartyMacApple},
 			{ConfigKey: "client_clashparty_linux_url", OS: "linux", Arch: "x64", Label: "Linux x64", Patterns: rx(`(?i)^.*linux.*(x64|amd64).*\.(deb|rpm|AppImage)$`)},
 			{ConfigKey: "client_clashparty_linux_arm_url", OS: "linux", Arch: "arm64", Label: "Linux arm64", Patterns: rx(`(?i)^.*linux.*(arm64|aarch64).*\.(deb|rpm|AppImage)$`)},
 		},

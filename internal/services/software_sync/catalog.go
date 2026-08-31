@@ -81,8 +81,6 @@ var Catalog = []Software{
 			{ConfigKey: "client_hiddify_android_url", OS: "android", Arch: "universal", Label: "Android APK", Preferred: apkPreferredArm, Patterns: apkAny},
 			{ConfigKey: "client_hiddify_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: rx(`(?i)^.*macos.*\.dmg$`)},
 			{ConfigKey: "client_hiddify_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: rx(`(?i)^.*macos.*\.dmg$`)},
-			{ConfigKey: "client_hiddify_linux_url", OS: "linux", Arch: "x64", Label: "Linux x64", Patterns: rx(`(?i)^.*linux.*(x64|amd64).*\.(deb|rpm|AppImage|tar\.gz)$`)},
-			{ConfigKey: "client_hiddify_linux_arm_url", OS: "linux", Arch: "arm64", Label: "Linux arm64", Patterns: rx(`(?i)^.*linux.*(arm64|aarch64).*\.(deb|rpm|AppImage|tar\.gz)$`)},
 		},
 	},
 	{
@@ -91,8 +89,6 @@ var Catalog = []Software{
 			{ConfigKey: "client_clashverge_windows_url", OS: "windows", Arch: "x64", Label: "Windows x64", Patterns: rx(`(?i)^.*x64.*\.(exe|msi)$`)},
 			{ConfigKey: "client_clashverge_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: dmgIntel},
 			{ConfigKey: "client_clashverge_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: dmgApple},
-			{ConfigKey: "client_clashverge_linux_url", OS: "linux", Arch: "x64", Label: "Linux x64", Patterns: rx(`(?i)^.*linux.*(x64|amd64).*\.(deb|rpm|AppImage)$`)},
-			{ConfigKey: "client_clashverge_linux_arm_url", OS: "linux", Arch: "arm64", Label: "Linux arm64", Patterns: rx(`(?i)^.*linux.*(arm64|aarch64).*\.(deb|rpm|AppImage)$`)},
 		},
 	},
 	{
@@ -101,8 +97,6 @@ var Catalog = []Software{
 			{ConfigKey: "client_clashparty_windows_url", OS: "windows", Arch: "x64", Label: "Windows x64", Patterns: rx(`(?i)^.*windows.*(x64|[^a-z]64).*\.exe$`)},
 			{ConfigKey: "client_clashparty_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: clashPartyMacIntel},
 			{ConfigKey: "client_clashparty_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: clashPartyMacApple},
-			{ConfigKey: "client_clashparty_linux_url", OS: "linux", Arch: "x64", Label: "Linux x64", Patterns: rx(`(?i)^.*linux.*(x64|amd64).*\.(deb|rpm|AppImage)$`)},
-			{ConfigKey: "client_clashparty_linux_arm_url", OS: "linux", Arch: "arm64", Label: "Linux arm64", Patterns: rx(`(?i)^.*linux.*(arm64|aarch64).*\.(deb|rpm|AppImage)$`)},
 		},
 	},
 	{
@@ -112,8 +106,6 @@ var Catalog = []Software{
 			{ConfigKey: "client_flclash_android_url", OS: "android", Arch: "universal", Label: "Android APK", Preferred: apkPreferredArm, Patterns: apkAny},
 			{ConfigKey: "client_flclash_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: dmgIntel},
 			{ConfigKey: "client_flclash_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: dmgApple},
-			{ConfigKey: "client_flclash_linux_url", OS: "linux", Arch: "x64", Label: "Linux x64", Patterns: rx(`(?i)^.*linux.*(x64|amd64).*\.(deb|rpm|AppImage)$`)},
-			{ConfigKey: "client_flclash_linux_arm_url", OS: "linux", Arch: "arm64", Label: "Linux arm64", Patterns: rx(`(?i)^.*linux.*(arm64|aarch64).*\.(deb|rpm|AppImage)$`)},
 		},
 	},
 	{

@@ -302,7 +302,7 @@ import {
 } from '@vicons/ionicons5'
 import { getDashboardInfo, checkIn, getCheckInStatus, getCheckInHistory } from '@/api/user'
 import { listPublicAnnouncements, getPublicConfig } from '@/api/common'
-import { getClientDownloadUrl, resolvePanDownloadUrl } from '@/utils/githubDownload'
+import { resolvePanDownloadUrl } from '@/utils/githubDownload'
 import { listOrders } from '@/api/order'
 import { getSubscription } from '@/api/subscription'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
@@ -676,23 +676,25 @@ function oneClickImport(client: string) {
 
 function openUrl(url: string) { if (url) window.open(url, '_blank') }
 
-// 自动客户端点击：动态解析 GitHub 最新版直链（pan:// 或未配置 URL）
+// 客户端点击：统一走后端解析（VPS 查 GitHub 最新版 + 国内加速镜像 302 直链）
+// - 配置值为 pan:// 或为空 → /download/gh?key=<配置键>（后端自动检测版本+匹配架构+加代理）
+// - 配置值为普通 URL → 直接用
 const downloadingKey = ref('')
 async function handleClientClick(c: any) {
-  if (c.auto && c.clientKey) {
-    if (downloadingKey.value) return
+  if (downloadingKey.value) return
+  // 无配置或 pan:// 标记：交给后端 /download/gh 解析（key 即配置键）
+  const needAuto = !c.url || String(c.url).startsWith('pan://')
+  if (needAuto) {
     downloadingKey.value = c.key
     try {
-      const resolved = await getClientDownloadUrl(c.clientKey, clientConfig.value, c.forcedArch)
-      window.open(resolved, '_blank')
-    } catch (e: any) {
-      message.error(e?.message || '获取下载链接失败，请稍后重试')
+      // key 用配置键（arm 分支已是 *_macos_arm_url 等），后端按平台/架构匹配
+      window.open(`/api/v1/download/gh?key=${encodeURIComponent(c.key)}`, '_blank')
     } finally {
       downloadingKey.value = ''
     }
     return
   }
-  // 普通 URL：pan:// 标记转后端解析接口
+  // 普通 URL
   openUrl(resolvePanDownloadUrl(c.url))
 }
 

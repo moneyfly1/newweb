@@ -397,13 +397,6 @@ const allClients = {
     { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png' },
     { key: 'client_stash_url', name: 'Stash', icon: '🟡', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/stash.png' },
   ],
-  linux: [
-    { key: 'client_clash_linux_url', name: 'Clash', icon: '🐧', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
-    { key: 'client_singbox_url', name: 'Sing-box', icon: '📦', iconUrl: 'https://raw.githubusercontent.com/SagerNet/sing-box/testing/docs/assets/icon.svg' },
-    { key: 'client_flclash_linux_url', armKey: 'client_flclash_linux_arm_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
-    { key: 'client_hiddify_linux_url', armKey: 'client_hiddify_linux_arm_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
-    { key: 'client_clashverge_linux_url', armKey: 'client_clashverge_linux_arm_url', name: 'Clash Verge', clientKey: 'clash-verge', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
-  ],
 }
 
 // 显示规则：配置了 URL 的客户端，或配置了 clientKey（GitHub 自动解析）的客户端都显示；
@@ -440,9 +433,8 @@ const windowsClients = computed(() => filterClients(allClients.windows))
 const androidClients = computed(() => filterClients(allClients.android))
 const macClients = computed(() => filterClients(allClients.macos))
 const iosClients = computed(() => filterClients(allClients.ios))
-const linuxClients = computed(() => filterClients(allClients.linux))
 const hasAnyClientUrl = computed(() =>
-  windowsClients.value.length || androidClients.value.length || macClients.value.length || iosClients.value.length || linuxClients.value.length
+  windowsClients.value.length || androidClients.value.length || macClients.value.length || iosClients.value.length
 )
 
 const detectedPlatform = computed(() => {
@@ -452,7 +444,6 @@ const detectedPlatform = computed(() => {
   if (/iphone|ipad|ipod/.test(ua)) return 'ios'
   if (/android/.test(ua)) return 'android'
   if (platform.includes('mac')) return 'macos'
-  if (platform.includes('linux')) return 'linux'
   return 'windows'
 })
 
@@ -461,7 +452,6 @@ const clientTabSource = computed(() => [
   { name: 'android', label: 'Android', clients: androidClients.value },
   { name: 'macos', label: 'macOS', clients: macClients.value },
   { name: 'ios', label: 'iOS', clients: iosClients.value },
-  { name: 'linux', label: 'Linux', clients: linuxClients.value },
 ].filter(t => t.clients.length))
 
 const preferredClientTab = computed(() => {

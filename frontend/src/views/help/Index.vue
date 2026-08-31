@@ -133,22 +133,6 @@
                   </button>
                 </div>
               </n-tab-pane>
-              <n-tab-pane name="linux" tab="Linux" v-if="linuxClients.length">
-                <div class="client-grid">
-                  <button v-for="c in linuxClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
-                    <span class="client-icon">{{ c.icon }}</span>
-                    <div class="client-info">
-                      <span class="client-name">
-                        {{ c.name }}
-                        <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
-                      </span>
-                      <span class="client-desc">{{ c.desc }}</span>
-                    </div>
-                    <n-spin v-if="downloadingKey === c.key" size="small" />
-                    <n-icon v-else :component="DownloadOutline" size="18" color="var(--primary-color)" />
-                  </button>
-                </div>
-              </n-tab-pane>
             </n-tabs>
           </div>
           <n-empty v-else-if="!loadingConfig" description="管理员暂未配置下载链接" />
@@ -377,13 +361,6 @@ const allClients = {
     { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀', desc: '需外区 Apple ID 购买' },
     { key: 'client_stash_url', name: 'Stash', icon: '🟡', desc: '基于规则的代理客户端' },
   ],
-  linux: [
-    { key: 'client_clash_linux_url', name: 'Clash', icon: '🐧', desc: 'Linux Clash 客户端' },
-    { key: 'client_singbox_url', name: 'Sing-box', icon: '📦', desc: '通用代理平台' },
-    { key: 'client_flclash_linux_url', armKey: 'client_flclash_linux_arm_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'Linux FlClash 客户端' },
-    { key: 'client_hiddify_linux_url', armKey: 'client_hiddify_linux_arm_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', desc: 'Linux Hiddify 客户端' },
-    { key: 'client_clashverge_linux_url', armKey: 'client_clashverge_linux_arm_url', name: 'Clash Verge', clientKey: 'clash-verge', icon: '🟣', desc: 'Linux Clash Verge 客户端' },
-  ],
 }
 
 // 显示规则：配置了 URL 或配置了 clientKey（GitHub 自动解析）的客户端都显示；
@@ -419,7 +396,6 @@ const windowsClients = computed(() => filterClients(allClients.windows))
 const androidClients = computed(() => filterClients(allClients.android))
 const macClients = computed(() => filterClients(allClients.macos))
 const iosClients = computed(() => filterClients(allClients.ios))
-const linuxClients = computed(() => filterClients(allClients.linux))
 const hasAnyClient = computed(() =>
   Object.values(allClients).flat().some(c => config.value[c.key] || (c as any).clientKey)
 )

@@ -425,7 +425,7 @@
                     <n-text depth="3" v-if="softwareSyncInfo">{{ softwareSyncInfo }}</n-text>
                   </n-space>
 
-                  <n-collapse arrow-placement="right" :default-expanded-names="['windows', 'android', 'macos', 'ios', 'linux']">
+                  <n-collapse arrow-placement="right" :default-expanded-names="['windows', 'android', 'macos', 'ios']">
                     <n-collapse-item v-for="group in softwareGroups" :key="group.name" :title="group.title" :name="group.name">
                       <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
                         <n-form-item-gi v-for="item in group.items" :key="item.key" :label="item.label">
@@ -628,12 +628,9 @@ const form = ref<Record<string, any>>({
   client_clashverge_windows_url: '', client_clashverge_macos_url: '', client_clashverge_macos_arm_url: '',
   client_v2rayn_macos_url: '', client_v2rayn_macos_arm_url: '',
   client_hiddify_macos_url: '', client_hiddify_macos_arm_url: '',
-  client_hiddify_linux_url: '', client_hiddify_linux_arm_url: '',
-  client_flclash_linux_url: '', client_flclash_linux_arm_url: '',
-  client_clashverge_linux_url: '', client_clashverge_linux_arm_url: '',
   client_flclash_android_url: '',
   client_shadowrocket_url: '', client_stash_url: '',
-  client_clash_linux_url: '', client_singbox_url: ''
+  client_singbox_url: ''
 })
 
 const ALL_PROTOCOLS = [
@@ -703,9 +700,6 @@ const AUTO_DOWNLOAD_KEYS = [
   'client_clashverge_macos_url', 'client_clashverge_macos_arm_url',
   'client_v2rayn_macos_url', 'client_v2rayn_macos_arm_url',
   'client_hiddify_macos_url', 'client_hiddify_macos_arm_url',
-  'client_hiddify_linux_url', 'client_hiddify_linux_arm_url',
-  'client_flclash_linux_url', 'client_flclash_linux_arm_url',
-  'client_clashverge_linux_url', 'client_clashverge_linux_arm_url',
 ]
 
 // 软件下载配置分组（完整覆盖：软件 × 平台 × 架构，macOS 区分 Intel/Apple 芯片）
@@ -750,19 +744,6 @@ const softwareGroups = [
     items: [
       { key: 'client_shadowrocket_url', label: 'Shadowrocket', auto: false },
       { key: 'client_stash_url', label: 'Stash', auto: false },
-    ],
-  },
-  {
-    name: 'linux', title: 'Linux / 通用客户端',
-    items: [
-      { key: 'client_clash_linux_url', label: 'Clash', auto: false },
-      { key: 'client_singbox_url', label: 'Sing-box', auto: false },
-      { key: 'client_flclash_linux_url', label: 'FlClash (x64)', auto: true },
-      { key: 'client_flclash_linux_arm_url', label: 'FlClash (arm64)', auto: true },
-      { key: 'client_hiddify_linux_url', label: 'Hiddify (x64)', auto: true },
-      { key: 'client_hiddify_linux_arm_url', label: 'Hiddify (arm64)', auto: true },
-      { key: 'client_clashverge_linux_url', label: 'Clash Verge (x64)', auto: true },
-      { key: 'client_clashverge_linux_arm_url', label: 'Clash Verge (arm64)', auto: true },
     ],
   },
 ]

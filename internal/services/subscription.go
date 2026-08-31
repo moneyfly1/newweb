@@ -136,11 +136,11 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 					subURL = BuildSubscriptionURL(userSub.SubscriptionURL, "")
 				}
 				emailSubject, emailBody := RenderEmail("payment_success", map[string]string{
-					"username": user.Username, "order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL,
+					"username": user.Username, "order_no": order.OrderNo, "amount": payAmount, "package_name": pkgName, "subscription_url": subURL, "payment_method": "余额支付",
 				})
 				go QueueEmail(user.Email, emailSubject, emailBody, "payment_success")
 				go NotifyAdmin("payment_success", map[string]string{
-					"username": user.Username, "order_no": order.OrderNo, "package_name": pkgName, "amount": payAmount,
+					"username": user.Username, "order_no": order.OrderNo, "package_name": pkgName, "amount": payAmount, "payment_method": "余额支付",
 				})
 			}
 			distributeInviteCommission(db, order)

@@ -235,7 +235,7 @@ func CreateOrder(c *gin.Context) {
 		"order_no": orderNo, "package_name": pkg.Name, "amount": fmt.Sprintf("%.2f", finalAmount),
 	})
 	go services.NotifyAdmin("new_order", map[string]string{
-		"username": user.Username, "order_no": orderNo, "package_name": pkg.Name, "amount": fmt.Sprintf("%.2f", finalAmount),
+		"username": user.Username, "order_no": orderNo, "package_name": pkg.Name, "amount": fmt.Sprintf("%.2f", finalAmount), "payment_method": "在线支付",
 	})
 
 	utils.Success(c, order)
@@ -464,11 +464,11 @@ func PayOrder(c *gin.Context) {
 			subURL = services.BuildSubscriptionURL(userSub.SubscriptionURL, "")
 		}
 		emailSubject, emailBody := services.RenderEmail("payment_success", map[string]string{
-			"username": notifyUser.Username, "order_no": orderNo, "amount": payAmountStr, "package_name": pkgName, "subscription_url": subURL,
+			"username": notifyUser.Username, "order_no": orderNo, "amount": payAmountStr, "package_name": pkgName, "subscription_url": subURL, "payment_method": "余额支付",
 		})
 		go services.QueueEmail(notifyUser.Email, emailSubject, emailBody, "payment_success")
 		go services.NotifyAdmin("payment_success", map[string]string{
-			"username": notifyUser.Username, "order_no": orderNo, "package_name": pkgName, "amount": payAmountStr,
+			"username": notifyUser.Username, "order_no": orderNo, "package_name": pkgName, "amount": payAmountStr, "payment_method": "余额支付",
 		})
 		utils.Success(c, gin.H{"message": "支付成功", "order_no": orderNo})
 		return
@@ -748,7 +748,7 @@ func CreateCustomOrder(c *gin.Context) {
 		"order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
 	})
 	go services.NotifyAdmin("new_order", map[string]string{
-		"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
+		"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice), "payment_method": "在线支付",
 	})
 
 	utils.Success(c, order)
@@ -989,7 +989,7 @@ func CreateUpgradeOrder(c *gin.Context) {
 		"order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
 	})
 	go services.NotifyAdmin("new_order", map[string]string{
-		"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
+		"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice), "payment_method": "在线支付",
 	})
 
 	utils.Success(c, order)

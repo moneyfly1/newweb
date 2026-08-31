@@ -335,10 +335,25 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		htmlBody = builder.GetWelcomeTemplate(data["username"], data["email"], loginURL, true, "")
 	case "subscription":
 		subject = fmt.Sprintf("您的订阅信息 - %s", siteName)
-		// Parse remaining days, device limit, current devices from data or use defaults
+		// 从 data 读取真实数据（发送方传入），缺省回退默认值
 		remainingDays := 30
+		if v := data["remaining_days"]; v != "" {
+			if parsed, err := strconv.Atoi(v); err == nil {
+				remainingDays = parsed
+			}
+		}
 		deviceLimit := 5
+		if v := data["device_limit"]; v != "" {
+			if parsed, err := strconv.Atoi(v); err == nil {
+				deviceLimit = parsed
+			}
+		}
 		currentDevices := 0
+		if v := data["current_devices"]; v != "" {
+			if parsed, err := strconv.Atoi(v); err == nil {
+				currentDevices = parsed
+			}
+		}
 		htmlBody = builder.GetSubscriptionTemplate(data["username"], data["universal_url"], data["clash_url"], data["expire_time"], remainingDays, deviceLimit, currentDevices)
 	case "payment_success":
 		subject = fmt.Sprintf("支付成功 - %s", siteName)
@@ -350,7 +365,11 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 			}
 		}
 		paymentTime := time.Now().Format("2006-01-02 15:04:05")
-		htmlBody = builder.GetPaymentSuccessTemplate(data["username"], data["order_no"], data["package_name"], amount, "支付宝", paymentTime)
+		paymentMethod := data["payment_method"]
+		if paymentMethod == "" {
+			paymentMethod = "在线支付"
+		}
+		htmlBody = builder.GetPaymentSuccessTemplate(data["username"], data["order_no"], data["package_name"], amount, paymentMethod, paymentTime)
 	case "recharge_success":
 		subject = fmt.Sprintf("充值成功 - %s", siteName)
 		// Use payment success template for recharge
@@ -361,7 +380,11 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 			}
 		}
 		paymentTime := time.Now().Format("2006-01-02 15:04:05")
-		htmlBody = builder.GetPaymentSuccessTemplate(data["username"], data["order_no"], "余额充值", amount, "支付宝", paymentTime)
+		paymentMethod := data["payment_method"]
+		if paymentMethod == "" {
+			paymentMethod = "在线支付"
+		}
+		htmlBody = builder.GetPaymentSuccessTemplate(data["username"], data["order_no"], "余额充值", amount, paymentMethod, paymentTime)
 	case "expiry_reminder":
 		subject = fmt.Sprintf("%s - 订阅即将到期提醒", siteName)
 		// Parse days from string to int
@@ -371,10 +394,18 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 				remainingDays = parsed
 			}
 		}
-		htmlBody = builder.GetExpirationReminderTemplate(data["username"], "订阅套餐", data["expire_time"], remainingDays, 5, 0, false)
+		pkgName := data["package_name"]
+		if pkgName == "" {
+			pkgName = "订阅套餐"
+		}
+		htmlBody = builder.GetExpirationReminderTemplate(data["username"], pkgName, data["expire_time"], remainingDays, 5, 0, false)
 	case "expiry_notice":
 		subject = fmt.Sprintf("%s - 订阅已过期", siteName)
-		htmlBody = builder.GetExpirationReminderTemplate(data["username"], "订阅套餐", data["expire_time"], 0, 5, 0, true)
+		pkgName := data["package_name"]
+		if pkgName == "" {
+			pkgName = "订阅套餐"
+		}
+		htmlBody = builder.GetExpirationReminderTemplate(data["username"], pkgName, data["expire_time"], 0, 5, 0, true)
 	case "test":
 		subject = fmt.Sprintf("%s - 测试邮件", siteName)
 		htmlBody = builder.GetBroadcastNotificationTemplate("测试邮件", "<p>如果您收到此邮件，说明 SMTP 配置正确。这是一封测试邮件，无需任何操作。</p>")

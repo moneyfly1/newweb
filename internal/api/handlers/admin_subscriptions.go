@@ -453,9 +453,18 @@ func AdminSendSubscriptionEmail(c *gin.Context) {
 	}
 	universalURL := services.BuildSubscriptionURL(sub.SubscriptionURL, "")
 	clashURL := services.BuildSubscriptionURL(sub.SubscriptionURL, "clash")
+	// 计算剩余天数（真实数据，避免模板硬编码）
+	remainingDays := 0
+	if sub.ExpireTime.After(time.Now()) {
+		remainingDays = int(time.Until(sub.ExpireTime).Hours() / 24)
+	}
 	subject, body := services.RenderEmail("subscription", map[string]string{
 		"clash_url": clashURL, "universal_url": universalURL,
-		"expire_time": sub.ExpireTime.Format("2006-01-02 15:04"),
+		"expire_time":     sub.ExpireTime.Format("2006-01-02 15:04"),
+		"username":        user.Username,
+		"remaining_days":  fmt.Sprintf("%d", remainingDays),
+		"device_limit":    fmt.Sprintf("%d", sub.DeviceLimit),
+		"current_devices": fmt.Sprintf("%d", sub.CurrentDevices),
 	})
 	go services.QueueEmail(user.Email, subject, body, "subscription")
 	utils.CreateAuditLog(c, "send_subscription_email", "subscription", sub.ID, fmt.Sprintf("向用户发送订阅邮件: %s", user.Email))

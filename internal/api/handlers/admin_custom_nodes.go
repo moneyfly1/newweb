@@ -303,6 +303,81 @@ func AdminImportCustomNodeLinks(c *gin.Context) {
 	})
 }
 
+// AdminImportCustomNodes 专线节点导入（支持订阅 URL / 节点链接）
+// 订阅导入采用"同步更新"模式：
+//   - 同一订阅地址的旧节点按名称更新（保留 ID 与分配关系）
+//   - 新节点插入；原订阅中消失的节点停用（不删除，保留分配）
+func AdminImportCustomNodes(c *gin.Context) {
+	var req struct {
+		Type  string `json:"type" binding:"required"` // "subscription" | "links"
+		URL   string `json:"url"`
+		Links string `json:"links"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	nodes, err := services.FetchAndParseImport(services.ImportSource{Type: req.Type, URL: req.URL, Links: req.Links})
+	if err != nil {
+		utils.BadRequest(c, "导入失败: "+err.Error())
+		return
+	}
+	if len(nodes) == 0 {
+		utils.BadRequest(c, "未找到有效的节点")
+		return
+	}
+
+	db := database.GetDB()
+
+	// 订阅模式：同步更新（保留分配关系）
+	if req.Type == "subscription" {
+		syncResult, err := services.SyncCustomNodesFromSubscription(db, nodes, req.URL)
+		if err != nil {
+			utils.InternalError(c, "同步订阅失败: "+err.Error())
+			return
+		}
+		utils.CreateAuditLog(c, "import_custom_nodes_sub", "custom_node", 0,
+			fmt.Sprintf("订阅导入专线节点: 新增 %d 更新 %d 停用 %d", syncResult.Inserted, syncResult.Updated, syncResult.Deactivated))
+		cache.ClearAllSubscriptionCache()
+		utils.Success(c, gin.H{
+			"total":       syncResult.Total,
+			"inserted":    syncResult.Inserted,
+			"updated":     syncResult.Updated,
+			"deactivated": syncResult.Deactivated,
+			"message":     fmt.Sprintf("同步完成: 新增 %d, 更新 %d, 停用 %d", syncResult.Inserted, syncResult.Updated, syncResult.Deactivated),
+		})
+		return
+	}
+
+	// 链接模式：仅新增（跳过同名，不更新已有，避免误覆盖手工节点）
+	customNodes := services.BuildCustomNodesFromNodes(nodes)
+	toInsert := make([]models.CustomNode, 0, len(customNodes))
+	var existingNames []string
+	var existingCount int64
+	for _, cn := range customNodes {
+		db.Model(&models.CustomNode{}).Where("name = ?", cn.Name).Count(&existingCount)
+		if existingCount > 0 {
+			continue
+		}
+		_ = existingNames
+		toInsert = append(toInsert, cn)
+	}
+	successCount := 0
+	if len(toInsert) > 0 {
+		if err := db.CreateInBatches(toInsert, 100).Error; err == nil {
+			successCount = len(toInsert)
+		}
+	}
+	utils.CreateAuditLog(c, "import_custom_nodes_links", "custom_node", 0, "链接导入专线节点")
+	cache.ClearAllSubscriptionCache()
+	utils.Success(c, gin.H{
+		"total":   len(nodes),
+		"success": successCount,
+		"message": fmt.Sprintf("导入完成: 成功 %d/%d（同名已存在则跳过）", successCount, len(nodes)),
+	})
+}
+
 func AdminBatchDeleteCustomNodes(c *gin.Context) {
 	var req struct {
 		IDs []uint `json:"ids" binding:"required"`

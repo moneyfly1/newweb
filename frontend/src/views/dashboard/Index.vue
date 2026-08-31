@@ -275,7 +275,10 @@
                     />
                     <span v-else>{{ c.icon }}</span>
                   </span>
-                  <span class="client-name">{{ c.name }}</span>
+                  <span class="client-name">
+                    {{ c.name }}
+                    <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
+                  </span>
                   <n-spin v-if="downloadingKey === c.key" size="small" />
                   <n-icon v-else :component="DownloadOutline" size="14" color="#999" />
                 </button>
@@ -373,6 +376,7 @@ const allClients = {
     { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
     { key: 'client_v2rayn_url', name: 'V2rayN', clientKey: 'v2rayN', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
     { key: 'client_clashparty_windows_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
+    { key: 'client_clashverge_windows_url', name: 'Clash Verge', clientKey: 'clash-verge', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
     { key: 'client_hiddify_windows_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
     { key: 'client_flclash_windows_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
   ],
@@ -380,10 +384,14 @@ const allClients = {
     { key: 'client_clash_android_url', name: 'Clash Meta', clientKey: 'clash-meta', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
     { key: 'client_v2rayng_url', name: 'V2rayNG', clientKey: 'v2rayNG', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
     { key: 'client_hiddify_android_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
+    { key: 'client_flclash_android_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
   ],
   macos: [
-    { key: 'client_flclash_macos_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
-    { key: 'client_clashparty_macos_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
+    { key: 'client_flclash_macos_url', armKey: 'client_flclash_macos_arm_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
+    { key: 'client_clashparty_macos_url', armKey: 'client_clashparty_macos_arm_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
+    { key: 'client_clashverge_macos_url', armKey: 'client_clashverge_macos_arm_url', name: 'Clash Verge', clientKey: 'clash-verge', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
+    { key: 'client_v2rayn_macos_url', armKey: 'client_v2rayn_macos_arm_url', name: 'V2rayN', clientKey: 'v2rayN', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
+    { key: 'client_hiddify_macos_url', armKey: 'client_hiddify_macos_arm_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
   ],
   ios: [
     { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png' },
@@ -392,17 +400,41 @@ const allClients = {
   linux: [
     { key: 'client_clash_linux_url', name: 'Clash', icon: '🐧', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
     { key: 'client_singbox_url', name: 'Sing-box', icon: '📦', iconUrl: 'https://raw.githubusercontent.com/SagerNet/sing-box/testing/docs/assets/icon.svg' },
+    { key: 'client_flclash_linux_url', armKey: 'client_flclash_linux_arm_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
+    { key: 'client_hiddify_linux_url', armKey: 'client_hiddify_linux_arm_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
+    { key: 'client_clashverge_linux_url', armKey: 'client_clashverge_linux_arm_url', name: 'Clash Verge', clientKey: 'clash-verge', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
   ],
 }
 
 // 显示规则：配置了 URL 的客户端，或配置了 clientKey（GitHub 自动解析）的客户端都显示；
-// URL 为 pan:// 标记或为空时点击自动获取 GitHub 最新版直链。
-const filterClients = (list: typeof allClients.windows) =>
-  list.filter(c => clientConfig.value[c.key] || c.clientKey).map(c => ({
-    ...c,
-    url: clientConfig.value[c.key] || '',
-    auto: !clientConfig.value[c.key] || String(clientConfig.value[c.key]).startsWith('pan://'),
-  }))
+// macOS 配置了 armKey 的拆分为 Intel / Apple 芯片两个下载选项。
+const filterClients = (list: typeof allClients.windows) => {
+  const out: any[] = []
+  list.forEach((raw: any) => {
+    const c = raw
+    const url = clientConfig.value[c.key] || ''
+    const armUrl = c.armKey ? (clientConfig.value[c.armKey] || '') : ''
+    const showIntel = url || c.clientKey
+    const showArm = c.armKey && (armUrl || c.clientKey)
+    if (showIntel) {
+      out.push({
+        ...c, url,
+        auto: !url || String(url).startsWith('pan://'),
+        chip: c.armKey ? 'Intel' : '',
+        forcedArch: c.armKey ? 'intel' : null,
+      })
+    }
+    if (showArm) {
+      out.push({
+        ...c, key: c.armKey, url: armUrl,
+        auto: !armUrl || String(armUrl).startsWith('pan://'),
+        chip: 'Apple 芯片',
+        forcedArch: 'apple',
+      })
+    }
+  })
+  return out
+}
 
 const windowsClients = computed(() => filterClients(allClients.windows))
 const androidClients = computed(() => filterClients(allClients.android))
@@ -651,7 +683,7 @@ async function handleClientClick(c: any) {
     if (downloadingKey.value) return
     downloadingKey.value = c.key
     try {
-      const resolved = await getClientDownloadUrl(c.clientKey, clientConfig.value)
+      const resolved = await getClientDownloadUrl(c.clientKey, clientConfig.value, c.forcedArch)
       window.open(resolved, '_blank')
     } catch (e: any) {
       message.error(e?.message || '获取下载链接失败，请稍后重试')
@@ -864,7 +896,10 @@ onUnmounted(() => {
 .client-card:hover { background: var(--primary-color-soft); border-color: #dfe4ee; }
 .client-card:focus-visible { outline: 2px solid rgba(102,126,234,0.45); outline-offset: 2px; }
 .client-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; font-size: 16px; flex-shrink: 0; }
-.client-name { flex: 1; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.client-name { flex: 1; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+.client-chip { font-size: 10px; font-weight: 600; padding: 0 4px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+.chip-arm { background: rgba(102,126,234,0.15); color: #667eea; }
+.chip-intel { background: rgba(52,199,89,0.15); color: #34c759; }
 
 .app-icon { width: 18px; height: 18px; object-fit: contain; border-radius: 4px; }
 

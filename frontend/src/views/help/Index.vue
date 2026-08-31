@@ -74,7 +74,10 @@
                   <button v-for="c in windowsClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
-                      <span class="client-name">{{ c.name }}</span>
+                      <span class="client-name">
+                        {{ c.name }}
+                        <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
+                      </span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
                     <n-spin v-if="downloadingKey === c.key" size="small" />
@@ -87,7 +90,10 @@
                   <button v-for="c in androidClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
-                      <span class="client-name">{{ c.name }}</span>
+                      <span class="client-name">
+                        {{ c.name }}
+                        <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
+                      </span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
                     <n-spin v-if="downloadingKey === c.key" size="small" />
@@ -100,7 +106,10 @@
                   <button v-for="c in macClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
-                      <span class="client-name">{{ c.name }}</span>
+                      <span class="client-name">
+                        {{ c.name }}
+                        <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
+                      </span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
                     <n-spin v-if="downloadingKey === c.key" size="small" />
@@ -113,7 +122,10 @@
                   <button v-for="c in iosClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
-                      <span class="client-name">{{ c.name }}</span>
+                      <span class="client-name">
+                        {{ c.name }}
+                        <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
+                      </span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
                     <n-spin v-if="downloadingKey === c.key" size="small" />
@@ -126,7 +138,10 @@
                   <button v-for="c in linuxClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
-                      <span class="client-name">{{ c.name }}</span>
+                      <span class="client-name">
+                        {{ c.name }}
+                        <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
+                      </span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
                     <n-spin v-if="downloadingKey === c.key" size="small" />
@@ -341,6 +356,7 @@ const allClients = {
     { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵', desc: 'Clash 内核，支持多种协议' },
     { key: 'client_v2rayn_url', name: 'V2rayN', clientKey: 'v2rayN', icon: '🟢', desc: 'V2Ray 图形化客户端' },
     { key: 'client_clashparty_windows_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', desc: 'Clash Party GUI 客户端' },
+    { key: 'client_clashverge_windows_url', name: 'Clash Verge', clientKey: 'clash-verge', icon: '🟣', desc: 'Clash Verge GUI 客户端' },
     { key: 'client_hiddify_windows_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', desc: '多协议代理客户端' },
     { key: 'client_flclash_windows_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'Flutter 跨平台 Clash 客户端' },
   ],
@@ -348,10 +364,14 @@ const allClients = {
     { key: 'client_clash_android_url', name: 'Clash Meta', clientKey: 'clash-meta', icon: '🔵', desc: 'Android Clash 客户端' },
     { key: 'client_v2rayng_url', name: 'V2rayNG', clientKey: 'v2rayNG', icon: '🟢', desc: 'Android V2Ray 客户端' },
     { key: 'client_hiddify_android_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', desc: 'Android 多协议客户端' },
+    { key: 'client_flclash_android_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'Android FlClash 客户端' },
   ],
   macos: [
-    { key: 'client_flclash_macos_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'macOS Clash 客户端' },
-    { key: 'client_clashparty_macos_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', desc: 'macOS Clash Party 客户端' },
+    { key: 'client_flclash_macos_url', armKey: 'client_flclash_macos_arm_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'macOS Clash 客户端' },
+    { key: 'client_clashparty_macos_url', armKey: 'client_clashparty_macos_arm_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', desc: 'macOS Clash Party 客户端' },
+    { key: 'client_clashverge_macos_url', armKey: 'client_clashverge_macos_arm_url', name: 'Clash Verge', clientKey: 'clash-verge', icon: '🟣', desc: 'macOS Clash Verge 客户端' },
+    { key: 'client_v2rayn_macos_url', armKey: 'client_v2rayn_macos_arm_url', name: 'V2rayN', clientKey: 'v2rayN', icon: '🟢', desc: 'macOS V2Ray 客户端' },
+    { key: 'client_hiddify_macos_url', armKey: 'client_hiddify_macos_arm_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', desc: 'macOS 多协议客户端' },
   ],
   ios: [
     { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀', desc: '需外区 Apple ID 购买' },
@@ -360,16 +380,40 @@ const allClients = {
   linux: [
     { key: 'client_clash_linux_url', name: 'Clash', icon: '🐧', desc: 'Linux Clash 客户端' },
     { key: 'client_singbox_url', name: 'Sing-box', icon: '📦', desc: '通用代理平台' },
+    { key: 'client_flclash_linux_url', armKey: 'client_flclash_linux_arm_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'Linux FlClash 客户端' },
+    { key: 'client_hiddify_linux_url', armKey: 'client_hiddify_linux_arm_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', desc: 'Linux Hiddify 客户端' },
+    { key: 'client_clashverge_linux_url', armKey: 'client_clashverge_linux_arm_url', name: 'Clash Verge', clientKey: 'clash-verge', icon: '🟣', desc: 'Linux Clash Verge 客户端' },
   ],
 }
 
-// 显示规则：配置了 URL 或配置了 clientKey（GitHub 自动解析）的客户端都显示
-const filterClients = (list: typeof allClients.windows) =>
-  list.filter(c => config.value[c.key] || (c as any).clientKey).map(c => ({
-    ...c,
-    url: config.value[c.key] || '',
-    auto: !config.value[c.key] || String(config.value[c.key]).startsWith('pan://'),
-  }))
+// 显示规则：配置了 URL 或配置了 clientKey（GitHub 自动解析）的客户端都显示；
+// macOS 配置了 armKey 的拆分为 Intel / Apple 芯片两个下载选项。
+const filterClients = (list: typeof allClients.windows) => {
+  const out: any[] = []
+  list.forEach((c: any) => {
+    const url = config.value[c.key] || ''
+    const armUrl = c.armKey ? (config.value[c.armKey] || '') : ''
+    const showIntel = url || c.clientKey
+    const showArm = c.armKey && (armUrl || c.clientKey)
+    if (showIntel) {
+      out.push({
+        ...c, url,
+        auto: !url || String(url).startsWith('pan://'),
+        chip: c.armKey ? 'Intel' : '',
+        forcedArch: c.armKey ? 'intel' : null,
+      })
+    }
+    if (showArm) {
+      out.push({
+        ...c, key: c.armKey, url: armUrl,
+        auto: !armUrl || String(armUrl).startsWith('pan://'),
+        chip: 'Apple 芯片',
+        forcedArch: 'apple',
+      })
+    }
+  })
+  return out
+}
 
 const windowsClients = computed(() => filterClients(allClients.windows))
 const androidClients = computed(() => filterClients(allClients.android))
@@ -387,7 +431,7 @@ async function handleClientClick(c: any) {
     if (downloadingKey.value) return
     downloadingKey.value = c.key
     try {
-      const resolved = await getClientDownloadUrl(c.clientKey, config.value)
+      const resolved = await getClientDownloadUrl(c.clientKey, config.value, c.forcedArch)
       window.open(resolved, '_blank')
     } catch (e: any) {
       message.error(e?.message || '获取下载链接失败，请稍后重试')

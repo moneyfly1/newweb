@@ -3,7 +3,13 @@
 // GitHub 最新 Release 对应平台的安装包（VPS 侧 30 分钟缓存 + 国内加速镜像 302 跳转）。
 package software_sync
 
-import "regexp"
+import (
+	"fmt"
+
+	"cboard/v2/internal/services/ghrelease"
+
+	"regexp"
+)
 
 // Target 一个下载入口（对应一个软件下载配置键）
 type Target struct {
@@ -64,6 +70,8 @@ var Catalog = []Software{
 			{ConfigKey: "client_hiddify_android_url", OS: "android", Arch: "universal", Label: "Android APK", Preferred: apkPreferredArm, Patterns: apkAny},
 			{ConfigKey: "client_hiddify_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: rx(`(?i)^.*macos.*\.dmg$`)},
 			{ConfigKey: "client_hiddify_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: rx(`(?i)^.*macos.*\.dmg$`)},
+			{ConfigKey: "client_hiddify_linux_url", OS: "linux", Arch: "x64", Label: "Linux x64", Patterns: rx(`(?i)^.*linux.*(x64|amd64).*\.(deb|rpm|AppImage|tar\.gz)$`)},
+			{ConfigKey: "client_hiddify_linux_arm_url", OS: "linux", Arch: "arm64", Label: "Linux arm64", Patterns: rx(`(?i)^.*linux.*(arm64|aarch64).*\.(deb|rpm|AppImage|tar\.gz)$`)},
 		},
 	},
 	{
@@ -72,6 +80,8 @@ var Catalog = []Software{
 			{ConfigKey: "client_clashverge_windows_url", OS: "windows", Arch: "x64", Label: "Windows x64", Patterns: rx(`(?i)^.*x64.*\.(exe|msi)$`)},
 			{ConfigKey: "client_clashverge_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: dmgIntel},
 			{ConfigKey: "client_clashverge_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: dmgApple},
+			{ConfigKey: "client_clashverge_linux_url", OS: "linux", Arch: "x64", Label: "Linux x64", Patterns: rx(`(?i)^.*linux.*(x64|amd64).*\.(deb|rpm|AppImage)$`)},
+			{ConfigKey: "client_clashverge_linux_arm_url", OS: "linux", Arch: "arm64", Label: "Linux arm64", Patterns: rx(`(?i)^.*linux.*(arm64|aarch64).*\.(deb|rpm|AppImage)$`)},
 		},
 	},
 	{
@@ -80,6 +90,8 @@ var Catalog = []Software{
 			{ConfigKey: "client_clashparty_windows_url", OS: "windows", Arch: "x64", Label: "Windows x64", Patterns: rx(`(?i)^.*windows.*(x64|[^a-z]64).*\.exe$`)},
 			{ConfigKey: "client_clashparty_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: dmgIntel},
 			{ConfigKey: "client_clashparty_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: dmgApple},
+			{ConfigKey: "client_clashparty_linux_url", OS: "linux", Arch: "x64", Label: "Linux x64", Patterns: rx(`(?i)^.*linux.*(x64|amd64).*\.(deb|rpm|AppImage)$`)},
+			{ConfigKey: "client_clashparty_linux_arm_url", OS: "linux", Arch: "arm64", Label: "Linux arm64", Patterns: rx(`(?i)^.*linux.*(arm64|aarch64).*\.(deb|rpm|AppImage)$`)},
 		},
 	},
 	{
@@ -89,6 +101,8 @@ var Catalog = []Software{
 			{ConfigKey: "client_flclash_android_url", OS: "android", Arch: "universal", Label: "Android APK", Preferred: apkPreferredArm, Patterns: apkAny},
 			{ConfigKey: "client_flclash_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: dmgIntel},
 			{ConfigKey: "client_flclash_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: dmgApple},
+			{ConfigKey: "client_flclash_linux_url", OS: "linux", Arch: "x64", Label: "Linux x64", Patterns: rx(`(?i)^.*linux.*(x64|amd64).*\.(deb|rpm|AppImage)$`)},
+			{ConfigKey: "client_flclash_linux_arm_url", OS: "linux", Arch: "arm64", Label: "Linux arm64", Patterns: rx(`(?i)^.*linux.*(arm64|aarch64).*\.(deb|rpm|AppImage)$`)},
 		},
 	},
 	{
@@ -127,4 +141,30 @@ func FindTarget(configKey string) *Target {
 		}
 	}
 	return nil
+}
+
+// FindAssetFor 在 Release 资产中按目标匹配规则挑选最合适的文件
+func FindAssetFor(release *ghrelease.Release, t *Target) (*ghrelease.Asset, error) {
+	if release == nil {
+		return nil, fmt.Errorf("无 Release 数据")
+	}
+	// 先尝试 Preferred 规则
+	if len(t.Preferred) > 0 {
+		for _, asset := range release.Assets {
+			for _, re := range t.Preferred {
+				if re.MatchString(asset.Name) {
+					return &asset, nil
+				}
+			}
+		}
+	}
+	// 再尝试 Patterns
+	for _, asset := range release.Assets {
+		for _, re := range t.Patterns {
+			if re.MatchString(asset.Name) {
+				return &asset, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("未找到匹配的下载文件（平台: %s, 架构: %s）", t.OS, t.Arch)
 }

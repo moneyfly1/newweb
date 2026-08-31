@@ -150,7 +150,7 @@ func GitHubResolve(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"code": 1, "message": "获取 GitHub 版本失败: " + err.Error()})
 		return
 	}
-	asset, aerr := FindAssetFor(release, t)
+	asset, aerr := software_sync.FindAssetFor(release, t)
 	if aerr != nil {
 		c.JSON(http.StatusNotFound, gin.H{"code": 1, "message": aerr.Error()})
 		return
@@ -158,32 +158,6 @@ func GitHubResolve(c *gin.Context) {
 
 	dlURL := pickMirrorURL(prefixes, asset.BrowserDownloadURL)
 	c.Redirect(http.StatusFound, dlURL)
-}
-
-// FindAssetFor 在 Release 资产中按目标匹配规则挑选最合适的文件
-func FindAssetFor(release *ghrelease.Release, t *software_sync.Target) (*ghrelease.Asset, error) {
-	if release == nil {
-		return nil, fmt.Errorf("无 Release 数据")
-	}
-	// 先尝试 Preferred 规则
-	if len(t.Preferred) > 0 {
-		for _, asset := range release.Assets {
-			for _, re := range t.Preferred {
-				if re.MatchString(asset.Name) {
-					return &asset, nil
-				}
-			}
-		}
-	}
-	// 再尝试 Patterns
-	for _, asset := range release.Assets {
-		for _, re := range t.Patterns {
-			if re.MatchString(asset.Name) {
-				return &asset, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("未找到匹配的下载文件（平台: %s, 架构: %s）", t.OS, t.Arch)
 }
 
 // ---------------------------------------------------------------------------

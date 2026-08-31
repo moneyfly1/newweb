@@ -71,62 +71,67 @@
             <n-tabs type="segment" size="small" animated>
               <n-tab-pane name="windows" tab="Windows" v-if="windowsClients.length">
                 <div class="client-grid">
-                  <a v-for="c in windowsClients" :key="c.key" class="client-card" :href="c.url" target="_blank" rel="noopener">
+                  <button v-for="c in windowsClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
                       <span class="client-name">{{ c.name }}</span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
-                    <n-icon :component="DownloadOutline" size="18" color="var(--primary-color)" />
-                  </a>
+                    <n-spin v-if="downloadingKey === c.key" size="small" />
+                    <n-icon v-else :component="DownloadOutline" size="18" color="var(--primary-color)" />
+                  </button>
                 </div>
               </n-tab-pane>
               <n-tab-pane name="android" tab="Android" v-if="androidClients.length">
                 <div class="client-grid">
-                  <a v-for="c in androidClients" :key="c.key" class="client-card" :href="c.url" target="_blank" rel="noopener">
+                  <button v-for="c in androidClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
                       <span class="client-name">{{ c.name }}</span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
-                    <n-icon :component="DownloadOutline" size="18" color="var(--primary-color)" />
-                  </a>
+                    <n-spin v-if="downloadingKey === c.key" size="small" />
+                    <n-icon v-else :component="DownloadOutline" size="18" color="var(--primary-color)" />
+                  </button>
                 </div>
               </n-tab-pane>
               <n-tab-pane name="macos" tab="macOS" v-if="macClients.length">
                 <div class="client-grid">
-                  <a v-for="c in macClients" :key="c.key" class="client-card" :href="c.url" target="_blank" rel="noopener">
+                  <button v-for="c in macClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
                       <span class="client-name">{{ c.name }}</span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
-                    <n-icon :component="DownloadOutline" size="18" color="var(--primary-color)" />
-                  </a>
+                    <n-spin v-if="downloadingKey === c.key" size="small" />
+                    <n-icon v-else :component="DownloadOutline" size="18" color="var(--primary-color)" />
+                  </button>
                 </div>
               </n-tab-pane>
               <n-tab-pane name="ios" tab="iOS" v-if="iosClients.length">
                 <div class="client-grid">
-                  <a v-for="c in iosClients" :key="c.key" class="client-card" :href="c.url" target="_blank" rel="noopener">
+                  <button v-for="c in iosClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
                       <span class="client-name">{{ c.name }}</span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
-                    <n-icon :component="DownloadOutline" size="18" color="var(--primary-color)" />
-                  </a>
+                    <n-spin v-if="downloadingKey === c.key" size="small" />
+                    <n-icon v-else :component="DownloadOutline" size="18" color="var(--primary-color)" />
+                  </button>
                 </div>
               </n-tab-pane>
               <n-tab-pane name="linux" tab="Linux" v-if="linuxClients.length">
                 <div class="client-grid">
-                  <a v-for="c in linuxClients" :key="c.key" class="client-card" :href="c.url" target="_blank" rel="noopener">
+                  <button v-for="c in linuxClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
                       <span class="client-name">{{ c.name }}</span>
                       <span class="client-desc">{{ c.desc }}</span>
                     </div>
-                    <n-icon :component="DownloadOutline" size="18" color="var(--primary-color)" />
-                  </a>
+                    <n-spin v-if="downloadingKey === c.key" size="small" />
+                    <n-icon v-else :component="DownloadOutline" size="18" color="var(--primary-color)" />
+                  </button>
                 </div>
               </n-tab-pane>
             </n-tabs>
@@ -169,11 +174,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useMessage } from 'naive-ui'
 import { DownloadOutline, ChevronDownOutline, ChevronUpOutline, MailOutline, ChatbubblesOutline, SendOutline } from '@vicons/ionicons5'
 import { getPublicConfig } from '@/api/common'
+import { getClientDownloadUrl, resolvePanDownloadUrl } from '@/utils/githubDownload'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
+const message = useMessage()
 const loadingConfig = ref(false)
 const config = ref<Record<string, string>>({})
 const expandedTut = ref('')
@@ -331,19 +339,19 @@ const tutorials: Tutorial[] = [
 const allClients = {
   windows: [
     { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵', desc: 'Clash 内核，支持多种协议' },
-    { key: 'client_v2rayn_url', name: 'V2rayN', icon: '🟢', desc: 'V2Ray 图形化客户端' },
-    { key: 'client_clashparty_windows_url', name: 'Clash Party', icon: '🟣', desc: 'Clash Party GUI 客户端' },
-    { key: 'client_hiddify_windows_url', name: 'Hiddify', icon: '🟠', desc: '多协议代理客户端' },
-    { key: 'client_flclash_windows_url', name: 'FlClash', icon: '⚡', desc: 'Flutter 跨平台 Clash 客户端' },
+    { key: 'client_v2rayn_url', name: 'V2rayN', clientKey: 'v2rayN', icon: '🟢', desc: 'V2Ray 图形化客户端' },
+    { key: 'client_clashparty_windows_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', desc: 'Clash Party GUI 客户端' },
+    { key: 'client_hiddify_windows_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', desc: '多协议代理客户端' },
+    { key: 'client_flclash_windows_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'Flutter 跨平台 Clash 客户端' },
   ],
   android: [
-    { key: 'client_clash_android_url', name: 'Clash Meta', icon: '🔵', desc: 'Android Clash 客户端' },
-    { key: 'client_v2rayng_url', name: 'V2rayNG', icon: '🟢', desc: 'Android V2Ray 客户端' },
-    { key: 'client_hiddify_android_url', name: 'Hiddify', icon: '🟠', desc: 'Android 多协议客户端' },
+    { key: 'client_clash_android_url', name: 'Clash Meta', clientKey: 'clash-meta', icon: '🔵', desc: 'Android Clash 客户端' },
+    { key: 'client_v2rayng_url', name: 'V2rayNG', clientKey: 'v2rayNG', icon: '🟢', desc: 'Android V2Ray 客户端' },
+    { key: 'client_hiddify_android_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', desc: 'Android 多协议客户端' },
   ],
   macos: [
-    { key: 'client_flclash_macos_url', name: 'FlClash', icon: '⚡', desc: 'macOS Clash 客户端' },
-    { key: 'client_clashparty_macos_url', name: 'Clash Party', icon: '🟣', desc: 'macOS Clash Party 客户端' },
+    { key: 'client_flclash_macos_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'macOS Clash 客户端' },
+    { key: 'client_clashparty_macos_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', desc: 'macOS Clash Party 客户端' },
   ],
   ios: [
     { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀', desc: '需外区 Apple ID 购买' },
@@ -355,8 +363,13 @@ const allClients = {
   ],
 }
 
+// 显示规则：配置了 URL 或配置了 clientKey（GitHub 自动解析）的客户端都显示
 const filterClients = (list: typeof allClients.windows) =>
-  list.filter(c => config.value[c.key]).map(c => ({ ...c, url: config.value[c.key] }))
+  list.filter(c => config.value[c.key] || (c as any).clientKey).map(c => ({
+    ...c,
+    url: config.value[c.key] || '',
+    auto: !config.value[c.key] || String(config.value[c.key]).startsWith('pan://'),
+  }))
 
 const windowsClients = computed(() => filterClients(allClients.windows))
 const androidClients = computed(() => filterClients(allClients.android))
@@ -364,9 +377,27 @@ const macClients = computed(() => filterClients(allClients.macos))
 const iosClients = computed(() => filterClients(allClients.ios))
 const linuxClients = computed(() => filterClients(allClients.linux))
 const hasAnyClient = computed(() =>
-  Object.values(allClients).flat().some(c => config.value[c.key])
+  Object.values(allClients).flat().some(c => config.value[c.key] || (c as any).clientKey)
 )
 
+// 自动客户端点击：动态解析 GitHub 最新版直链
+const downloadingKey = ref('')
+async function handleClientClick(c: any) {
+  if (c.auto && c.clientKey) {
+    if (downloadingKey.value) return
+    downloadingKey.value = c.key
+    try {
+      const resolved = await getClientDownloadUrl(c.clientKey, config.value)
+      window.open(resolved, '_blank')
+    } catch (e: any) {
+      message.error(e?.message || '获取下载链接失败，请稍后重试')
+    } finally {
+      downloadingKey.value = ''
+    }
+    return
+  }
+  if (c.url) window.open(resolvePanDownloadUrl(c.url), '_blank')
+}
 onMounted(async () => {
   loadingConfig.value = true
   try {
@@ -410,6 +441,11 @@ onMounted(async () => {
   transition: all 0.2s;
   text-decoration: none;
   color: inherit;
+  /* button 元素默认样式重置 */
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
 }
 .client-card:hover {
   background: rgba(0,0,0,0.04);

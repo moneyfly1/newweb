@@ -32,6 +32,13 @@ func GetPublicConfig(c *gin.Context) {
 		"client_flclash_macos_url", "client_clashparty_macos_url",
 		"client_shadowrocket_url", "client_stash_url", "client_singbox_url",
 		"client_clash_linux_url",
+		// GitHub 自动下载扩展键（各平台/架构）
+		"client_v2rayn_macos_url", "client_v2rayn_macos_arm_url",
+		"client_hiddify_macos_url", "client_hiddify_macos_arm_url",
+		"client_clashverge_windows_url", "client_clashverge_macos_url", "client_clashverge_macos_arm_url",
+		"client_clashparty_macos_arm_url", "client_flclash_macos_arm_url",
+		"client_flclash_android_url", "client_hiddify_linux_url", "client_flclash_linux_url",
+		"download_proxy_prefixes",
 		// Telegram login
 		"telegram_login_enabled", "telegram_bot_username",
 		// Custom package

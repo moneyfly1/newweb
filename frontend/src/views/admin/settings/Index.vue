@@ -408,31 +408,68 @@
                 <div v-else-if="activeTab === 'downloads'" key="downloads">
                   <n-alert type="info" style="margin-bottom: 24px;">
                     配置后会显示在用户端仪表盘的软件下载区域和帮助页面。留空的客户端不会对用户展示。
+                    <br />支持 <b>GitHub 自动下载</b>：点击「自动」按钮为支持的客户端填入 <n-text code>pan://</n-text> 标记，
+                    用户点击时将自动从 GitHub 最新 Release 解析对应平台/架构的安装包并经国内加速镜像下载。
                   </n-alert>
+
+                  <n-space style="margin-bottom: 16px;">
+                    <n-button type="primary" :loading="autoConfigAll" @click="handleAutoConfigAll">
+                      <template #icon><n-icon><DownloadOutline /></n-icon></template>
+                      一键自动配置全部支持项
+                    </n-button>
+                    <n-text depth="3">（自动项可单独改回手动链接）</n-text>
+                  </n-space>
 
                   <n-collapse arrow-placement="right" :default-expanded-names="['windows', 'android', 'macos', 'ios', 'linux']">
                     <n-collapse-item title="Windows 客户端" name="windows">
                       <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
                         <n-form-item-gi label="Clash for Windows"><n-input v-model:value="form.client_clash_windows_url" placeholder="https://..." /></n-form-item-gi>
-                        <n-form-item-gi label="V2rayN"><n-input v-model:value="form.client_v2rayn_url" placeholder="https://..." /></n-form-item-gi>
-                        <n-form-item-gi label="Clash Party"><n-input v-model:value="form.client_clashparty_windows_url" placeholder="https://..." /></n-form-item-gi>
-                        <n-form-item-gi label="Hiddify"><n-input v-model:value="form.client_hiddify_windows_url" placeholder="https://..." /></n-form-item-gi>
-                        <n-form-item-gi label="FlClash"><n-input v-model:value="form.client_flclash_windows_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="V2rayN">
+                          <n-input v-model:value="form.client_v2rayn_url" placeholder="https://... 或点自动" />
+                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_v2rayn_url')">自动</n-button></template>
+                        </n-form-item-gi>
+                        <n-form-item-gi label="Clash Party">
+                          <n-input v-model:value="form.client_clashparty_windows_url" placeholder="https://... 或点自动" />
+                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_clashparty_windows_url')">自动</n-button></template>
+                        </n-form-item-gi>
+                        <n-form-item-gi label="Hiddify">
+                          <n-input v-model:value="form.client_hiddify_windows_url" placeholder="https://... 或点自动" />
+                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_hiddify_windows_url')">自动</n-button></template>
+                        </n-form-item-gi>
+                        <n-form-item-gi label="FlClash">
+                          <n-input v-model:value="form.client_flclash_windows_url" placeholder="https://... 或点自动" />
+                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_flclash_windows_url')">自动</n-button></template>
+                        </n-form-item-gi>
                       </n-grid>
                     </n-collapse-item>
 
                     <n-collapse-item title="Android 客户端" name="android">
                       <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                        <n-form-item-gi label="Clash Meta"><n-input v-model:value="form.client_clash_android_url" placeholder="https://..." /></n-form-item-gi>
-                        <n-form-item-gi label="V2rayNG"><n-input v-model:value="form.client_v2rayng_url" placeholder="https://..." /></n-form-item-gi>
-                        <n-form-item-gi label="Hiddify"><n-input v-model:value="form.client_hiddify_android_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="Clash Meta">
+                          <n-input v-model:value="form.client_clash_android_url" placeholder="https://... 或点自动" />
+                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_clash_android_url')">自动</n-button></template>
+                        </n-form-item-gi>
+                        <n-form-item-gi label="V2rayNG">
+                          <n-input v-model:value="form.client_v2rayng_url" placeholder="https://... 或点自动" />
+                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_v2rayng_url')">自动</n-button></template>
+                        </n-form-item-gi>
+                        <n-form-item-gi label="Hiddify">
+                          <n-input v-model:value="form.client_hiddify_android_url" placeholder="https://... 或点自动" />
+                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_hiddify_android_url')">自动</n-button></template>
+                        </n-form-item-gi>
                       </n-grid>
                     </n-collapse-item>
 
                     <n-collapse-item title="macOS 客户端" name="macos">
                       <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                        <n-form-item-gi label="FlClash"><n-input v-model:value="form.client_flclash_macos_url" placeholder="https://..." /></n-form-item-gi>
-                        <n-form-item-gi label="Clash Party"><n-input v-model:value="form.client_clashparty_macos_url" placeholder="https://..." /></n-form-item-gi>
+                        <n-form-item-gi label="FlClash">
+                          <n-input v-model:value="form.client_flclash_macos_url" placeholder="https://... 或点自动" />
+                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_flclash_macos_url')">自动</n-button></template>
+                        </n-form-item-gi>
+                        <n-form-item-gi label="Clash Party">
+                          <n-input v-model:value="form.client_clashparty_macos_url" placeholder="https://... 或点自动" />
+                          <template #label-extra><n-button size="tiny" quaternary type="primary" @click="autoFill('client_clashparty_macos_url')">自动</n-button></template>
+                        </n-form-item-gi>
                       </n-grid>
                     </n-collapse-item>
 
@@ -676,6 +713,31 @@ const loadSettings = async () => {
     }
   } finally {
     loading.value = false
+  }
+}
+
+// 可自动配置的下载键（对应 GitHub Release 仓库，值为 pan://<键> 时自动解析）
+const AUTO_DOWNLOAD_KEYS = [
+  'client_v2rayn_url', 'client_clashparty_windows_url', 'client_hiddify_windows_url',
+  'client_flclash_windows_url', 'client_clash_android_url', 'client_v2rayng_url',
+  'client_hiddify_android_url', 'client_flclash_macos_url', 'client_clashparty_macos_url',
+]
+
+// 自动填入单个配置项（pan:// 标记）
+const autoFill = (key: string) => {
+  form.value[key] = 'pan://' + key
+  message.success('已设置为自动下载（保存后生效）')
+}
+
+// 一键自动配置全部支持项
+const autoConfigAll = ref(false)
+const handleAutoConfigAll = async () => {
+  autoConfigAll.value = true
+  try {
+    AUTO_DOWNLOAD_KEYS.forEach(key => { form.value[key] = 'pan://' + key })
+    message.success(`已自动配置 ${AUTO_DOWNLOAD_KEYS.length} 个客户端，请点击保存`)
+  } finally {
+    autoConfigAll.value = false
   }
 }
 

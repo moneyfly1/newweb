@@ -263,7 +263,7 @@
           <n-tabs v-model:value="activeClientTab" type="segment" size="small" animated>
             <n-tab-pane v-for="tab in clientTabs" :key="tab.name" :name="tab.name" :tab="tab.label">
               <div class="client-grid">
-                <button v-for="c in tab.clients" :key="c.key" class="client-card" type="button" @click="openUrl(c.url)">
+                <button v-for="c in tab.clients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
                   <span class="client-icon">
                     <img
                       v-if="canShowIcon(`client:${c.key}`, c.iconUrl)"
@@ -276,7 +276,8 @@
                     <span v-else>{{ c.icon }}</span>
                   </span>
                   <span class="client-name">{{ c.name }}</span>
-                  <n-icon :component="DownloadOutline" size="14" color="#999" />
+                  <n-spin v-if="downloadingKey === c.key" size="small" />
+                  <n-icon v-else :component="DownloadOutline" size="14" color="#999" />
                 </button>
               </div>
             </n-tab-pane>
@@ -298,6 +299,7 @@ import {
 } from '@vicons/ionicons5'
 import { getDashboardInfo, checkIn, getCheckInStatus, getCheckInHistory } from '@/api/user'
 import { listPublicAnnouncements, getPublicConfig } from '@/api/common'
+import { getClientDownloadUrl, resolvePanDownloadUrl } from '@/utils/githubDownload'
 import { listOrders } from '@/api/order'
 import { getSubscription } from '@/api/subscription'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
@@ -369,19 +371,19 @@ async function handleCheckIn() {
 const allClients = {
   windows: [
     { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
-    { key: 'client_v2rayn_url', name: 'V2rayN', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
-    { key: 'client_clashparty_windows_url', name: 'Clash Party', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
-    { key: 'client_hiddify_windows_url', name: 'Hiddify', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
-    { key: 'client_flclash_windows_url', name: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
+    { key: 'client_v2rayn_url', name: 'V2rayN', clientKey: 'v2rayN', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
+    { key: 'client_clashparty_windows_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
+    { key: 'client_hiddify_windows_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
+    { key: 'client_flclash_windows_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
   ],
   android: [
-    { key: 'client_clash_android_url', name: 'Clash Meta', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
-    { key: 'client_v2rayng_url', name: 'V2rayNG', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
-    { key: 'client_hiddify_android_url', name: 'Hiddify', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
+    { key: 'client_clash_android_url', name: 'Clash Meta', clientKey: 'clash-meta', icon: '🔵', iconUrl: 'https://fastly.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/clash.png' },
+    { key: 'client_v2rayng_url', name: 'V2rayNG', clientKey: 'v2rayNG', icon: '🟢', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/V2ray.png' },
+    { key: 'client_hiddify_android_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', iconUrl: 'https://raw.githubusercontent.com/hiddify/hiddify-app/main/assets/images/logo.svg' },
   ],
   macos: [
-    { key: 'client_flclash_macos_url', name: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
-    { key: 'client_clashparty_macos_url', name: 'Clash Party', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
+    { key: 'client_flclash_macos_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', iconUrl: 'https://fastly.jsdelivr.net/gh/chen08209/FlClash@main/assets/images/icon.png' },
+    { key: 'client_clashparty_macos_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', iconUrl: 'https://fastly.jsdelivr.net/gh/mihomo-party-org/clash-party@smart_core/images/icon-black.png' },
   ],
   ios: [
     { key: 'client_shadowrocket_url', name: 'Shadowrocket', icon: '🚀', iconUrl: 'https://fastly.jsdelivr.net/gh/Orz-3/mini@master/Color/shadowrocket.png' },
@@ -393,8 +395,14 @@ const allClients = {
   ],
 }
 
+// 显示规则：配置了 URL 的客户端，或配置了 clientKey（GitHub 自动解析）的客户端都显示；
+// URL 为 pan:// 标记或为空时点击自动获取 GitHub 最新版直链。
 const filterClients = (list: typeof allClients.windows) =>
-  list.filter(c => clientConfig.value[c.key]).map(c => ({ ...c, url: clientConfig.value[c.key] }))
+  list.filter(c => clientConfig.value[c.key] || c.clientKey).map(c => ({
+    ...c,
+    url: clientConfig.value[c.key] || '',
+    auto: !clientConfig.value[c.key] || String(clientConfig.value[c.key]).startsWith('pan://'),
+  }))
 
 const windowsClients = computed(() => filterClients(allClients.windows))
 const androidClients = computed(() => filterClients(allClients.android))
@@ -635,6 +643,26 @@ function oneClickImport(client: string) {
 }
 
 function openUrl(url: string) { if (url) window.open(url, '_blank') }
+
+// 自动客户端点击：动态解析 GitHub 最新版直链（pan:// 或未配置 URL）
+const downloadingKey = ref('')
+async function handleClientClick(c: any) {
+  if (c.auto && c.clientKey) {
+    if (downloadingKey.value) return
+    downloadingKey.value = c.key
+    try {
+      const resolved = await getClientDownloadUrl(c.clientKey, clientConfig.value)
+      window.open(resolved, '_blank')
+    } catch (e: any) {
+      message.error(e?.message || '获取下载链接失败，请稍后重试')
+    } finally {
+      downloadingKey.value = ''
+    }
+    return
+  }
+  // 普通 URL：pan:// 标记转后端解析接口
+  openUrl(resolvePanDownloadUrl(c.url))
+}
 
 const loadDashboardData = async () => {
   const [dashRes, subRes, ordersRes, checkinRes] = await Promise.allSettled([

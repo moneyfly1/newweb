@@ -288,7 +288,8 @@ func AdminReplyTicket(c *gin.Context) {
 	var user models.User
 	if err := db.First(&user, ticket.UserID).Error; err == nil && user.Email != "" {
 		var replies []models.TicketReply
-		db.Where("ticket_id = ?", ticket.ID).Order("created_at ASC").Find(&replies)
+		// 历史排除刚创建的这条回复（邮件正文已单独展示新回复，避免重复）
+		db.Where("ticket_id = ? AND id != ?", ticket.ID, reply.ID).Order("created_at ASC").Find(&replies)
 		historyHTML := services.BuildTicketConversationHistoryHTML(ticket, replies)
 		subject, body := services.RenderEmail("ticket_reply", map[string]string{
 			"username":     user.Username,

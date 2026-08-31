@@ -158,6 +158,14 @@ func ReplyTicket(c *gin.Context) {
 		}
 	}
 
+	// 用户回复工单 → 通知管理员（Bark/Telegram/邮件）
+	var user models.User
+	if err := db.Select("username", "email").First(&user, userID).Error; err == nil {
+		go services.NotifyAdmin("ticket_reply", map[string]string{
+			"username": user.Username, "ticket_no": ticket.TicketNo, "title": ticket.Title, "reply": req.Content,
+		})
+	}
+
 	utils.Success(c, reply)
 }
 

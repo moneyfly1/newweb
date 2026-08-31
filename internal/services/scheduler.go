@@ -13,6 +13,8 @@ import (
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services/software_sync"
 	"cboard/v2/internal/utils"
+
+	"gorm.io/gorm"
 )
 
 // Scheduler manages all periodic background tasks.
@@ -150,66 +152,90 @@ func checkExpiryStatusTask() {
 		Update("status", models.SubStatusExpiring)
 }
 
+// expirySubUser 到期提醒订阅信息（包级，供辅助函数复用）
+type expirySubUser struct {
+	Email      string
+	Username   string
+	ExpireTime time.Time
+	PackageID  *int64
+}
+
 // sendExpiryRemindersTask sends reminder emails for expiring subscriptions.
 func sendExpiryRemindersTask() {
 	db := database.GetDB()
 
-	type subUser struct {
-		Email      string
-		Username   string
-		ExpireTime time.Time
-	}
-
 	// 3-day reminder (check a 1-hour window to avoid duplicates)
 	now := time.Now()
-	var remind3 []subUser
+	var remind3 []expirySubUser
 	db.Model(&models.Subscription{}).
-		Select("users.email, users.username, subscriptions.expire_time").
+		Select("users.email, users.username, subscriptions.expire_time, subscriptions.package_id").
 		Joins("JOIN users ON users.id = subscriptions.user_id").
 		Where("subscriptions.is_active = ? AND subscriptions.expire_time BETWEEN ? AND ? AND users.email_notifications = ?",
 			true, now.Add(72*time.Hour), now.Add(73*time.Hour), true).
 		Scan(&remind3)
+	pkgMap := loadPackageNames(db, appendPackageIDs(remind3))
 	for _, r := range remind3 {
+		pkgName := ""
+		if r.PackageID != nil {
+			pkgName = pkgMap[*r.PackageID]
+		}
+		if pkgName == "" {
+			pkgName = "订阅套餐"
+		}
 		subject, body := RenderEmail("expiry_reminder", map[string]string{
-			"username": r.Username, "days": "3", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+			"username": r.Username, "days": "3", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"), "package_name": pkgName,
 		})
 		QueueEmail(r.Email, subject, body, "expiry_reminder")
 		go NotifyAdmin("expiry_reminder", map[string]string{
-			"username":    r.Username,
-			"expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+			"username": r.Username, "expire_time": r.ExpireTime.Format("2006-01-02 15:04"), "package_name": pkgName,
 		})
 	}
 
 	// 1-day reminder
-	var remind1 []subUser
+	var remind1 []expirySubUser
 	db.Model(&models.Subscription{}).
-		Select("users.email, users.username, subscriptions.expire_time").
+		Select("users.email, users.username, subscriptions.expire_time, subscriptions.package_id").
 		Joins("JOIN users ON users.id = subscriptions.user_id").
 		Where("subscriptions.is_active = ? AND subscriptions.expire_time BETWEEN ? AND ? AND users.email_notifications = ?",
 			true, now.Add(24*time.Hour), now.Add(25*time.Hour), true).
 		Scan(&remind1)
+	pkgMap = loadPackageNames(db, appendPackageIDs(remind3, remind1))
 	for _, r := range remind1 {
+		pkgName := ""
+		if r.PackageID != nil {
+			pkgName = pkgMap[*r.PackageID]
+		}
+		if pkgName == "" {
+			pkgName = "订阅套餐"
+		}
 		subject, body := RenderEmail("expiry_reminder", map[string]string{
-			"username": r.Username, "days": "1", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+			"username": r.Username, "days": "1", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"), "package_name": pkgName,
 		})
 		QueueEmail(r.Email, subject, body, "expiry_reminder")
 		go NotifyAdmin("expiry_reminder", map[string]string{
-			"username":    r.Username,
-			"expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+			"username": r.Username, "expire_time": r.ExpireTime.Format("2006-01-02 15:04"), "package_name": pkgName,
 		})
 	}
 
 	// Expired notice (within last hour)
-	var expired []subUser
+	var expired []expirySubUser
 	db.Model(&models.Subscription{}).
 		Select("users.email, subscriptions.expire_time").
 		Joins("JOIN users ON users.id = subscriptions.user_id").
 		Where("subscriptions.status = ? AND subscriptions.expire_time BETWEEN ? AND ? AND users.email_notifications = ?",
 			models.SubStatusExpired, now.Add(-1*time.Hour), now, true).
 		Scan(&expired)
+	pkgMap = loadPackageNames(db, appendPackageIDs(remind3, remind1, expired))
 	for _, r := range expired {
+		pkgName := ""
+		if r.PackageID != nil {
+			pkgName = pkgMap[*r.PackageID]
+		}
+		if pkgName == "" {
+			pkgName = "订阅套餐"
+		}
 		subject, body := RenderEmail("expiry_notice", map[string]string{
-			"username": r.Username, "expire_time": r.ExpireTime.Format("2006-01-02 15:04"),
+			"username": r.Username, "expire_time": r.ExpireTime.Format("2006-01-02 15:04"), "package_name": pkgName,
 		})
 		QueueEmail(r.Email, subject, body, "expiry_notice")
 	}
@@ -495,4 +521,37 @@ func autoBackupTask() {
 	utils.SysInfo("backup", fmt.Sprintf("自动备份完成: %s (%.2f MB)", result.Filename, float64(result.ZipSize)/1024/1024))
 
 	go UploadBackupToGitHub(result.ZipPath)
+}
+
+// appendPackageIDs 收集多个到期订阅列表的 PackageID（去重）
+func appendPackageIDs(lists ...[]expirySubUser) []*int64 {
+	seen := make(map[int64]bool)
+	var out []*int64
+	for _, list := range lists {
+		for _, r := range list {
+			if r.PackageID != nil && !seen[*r.PackageID] {
+				seen[*r.PackageID] = true
+				out = append(out, r.PackageID)
+			}
+		}
+	}
+	return out
+}
+
+// loadPackageNames 批量查询套餐名称，返回 packageID → name 映射
+func loadPackageNames(db *gorm.DB, pkgIDs []*int64) map[int64]string {
+	result := make(map[int64]string)
+	if len(pkgIDs) == 0 {
+		return result
+	}
+	ids := make([]int64, 0, len(pkgIDs))
+	for _, id := range pkgIDs {
+		ids = append(ids, *id)
+	}
+	var pkgs []models.Package
+	db.Where("id IN ?", ids).Select("id, name").Find(&pkgs)
+	for _, p := range pkgs {
+		result[int64(p.ID)] = p.Name
+	}
+	return result
 }

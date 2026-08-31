@@ -138,6 +138,12 @@ func NotifyAdmin(eventType string, data map[string]string) {
 		settingKey = "notify_unpaid_order"
 	case "expiry_reminder":
 		settingKey = "notify_expiry_reminder"
+	case "ticket_reply":
+		settingKey = "notify_ticket_reply"
+	case "account_disabled":
+		settingKey = "notify_account_disabled"
+	case "account_enabled":
+		settingKey = "notify_account_enabled"
 	default:
 		return
 	}

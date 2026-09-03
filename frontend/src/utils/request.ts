@@ -161,6 +161,16 @@ instance.interceptors.response.use(
     if (data.code !== 0) {
       return Promise.reject(new Error(data.message || '请求失败'))
     }
+    // 写操作成功后后端已轮换 CSRF token（单次使用设计）：
+    // 立即后台刷新缓存，避免下一次写操作用旧 token 触发 403+重取 的额外往返（造成卡顿）
+    const method = (response.config.method || 'get').toUpperCase()
+    const reqUrl = response.config.url || ''
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !reqUrl.endsWith('/csrf-token')) {
+      csrfTokenCache = ''
+      csrfTokenPromise = null
+      // 延迟到微任务后预取，避免与当前响应竞态；失败静默（下次请求再取）
+      queueMicrotask(() => { ensureCSRFToken().catch(() => {}) })
+    }
     return data
   },
   async (error) => {

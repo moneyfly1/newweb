@@ -114,6 +114,18 @@
                   <n-button size="tiny" @click="inlineAddDevice(row, 20)">+20</n-button>
                   <n-button size="tiny" @click="inlineAddDevice(row, 30)">+30</n-button>
                 </div>
+                <div class="sub-section-row" style="margin-top: 6px;">
+                  <span class="sub-section-label" style="flex: 0 0 auto;">手动设置</span>
+                  <n-input-number
+                    v-model:value="row._deviceLimitEdit"
+                    :min="0" :max="999" size="small" style="width: 110px"
+                    placeholder="输入上限"
+                    @blur="() => inlineSetDevice(row, row._deviceLimitEdit)"
+                    @keyup.enter="() => inlineSetDevice(row, row._deviceLimitEdit)"
+                  />
+                  <n-button size="tiny" quaternary type="error" @click="inlineAddDevice(row, -5)">-5</n-button>
+                  <n-button size="tiny" quaternary type="error" @click="inlineAddDevice(row, -10)">-10</n-button>
+                </div>
               </div>
               <div class="sub-section">
                 <div class="sub-section-row">
@@ -421,7 +433,10 @@ const fetchData = async () => {
     }
     const res = await listAdminSubscriptions(params)
     const items = res.data.items || []
-    items.forEach(r => { r._expireTs = r.expire_time ? new Date(r.expire_time).getTime() : null })
+    items.forEach(r => {
+      r._expireTs = r.expire_time ? new Date(r.expire_time).getTime() : null
+      r._deviceLimitEdit = r.device_limit ?? 0
+    })
     tableData.value = items
     pagination.value.itemCount = res.data.total || 0
   } catch { message.error('获取订阅列表失败') }
@@ -459,47 +474,86 @@ const handleSorterChange = (sorter) => {
   fetchData()
 }
 
-// Inline time operations（本地更新行数据，避免整表刷新导致的重渲染卡顿）
+// Inline time operations（乐观更新：先本地生效再请求，失败回滚，消除网络往返的"点了没反应"感）
 const inlineAddTime = async (row, days) => {
+  const oldExpire = row.expire_time
+  const oldActive = row.is_active
+  const oldStatus = row.status
+  // 先本地计算新到期时间（乐观）
+  const base = oldExpire ? new Date(oldExpire) : new Date()
+  if (isNaN(base.getTime()) || base.getTime() < Date.now()) base.setTime(Date.now())
+  const newExpire = new Date(base.getTime() + days * 24 * 3600 * 1000)
+  row.expire_time = newExpire.toISOString()
+  row._expireTs = newExpire.getTime()
+  row.is_active = true
+  row.status = 'active'
   try {
     const res = await extendSubscription(row.id, { days })
     if (res.data?.new_expire_time) {
       row.expire_time = res.data.new_expire_time
       row._expireTs = new Date(res.data.new_expire_time).getTime()
-      row.is_active = true
-      row.status = 'active'
     }
     message.success(`已延长 ${days} 天`)
-  } catch { message.error('延长失败') }
+  } catch {
+    // 失败回滚
+    row.expire_time = oldExpire
+    row._expireTs = oldExpire ? new Date(oldExpire).getTime() : null
+    row.is_active = oldActive
+    row.status = oldStatus
+    message.error('延长失败')
+  }
 }
 const inlineSetExpire = async (row, ts) => {
   if (!ts) return
   const iso = new Date(ts).toISOString()
+  const oldExpire = row.expire_time
+  const oldTs = row._expireTs
+  const oldActive = row.is_active
+  const oldStatus = row.status
+  // 乐观更新
+  row.expire_time = iso
+  row._expireTs = ts
+  if (new Date(ts).getTime() > Date.now()) { row.is_active = true; row.status = 'active' }
   try {
     await setSubscriptionExpireTime(row.id, { expire_time: iso })
-    row.expire_time = iso
-    row._expireTs = ts
-    if (new Date(ts).getTime() > Date.now()) { row.is_active = true; row.status = 'active' }
     message.success('到期时间已设置')
-  } catch { message.error('设置失败') }
+  } catch {
+    row.expire_time = oldExpire
+    row._expireTs = oldTs
+    row.is_active = oldActive
+    row.status = oldStatus
+    message.error('设置失败')
+  }
 }
 
-// Inline device operations（本地更新行数据）
+// Inline device operations（乐观更新：先本地生效再请求，失败回滚）
 const inlineAddDevice = async (row, n) => {
-  const newLimit = (row.device_limit || 0) + n
+  const oldLimit = row.device_limit || 0
+  const newLimit = Math.max(0, oldLimit + n)
+  row.device_limit = newLimit
+  row._deviceLimitEdit = newLimit
   try {
     await updateSubscriptionDeviceLimit(row.id, { device_limit: newLimit })
-    row.device_limit = newLimit
     message.success(`设备上限已设为 ${newLimit}`)
-  } catch { message.error('更新失败') }
+  } catch {
+    row.device_limit = oldLimit
+    row._deviceLimitEdit = oldLimit
+    message.error('更新失败')
+  }
 }
 const inlineSetDevice = async (row, v) => {
   if (v == null || v === row.device_limit) return
+  const oldLimit = row.device_limit || 0
+  row.device_limit = v
+  row._deviceLimitEdit = v
   try {
     await updateSubscriptionDeviceLimit(row.id, { device_limit: v })
-    row.device_limit = v
     message.success(`设备上限已设为 ${v}`)
-  } catch { message.error('更新失败') }
+  } catch {
+    row.device_limit = oldLimit
+    row._deviceLimitEdit = oldLimit
+    message.error('更新失败')
+  }
 }
 
 const handleViewDetail = (row) => {

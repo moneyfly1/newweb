@@ -232,7 +232,7 @@ func CreateOrder(c *gin.Context) {
 	utils.LogOrder("订单创建成功: order_no=%s user_id=%d username=%s package=%s amount=%.2f ip=%s",
 		orderNo, userID, user.Username, pkg.Name, finalAmount, utils.GetRealClientIP(c))
 	go services.NotifyUser(userID, "new_order", map[string]string{
-		"order_no": orderNo, "package_name": pkg.Name, "amount": fmt.Sprintf("%.2f", finalAmount),
+		"username": user.Username, "order_no": orderNo, "package_name": pkg.Name, "amount": fmt.Sprintf("%.2f", finalAmount),
 	})
 	go services.NotifyAdmin("new_order", map[string]string{
 		"username": user.Username, "order_no": orderNo, "package_name": pkg.Name, "amount": fmt.Sprintf("%.2f", finalAmount), "payment_method": "在线支付",
@@ -745,7 +745,7 @@ func CreateCustomOrder(c *gin.Context) {
 	pkgName := fmt.Sprintf("自定义套餐 (%d设备/%d月)", req.Devices, req.Months)
 	user := c.MustGet("user").(*models.User)
 	go services.NotifyUser(userID, "new_order", map[string]string{
-		"order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
+		"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
 	})
 	go services.NotifyAdmin("new_order", map[string]string{
 		"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice), "payment_method": "在线支付",
@@ -986,7 +986,7 @@ func CreateUpgradeOrder(c *gin.Context) {
 	}
 	user := c.MustGet("user").(*models.User)
 	go services.NotifyUser(userID, "new_order", map[string]string{
-		"order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
+		"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice),
 	})
 	go services.NotifyAdmin("new_order", map[string]string{
 		"username": user.Username, "order_no": orderNo, "package_name": pkgName, "amount": fmt.Sprintf("%.2f", finalPrice), "payment_method": "在线支付",

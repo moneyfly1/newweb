@@ -2,8 +2,10 @@ package services
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"strconv"
 	"strings"
 	"time"
 
@@ -643,7 +645,7 @@ func (b *EmailTemplateBuilder) GetAdminNotificationTemplate(notificationType, ti
 	var content string
 
 	switch notificationType {
-	case "order_paid":
+	case "order_paid", "payment_success": // payment_success 与 order_paid 共用支付成功模板
 		orderNo := getStringFromData(data, "order_no", "N/A")
 		username := getStringFromData(data, "username", "N/A")
 		amount := getFloatFromData(data, "amount", 0)
@@ -754,7 +756,7 @@ func (b *EmailTemplateBuilder) GetAdminNotificationTemplate(notificationType, ti
                 <p><strong>💡 提示：</strong>用户订阅已过期，建议引导用户续费以恢复服务。</p>
             </div>`, username, email, expireTime)
 
-	case "user_created":
+	case "user_created", "new_user", "admin_create_user": // 新用户/管理员创建用户共用模板
 		username := getStringFromData(data, "username", "N/A")
 		email := getStringFromData(data, "email", "N/A")
 		createdBy := getStringFromData(data, "created_by", "N/A")
@@ -937,8 +939,23 @@ func getStringFromData(data map[string]interface{}, key string, defaultValue str
 
 func getFloatFromData(data map[string]interface{}, key string, defaultValue float64) float64 {
 	if val, ok := data[key]; ok {
-		if f, ok := val.(float64); ok {
-			return f
+		switch v := val.(type) {
+		case float64:
+			return v
+		case float32:
+			return float64(v)
+		case int:
+			return float64(v)
+		case int64:
+			return float64(v)
+		case json.Number:
+			if f, err := v.Float64(); err == nil {
+				return f
+			}
+		case string:
+			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
+				return f
+			}
 		}
 	}
 	return defaultValue

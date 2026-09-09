@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"time"
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/utils"
 	"github.com/gin-gonic/gin"
+	"time"
 )
 
 func AdminGetCheckInStats(c *gin.Context) {

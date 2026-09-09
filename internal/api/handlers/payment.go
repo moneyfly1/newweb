@@ -311,7 +311,7 @@ func loadRechargePaymentTarget(db *gorm.DB, userID uint, rechargeID uint) (*paym
 
 func handleFormGatewayNotify(c *gin.Context, db *gorm.DB, callbackType string, configLoader func() (string, error), verify func(map[string]string, string) bool, paymentMethod string, statusResolver func(map[string]string) string) {
 	utils.LogCallback("========== 开始处理%s回调 ==========", paymentMethod)
-	utils.LogCallback("Method: %s, URL: %s, IP: %s", c.Request.Method, c.Request.URL.String(), utils.GetRealClientIP(c))
+	utils.LogCallback("Method: %s, URL: %s, IP: %s", c.Request.Method, utils.MaskSensitiveParams(c.Request.URL.String()), utils.GetRealClientIP(c))
 
 	params := make(map[string]string)
 	if c.Request.Method == "GET" {
@@ -1128,7 +1128,7 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	// Log incoming request
 	utils.LogCallback("========== 开始处理支付宝回调 ==========")
 	utils.LogCallback("Method: %s", c.Request.Method)
-	utils.LogCallback("URL: %s", c.Request.URL.String())
+	utils.LogCallback("URL: %s", utils.MaskSensitiveParams(c.Request.URL.String()))
 	utils.LogCallback("Remote: %s", c.ClientIP())
 
 	alipayCfg, err := services.GetAlipayConfig()
@@ -1497,7 +1497,7 @@ func PaymentReturn(c *gin.Context) {
 		outTradeNo = c.Query("order_no")
 	}
 
-	utils.LogCallback("[PaymentReturn] 同步回调 - out_trade_no=%s, query=%v", outTradeNo, c.Request.URL.Query())
+	utils.LogCallback("[PaymentReturn] 同步回调 - out_trade_no=%s, query=%v", outTradeNo, utils.MaskSensitiveParams(c.Request.URL.RawQuery))
 
 	// 查找订单号
 	orderNo := outTradeNo

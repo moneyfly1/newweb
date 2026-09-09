@@ -641,29 +641,29 @@ func GetSubscription(c *gin.Context) {
 		}
 	}
 	if cacheKey != "" && cachedBody != "" {
-			subscriptionName := generateSubscriptionName(ctx)
-			encodedName := url.QueryEscape(subscriptionName)
+		subscriptionName := generateSubscriptionName(ctx)
+		encodedName := url.QueryEscape(subscriptionName)
 
-			if useStash || useClash {
-				c.Header("Content-Type", "text/yaml; charset=utf-8")
-				c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.yaml", encodedName))
-			} else if useSurge || useQuantumultX || useLoon {
-				c.Header("Content-Type", "text/plain; charset=utf-8")
-				c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.conf", encodedName))
-			} else if useSingBox {
-				c.Header("Content-Type", "application/json; charset=utf-8")
-				c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.json", encodedName))
-			} else {
-				c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", encodedName))
-				c.Header("Content-Type", "text/plain; charset=utf-8")
-			}
-
-			c.Header("Subscription-Title", subscriptionName)
-			c.Header("Profile-Title", subscriptionName)
-			setSubscriptionHeaders(c, ctx)
-			c.String(http.StatusOK, cachedBody)
-			return
+		if useStash || useClash {
+			c.Header("Content-Type", "text/yaml; charset=utf-8")
+			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.yaml", encodedName))
+		} else if useSurge || useQuantumultX || useLoon {
+			c.Header("Content-Type", "text/plain; charset=utf-8")
+			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.conf", encodedName))
+		} else if useSingBox {
+			c.Header("Content-Type", "application/json; charset=utf-8")
+			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.json", encodedName))
+		} else {
+			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", encodedName))
+			c.Header("Content-Type", "text/plain; charset=utf-8")
 		}
+
+		c.Header("Subscription-Title", subscriptionName)
+		c.Header("Profile-Title", subscriptionName)
+		setSubscriptionHeaders(c, ctx)
+		c.String(http.StatusOK, cachedBody)
+		return
+	}
 
 	var nodes []models.Node
 	if ctx.Status != subStatusOK {

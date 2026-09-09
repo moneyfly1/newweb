@@ -1,14 +1,14 @@
 package services
 
 import (
+	"cboard/v2/internal/models"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"net/url"
 	"strconv"
 	"strings"
-	"cboard/v2/internal/models"
-	"gopkg.in/yaml.v3"
 )
 
 func ParseNodeLinks(content string) ([]models.Node, error) {
@@ -29,7 +29,6 @@ func ParseNodeLinks(content string) ([]models.Node, error) {
 
 	return nodes, nil
 }
-
 
 type clashSubscription struct {
 	Proxies []map[string]interface{} `yaml:"proxies"`
@@ -83,12 +82,10 @@ func parseJSONNodeList(content string) ([]models.Node, bool) {
 	return nodes, len(nodes) > 0
 }
 
-
 var proxyLinkPrefixes = []string{
 	"vmess://", "vless://", "trojan://", "ss://", "ssr://",
 	"hysteria://", "hysteria2://", "tuic://", "naive+", "anytls://", "wireguard://",
 }
-
 
 func extractProxyLinksFromJSON(v interface{}) []string {
 	var links []string
@@ -112,7 +109,6 @@ func extractProxyLinksFromJSON(v interface{}) []string {
 	}
 	return links
 }
-
 
 func ExtractDomainPortFromNodeLink(link string) (string, int, error) {
 	link = strings.TrimSpace(link)
@@ -209,7 +205,6 @@ func ExtractDomainPortFromNodeLink(link string) (string, int, error) {
 	}
 }
 
-
 func extractDomainPortFromVmessLink(link string) (string, int, error) {
 	encoded := strings.TrimPrefix(link, "vmess://")
 	encodedBase64 := encoded
@@ -248,7 +243,6 @@ func extractDomainPortFromVmessLink(link string) (string, int, error) {
 	return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
 }
 
-
 func parseClashSubscription(content string) ([]models.Node, bool, error) {
 	var sub clashSubscription
 	if err := yaml.Unmarshal([]byte(content), &sub); err != nil {
@@ -269,7 +263,6 @@ func parseClashSubscription(content string) ([]models.Node, bool, error) {
 	return nodes, true, nil
 }
 
-
 func clashProxyToNode(proxy map[string]interface{}) (*models.Node, error) {
 	nodeType := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", proxy["type"])))
 	name := strings.TrimSpace(fmt.Sprintf("%v", proxy["name"]))
@@ -284,13 +277,11 @@ func clashProxyToNode(proxy map[string]interface{}) (*models.Node, error) {
 	return buildNode(name, strings.ToUpper(normalizedType)+" Node", normalizedType, link), nil
 }
 
-
 type nodeLinkRule struct {
 	prefixes  []string
 	parser    func(string) (*models.Node, error)
 	condition func(string) bool
 }
-
 
 var nodeLinkRules = []nodeLinkRule{
 	{prefixes: []string{"vmess://"}, parser: ParseVmessLink},
@@ -312,7 +303,6 @@ var nodeLinkRules = []nodeLinkRule{
 	},
 }
 
-
 func parseNodeFromLine(line string) (*models.Node, error) {
 	for _, rule := range nodeLinkRules {
 		if !hasAnyPrefix(line, rule.prefixes) {
@@ -326,7 +316,6 @@ func parseNodeFromLine(line string) (*models.Node, error) {
 	return nil, nil
 }
 
-
 func hasAnyPrefix(s string, prefixes []string) bool {
 	for _, p := range prefixes {
 		if strings.HasPrefix(s, p) {
@@ -336,11 +325,9 @@ func hasAnyPrefix(s string, prefixes []string) bool {
 	return false
 }
 
-
 func isLikelyHTTPProxyLink(link string) bool {
 	return strings.Contains(link, "method=") || strings.Contains(link, "remarks=") || strings.Contains(link, "#")
 }
-
 
 func buildNode(name string, defaultName string, nodeType string, link string) *models.Node {
 	resolvedName := sanitizeNodeName(name)
@@ -360,7 +347,6 @@ func buildNode(name string, defaultName string, nodeType string, link string) *m
 	}
 }
 
-
 func sanitizeNodeName(name string) string {
 	cleaned := strings.TrimSpace(name)
 	cleaned = strings.ReplaceAll(cleaned, "\r", " ")
@@ -369,7 +355,6 @@ func sanitizeNodeName(name string) string {
 	cleaned = strings.Join(strings.Fields(cleaned), " ")
 	return cleaned
 }
-
 
 func decodeFragment(fragment string) string {
 	if fragment == "" {
@@ -381,7 +366,6 @@ func decodeFragment(fragment string) string {
 	return fragment
 }
 
-
 func parseQuerySafe(raw string) url.Values {
 	values, err := url.ParseQuery(raw)
 	if err != nil {
@@ -389,7 +373,6 @@ func parseQuerySafe(raw string) url.Values {
 	}
 	return values
 }
-
 
 func parseIntOrDefault(raw string, defaultVal int) int {
 	if raw == "" {
@@ -402,7 +385,6 @@ func parseIntOrDefault(raw string, defaultVal int) int {
 	return n
 }
 
-
 func parsePortWithDefault(portStr string, defaultPort int) int {
 	port := parseIntOrDefault(portStr, 0)
 	if port <= 0 {
@@ -410,7 +392,6 @@ func parsePortWithDefault(portStr string, defaultPort int) int {
 	}
 	return port
 }
-
 
 func boolFromMap(m map[string]interface{}, key string) bool {
 	v, ok := m[key]
@@ -433,14 +414,12 @@ func boolFromMap(m map[string]interface{}, key string) bool {
 	}
 }
 
-
 func stringFromMap(m map[string]interface{}, key string) string {
 	if v, ok := m[key]; ok {
 		return strings.TrimSpace(fmt.Sprintf("%v", v))
 	}
 	return ""
 }
-
 
 func intFromMap(m map[string]interface{}, key string, defaultVal int) int {
 	v, ok := m[key]
@@ -468,7 +447,6 @@ func intFromMap(m map[string]interface{}, key string, defaultVal int) int {
 	return defaultVal
 }
 
-
 func stringSliceFromValue(v interface{}) []string {
 	switch value := v.(type) {
 	case []string:
@@ -492,14 +470,12 @@ func stringSliceFromValue(v interface{}) []string {
 	}
 }
 
-
 func encodeNameFragment(name string) string {
 	if name == "" {
 		return ""
 	}
 	return "#" + url.QueryEscape(name)
 }
-
 
 func encodeHostPortQuery(host string, path string) string {
 	if host == "" && path == "" {
@@ -514,4 +490,3 @@ func encodeHostPortQuery(host string, path string) string {
 	}
 	return q.Encode()
 }
-

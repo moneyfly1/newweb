@@ -50,6 +50,7 @@ func rx(patterns ...string) []*regexp.Regexp {
 // 通用匹配（已对照各仓库真实资产名）
 var apkAny = rx(`(?i)\.apk$`)
 var apkPreferredArm = rx(`(?i)(arm64[-_]?v8a|arm64)[^.]*\.apk$`)
+
 // macOS 安装包通用正则（macos/darwin 前缀优先，排除 catalina 旧版兼容资产）
 var dmgIntel = rx(
 	`(?i)^.*(macos|darwin).*[-_.](x64|amd64|intel|-64)[^.]*\.(dmg|pkg)$`,
@@ -59,6 +60,7 @@ var dmgApple = rx(
 	`(?i)^.*(macos|darwin).*[-_.](arm64|aarch64|apple|silicon|m[0-9]+)[^.]*\.(dmg|pkg)$`,
 	`(?i)^.*[-_.](arm64|aarch64)[^.]*\.(dmg|pkg)$`,
 )
+
 // Clash Party 专用：macos 前缀精确匹配（排除 catalina 兼容包），
 // 资产形如 clash-party-macos-2.0.2-arm64.pkg / clash-party-macos-2.0.2-x64.pkg
 var clashPartyMacIntel = rx(`(?i)^(clash-party|mihomo-party)-macos.*[-_.](x64|amd64|intel)[^.]*\.(dmg|pkg)$`)

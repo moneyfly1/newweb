@@ -1,12 +1,12 @@
 package services
 
 import (
+	"cboard/v2/internal/models"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
-	"cboard/v2/internal/models"
 )
 
 func ParseVmessLink(link string) (*models.Node, error) {
@@ -68,7 +68,6 @@ func ParseVmessLink(link string) (*models.Node, error) {
 	return nil, fmt.Errorf("invalid vmess link format")
 }
 
-
 func ParseVlessLink(link string) (*models.Node, error) {
 	u, err := url.Parse(link)
 	if err != nil {
@@ -98,7 +97,6 @@ func ParseVlessLink(link string) (*models.Node, error) {
 	return buildNode(name, "VLESS Node", "vless", link), nil
 }
 
-
 func ParseTrojanLink(link string) (*models.Node, error) {
 	u, err := url.Parse(link)
 	if err != nil {
@@ -107,7 +105,6 @@ func ParseTrojanLink(link string) (*models.Node, error) {
 
 	return buildNode(u.Fragment, "Trojan Node", "trojan", link), nil
 }
-
 
 func ParseShadowsocksLink(link string) (*models.Node, error) {
 	u, err := url.Parse(link)

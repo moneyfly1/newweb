@@ -6,10 +6,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -284,40 +286,11 @@ func AdminCleanOldLogs(c *gin.Context) {
 	results := make([]result, 0)
 	totalDeleted := int64(0)
 
-	logTables := []struct {
-		model interface{}
-		name  string
-	}{
-		{&models.AuditLog{}, "audit_logs"},
-		{&models.RegistrationLog{}, "registration_logs"},
-		{&models.SubscriptionLog{}, "subscription_logs"},
-		{&models.BalanceLog{}, "balance_logs"},
-		{&models.CommissionLog{}, "commission_logs"},
-		{&models.SystemLog{}, "system_logs"},
-		{&models.OrderLog{}, "order_logs"},
-		{&models.PaymentLog{}, "payment_logs"},
-		{&models.CouponLog{}, "coupon_logs"},
-		{&models.NodeLog{}, "node_logs"},
-		{&models.UserActionLog{}, "user_action_logs"},
-		{&models.AdminActionLog{}, "admin_action_logs"},
-		{&models.DeviceLog{}, "device_logs"},
-		{&models.TicketLog{}, "ticket_logs"},
-		{&models.InviteLog{}, "invite_logs"},
-		{&models.ConfigChangeLog{}, "config_change_logs"},
-		{&models.SecurityLog{}, "security_logs"},
-		{&models.APILog{}, "api_logs"},
-		{&models.DatabaseLog{}, "database_logs"},
-		{&models.EmailLog{}, "email_logs"},
-		{&models.NotificationLog{}, "notification_logs"},
-		{&models.LoginHistory{}, "login_history"},
-		{&models.UserActivity{}, "user_activities"},
-		{&models.LoginAttempt{}, "login_attempts"},
-		{&models.VerificationAttempt{}, "verification_attempts"},
-	}
-
-	for _, t := range logTables {
-		r := db.Where("created_at < ?", cutoff).Delete(t.model)
-		results = append(results, result{Table: t.name, Deleted: r.RowsAffected})
+	// 使用 models.RetentionLogTables 单一清单（含各自时间列），
+	// 与定时任务清理(cleanOldLogsTask)保持一致，避免两处维护分叉。
+	for _, t := range models.RetentionLogTables {
+		r := db.Where(t.TimeColumn+" < ?", cutoff).Delete(t.Model)
+		results = append(results, result{Table: t.Table, Deleted: r.RowsAffected})
 		totalDeleted += r.RowsAffected
 	}
 
@@ -483,4 +456,3 @@ func FilterNodesByProtocol(nodes []models.Node, allowed map[string]bool) []model
 	}
 	return result
 }
-

@@ -88,38 +88,38 @@ func AdminListOrders(c *gin.Context) {
 	p := utils.GetPagination(c)
 
 	type AdminOrderItem struct {
-		ID                   uint       `json:"id"`
-		OrderNo              string     `json:"order_no"`
-		UserID               uint       `json:"user_id"`
-		UserEmail            string     `json:"user_email"`
-		PackageID            uint       `json:"package_id"`
-		Amount               float64    `json:"amount"`
-		Status               string     `json:"status"`
-		PaymentMethodID      *int64     `json:"payment_method_id"`
-		PaymentMethodName    *string    `json:"payment_method_name"`
-		PaymentTime          *flexTime  `json:"payment_time"`
-		PaymentTransactionID *string    `json:"payment_transaction_id"`
-		GatewayTradeNo       *string    `json:"gateway_trade_no,omitempty"`
-		ExpireTime           *flexTime  `json:"expire_time"`
-		CouponID             *int64     `json:"coupon_id"`
-		DiscountAmount       *float64   `json:"discount_amount"`
-		FinalAmount          *float64   `json:"final_amount"`
-		ExtraData            *string    `json:"extra_data"`
-		CreatedAt            flexTime   `json:"created_at"`
-		UpdatedAt            flexTime   `json:"updated_at"`
-		OrderType            string     `json:"order_type"`
-		OrderTypeText        string     `json:"order_type_text"`
-		OrderSummary         string     `json:"order_summary"`
-		PackageName          string     `json:"package_name"`
-		Devices              *int       `json:"devices,omitempty"`
-		Months               *int       `json:"months,omitempty"`
-		AddDevices           *int       `json:"add_devices,omitempty"`
-		ExtendMonths         *int       `json:"extend_months,omitempty"`
-		CurrentDeviceLimit   *int       `json:"current_device_limit,omitempty"`
-		NewDeviceLimit       *int       `json:"new_device_limit,omitempty"`
-		CurrentExpireTime    *string    `json:"current_expire_time,omitempty"`
-		NewExpireTime        *string    `json:"new_expire_time,omitempty"`
-		BalanceAmount        *float64   `json:"balance_amount,omitempty"`
+		ID                   uint      `json:"id"`
+		OrderNo              string    `json:"order_no"`
+		UserID               uint      `json:"user_id"`
+		UserEmail            string    `json:"user_email"`
+		PackageID            uint      `json:"package_id"`
+		Amount               float64   `json:"amount"`
+		Status               string    `json:"status"`
+		PaymentMethodID      *int64    `json:"payment_method_id"`
+		PaymentMethodName    *string   `json:"payment_method_name"`
+		PaymentTime          *flexTime `json:"payment_time"`
+		PaymentTransactionID *string   `json:"payment_transaction_id"`
+		GatewayTradeNo       *string   `json:"gateway_trade_no,omitempty"`
+		ExpireTime           *flexTime `json:"expire_time"`
+		CouponID             *int64    `json:"coupon_id"`
+		DiscountAmount       *float64  `json:"discount_amount"`
+		FinalAmount          *float64  `json:"final_amount"`
+		ExtraData            *string   `json:"extra_data"`
+		CreatedAt            flexTime  `json:"created_at"`
+		UpdatedAt            flexTime  `json:"updated_at"`
+		OrderType            string    `json:"order_type"`
+		OrderTypeText        string    `json:"order_type_text"`
+		OrderSummary         string    `json:"order_summary"`
+		PackageName          string    `json:"package_name"`
+		Devices              *int      `json:"devices,omitempty"`
+		Months               *int      `json:"months,omitempty"`
+		AddDevices           *int      `json:"add_devices,omitempty"`
+		ExtendMonths         *int      `json:"extend_months,omitempty"`
+		CurrentDeviceLimit   *int      `json:"current_device_limit,omitempty"`
+		NewDeviceLimit       *int      `json:"new_device_limit,omitempty"`
+		CurrentExpireTime    *string   `json:"current_expire_time,omitempty"`
+		NewExpireTime        *string   `json:"new_expire_time,omitempty"`
+		BalanceAmount        *float64  `json:"balance_amount,omitempty"`
 	}
 
 	statusFilter := c.Query("status")
@@ -819,4 +819,3 @@ func AdminDeleteOrder(c *gin.Context) {
 }
 
 // ==================== Package Management ====================
-

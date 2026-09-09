@@ -40,7 +40,6 @@ func clashProxyToLink(proxy map[string]interface{}, nodeType string, name string
 	}
 }
 
-
 func clashVMessProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	cfg := map[string]interface{}{
 		"v":    "2",
@@ -107,7 +106,6 @@ func clashVMessProxyToLink(proxy map[string]interface{}, name string) (string, s
 	}
 	return "vmess://" + base64.StdEncoding.EncodeToString(data), "vmess", nil
 }
-
 
 func clashVLESSProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
@@ -181,7 +179,6 @@ func clashVLESSProxyToLink(proxy map[string]interface{}, name string) (string, s
 	return link + encodeNameFragment(name), "vless", nil
 }
 
-
 func clashTrojanProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
 	port := intFromMap(proxy, "port", 0)
@@ -229,7 +226,6 @@ func clashTrojanProxyToLink(proxy map[string]interface{}, name string) (string, 
 	return link + encodeNameFragment(name), "trojan", nil
 }
 
-
 func clashShadowsocksProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
 	port := intFromMap(proxy, "port", 0)
@@ -253,7 +249,6 @@ func clashShadowsocksProxyToLink(proxy map[string]interface{}, name string) (str
 	}
 	return link + encodeNameFragment(name), "ss", nil
 }
-
 
 func clashSSRProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
@@ -283,7 +278,6 @@ func clashSSRProxyToLink(proxy map[string]interface{}, name string) (string, str
 	full := base + "/?" + params.Encode()
 	return "ssr://" + base64.RawURLEncoding.EncodeToString([]byte(full)), "ssr", nil
 }
-
 
 func clashHysteriaProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
@@ -323,7 +317,6 @@ func clashHysteriaProxyToLink(proxy map[string]interface{}, name string) (string
 	return link + encodeNameFragment(name), "hysteria", nil
 }
 
-
 func clashHysteria2ProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
 	port := intFromMap(proxy, "port", 0)
@@ -357,7 +350,6 @@ func clashHysteria2ProxyToLink(proxy map[string]interface{}, name string) (strin
 	return link + encodeNameFragment(name), "hysteria2", nil
 }
 
-
 func clashTUICProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
 	port := intFromMap(proxy, "port", 0)
@@ -387,7 +379,6 @@ func clashTUICProxyToLink(proxy map[string]interface{}, name string) (string, st
 	return link + encodeNameFragment(name), "tuic", nil
 }
 
-
 func clashSOCKSProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
 	port := intFromMap(proxy, "port", 1080)
@@ -407,7 +398,6 @@ func clashSOCKSProxyToLink(proxy map[string]interface{}, name string) (string, s
 	link += fmt.Sprintf("%s:%d", host, port)
 	return link + encodeNameFragment(name), "socks5", nil
 }
-
 
 func clashHTTPProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
@@ -432,7 +422,6 @@ func clashHTTPProxyToLink(proxy map[string]interface{}, name string) (string, st
 	link += fmt.Sprintf("%s:%d", host, port)
 	return link + encodeNameFragment(name), "http", nil
 }
-
 
 func clashWireGuardProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
@@ -473,7 +462,6 @@ func clashWireGuardProxyToLink(proxy map[string]interface{}, name string) (strin
 	return link + encodeNameFragment(name), "wireguard", nil
 }
 
-
 func clashAnyTLSProxyToLink(proxy map[string]interface{}, name string) (string, string, error) {
 	host := stringFromMap(proxy, "server")
 	port := intFromMap(proxy, "port", 443)
@@ -491,4 +479,3 @@ func clashAnyTLSProxyToLink(proxy map[string]interface{}, name string) (string, 
 	}
 	return link + encodeNameFragment(name), "anytls", nil
 }
-

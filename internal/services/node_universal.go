@@ -1,6 +1,7 @@
 package services
 
 import (
+	"cboard/v2/internal/models"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"cboard/v2/internal/models"
 )
 
 func GenerateUniversalBase64(nodes []models.Node) string {
@@ -20,7 +20,6 @@ func GenerateUniversalBase64(nodes []models.Node) string {
 	}
 	return base64.StdEncoding.EncodeToString([]byte(strings.Join(links, "\n")))
 }
-
 
 func writeClashProxy(sb *strings.Builder, m map[string]interface{}) {
 	m = normalizeClashProxyMap(m)
@@ -69,7 +68,6 @@ func writeClashProxy(sb *strings.Builder, m map[string]interface{}) {
 	sb.WriteString("}\n")
 }
 
-
 func normalizeClashProxyMap(m map[string]interface{}) map[string]interface{} {
 	needsSkipCertVerify := shouldClashSkipCertVerify(m)
 	needsTFO := shouldClashDisableTFO(m)
@@ -89,7 +87,6 @@ func normalizeClashProxyMap(m map[string]interface{}) map[string]interface{} {
 	return clone
 }
 
-
 func shouldClashSkipCertVerify(m map[string]interface{}) bool {
 	typ, _ := m["type"].(string)
 	switch typ {
@@ -102,7 +99,6 @@ func shouldClashSkipCertVerify(m map[string]interface{}) bool {
 		return false
 	}
 }
-
 
 func shouldClashDisableTFO(m map[string]interface{}) bool {
 	tls, _ := m["tls"].(bool)
@@ -117,7 +113,6 @@ func shouldClashDisableTFO(m map[string]interface{}) bool {
 		return false
 	}
 }
-
 
 func writeYAMLInlineValue(sb *strings.Builder, val interface{}) {
 	switch v := val.(type) {
@@ -176,7 +171,6 @@ func writeYAMLInlineValue(sb *strings.Builder, val interface{}) {
 	}
 }
 
-
 func escapeYAML(s string) string {
 	if s == "" {
 		return "\"\""
@@ -197,7 +191,6 @@ func escapeYAML(s string) string {
 	return s
 }
 
-
 func splitHostPort(hostport string) (string, string) {
 	// Use net.SplitHostPort for proper IPv6 support
 	host, port, err := net.SplitHostPort(hostport)
@@ -207,7 +200,6 @@ func splitHostPort(hostport string) (string, string) {
 	}
 	return host, port
 }
-
 
 func toInt(v interface{}) int {
 	switch val := v.(type) {

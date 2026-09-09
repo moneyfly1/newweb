@@ -40,7 +40,7 @@ func InvalidateUserCache(userID uint) {
 type Claims struct {
 	UserID uint   `json:"user_id"`
 	Type   string `json:"type"` // "access" or "refresh"
-	Ver    uint   `json:"ver"` // token 版本号，用于改密后吊销旧 token
+	Ver    uint   `json:"ver"`  // token 版本号，用于改密后吊销旧 token
 	jwt.RegisteredClaims
 }
 

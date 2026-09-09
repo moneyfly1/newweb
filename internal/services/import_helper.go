@@ -9,8 +9,8 @@ import (
 
 // 导入相关错误哨兵
 var (
-	ErrEmptySubscriptionURL = errors.New("订阅URL不能为空")
-	ErrEmptyNodeLinks       = errors.New("节点链接不能为空")
+	ErrEmptySubscriptionURL  = errors.New("订阅URL不能为空")
+	ErrEmptyNodeLinks        = errors.New("节点链接不能为空")
 	ErrUnsupportedImportType = errors.New("不支持的导入类型")
 )
 
@@ -111,11 +111,11 @@ func BuildCustomNodesFromNodes(nodes []models.Node) []models.CustomNode {
 
 // CustomNodeSyncResult 专线订阅同步结果
 type CustomNodeSyncResult struct {
-	Total     int `json:"total"`      // 订阅中解析出的节点数
-	Inserted  int `json:"inserted"`   // 新增节点数
-	Updated   int `json:"updated"`    // 更新节点数
+	Total       int `json:"total"`       // 订阅中解析出的节点数
+	Inserted    int `json:"inserted"`    // 新增节点数
+	Updated     int `json:"updated"`     // 更新节点数
 	Deactivated int `json:"deactivated"` // 原订阅中消失被停用的节点数
-	Kept      int `json:"kept"`       // 保留未变的节点数
+	Kept        int `json:"kept"`        // 保留未变的节点数
 }
 
 // SyncCustomNodesFromSubscription 同步订阅到专线节点：

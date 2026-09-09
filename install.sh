@@ -468,6 +468,13 @@ EOF
         add_header Cache-Control "public, immutable";
     }
 
+    # SPA 外壳不做缓存：保证发布后用户拿到最新 index.html（引用新 hash 的 JS）
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+    }
+
     location / {
         try_files \$uri \$uri/ /index.html;
     }

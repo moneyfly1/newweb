@@ -354,7 +354,7 @@ func OpenMysteryBox(c *gin.Context) {
 		deductDesc := fmt.Sprintf("开启盲盒「%s」", pool.Name)
 		if err := tx.Create(&models.BalanceLog{
 			UserID: userID, ChangeType: "mystery_box", Amount: -pool.Price,
-			BalanceBefore: balanceBefore, BalanceAfter: utils.Round2(balanceBefore-pool.Price), Description: &deductDesc,
+			BalanceBefore: balanceBefore, BalanceAfter: utils.Round2(balanceBefore - pool.Price), Description: &deductDesc,
 		}).Error; err != nil {
 			return err
 		}

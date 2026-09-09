@@ -1,12 +1,12 @@
 package services
 
 import (
+	"cboard/v2/internal/models"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"os"
 	"strconv"
 	"strings"
-	"cboard/v2/internal/models"
-	"gopkg.in/yaml.v3"
 )
 
 func GenerateClashYAML(nodes []models.Node) string {
@@ -129,7 +129,6 @@ func GenerateStashYAMLWithDomain(nodes []models.Node, siteDomain string, subscri
 func generateFromTemplate(proxies []map[string]interface{}, allNames, realNames []string, subscriptionName string) string {
 	return generateFromTemplateFile("uploads/config/temp.yaml", proxies, allNames, realNames, subscriptionName)
 }
-
 
 func generateFromTemplateFile(templatePath string, proxies []map[string]interface{}, allNames, realNames []string, subscriptionName string) string {
 	data, err := os.ReadFile(templatePath)

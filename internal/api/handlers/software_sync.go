@@ -49,9 +49,9 @@ func SoftwareSyncConfigGet(c *gin.Context) {
 // SoftwareSyncConfigSave 保存同步配置
 func SoftwareSyncConfigSave(c *gin.Context) {
 	var req struct {
-		Enabled        bool   `json:"enabled"`
-		IntervalHours  int    `json:"interval_hours"`
-		ProxyPrefixes  string `json:"proxy_prefixes"`
+		Enabled       bool   `json:"enabled"`
+		IntervalHours int    `json:"interval_hours"`
+		ProxyPrefixes string `json:"proxy_prefixes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -84,17 +84,17 @@ func saveProxyPrefixes(raw string) error {
 // SoftwareVersionCheck 版本对照表：GitHub 最新版 vs 已检出版本
 func SoftwareVersionCheck(c *gin.Context) {
 	type row struct {
-		Key          string `json:"key"`
-		Name         string `json:"name"`
-		Label        string `json:"label"`
-		OS           string `json:"os"`
-		Arch         string `json:"arch"`
-		GitHubVer    string `json:"github_version"`
-		CheckedVer   string `json:"checked_version"`
-		FileName     string `json:"file_name"`
-		Custom       bool   `json:"custom"`
-		UpToDate     bool   `json:"up_to_date"`
-		Configured   bool   `json:"configured"`
+		Key        string `json:"key"`
+		Name       string `json:"name"`
+		Label      string `json:"label"`
+		OS         string `json:"os"`
+		Arch       string `json:"arch"`
+		GitHubVer  string `json:"github_version"`
+		CheckedVer string `json:"checked_version"`
+		FileName   string `json:"file_name"`
+		Custom     bool   `json:"custom"`
+		UpToDate   bool   `json:"up_to_date"`
+		Configured bool   `json:"configured"`
 	}
 	fileIDMap, err := software_sync.LoadFileIDMap()
 	if err != nil {

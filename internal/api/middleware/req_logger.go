@@ -2,87 +2,83 @@ package middleware
 
 import (
 	"bytes"
-	"cboard/v2/internal/utils"
 	"io"
 	"strings"
 	"time"
 
+	"cboard/v2/internal/utils"
+
 	"github.com/gin-gonic/gin"
 )
 
-// RequestLogger 记录所有请求的中间件
+// isPaymentNotifyPath 判断是否支付回调路径（含 epay/alipay/stripe/codepay 等全部类型）。
+func isPaymentNotifyPath(path string) bool {
+	return strings.HasPrefix(path, "/api/v1/payment/notify/")
+}
+
+// RequestLogger 记录支付回调与订单请求的日志。
 func RequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 开始时间
 		startTime := time.Now()
-
-		// 记录请求信息
 		path := c.Request.URL.Path
-		method := c.Request.Method
-		clientIP := c.ClientIP()
 
-		// 对于支付回调，记录详细信息
-		if path == "/api/v1/payment/notify/alipay" || path == "/api/v1/payment/notify/epay" {
-			utils.LogCallback("========================================")
-			utils.LogCallback("收到支付回调请求")
-			utils.LogCallback("  Method: %s", method)
-			utils.LogCallback("  Path: %s", path)
-			utils.LogCallback("  Client IP: %s", clientIP)
-			utils.LogCallback("  User-Agent: %s", c.Request.Header.Get("User-Agent"))
-			utils.LogCallback("  Content-Type: %s", c.Request.Header.Get("Content-Type"))
-
-			// 读取请求体（限制最大 10KB）
-			if c.Request.Body != nil {
-				bodyBytes, _ := io.ReadAll(io.LimitReader(c.Request.Body, 10240))
-				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-				if len(bodyBytes) > 0 {
-					maskedBody := maskSensitiveParams(string(bodyBytes))
-					if len(bodyBytes) >= 10240 {
-						utils.LogCallback("  Body: %s... (truncated)", maskedBody[:200])
-					} else {
-						utils.LogCallback("  Body: %s", maskedBody)
-					}
-				}
-			}
-
-			// 记录查询参数（脱敏签名，防日志泄露验签数据）
-			if len(c.Request.URL.RawQuery) > 0 {
-				utils.LogCallback("  Query: %s", maskSensitiveParams(c.Request.URL.RawQuery))
-			}
-			utils.LogCallback("========================================")
+		if isPaymentNotifyPath(path) {
+			logCallbackRequest(c)
 		}
 
-		// 处理请求
 		c.Next()
 
-		// 结束时间
-		endTime := time.Now()
-		latency := endTime.Sub(startTime)
-
-		// 记录响应信息
 		statusCode := c.Writer.Status()
+		latency := time.Since(startTime)
 
-		// 对于支付相关的请求，记录详细日志
-		if path == "/api/v1/payment/notify/alipay" || path == "/api/v1/payment/notify/epay" {
+		if isPaymentNotifyPath(path) {
 			utils.LogCallback("回调处理完成")
 			utils.LogCallback("  Status: %d", statusCode)
 			utils.LogCallback("  Latency: %v", latency)
 			utils.LogCallback("========================================")
 		} else if path == "/api/v1/payment/create" || path == "/api/v1/orders" {
-			utils.LogPayment("[%s] %s - Status: %d, Latency: %v", method, path, statusCode, latency)
+			utils.LogPayment("[%s] %s - Status: %d, Latency: %v", c.Request.Method, path, statusCode, latency)
 		}
 	}
 }
 
-// maskSensitiveParams 脱敏日志中的签名等敏感参数（URL query 或 form body 中的 sign/sign_type）
-func maskSensitiveParams(s string) string {
-	if s == "" {
+// logCallbackRequest 输出支付回调请求头与请求体（体积与敏感参数均已处理）。
+// 注意：请求体会被完整读回并放回，不能截断——Stripe 等渠道校验签名需要原始 body。
+func logCallbackRequest(c *gin.Context) {
+	utils.LogCallback("========================================")
+	utils.LogCallback("收到支付回调请求")
+	utils.LogCallback("  Method: %s", c.Request.Method)
+	utils.LogCallback("  Path: %s", c.Request.URL.Path)
+	utils.LogCallback("  Client IP: %s", c.ClientIP())
+	utils.LogCallback("  User-Agent: %s", c.Request.Header.Get("User-Agent"))
+	utils.LogCallback("  Content-Type: %s", c.Request.Header.Get("Content-Type"))
+
+	// 完整读取 body 并放回，供后续 handler 继续消费
+	const bodyPreviewLen = 1024
+	if c.Request.Body != nil {
+		bodyBytes, _ := io.ReadAll(c.Request.Body)
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		if len(bodyBytes) > 0 {
+			masked := utils.MaskSensitiveParams(string(bodyBytes))
+			if len(masked) > bodyPreviewLen {
+				utils.LogCallback("  Body(%d): %s... (truncated)", len(bodyBytes), truncate(masked, bodyPreviewLen))
+			} else {
+				utils.LogCallback("  Body(%d): %s", len(bodyBytes), masked)
+			}
+		}
+	}
+
+	// 记录查询参数（脱敏签名，防日志泄露验签数据）
+	if raw := c.Request.URL.RawQuery; raw != "" {
+		utils.LogCallback("  Query: %s", utils.MaskSensitiveParams(raw))
+	}
+	utils.LogCallback("========================================")
+}
+
+// truncate 安全截断字符串，避免越界。
+func truncate(s string, n int) string {
+	if len(s) <= n {
 		return s
 	}
-	replacer := strings.NewReplacer(
-		"sign=", "sign=***",
-		"sign_type=", "sign_type=***",
-		"&sign", "&sign***",
-	)
-	return replacer.Replace(s)
+	return s[:n]
 }

@@ -3,12 +3,38 @@ package utils
 import (
 	"encoding/json"
 	"log"
+	"regexp"
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+// sensitiveParamRe 匹配表单/query 中的 sign、sign_type 参数及其取值。
+var sensitiveParamRe = regexp.MustCompile(`(?i)(^|[?&])(sign|sign_type)=[^&\s]*`)
+
+// MaskSensitiveParams 将 sign/sign_type 参数的取值替换为 ***，
+// 防止验签数据写入日志。URL query 与 form body 通用。
+func MaskSensitiveParams(s string) string {
+	if s == "" {
+		return s
+	}
+	return sensitiveParamRe.ReplaceAllString(s, "${1}${2}=***")
+}
+
+// createLogAsync 异步写一条日志，失败时仅记录日志，不阻塞业务。
+func createLogAsync(db *gorm.DB, entry interface{}, logName string) {
+	if db == nil {
+		return
+	}
+	go func() {
+		if err := db.Create(entry).Error; err != nil {
+			log.Printf("[logs] failed to create %s: %v", logName, err)
+		}
+	}()
+}
 
 // CreateRegistrationLog records a user registration event.
 func CreateRegistrationLog(c *gin.Context, userID uint, username, email, inviteCode string, inviterID *uint) {
@@ -39,11 +65,7 @@ func CreateRegistrationLog(c *gin.Context, userID uint, username, email, inviteC
 		entry.InviterID = &id
 	}
 
-	go func() {
-		if err := db.Create(&entry).Error; err != nil {
-			log.Printf("[logs] failed to create registration log: %v", err)
-		}
-	}()
+	createLogAsync(db, &entry, "registration log")
 }
 
 // CreateSubscriptionLog records a subscription change event.
@@ -77,11 +99,7 @@ func CreateSubscriptionLog(subID, userID uint, actionType, actionBy string, acti
 		}
 	}
 
-	go func() {
-		if err := db.Create(&entry).Error; err != nil {
-			log.Printf("[logs] failed to create subscription log: %v", err)
-		}
-	}()
+	createLogAsync(db, &entry, "subscription log")
 }
 
 // CreateBalanceLogEntry records a balance change event.
@@ -109,11 +127,7 @@ func CreateBalanceLogEntry(userID uint, changeType string, amount, balanceBefore
 		entry.Location = &location
 	}
 
-	go func() {
-		if err := db.Create(&entry).Error; err != nil {
-			log.Printf("[logs] failed to create balance log: %v", err)
-		}
-	}()
+	createLogAsync(db, &entry, "balance log")
 }
 
 // CreateBalanceLogSimple records a balance change without gin context (for background tasks).
@@ -121,7 +135,7 @@ func CreateBalanceLogSimple(userID uint, changeType string, amount, balanceBefor
 	CreateBalanceLogEntry(userID, changeType, amount, balanceBefore, balanceAfter, relatedOrderID, description, nil)
 }
 
-// SysLog writes a system log entry to both stdout and the database.
+// SysLog writes a system log entry to the database.
 func SysLog(level, module, message string, detail ...string) {
 	db := database.GetDB()
 	if db == nil {
@@ -135,11 +149,7 @@ func SysLog(level, module, message string, detail ...string) {
 	if len(detail) > 0 && detail[0] != "" {
 		entry.Detail = &detail[0]
 	}
-	go func() {
-		if err := db.Create(&entry).Error; err != nil {
-			log.Printf("[logs] failed to create system log: %v", err)
-		}
-	}()
+	createLogAsync(db, &entry, "system log")
 }
 
 // SysInfo logs an info-level system event.

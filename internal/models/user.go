@@ -34,18 +34,18 @@ type User struct {
 	LevelExpiresAt              *time.Time `json:"level_expires_at"`
 	SpecialNodeSubscriptionType string     `gorm:"type:varchar(20);default:'both'" json:"special_node_subscription_type"`
 	// TokenVersion 密码变更/重置/管理员重置时自增，用于吊销该用户全部已签发 token
-	TokenVersion uint `gorm:"default:0" json:"-"`
-	SpecialNodeExpiresAt        *time.Time `json:"special_node_expires_at"`
-	TelegramID                  *int64     `gorm:"uniqueIndex" json:"telegram_id"`
-	TelegramUsername            *string    `gorm:"type:varchar(100)" json:"telegram_username"`
-	Notes                       *string    `gorm:"type:text" json:"notes"`
-	VerificationToken           *string    `gorm:"type:varchar(255)" json:"-"`
-	VerificationExpires         *time.Time `json:"-"`
-	ResetToken                  *string    `gorm:"type:varchar(255)" json:"-"`
-	ResetExpires                *time.Time `json:"-"`
-	CreatedAt                   time.Time  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt                   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
-	LastLogin                   *time.Time `json:"last_login"`
+	TokenVersion         uint       `gorm:"default:0" json:"-"`
+	SpecialNodeExpiresAt *time.Time `json:"special_node_expires_at"`
+	TelegramID           *int64     `gorm:"uniqueIndex" json:"telegram_id"`
+	TelegramUsername     *string    `gorm:"type:varchar(100)" json:"telegram_username"`
+	Notes                *string    `gorm:"type:text" json:"notes"`
+	VerificationToken    *string    `gorm:"type:varchar(255)" json:"-"`
+	VerificationExpires  *time.Time `json:"-"`
+	ResetToken           *string    `gorm:"type:varchar(255)" json:"-"`
+	ResetExpires         *time.Time `json:"-"`
+	CreatedAt            time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt            time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
+	LastLogin            *time.Time `json:"last_login"`
 }
 
 func (User) TableName() string {

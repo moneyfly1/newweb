@@ -157,7 +157,7 @@ func CreateOrder(c *gin.Context) {
 			validatedCoupon = result.Coupon
 		}
 	}
-	finalAmount := utils.Round2(amount-discountAmount)
+	finalAmount := utils.Round2(amount - discountAmount)
 	orderNo, err := services.GenerateBusinessOrderNo(db, services.OrderNoPrefixOrder)
 	if err != nil {
 		utils.InternalError(c, "生成订单号失败")

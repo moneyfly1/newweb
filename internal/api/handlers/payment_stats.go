@@ -49,7 +49,7 @@ func AdminPaymentStats(c *gin.Context) {
 	var methodStats []PaymentMethodStat
 	db.Model(&models.Order{}).
 		Select("payment_method, COUNT(*) as order_count, SUM(COALESCE(final_amount, amount)) as total_amount, "+
-			"SUM(CASE WHEN status IN ('" + models.OrderStatusPaid + "', '" + models.OrderStatusCompleted + "') THEN 1 ELSE 0 END) as success_count").
+			"SUM(CASE WHEN status IN ('"+models.OrderStatusPaid+"', '"+models.OrderStatusCompleted+"') THEN 1 ELSE 0 END) as success_count").
 		Where("DATE(created_at) BETWEEN ? AND ?", startDate, endDate).
 		Group("payment_method").
 		Scan(&methodStats)
@@ -105,10 +105,10 @@ func AdminPaymentStats(c *gin.Context) {
 	var overall OverallStat
 	db.Model(&models.Order{}).
 		Select("COUNT(*) as total_orders, "+
-			"SUM(CASE WHEN status IN ('" + models.OrderStatusPaid + "', '" + models.OrderStatusCompleted + "') THEN 1 ELSE 0 END) as success_orders, "+
-			"SUM(CASE WHEN status = '" + models.OrderStatusFailed + "' THEN 1 ELSE 0 END) as failed_orders, "+
-			"SUM(CASE WHEN status = '" + models.OrderStatusPending + "' THEN 1 ELSE 0 END) as pending_orders, "+
-			"SUM(CASE WHEN status IN ('" + models.OrderStatusPaid + "', '" + models.OrderStatusCompleted + "') THEN COALESCE(final_amount, amount) ELSE 0 END) as total_amount").
+			"SUM(CASE WHEN status IN ('"+models.OrderStatusPaid+"', '"+models.OrderStatusCompleted+"') THEN 1 ELSE 0 END) as success_orders, "+
+			"SUM(CASE WHEN status = '"+models.OrderStatusFailed+"' THEN 1 ELSE 0 END) as failed_orders, "+
+			"SUM(CASE WHEN status = '"+models.OrderStatusPending+"' THEN 1 ELSE 0 END) as pending_orders, "+
+			"SUM(CASE WHEN status IN ('"+models.OrderStatusPaid+"', '"+models.OrderStatusCompleted+"') THEN COALESCE(final_amount, amount) ELSE 0 END) as total_amount").
 		Where("DATE(created_at) BETWEEN ? AND ?", startDate, endDate).
 		Scan(&overall)
 
@@ -222,7 +222,7 @@ func AdminPaymentAnalysis(c *gin.Context) {
 	var hourlyStats []HourlyStat
 	db.Model(&models.Order{}).
 		Select(hourExpr(db, "created_at")+" as hour, COUNT(*) as order_count, "+
-			"SUM(CASE WHEN status IN ('" + models.OrderStatusPaid + "', '" + models.OrderStatusCompleted + "') THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate").
+			"SUM(CASE WHEN status IN ('"+models.OrderStatusPaid+"', '"+models.OrderStatusCompleted+"') THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate").
 		Where("payment_method = ? AND DATE(created_at) BETWEEN ? AND ?", paymentMethod, startDate, endDate).
 		Group(hourExpr(db, "created_at")).
 		Order("hour ASC").

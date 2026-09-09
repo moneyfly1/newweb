@@ -21,16 +21,16 @@ func GetCurrentUser(c *gin.Context) {
 		"nickname": user.Nickname, "avatar": user.Avatar, "is_admin": user.IsAdmin,
 		"balance": user.Balance, "theme": user.Theme, "language": user.Language,
 		"timezone": user.Timezone, "is_active": user.IsActive,
-		"email_notifications": user.EmailNotifications,
+		"email_notifications":          user.EmailNotifications,
 		"abnormal_login_alert_enabled": user.AbnormalLoginAlertEnabled,
-		"push_notifications": user.PushNotifications,
-		"notify_order": user.NotifyOrder, "notify_expiry": user.NotifyExpiry,
+		"push_notifications":           user.PushNotifications,
+		"notify_order":                 user.NotifyOrder, "notify_expiry": user.NotifyExpiry,
 		"notify_subscription": user.NotifySubscription,
-		"data_sharing": user.DataSharing, "analytics": user.Analytics,
+		"data_sharing":        user.DataSharing, "analytics": user.Analytics,
 		"telegram_id": user.TelegramID, "telegram_username": user.TelegramUsername,
-		"user_level_id": user.UserLevelID,
+		"user_level_id":                  user.UserLevelID,
 		"special_node_subscription_type": user.SpecialNodeSubscriptionType,
-		"created_at": user.CreatedAt,
+		"created_at":                     user.CreatedAt,
 	})
 }
 

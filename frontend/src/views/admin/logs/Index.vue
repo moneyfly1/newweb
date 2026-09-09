@@ -658,6 +658,17 @@ const moduleOptions = [
   { label: '邮件', value: 'email' },
   { label: '通知', value: 'notify' },
   { label: '支付', value: 'payment' },
+  { label: '订阅', value: 'subscription' },
+  { label: '节点', value: 'node' },
+  { label: '订单', value: 'order' },
+  { label: '余额', value: 'balance' },
+  { label: '认证', value: 'auth' },
+  { label: '安全', value: 'security' },
+  { label: '安全告警', value: 'security_alert' },
+  { label: '备份', value: 'backup' },
+  { label: '恢复', value: 'restore' },
+  { label: '审计', value: 'audit' },
+  { label: '管理操作', value: 'admin' },
   { label: '系统', value: 'system' },
 ]
 const systemPagination = reactive({

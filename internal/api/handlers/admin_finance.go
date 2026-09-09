@@ -1,15 +1,15 @@
 package handlers
 
 import (
-	"encoding/json"
-	"fmt"
-	"sort"
-	"strings"
-	"time"
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/utils"
+	"encoding/json"
+	"fmt"
 	"github.com/gin-gonic/gin"
+	"sort"
+	"strings"
+	"time"
 )
 
 func AdminRevenueStats(c *gin.Context) {
@@ -486,4 +486,3 @@ func AdminRegionStats(c *gin.Context) {
 }
 
 // ==================== Batch Operations ====================
-

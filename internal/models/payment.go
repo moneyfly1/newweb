@@ -111,4 +111,3 @@ func RecordNonce(db *gorm.DB, transactionID string, callbackType string, externa
 	}
 	return db.Create(&nonce).Error
 }
-

@@ -7,42 +7,37 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// CreateAuditLog records an admin action in the audit_logs table.
+// CreateAuditLog 异步记录一条管理员操作审计日志。
 func CreateAuditLog(c *gin.Context, actionType, resourceType string, resourceID uint, description string) {
 	db := database.GetDB()
-	userID := c.GetUint("user_id")
 	ip := GetRealClientIP(c)
 	ua := c.GetHeader("User-Agent")
 	location := GetIPLocation(ip)
-	method := c.Request.Method
-	path := c.Request.URL.Path
 
-	log := models.AuditLog{
+	entry := models.AuditLog{
 		ActionType: actionType,
 	}
-	if userID > 0 {
+	if userID := c.GetUint("user_id"); userID > 0 {
 		uid := int64(userID)
-		log.UserID = &uid
+		entry.UserID = &uid
 	}
 	if resourceType != "" {
-		log.ResourceType = &resourceType
+		entry.ResourceType = &resourceType
 	}
 	if resourceID > 0 {
 		rid := int64(resourceID)
-		log.ResourceID = &rid
+		entry.ResourceID = &rid
 	}
 	if description != "" {
-		log.ActionDescription = &description
+		entry.ActionDescription = &description
 	}
-	log.IPAddress = &ip
-	log.UserAgent = &ua
-	log.Location = &location
-	log.RequestMethod = &method
-	log.RequestPath = &path
+	if c.Request != nil {
+		entry.IPAddress = &ip
+		entry.UserAgent = &ua
+		entry.Location = &location
+		entry.RequestMethod = &c.Request.Method
+		entry.RequestPath = &c.Request.URL.Path
+	}
 
-	go func(entry models.AuditLog) {
-		if err := db.Create(&entry).Error; err != nil {
-			SysError("audit", "创建审计日志失败: "+err.Error())
-		}
-	}(log)
+	createLogAsync(db, &entry, "audit log")
 }

@@ -78,7 +78,7 @@
       :mask-closable="false"
       show-footer
       @confirm="handleCreate"
-      @cancel="showCreateModal = false"
+      @cancel="handleCancelCreate"
       :loading="submitting"
       confirm-text="提交工单"
       cancel-text="取消"
@@ -114,6 +114,9 @@
             show-count
           />
         </n-form-item>
+        <n-form-item label="附件（选填，最多 5 个）" path="">
+          <TicketAttachmentUploader ref="uploaderRef" @change="(ids) => (attachmentIds = ids)" />
+        </n-form-item>
       </n-form>
     </common-drawer>
   </div>
@@ -128,6 +131,7 @@ import { AddOutline } from '@vicons/ionicons5'
 import { listTickets, createTicket } from '@/api/ticket'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import TicketAttachmentUploader from '@/components/TicketAttachmentUploader.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 
 const router = useRouter()
@@ -139,6 +143,8 @@ const submitting = ref(false)
 const showCreateModal = ref(false)
 const tickets = ref([])
 const formRef = ref(null)
+const uploaderRef = ref(null)
+const attachmentIds = ref([])
 
 const formData = reactive({
   title: '',
@@ -292,10 +298,12 @@ const handleCreate = async () => {
   try {
     await formRef.value?.validate()
     submitting.value = true
-    await createTicket(formData)
+    await createTicket({ ...formData, attachment_ids: attachmentIds.value })
     message.success('工单创建成功')
     showCreateModal.value = false
     Object.assign(formData, { title: '', type: '', content: '' })
+    attachmentIds.value = []
+    uploaderRef.value?.reset(false)
     loadTickets()
   } catch (error) {
     if (error.message) {
@@ -304,6 +312,13 @@ const handleCreate = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+// 取消新建：清理已上传但未绑定的 pending 附件
+const handleCancelCreate = () => {
+  showCreateModal.value = false
+  attachmentIds.value = []
+  uploaderRef.value?.reset(true)
 }
 
 // 下拉刷新（App 原生感）

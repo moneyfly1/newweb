@@ -1,8 +1,8 @@
 <template>
   <div class="ticket-uploader">
-    <div class="uploader-bar" :class="{ mobile: isMobile }">
-      <!-- 手机端：相册/文件 两个大按钮（label 原生触发，兼容 iOS/安卓 WebView） -->
-      <template v-if="isMobile">
+    <div class="uploader-bar" :class="{ mobile: compactView }">
+      <!-- 触屏设备（手机/平板/横屏）：相册/文件 两个大按钮（label 原生触发，兼容 iOS/安卓 WebView） -->
+      <template v-if="compactView">
         <label class="picker-btn" :class="{ disabled: uploading || disabled }">
           <input
             ref="photoInput"
@@ -50,7 +50,7 @@
         <span class="upload-hint">支持图片、视频、PDF、文档、压缩包等，单个不超过 20MB</span>
       </template>
     </div>
-    <div v-if="isMobile && items.length === 0 && !uploading" class="upload-mobile-hint">支持从相册或文件选择，单个不超过 20MB</div>
+    <div v-if="compactView && items.length === 0 && !uploading" class="upload-mobile-hint">支持从相册或文件选择，单个不超过 20MB</div>
 
     <n-spin :show="uploading">
       <div v-if="items.length > 0" class="upload-list">
@@ -88,7 +88,18 @@ import { useAppStore } from '@/stores/app'
 
 const message = useMessage()
 const appStore = useAppStore()
-const isMobile = computed(() => appStore.isMobile)
+
+// 触屏/移动判定：宽度 <768（appStore.isMobile），或触屏设备宽度 <1100
+// （手机横屏 / 平板竖屏宽度 768-1024 之间时 appStore.isMobile 为 false，
+// 但这类设备同样需要「相册」入口，iOS 对含扩展名的 accept 只给"文件"浏览）
+function isTouchDevice(): boolean {
+  if (typeof window === 'undefined') return false
+  return 'ontouchstart' in window || navigator.maxTouchPoints > 0
+}
+const compactView = computed(() => {
+  if (appStore.isMobile) return true
+  return isTouchDevice() && window.innerWidth < 1100
+})
 
 // 允许的扩展名（与后端白名单一致；heic/heif 兼容 iPhone 相册）
 const ALLOWED_EXTS = [

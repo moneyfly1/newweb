@@ -1,6 +1,27 @@
 <template>
   <div class="ticket-uploader">
+    <!-- 手机端：相册（图片/视频）+ 文件 双入口 -->
     <input
+      v-if="isMobile"
+      ref="photoInput"
+      type="file"
+      multiple
+      accept="image/*,video/*,.heic,.heif"
+      style="display: none"
+      @change="onFilesChosen"
+    />
+    <input
+      v-if="isMobile"
+      ref="fileInput"
+      type="file"
+      multiple
+      :accept="acceptAttr"
+      style="display: none"
+      @change="onFilesChosen"
+    />
+    <!-- 桌面端：单一文件选择入口 -->
+    <input
+      v-else
       ref="fileInput"
       type="file"
       multiple
@@ -9,14 +30,31 @@
       @change="onFilesChosen"
     />
     <div class="uploader-bar">
-      <n-button size="small" :loading="uploading" :disabled="uploading" @click="fileInput?.click()">
+      <!-- 手机端相册/文件两个按钮 -->
+      <template v-if="isMobile">
+        <n-button size="small" :loading="uploading" :disabled="uploading || disabled" @click="photoInput?.click()">
+          <template #icon>
+            <n-icon><ImagesOutline /></n-icon>
+          </template>
+          相册
+        </n-button>
+        <n-button size="small" :loading="uploading" :disabled="uploading || disabled" @click="fileInput?.click()">
+          <template #icon>
+            <n-icon><FolderOpenOutline /></n-icon>
+          </template>
+          文件
+        </n-button>
+      </template>
+      <!-- 桌面端单按钮 -->
+      <n-button v-else size="small" :loading="uploading" :disabled="uploading || disabled" @click="fileInput?.click()">
         <template #icon>
           <n-icon><AttachOutline /></n-icon>
         </template>
         添加图片/视频/附件
       </n-button>
-      <span class="upload-hint">支持图片、视频、PDF、文档、压缩包等，单个不超过 20MB</span>
+      <span v-if="!isMobile" class="upload-hint">支持图片、视频、PDF、文档、压缩包等，单个不超过 20MB</span>
     </div>
+    <div v-if="isMobile && items.length === 0" class="upload-mobile-hint">支持从相册或文件选择，单个不超过 20MB</div>
 
     <n-spin :show="uploading">
       <div v-if="items.length > 0" class="upload-list">
@@ -48,14 +86,17 @@
 <script setup lang="ts">
 import { ref, computed, onBeforeUnmount } from 'vue'
 import { NButton, NIcon, NSpin, useMessage } from 'naive-ui'
-import { AttachOutline, TrashOutline, DocumentOutline, ImageOutline, VideocamOutline } from '@vicons/ionicons5'
+import { AttachOutline, TrashOutline, DocumentOutline, ImageOutline, VideocamOutline, ImagesOutline, FolderOpenOutline } from '@vicons/ionicons5'
 import { uploadTicketAttachment, deleteTicketAttachment } from '@/api/ticket'
+import { useAppStore } from '@/stores/app'
 
 const message = useMessage()
+const appStore = useAppStore()
+const isMobile = computed(() => appStore.isMobile)
 
-// 允许的扩展名（与后端白名单一致）
+// 允许的扩展名（与后端白名单一致；heic/heif 兼容 iPhone 相册）
 const ALLOWED_EXTS = [
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg',
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.heic', '.heif',
   '.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v',
   '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
   '.txt', '.log', '.zip', '.rar', '.7z', '.tar', '.gz',
@@ -73,6 +114,7 @@ const emit = defineEmits<{
 }>()
 
 const fileInput = ref<HTMLInputElement | null>(null)
+const photoInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 const errorMsg = ref('')
 
@@ -87,7 +129,7 @@ const items = ref<UploadedItem[]>([])
 
 const acceptAttr = computed(() => ALLOWED_EXTS.join(',') + ',image/*,video/*')
 
-const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'])
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.heic', '.heif'])
 const VIDEO_EXTS = new Set(['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v'])
 
 function extOf(name: string): string {
@@ -271,5 +313,10 @@ onBeforeUnmount(() => {})
   margin-top: 6px;
   font-size: 12px;
   color: #d03050;
+}
+.upload-mobile-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-color-3, #999);
 }
 </style>

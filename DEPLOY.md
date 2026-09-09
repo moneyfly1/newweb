@@ -2,26 +2,32 @@
 
 ## 环境要求
 
-- Go 1.21+
-- Node.js 18+
-- SQLite 3 或 MySQL 5.7+
+- Go 1.24+（`go.mod` 要求 go 1.24）
+- Node.js 18+（安装脚本使用 20.x）
+- SQLite 3 或 MySQL 5.7+ 或 PostgreSQL
 - Redis（可选，用于缓存和限流）
+- 快速部署推荐直接使用仓库内 `install.sh`（纯净 Linux）或 `install_bt.sh`（宝塔）一键安装；以下为手动部署步骤
 
 ## 快速部署
 
 ### 1. 后端部署
 
 ```bash
-# 编译
+# 编译（产物为 ./cboard）
 go build -o cboard ./cmd/server
 
 # 配置环境变量
 cp .env.example .env
-# 编辑 .env 文件
+# 编辑 .env 文件：手动模式默认端口 8000；若按下方 Nginx 模板（proxy 9000）部署，
+# 请把 .env 中 PORT 设为 9000（与安装脚本模式保持一致）
+# PORT=9000
 
 # 运行
 ./cboard
 ```
+
+> 生产建议注册为 systemd 服务（单元名 `cboard-v2`，安装脚本自动完成）。
+> 手动注册示例：`/etc/systemd/system/cboard-v2.service` 内 `ExecStart=/path/to/cboard`，然后 `systemctl enable --now cboard-v2`。
 
 ### 2. 前端部署
 

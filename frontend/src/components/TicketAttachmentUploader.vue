@@ -1,60 +1,56 @@
 <template>
   <div class="ticket-uploader">
-    <!-- 手机端：相册（图片/视频）+ 文件 双入口 -->
-    <input
-      v-if="isMobile"
-      ref="photoInput"
-      type="file"
-      multiple
-      accept="image/*,video/*,.heic,.heif"
-      style="display: none"
-      @change="onFilesChosen"
-    />
-    <input
-      v-if="isMobile"
-      ref="fileInput"
-      type="file"
-      multiple
-      :accept="acceptAttr"
-      style="display: none"
-      @change="onFilesChosen"
-    />
-    <!-- 桌面端：单一文件选择入口 -->
-    <input
-      v-else
-      ref="fileInput"
-      type="file"
-      multiple
-      :accept="acceptAttr"
-      style="display: none"
-      @change="onFilesChosen"
-    />
-    <div class="uploader-bar">
-      <!-- 手机端相册/文件两个按钮 -->
+    <div class="uploader-bar" :class="{ mobile: isMobile }">
+      <!-- 手机端：相册/文件 两个大按钮（label 原生触发，兼容 iOS/安卓 WebView） -->
       <template v-if="isMobile">
-        <n-button size="small" :loading="uploading" :disabled="uploading || disabled" @click="photoInput?.click()">
-          <template #icon>
-            <n-icon><ImagesOutline /></n-icon>
-          </template>
-          相册
-        </n-button>
-        <n-button size="small" :loading="uploading" :disabled="uploading || disabled" @click="fileInput?.click()">
-          <template #icon>
-            <n-icon><FolderOpenOutline /></n-icon>
-          </template>
-          文件
-        </n-button>
+        <label class="picker-btn" :class="{ disabled: uploading || disabled }">
+          <input
+            ref="photoInput"
+            type="file"
+            multiple
+            accept="image/*,video/*"
+            class="visually-hidden-input"
+            @change="onFilesChosen"
+          />
+          <n-icon size="20"><ImagesOutline /></n-icon>
+          <span>相册</span>
+        </label>
+        <label class="picker-btn" :class="{ disabled: uploading || disabled }">
+          <input
+            ref="fileInput"
+            type="file"
+            multiple
+            :accept="acceptAttr"
+            class="visually-hidden-input"
+            @change="onFilesChosen"
+          />
+          <n-icon size="20"><FolderOpenOutline /></n-icon>
+          <span>文件</span>
+        </label>
+        <span v-if="uploading" class="upload-mobile-loading">
+          <n-spin size="small" /> 上传中...
+        </span>
       </template>
       <!-- 桌面端单按钮 -->
-      <n-button v-else size="small" :loading="uploading" :disabled="uploading || disabled" @click="fileInput?.click()">
-        <template #icon>
-          <n-icon><AttachOutline /></n-icon>
-        </template>
-        添加图片/视频/附件
-      </n-button>
-      <span v-if="!isMobile" class="upload-hint">支持图片、视频、PDF、文档、压缩包等，单个不超过 20MB</span>
+      <template v-else>
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          :accept="acceptAttr"
+          class="visually-hidden-input"
+          @change="onFilesChosen"
+        />
+        <n-button size="small" :loading="uploading" :disabled="uploading || disabled" @click="triggerDesktopPicker">
+          <template #icon>
+            <n-icon><AttachOutline /></n-icon>
+          </template>
+          添加图片/视频/附件
+        </n-button>
+        <span class="upload-hint">支持图片、视频、PDF、文档、压缩包等，单个不超过 20MB</span>
+      </template>
     </div>
-    <div v-if="isMobile && items.length === 0" class="upload-mobile-hint">支持从相册或文件选择，单个不超过 20MB</div>
+    <div v-if="isMobile && items.length === 0 && !uploading" class="upload-mobile-hint">支持从相册或文件选择，单个不超过 20MB</div>
 
     <n-spin :show="uploading">
       <div v-if="items.length > 0" class="upload-list">
@@ -117,6 +113,11 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const photoInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 const errorMsg = ref('')
+
+// 桌面端：通过 JS click 唤起文件选择器（桌面浏览器无兼容问题）
+function triggerDesktopPicker() {
+  fileInput.value?.click()
+}
 
 export interface UploadedItem {
   uid: number // 本地唯一 id
@@ -261,7 +262,61 @@ onBeforeUnmount(() => {})
   gap: 10px;
   flex-wrap: wrap;
 }
+/* 视觉隐藏但保留可交互性（不能 display:none，部分移动 WebView 会阻止唤起选择器） */
+.visually-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* 手机端相册/文件大按钮（label 原生触发 input，兼容 iOS Safari / 安卓 WebView / 微信） */
+.uploader-bar.mobile {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+.picker-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--divider-color, #e0e0e0);
+  background: var(--bg-color-secondary, #f6f7f9);
+  color: var(--text-color, #333);
+  font-size: 15px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: opacity 0.15s;
+}
+.picker-btn:active {
+  opacity: 0.75;
+}
+.picker-btn.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.upload-mobile-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-color-3, #999);
+}
 .upload-hint {
+  font-size: 12px;
+  color: var(--text-color-3, #999);
+}
+.upload-mobile-hint {
+  margin-top: 6px;
   font-size: 12px;
   color: var(--text-color-3, #999);
 }
@@ -313,10 +368,5 @@ onBeforeUnmount(() => {})
   margin-top: 6px;
   font-size: 12px;
   color: #d03050;
-}
-.upload-mobile-hint {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--text-color-3, #999);
 }
 </style>

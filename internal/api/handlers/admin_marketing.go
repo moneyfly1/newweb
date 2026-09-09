@@ -207,7 +207,7 @@ func AdminGetTicket(c *gin.Context) {
 	var replies []models.TicketReply
 	db.Where("ticket_id = ?", ticket.ID).Order("created_at ASC").Find(&replies)
 
-	utils.Success(c, gin.H{"ticket": ticket, "replies": replies})
+	utils.Success(c, gin.H{"ticket": ticket, "replies": replies, "attachments": collectTicketAttachments(ticket.ID)})
 }
 
 func AdminUpdateTicket(c *gin.Context) {
@@ -257,7 +257,8 @@ func AdminReplyTicket(c *gin.Context) {
 	}
 	adminID := c.GetUint("user_id")
 	var req struct {
-		Content string `json:"content" binding:"required"`
+		Content       string `json:"content" binding:"required"`
+		AttachmentIDs []uint `json:"attachment_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
@@ -280,6 +281,9 @@ func AdminReplyTicket(c *gin.Context) {
 		utils.InternalError(c, "回复工单失败")
 		return
 	}
+	// 绑定管理员回复时上传的附件（pending → ticket + reply）
+	replyID := reply.ID
+	BindTicketAttachments(c, adminID, ticket.ID, &replyID, req.AttachmentIDs)
 	if err := db.Model(&ticket).Update("status", string(models.TicketStatusProcessing)).Error; err != nil {
 		utils.InternalError(c, "更新工单状态失败")
 		return

@@ -39,10 +39,11 @@ func CreateTicket(c *gin.Context) {
 	userID := c.GetUint("user_id")
 
 	var req struct {
-		Title    string `json:"title" binding:"required,max=200"`
-		Content  string `json:"content" binding:"required,max=5000"`
-		Type     string `json:"type"`
-		Priority string `json:"priority"`
+		Title         string `json:"title" binding:"required,max=200"`
+		Content       string `json:"content" binding:"required,max=5000"`
+		Type          string `json:"type"`
+		Priority      string `json:"priority"`
+		AttachmentIDs []uint `json:"attachment_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -72,6 +73,9 @@ func CreateTicket(c *gin.Context) {
 		utils.InternalError(c, "创建工单失败")
 		return
 	}
+
+	// 绑定已上传的附件到该工单（pending → ticket）
+	BindTicketAttachments(c, userID, ticket.ID, nil, req.AttachmentIDs)
 
 	// 通知管理员
 	var user models.User
@@ -107,7 +111,7 @@ func GetTicket(c *gin.Context) {
 	var replies []models.TicketReply
 	db.Where("ticket_id = ?", ticket.ID).Order("created_at ASC").Find(&replies)
 
-	utils.Success(c, gin.H{"ticket": ticket, "replies": replies})
+	utils.Success(c, gin.H{"ticket": ticket, "replies": replies, "attachments": collectTicketAttachments(ticket.ID)})
 }
 
 // ReplyTicket adds a reply to an existing ticket.
@@ -120,7 +124,8 @@ func ReplyTicket(c *gin.Context) {
 	}
 
 	var req struct {
-		Content string `json:"content" binding:"required,max=5000"`
+		Content       string `json:"content" binding:"required,max=5000"`
+		AttachmentIDs []uint `json:"attachment_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误: "+err.Error())
@@ -149,6 +154,10 @@ func ReplyTicket(c *gin.Context) {
 		utils.InternalError(c, "回复失败")
 		return
 	}
+
+	// 绑定回复时上传的附件（pending → ticket + reply）
+	replyID := reply.ID
+	BindTicketAttachments(c, userID, ticket.ID, &replyID, req.AttachmentIDs)
 
 	// Update ticket status to processing if it was pending
 	if ticket.Status == string(models.TicketStatusPending) {

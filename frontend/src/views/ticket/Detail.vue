@@ -53,6 +53,22 @@
 
     <n-card :bordered="false" class="chat-card">
       <div class="chat-container" ref="chatContainer">
+        <!-- 工单主内容（用户提问） -->
+        <div class="message-wrapper user" v-if="ticket.content">
+          <div class="message-bubble">
+            <div class="message-header">
+              <span class="message-sender">我</span>
+              <span class="message-time">{{ ticket.created_at }}</span>
+            </div>
+            <div class="message-content">{{ ticket.content }}</div>
+            <TicketAttachmentList
+              v-if="ticketAttachments.length > 0"
+              :key="'main-' + ticket.id"
+              :attachments="ticketAttachments"
+            />
+          </div>
+        </div>
+        <!-- 历史回复 -->
         <div
           v-for="reply in replies"
           :key="reply.id"
@@ -66,9 +82,13 @@
               <span class="message-time">{{ reply.created_at }}</span>
             </div>
             <div class="message-content">{{ reply.content }}</div>
+            <TicketAttachmentList
+              v-if="attachmentsByReply[reply.id]?.length"
+              :attachments="attachmentsByReply[reply.id]"
+            />
           </div>
         </div>
-        <div v-if="replies.length === 0" class="empty-state">
+        <div v-if="replies.length === 0 && !ticket.content" class="empty-state">
           暂无回复消息
         </div>
       </div>
@@ -89,11 +109,12 @@
           show-count
           @keydown.ctrl.enter="handleReply"
         />
+        <TicketAttachmentUploader ref="uploaderRef" @change="(ids) => (attachmentIds = ids)" />
         <n-button
           type="primary"
           @click="handleReply"
           :loading="replying"
-          :disabled="!replyContent.trim()"
+          :disabled="!replyContent.trim() && attachmentIds.length === 0"
           style="margin-top: 12px; align-self: flex-end"
         >
           <template #icon>
@@ -107,11 +128,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NIcon, useMessage, useDialog } from 'naive-ui'
 import { ArrowBackOutline, SendOutline } from '@vicons/ionicons5'
 import { getTicket, replyTicket, closeTicket } from '@/api/ticket'
+import TicketAttachmentList from '@/components/TicketAttachmentList.vue'
+import TicketAttachmentUploader from '@/components/TicketAttachmentUploader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -120,10 +143,28 @@ const dialog = useDialog()
 
 const ticket = ref({})
 const replies = ref([])
+const attachments = ref([])
 const replyContent = ref('')
+const attachmentIds = ref([])
+const uploaderRef = ref(null)
 const replying = ref(false)
 const closing = ref(false)
 const chatContainer = ref(null)
+
+// 工单主内容附件（reply_id 为空）与各回复附件
+const ticketAttachments = computed(() =>
+  (attachments.value || []).filter(a => a.reply_id === null || a.reply_id === undefined || a.reply_id === 0)
+)
+const attachmentsByReply = computed(() => {
+  const map = {}
+  for (const a of attachments.value || []) {
+    if (a.reply_id) {
+      if (!map[a.reply_id]) map[a.reply_id] = []
+      map[a.reply_id].push(a)
+    }
+  }
+  return map
+})
 
 const getStatusType = (status) => {
   const map = {
@@ -180,6 +221,7 @@ const loadTicket = async () => {
     const res = await getTicket(route.params.id)
     ticket.value = res.data.ticket || {}
     replies.value = res.data.replies || []
+    attachments.value = res.data.attachments || []
     await nextTick()
     scrollToBottom()
   } catch (error) {
@@ -189,18 +231,21 @@ const loadTicket = async () => {
 
 const handleReply = async () => {
   if (replying.value) return // 防 Ctrl+Enter 快速双发
-  if (!replyContent.value.trim()) {
-    message.warning('请输入回复内容')
+  if (!replyContent.value.trim() && attachmentIds.value.length === 0) {
+    message.warning('请输入回复内容或添加附件')
     return
   }
-  
+
   replying.value = true
   try {
     await replyTicket(route.params.id, {
-      content: replyContent.value
+      content: replyContent.value,
+      attachment_ids: attachmentIds.value
     })
     message.success('回复成功')
     replyContent.value = ''
+    attachmentIds.value = []
+    uploaderRef.value?.reset(false)
     await loadTicket()
   } catch (error) {
     message.error(error.message || '回复失败')

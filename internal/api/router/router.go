@@ -190,6 +190,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			tickets.GET("/:id", handlers.GetTicket)
 			tickets.POST("/:id/reply", handlers.ReplyTicket)
 			tickets.PUT("/:id", handlers.CloseTicket)
+			// 附件上传/下载（鉴权：工单所有者或管理员）
+			tickets.POST("/attachments", handlers.UploadTicketAttachment)
+			tickets.DELETE("/attachments/:attId", handlers.DeleteTicketAttachment)
+			tickets.GET("/:id/attachments/:attId", handlers.DownloadTicketAttachment)
 		}
 
 		// 设备
@@ -377,6 +381,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminTickets.GET("/:id", handlers.AdminGetTicket)
 			adminTickets.PUT("/:id", handlers.AdminUpdateTicket)
 			adminTickets.POST("/:id/reply", handlers.AdminReplyTicket)
+			// 附件（管理员可上传/删除 pending 附件；下载复用用户端点，管理员同样有权）
+			adminTickets.POST("/attachments", handlers.UploadTicketAttachment)
+			adminTickets.DELETE("/attachments/:attId", handlers.DeleteTicketAttachment)
 		}
 
 		// 用户等级

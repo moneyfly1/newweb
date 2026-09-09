@@ -65,8 +65,11 @@ export const deleteCoupon = (id: number) => request.delete(`/admin/coupons/${id}
 export const listAdminTickets = (params?: any) => request.get('/admin/tickets', { params })
 export const getAdminTicket = (id: number) => request.get(`/admin/tickets/${id}`)
 export const updateTicket = (id: number, data: any) => request.put(`/admin/tickets/${id}`, data)
-export const replyAdminTicket = (id: number, data: { content: string }) =>
+export const replyAdminTicket = (id: number, data: { content: string; attachment_ids?: number[] }) =>
   request.post(`/admin/tickets/${id}/reply`, data)
+export const uploadTicketAttachment = (data: FormData) =>
+  request.post('/tickets/attachments', data, { headers: { 'Content-Type': 'multipart/form-data' } })
+export const deleteTicketAttachment = (attId: number) => request.delete(`/tickets/attachments/${attId}`)
 
 // Settings
 export const getSettings = () => request.get('/admin/settings')

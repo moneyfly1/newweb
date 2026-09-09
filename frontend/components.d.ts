@@ -81,5 +81,7 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SearchFilterBar: typeof import('./src/components/SearchFilterBar.vue')['default']
+    TicketAttachmentList: typeof import('./src/components/TicketAttachmentList.vue')['default']
+    TicketAttachmentUploader: typeof import('./src/components/TicketAttachmentUploader.vue')['default']
   }
 }

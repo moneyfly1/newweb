@@ -132,6 +132,20 @@
           <n-divider>对话记录</n-divider>
 
           <div class="chat-container">
+            <!-- 用户主贴内容 -->
+            <div v-if="currentTicket.content" class="chat-message user">
+              <div class="message-header">
+                <n-tag type="info" size="small">用户</n-tag>
+                <span class="message-time">{{ formatFullDateTime(currentTicket.created_at) }}</span>
+              </div>
+              <div class="message-content">{{ currentTicket.content }}</div>
+              <TicketAttachmentList
+                v-if="ticketAttachments.length > 0"
+                :key="'main-' + currentTicket.id"
+                :attachments="ticketAttachments"
+              />
+            </div>
+            <!-- 回复记录 -->
             <div
               v-for="reply in currentTicket.replies"
               :key="reply.id"
@@ -144,6 +158,10 @@
                 <span class="message-time">{{ formatFullDateTime(reply.created_at) }}</span>
               </div>
               <div class="message-content">{{ reply.content }}</div>
+              <TicketAttachmentList
+                v-if="attachmentsByReply[reply.id]?.length"
+                :attachments="attachmentsByReply[reply.id]"
+              />
             </div>
           </div>
 
@@ -156,6 +174,11 @@
               placeholder="输入回复内容..."
               :rows="4"
             />
+            <TicketAttachmentUploader
+              ref="replyUploaderRef"
+              :disabled="replyLoading"
+              @change="(ids) => (replyAttachmentIds = ids)"
+            />
             <n-space>
               <n-select
                 v-model:value="updateStatus"
@@ -163,7 +186,12 @@
                 style="width: 150px"
                 :options="statusOptions"
               />
-              <n-button type="primary" @click="handleReply" :loading="replyLoading">
+              <n-button
+                type="primary"
+                @click="handleReply"
+                :loading="replyLoading"
+                :disabled="!replyContent.trim() && replyAttachmentIds.length === 0"
+              >
                 发送回复
               </n-button>
             </n-space>
@@ -175,13 +203,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, h, onActivated, onMounted } from 'vue'
+import { ref, reactive, computed, h, onActivated, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, NSpin, NSelect, useMessage, useDialog } from 'naive-ui'
 import { listAdminTickets, getAdminTicket, updateTicket, replyAdminTicket } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import TicketAttachmentList from '@/components/TicketAttachmentList.vue'
+import TicketAttachmentUploader from '@/components/TicketAttachmentUploader.vue'
 
 const appStore = useAppStore()
 
@@ -196,8 +226,25 @@ const checkedRowKeys = ref<any[]>([])
 const currentTicket = ref<any>(null)
 const showDetailDrawer = ref(false)
 const replyContent = ref('')
+const replyAttachmentIds = ref<number[]>([])
+const replyUploaderRef = ref<InstanceType<typeof TicketAttachmentUploader> | null>(null)
 const updateStatus = ref('')
 const sortState = ref({ sort: 'id', order: 'desc' })
+
+// 工单主贴附件（reply_id 为空）与各回复附件
+const ticketAttachments = computed(() =>
+  (currentTicket.value?.attachments || []).filter((a: any) => !a.reply_id)
+)
+const attachmentsByReply = computed(() => {
+  const map: Record<number, any[]> = {}
+  for (const a of currentTicket.value?.attachments || []) {
+    if (a.reply_id) {
+      if (!map[a.reply_id]) map[a.reply_id] = []
+      map[a.reply_id].push(a)
+    }
+  }
+  return map
+})
 
 const filters = reactive({
   status: null,
@@ -393,7 +440,7 @@ const handleViewDetail = async (id: number) => {
   showDetailDrawer.value = true
   try {
     const res = await getAdminTicket(id)
-    currentTicket.value = { ...res.data.ticket, replies: res.data.replies || [] }
+    currentTicket.value = { ...res.data.ticket, replies: res.data.replies || [], attachments: res.data.attachments || [] }
     updateStatus.value = res.data.ticket.status
   } catch (error: any) {
     message.error(error.message || '加载工单详情失败')
@@ -404,8 +451,8 @@ const handleViewDetail = async (id: number) => {
 }
 
 const handleReply = async () => {
-  if (!replyContent.value.trim()) {
-    message.warning('请输入回复内容')
+  if (!replyContent.value.trim() && replyAttachmentIds.value.length === 0) {
+    message.warning('请输入回复内容或添加附件')
     return
   }
 
@@ -418,9 +465,12 @@ const handleReply = async () => {
     }
     await replyAdminTicket(currentTicket.value.id, {
       content: replyContent.value,
+      attachment_ids: replyAttachmentIds.value,
     })
     message.success('回复成功')
     replyContent.value = ''
+    replyAttachmentIds.value = []
+    replyUploaderRef.value?.reset(false)
     await handleViewDetail(currentTicket.value.id)
     await loadTickets()
   } catch (error: any) {

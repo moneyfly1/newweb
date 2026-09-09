@@ -73,7 +73,90 @@ cd frontend && npm install && npm run build && cd ..
 
 # 5. 启动服务
 ./cboard
+
+# 6. 配置 Nginx（反向代理前端 + API）
+#    使用仓库内最终标准模板，见下方「🔧 Nginx 配置模板」
 ```
+
+> 手动部署时请务必使用下方最终 Nginx 模板：除反向代理外，它包含
+> **`/index.html` no-cache 规则**（保证发布后用户立即拿到新版页面，
+> 不会被旧缓存卡住）与 `/nodes/` 转发（节点文件同步公开外链）。
+> 完整部署文档见 [DEPLOY.md](./DEPLOY.md)。
+
+## 🔧 Nginx 配置模板（最终标准版）
+
+与 `install.sh` / `install_bt.sh` 自动生成配置保持一致：
+
+```nginx
+# ---------- HTTP：跳转 HTTPS（配置 SSL 时启用） ----------
+server {
+    listen 80;
+    server_name your-domain.com;
+    location /.well-known/acme-challenge/ {
+        root /path/to/frontend/dist;
+        allow all;
+    }
+    location / { return 301 https://$host$request_uri; }
+}
+
+# ---------- HTTPS ----------
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    ssl_certificate     /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    root /path/to/frontend/dist;
+    index index.html;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
+    gzip_min_length 1024;
+
+    # 后端 API
+    location /api/ {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    # GitHub 节点文件同步公开外链（Go 后端从 uploads/nodes 提供）
+    location /nodes/ {
+        proxy_pass http://127.0.0.1:9000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # 静态资源：Vite 产物文件名带 hash，可长期缓存
+    location /assets/ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # SPA 外壳不做缓存：保证发布后用户拿到最新 index.html（引用新 hash 的 JS）
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+    }
+
+    # SPA 回退
+    location / { try_files $uri $uri/ /index.html; }
+}
+```
+
+> 仅使用 HTTP 时：删除第一个 80 跳转 server，第二个 server 改为 `listen 80` 并移除 `ssl_*` 行。
 
 ## 🔧 管理菜单
 

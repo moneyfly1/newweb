@@ -22,8 +22,9 @@ const TicketUploadDir = "tickets"
 
 // AllowedTicketExts 允许的附件扩展名（图片/视频/通用文档）
 var AllowedTicketExts = map[string]bool{
-	// 图片
+	// 图片（heic/heif 兼容 iPhone 相册）
 	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true, ".bmp": true, ".svg": true,
+	".heic": true, ".heif": true,
 	// 视频
 	".mp4": true, ".mov": true, ".avi": true, ".mkv": true, ".webm": true, ".m4v": true,
 	// 文档/压缩
@@ -43,7 +44,8 @@ func ticketExtContentType(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
 	m := map[string]string{
 		".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif",
-		".webp": "image/webp", ".svg": "image/svg+xml", ".mp4": "video/mp4", ".webm": "video/webm",
+		".webp": "image/webp", ".svg": "image/svg+xml", ".heic": "image/heic", ".heif": "image/heif",
+		".mp4": "video/mp4", ".webm": "video/webm",
 		".mov": "video/quicktime", ".pdf": "application/pdf", ".zip": "application/zip",
 		".txt": "text/plain", ".csv": "text/csv", ".json": "application/json", ".md": "text/markdown",
 	}

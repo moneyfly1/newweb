@@ -33,11 +33,11 @@ type mmdbCityRecord struct {
 const ipCacheMaxSize = 2048
 
 var (
-	ipLocationCache  = make(map[string]ipLocationCacheEntry)
-	ipLocationMu     sync.RWMutex
-	ipLocationTTL    = 30 * time.Minute
-	mmdbReader       *maxminddb.Reader
-	mmdbOnce         sync.Once
+	ipLocationCache   = make(map[string]ipLocationCacheEntry)
+	ipLocationMu      sync.RWMutex
+	ipLocationTTL     = 30 * time.Minute
+	mmdbReader        *maxminddb.Reader
+	mmdbOnce          sync.Once
 	ip2regionSearcher *xdb.Searcher
 	ip2regionOnce     sync.Once
 )

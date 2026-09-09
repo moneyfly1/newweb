@@ -128,8 +128,8 @@ var (
 )
 
 type publicCacheEntry struct {
-	data      interface{}
-	expireAt  time.Time
+	data     interface{}
+	expireAt time.Time
 }
 
 // GetPublicCache 读取公共数据缓存；未命中或过期返回 nil

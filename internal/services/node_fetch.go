@@ -10,10 +10,9 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"unicode/utf8"
 	"time"
+	"unicode/utf8"
 )
-
 
 const (
 	maxResponseSize                     = 10 * 1024 * 1024 // 10MB limit for subscription content
@@ -26,7 +25,6 @@ type subscriptionRequestProfile struct {
 	UserAgent string
 	Accept    string
 }
-
 
 var subscriptionRequestProfiles = []subscriptionRequestProfile{
 	{Name: "v2rayN", UserAgent: "v2rayN/6.23", Accept: "*/*"},
@@ -42,7 +40,6 @@ var subscriptionRequestProfiles = []subscriptionRequestProfile{
 	{Name: "curl", UserAgent: "curl/8.0.1", Accept: "*/*"},
 	{Name: "browser", UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", Accept: "*/*"},
 }
-
 
 func FetchSubscriptionContent(urlStr string) (string, error) {
 	return FetchSubscriptionContentWithProxy(urlStr, "")
@@ -115,7 +112,6 @@ func FetchSubscriptionContentWithProxy(urlStr string, proxyURL string) (string, 
 	return content, nil
 }
 
-
 func subscriptionHTTPTransport(proxyURL string) *http.Transport {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -137,7 +133,6 @@ func subscriptionHTTPTransport(proxyURL string) *http.Transport {
 	return transport
 }
 
-
 func normalizeSubscriptionRequestURL(parsedURL *url.URL) string {
 	normalized := *parsedURL
 	if normalized.RawQuery != "" {
@@ -145,7 +140,6 @@ func normalizeSubscriptionRequestURL(parsedURL *url.URL) string {
 	}
 	return normalized.String()
 }
-
 
 func fetchSubscriptionBody(client *http.Client, urlStr string) ([]byte, error) {
 	var lastErr error
@@ -197,7 +191,6 @@ func fetchSubscriptionBody(client *http.Client, urlStr string) ([]byte, error) {
 	return nil, fmt.Errorf("subscription request failed")
 }
 
-
 func summarizeSubscriptionRequestErrors(errs []string) string {
 	if len(errs) == 0 {
 		return "no response"
@@ -214,7 +207,6 @@ func summarizeSubscriptionRequestErrors(errs []string) string {
 	return strings.Join(unique, "; ")
 }
 
-
 func subscriptionRequestProfilesForURL(urlStr string) []subscriptionRequestProfile {
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
@@ -228,7 +220,6 @@ func subscriptionRequestProfilesForURL(urlStr string) []subscriptionRequestProfi
 		return subscriptionRequestProfiles
 	}
 }
-
 
 func prioritizeSubscriptionProfiles(names []string, profiles []subscriptionRequestProfile) []subscriptionRequestProfile {
 	if len(names) == 0 || len(profiles) == 0 {
@@ -255,12 +246,10 @@ func prioritizeSubscriptionProfiles(names []string, profiles []subscriptionReque
 	return append(prioritized, remaining...)
 }
 
-
 func normalizeSubscriptionContent(content string) string {
 	content = strings.TrimPrefix(content, "\ufeff")
 	return strings.TrimSpace(content)
 }
-
 
 func looksLikeBase64Subscription(content string) bool {
 	if content == "" {

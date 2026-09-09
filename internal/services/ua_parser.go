@@ -138,7 +138,7 @@ func detectSoftware(lower, ua string, info *ClientInfo) {
 	}
 	// Browser detection
 	if strings.Contains(lower, "mozilla") || strings.Contains(lower, "chrome") ||
-	   strings.Contains(lower, "safari") || strings.Contains(lower, "firefox") {
+		strings.Contains(lower, "safari") || strings.Contains(lower, "firefox") {
 		if strings.Contains(lower, "edg/") {
 			info.SoftwareName = "Edge 浏览器"
 		} else if strings.Contains(lower, "chrome") && !strings.Contains(lower, "edg") {

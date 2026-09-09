@@ -384,42 +384,12 @@ func cleanOldLogsTask() {
 	db := database.GetDB()
 	totalDeleted := int64(0)
 
-	logTables := []struct {
-		model      interface{}
-		name       string
-		timeColumn string
-	}{
-		{&models.AuditLog{}, "audit_logs", "created_at"},
-		{&models.RegistrationLog{}, "registration_logs", "created_at"},
-		{&models.SubscriptionLog{}, "subscription_logs", "created_at"},
-		{&models.BalanceLog{}, "balance_logs", "created_at"},
-		{&models.CommissionLog{}, "commission_logs", "created_at"},
-		{&models.SystemLog{}, "system_logs", "created_at"},
-		{&models.OrderLog{}, "order_logs", "created_at"},
-		{&models.PaymentLog{}, "payment_logs", "created_at"},
-		{&models.CouponLog{}, "coupon_logs", "created_at"},
-		{&models.NodeLog{}, "node_logs", "created_at"},
-		{&models.UserActionLog{}, "user_action_logs", "created_at"},
-		{&models.AdminActionLog{}, "admin_action_logs", "created_at"},
-		{&models.DeviceLog{}, "device_logs", "created_at"},
-		{&models.TicketLog{}, "ticket_logs", "created_at"},
-		{&models.InviteLog{}, "invite_logs", "created_at"},
-		{&models.ConfigChangeLog{}, "config_change_logs", "created_at"},
-		{&models.SecurityLog{}, "security_logs", "created_at"},
-		{&models.APILog{}, "api_logs", "created_at"},
-		{&models.DatabaseLog{}, "database_logs", "created_at"},
-		{&models.EmailLog{}, "email_logs", "created_at"},
-		{&models.NotificationLog{}, "notification_logs", "created_at"},
-		{&models.LoginHistory{}, "login_history", "login_time"},
-		{&models.UserActivity{}, "user_activities", "created_at"},
-		{&models.LoginAttempt{}, "login_attempts", "created_at"},
-		{&models.VerificationAttempt{}, "verification_attempts", "created_at"},
-	}
-
-	for _, t := range logTables {
-		result := db.Where(t.timeColumn+" < ?", cutoff).Delete(t.model)
+	// 使用 models.RetentionLogTables 单一清单（含各自时间列），
+	// 与后台手动清理(AdminCleanOldLogs)保持一致，避免两处维护分叉。
+	for _, t := range models.RetentionLogTables {
+		result := db.Where(t.TimeColumn+" < ?", cutoff).Delete(t.Model)
 		if result.Error != nil {
-			log.Printf("[Scheduler] 清理 %s 失败: %v", t.name, result.Error)
+			log.Printf("[Scheduler] 清理 %s 失败: %v", t.Table, result.Error)
 			continue
 		}
 		if result.RowsAffected > 0 {

@@ -80,18 +80,18 @@ func (rl *memRateLimiter) cleanup() {
 // RateLimit 频率限制中间件 (优先使用 Redis，回退到内存)
 func RateLimit(rate int, window time.Duration) gin.HandlerFunc {
 	memFallback := newMemRateLimiter(rate, window)
-	
+
 	return func(c *gin.Context) {
 		clientIP := utils.GetRealClientIP(c)
 		r := database.GetRedis()
-		
+
 		allowed := true
-		
+
 		if r != nil {
 			// Redis sliding window / fixed window logic
 			ctx := context.Background()
 			key := fmt.Sprintf("ratelimit:%s:%s", c.FullPath(), clientIP)
-			
+
 			// increment counter
 			cnt, err := r.Incr(ctx, key).Result()
 			if err == nil {

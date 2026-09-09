@@ -15,17 +15,17 @@ import (
 
 // AlipayConfig holds direct Alipay API configuration
 type AlipayConfig struct {
-	AppID              string
-	PrivateKey         string
-	PublicKey          string
-	NotifyURL          string
-	ReturnURL          string
-	PaymentPublicBase  string
-	SiteURL            string
-	DomainName         string
-	IsProduction       bool
-	SandboxRaw         string
-	PublicKeyHint      string
+	AppID             string
+	PrivateKey        string
+	PublicKey         string
+	NotifyURL         string
+	ReturnURL         string
+	PaymentPublicBase string
+	SiteURL           string
+	DomainName        string
+	IsProduction      bool
+	SandboxRaw        string
+	PublicKeyHint     string
 }
 
 // GetAlipayConfig reads direct Alipay settings from system_configs.

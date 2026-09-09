@@ -301,7 +301,7 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 	if order.FinalAmount != nil {
 		payAmount = *order.FinalAmount
 	}
-	commission := utils.Round2(payAmount*rate/100)
+	commission := utils.Round2(payAmount * rate / 100)
 	if commission <= 0 {
 		return
 	}
@@ -498,8 +498,6 @@ func appendSurgeWSParams(params []string, m map[string]interface{}) []string {
 	}
 	return params
 }
-
-
 
 // GenerateShadowrocketBase64 generates Shadowrocket-compatible base64 subscription
 func GenerateShadowrocketBase64(nodes []models.Node) string {

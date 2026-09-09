@@ -34,8 +34,6 @@ type BasePaymentConfig struct {
 	IsProduction bool
 }
 
-
-
 // ValidatePaymentConfig 验证支付配置是否完整
 func ValidatePaymentConfig(configs map[string]string, requiredKeys []string) error {
 	for _, key := range requiredKeys {

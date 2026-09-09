@@ -2,18 +2,18 @@ package handlers
 
 import (
 	"archive/zip"
+	"cboard/v2/internal/services"
+	"cboard/v2/internal/services/git"
+	"cboard/v2/internal/utils"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
-	"cboard/v2/internal/services"
-	"cboard/v2/internal/services/git"
-	"cboard/v2/internal/utils"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
 func AdminCreateBackup(c *gin.Context) {
@@ -339,4 +339,3 @@ func AdminTestGitHubConnection(c *gin.Context) {
 	utils.CreateAuditLog(c, "test_github", "backup", 0, "测试GitHub连接")
 	utils.Success(c, gin.H{"message": "GitHub 连接测试成功"})
 }
-

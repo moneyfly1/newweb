@@ -362,7 +362,6 @@ func getRawQueryParam(rawQuery string, key string) string {
 	return ""
 }
 
-
 func portToInt(port string) int {
 	p, err := strconv.Atoi(port)
 	if err != nil {
@@ -370,4 +369,3 @@ func portToInt(port string) int {
 	}
 	return p
 }
-

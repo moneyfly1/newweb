@@ -14,9 +14,9 @@ type TTLItem struct {
 
 // MemoryCache represents an in-memory TTL cache
 type MemoryCache struct {
-	mu       sync.RWMutex
-	items    map[string]TTLItem
-	maxSize  int
+	mu      sync.RWMutex
+	items   map[string]TTLItem
+	maxSize int
 }
 
 const defaultMaxSize = 1000
@@ -82,7 +82,7 @@ func (c *MemoryCache) Get(key string) (interface{}, bool) {
 		return nil, false
 	}
 	if time.Now().After(item.ExpireTime) {
-		// Do not delete here to avoid upgrading the lock, 
+		// Do not delete here to avoid upgrading the lock,
 		// it will naturally be overwritten or simply considered missing.
 		return nil, false
 	}

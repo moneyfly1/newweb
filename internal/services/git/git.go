@@ -539,11 +539,11 @@ func (c *GitClient) listDir(dirPath string) ([]DirEntry, error) {
 
 // githubDownloadAllowedHosts GitHub 备份下载允许的域名白名单（防 SSRF 与 GitHub Token 外泄）
 var githubDownloadAllowedHosts = map[string]bool{
-	"api.github.com":               true,
-	"github.com":                   true,
-	"raw.githubusercontent.com":    true,
+	"api.github.com":                true,
+	"github.com":                    true,
+	"raw.githubusercontent.com":     true,
 	"objects.githubusercontent.com": true,
-	"codeload.github.com":          true,
+	"codeload.github.com":           true,
 }
 
 // maxBackupDownloadSize 备份文件下载大小上限（200MB，防止磁盘耗尽）

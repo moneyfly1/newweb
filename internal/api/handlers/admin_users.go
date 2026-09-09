@@ -1,9 +1,17 @@
 package handlers
 
 import (
+	"cboard/v2/internal/api/middleware"
+	"cboard/v2/internal/cache"
+	"cboard/v2/internal/database"
+	"cboard/v2/internal/models"
+	"cboard/v2/internal/services"
+	"cboard/v2/internal/utils"
 	"compress/gzip"
 	"encoding/csv"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"io"
 	"net/http"
 	"net/mail"
@@ -13,14 +21,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"cboard/v2/internal/api/middleware"
-	"cboard/v2/internal/cache"
-	"cboard/v2/internal/database"
-	"cboard/v2/internal/models"
-	"cboard/v2/internal/services"
-	"cboard/v2/internal/utils"
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 func AdminListUsers(c *gin.Context) {
@@ -1739,4 +1739,3 @@ func AdminImportUsersCSV(c *gin.Context) {
 		"errors":   errors,
 	})
 }
-

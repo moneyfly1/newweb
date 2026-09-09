@@ -1,17 +1,17 @@
 package handlers
 
 import (
-	"errors"
-	"fmt"
-	"strconv"
-	"sync"
-	"time"
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
+	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"strconv"
+	"sync"
+	"time"
 )
 
 func AdminListSubscriptions(c *gin.Context) {
@@ -565,4 +565,3 @@ func AdminClearSubscriptionDevices(c *gin.Context) {
 }
 
 // ==================== Public Announcements ====================
-

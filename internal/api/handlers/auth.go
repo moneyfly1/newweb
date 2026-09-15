@@ -787,6 +787,19 @@ func ResetPassword(c *gin.Context) {
 	if err := db.Model(&models.User{}).Where("email = ?", req.Email).UpdateColumn("token_version", gorm.Expr("token_version + 1")).Error; err != nil {
 		utils.SysError("auth", fmt.Sprintf("更新 token 版本失败: email=%s err=%v", req.Email, err))
 	}
+	// 清除认证缓存 —— 必须与 ChangePassword 的写法保持一致。
+	//
+	// middleware.getUserByID 会把 user 对象（含 token_version）在进程内缓存
+	// userCacheTTL = 5 分钟，而上面只改了数据库里的 token_version。少了这一步，
+	// 缓存中的旧版本会与刚签发 token 里的新版本不一致，于是：
+	//   用户用「忘记密码」重置成功 → 立刻用新密码登录 → 拿到的 token 被判
+	//   「Token 已失效，请重新登录」→ 客户端把人踢回登录页 → 再登一次仍失败，
+	//   直到 5 分钟缓存自然过期。表现为「重置完密码就登不进去」。
+	// ChangePassword 一直有这行，ResetPassword 漏了，两条路径行为不一致。
+	var resetUser models.User
+	if err := db.Where("email = ?", req.Email).First(&resetUser).Error; err == nil {
+		middleware.InvalidateUserCache(resetUser.ID)
+	}
 	vc.MarkAsUsed()
 	if err := db.Save(&vc).Error; err != nil {
 		utils.InternalError(c, "更新验证码状态失败")

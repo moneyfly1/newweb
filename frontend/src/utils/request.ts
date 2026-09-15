@@ -181,6 +181,34 @@ instance.interceptors.response.use(
     // Attempt token refresh on 401 (skip for auth endpoints and retried requests)
     if (error.response?.status === 401 && !isAuthEndpoint && !originalRequest._retry) {
       const userStore = useUserStore()
+
+      // 跨标签页竞态修复：refresh token 为一次性轮换（后端用后即拉黑），
+      // 同一浏览器多个标签页同时 401 时只有一个能刷新成功，其余会因旧 refresh token
+      // 已失效而失败并被登出（清空 localStorage + 跳登录页），用户表现为“频繁要重新登录”。
+      // 因此刷新前后都先认领其他标签页已写入 localStorage 的新令牌。
+      const claimFreshToken = (): string | null => {
+        const latestToken = localStorage.getItem('token') || ''
+        const latestRefresh = localStorage.getItem('refresh_token') || ''
+        if (latestRefresh && latestRefresh !== userStore.refreshTokenVal) {
+          userStore.refreshTokenVal = latestRefresh
+        }
+        if (latestToken && latestToken !== userStore.token) {
+          userStore.token = latestToken
+          return latestToken
+        }
+        return null
+      }
+      const retryWithToken = (newToken: string) => {
+        originalRequest._retry = true
+        originalRequest.headers = originalRequest.headers || {}
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        return instance(originalRequest)
+      }
+
+      // 其他标签页可能刚刷新成功，直接复用其结果，避免重复消费 refresh token
+      const claimedToken = claimFreshToken()
+      if (claimedToken) return retryWithToken(claimedToken)
+
       const storedRefresh = userStore.refreshTokenVal
 
       if (storedRefresh) {
@@ -221,6 +249,10 @@ instance.interceptors.response.use(
           processQueue(refreshError, null)
           isRefreshing = false
         }
+
+        // 刷新失败可能只是输掉了跨标签页竞态：其他标签页此刻可能已刷新成功
+        const claimedAfterFail = claimFreshToken()
+        if (claimedAfterFail) return retryWithToken(claimedAfterFail)
       }
 
       // 刷新失败或没有 refresh token — 登出

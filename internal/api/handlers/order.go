@@ -759,6 +759,39 @@ func CreateCustomOrder(c *gin.Context) {
 // - 仅增加设备：新增设备数 × 单价 × (剩余天数/365)
 // - 仅续期：原设备数 × 单价 × (续期月数/12)
 // - 增加设备且续期：原设备续期费 + 新增设备 × 单价 × (剩余天数/365 + 续期月数/12)
+// normalizeUpgradeRequest 归一化「设备升级 / 续期」请求。
+//
+// 背景（客户端提的 bug）：客户端界面上让用户选「增加天数」（add_days），
+// 而这里只认 extend_months —— 于是「只延长时间」的订单金额不变、到期时间也不变，
+// 用户花了钱却没续上。现在两边都认：
+//   * extend_months 为准；给了 add_days 就按 30 天/月向上取整换算；
+//   * add_devices 允许为 0（只要续期 > 0）—— 否则「只续期」根本无法下单；
+//   * 两者都为 0 才报参数错误。
+func normalizeUpgradeRequest(addDevices, extendMonths, addDays int) (int, int, error) {
+	if addDevices < 0 {
+		return 0, 0, errors.New("增加台数不能为负")
+	}
+	if addDevices > 100 {
+		return 0, 0, errors.New("单次最多增加 100 个设备")
+	}
+	if addDays > 0 {
+		months := (addDays + 29) / 30 // 向上取整：30 天 = 1 个月，365 天 = 13 个月→夹到 12
+		if months < 1 {
+			months = 1
+		}
+		if extendMonths == 0 || months > extendMonths {
+			extendMonths = months
+		}
+	}
+	if extendMonths < 0 || extendMonths > 120 {
+		return 0, 0, errors.New("续期月数需在 0 ~ 120 之间")
+	}
+	if addDevices == 0 && extendMonths == 0 {
+		return 0, 0, errors.New("请至少增加设备数量或延长有效期")
+	}
+	return addDevices, extendMonths, nil
+}
+
 func CalcUpgradePrice(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	db := database.GetDB()
@@ -768,13 +801,21 @@ func CalcUpgradePrice(c *gin.Context) {
 		return
 	}
 	var req struct {
-		AddDevices   int `json:"add_devices" binding:"required,min=1"`
+		AddDevices   int `json:"add_devices"`   // 允许 0：只续期
 		ExtendMonths int `json:"extend_months"` // 0 表示不续期
+		AddDays      int `json:"add_days"`      // 兼容按天选续期的客户端（30 天 = 1 个月）
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	addDevices, extendMonths, err := normalizeUpgradeRequest(req.AddDevices, req.ExtendMonths, req.AddDays)
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+	req.AddDevices = addDevices
+	req.ExtendMonths = extendMonths
 	// Remove restriction of multiples of 5
 
 	now := time.Now()
@@ -837,23 +878,23 @@ func CreateUpgradeOrder(c *gin.Context) {
 		return
 	}
 	var req struct {
-		AddDevices   int    `json:"add_devices" binding:"required,min=1"`
+		AddDevices   int    `json:"add_devices"`   // 允许 0：只续期
 		ExtendMonths int    `json:"extend_months"`
+		AddDays      int    `json:"add_days"` // 兼容按天选续期的客户端
 		CouponCode   string `json:"coupon_code"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
+	addDevices, extendMonths, nerr := normalizeUpgradeRequest(req.AddDevices, req.ExtendMonths, req.AddDays)
+	if nerr != nil {
+		utils.BadRequest(c, nerr.Error())
+		return
+	}
+	req.AddDevices = addDevices
+	req.ExtendMonths = extendMonths
 	// Remove restriction of multiples of 5
-	if req.AddDevices > 100 {
-		utils.BadRequest(c, "单次最多增加 100 个设备")
-		return
-	}
-	if req.ExtendMonths < 0 || req.ExtendMonths > 120 {
-		utils.BadRequest(c, "续期月数需在 0 ~ 120 之间")
-		return
-	}
 
 	now := time.Now()
 	// 订阅已到期不允许升级，必须先续费或重新购买套餐

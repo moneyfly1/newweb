@@ -478,6 +478,14 @@ const orderCols = [
 ]
 const deviceCols = [
   { title: '设备名', key: 'device_name', width: 120, ellipsis: { tooltip: true }, render: (r) => r.device_name || '未知设备' },
+  {
+    title: '状态', key: 'is_online', width: 80,
+    render: (r) => h(NTag, {
+      type: r.is_online ? 'success' : 'default',
+      size: 'small',
+      bordered: false
+    }, { default: () => r.is_online ? '在线' : '离线' })
+  },
   { title: '客户端', key: 'software_name', width: 120, render: (r) => r.software_name || '未知' },
   { title: '版本', key: 'software_version', width: 80, render: (r) => r.software_version || '-' },
   { title: '系统', key: 'os_name', width: 80, render: (r) => r.os_name || '-' },

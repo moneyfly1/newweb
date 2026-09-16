@@ -351,7 +351,7 @@ const columns = [
     title: '设备限制', key: 'device_limit', width: 260, resizable: true,
     sorter: (a, b) => (a.device_limit || 0) - (b.device_limit || 0),
     render: (row) => h('div', { class: isOverlimit(row) ? 'inline-cell cell-overlimit' : 'inline-cell' }, [
-      h('div', { style: 'font-size:13px;margin-bottom:4px' }, `在线 ${row.current_devices || 0} / 上限 ${row.device_limit || 0}`),
+      h('div', { style: 'font-size:13px;margin-bottom:4px' }, `在线 ${row.online_devices || 0} · 设备 ${row.current_devices || 0} / 上限 ${row.device_limit || 0}`),
       // 懒渲染：点击编辑才实例化 NInputNumber
       row._editingDevice ? h(NInputNumber, { value: row.device_limit, min: 0, max: 999, size: 'small', style: 'width:100%', onUpdateValue: (v) => { inlineSetDevice(row, v); row._editingDevice = false } }) : h(NButton, { size: 'tiny', quaternary: true, onClick: () => { row._editingDevice = true } }, { default: () => `上限 ${row.device_limit || 0}` }),
       h('div', { class: 'inline-quick-btns' }, [

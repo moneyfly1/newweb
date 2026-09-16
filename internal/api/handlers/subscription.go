@@ -31,6 +31,13 @@ const (
 	subStatusExpired
 	subStatusInactive
 	subStatusDeviceOverLimit
+	// 服务端暂时不可用（设备登记失败等内部错误）。
+	//
+	// 必须与 subStatusInactive 区分开：以前这里一律返回「订阅已失效」，
+	// 于是一次数据库抖动（SQLite 的 database is locked / 表缺失）就会让
+	// **付费正常的客户**看到「订阅已失效」并被禁止连接 —— 原因说错了，
+	// 客服也无从解释。这里如实说「服务暂时不可用，请稍后重试」。
+	subStatusServerError
 )
 
 var errDeviceLimitReached = errors.New("device limit reached")
@@ -272,7 +279,9 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.SysError("subscription", fmt.Sprintf("查询设备失败: sub=%d err=%v", sub.ID, err))
-			ctx.Status = subStatusInactive
+			// 查询设备出错（数据库抖动 / 表缺失）不代表客户订阅失效：
+			// 以前这里返回 subStatusInactive，付费客户会看到「订阅已失效」。
+			ctx.Status = subStatusServerError
 			return ctx
 		}
 
@@ -361,7 +370,9 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 				return ctx
 			}
 			utils.SysError("subscription", fmt.Sprintf("登记新设备失败: sub=%d err=%v", sub.ID, txErr))
-			ctx.Status = subStatusInactive
+			// 内部错误不是「订阅失效」：如实返回可重试的服务端错误，
+			// 但仍然不下发真实节点（宁可拦住，也不放行未登记的设备）。
+			ctx.Status = subStatusServerError
 			return ctx
 		}
 
@@ -563,6 +574,9 @@ func getErrorNodes(ctx *subscriptionContext) []models.Node {
 	case subStatusDeviceOverLimit:
 		reason = "设备数量超限"
 		solution = fmt.Sprintf("当前设备 %d/%d，请在官网删除不使用的设备", ctx.CurrentDevices, ctx.DeviceLimit)
+	case subStatusServerError:
+		reason = "服务暂时不可用"
+		solution = "请稍后重试；若持续出现请截图联系客服"
 	}
 
 	nodes := []models.Node{
@@ -588,6 +602,8 @@ func generateSubscriptionName(ctx *subscriptionContext) string {
 			return "设备超限"
 		case subStatusNotFound:
 			return "订阅不存在"
+		case subStatusServerError:
+			return "服务暂时不可用"
 		default:
 			return "订阅异常"
 		}

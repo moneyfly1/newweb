@@ -19,12 +19,23 @@ type csrfToken struct {
 
 type csrfStore struct {
 	mu     sync.RWMutex
-	tokens map[uint]*csrfToken // userID -> token
+	tokens map[uint]*csrfToken // userID -> 当前 token
+	// grace[userID] 保存**刚刚被轮换掉**的上一个 token。
+	//
+	// 为什么要留宽限：客户端（App）会在并发写请求里各自取一次 token，
+	// 第一个请求成功后服务端立刻轮换，第二个请求带着刚作废的 token 就必然
+	// 403 —— 用户侧表现是「支付点了没反应 / 取消订单没反应 / 提示 CSRF 过期」。
+	// 保留上一枚 token 一小段时间，并发客户端就不会因为轮换而互相打死。
+	grace map[uint]*csrfToken
 }
 
 var store = &csrfStore{
 	tokens: make(map[uint]*csrfToken),
+	grace:  make(map[uint]*csrfToken),
 }
+
+// csrfGracePeriod 旧 token 的宽限期（覆盖客户端「取 token → 发请求」的并发窗口）。
+const csrfGracePeriod = 5 * time.Minute
 
 const csrfTokenExpiry = 1 * time.Hour // 缩短到 1 小时
 
@@ -39,6 +50,11 @@ func init() {
 			for userID, token := range store.tokens {
 				if now.Sub(token.createdAt) > csrfTokenExpiry {
 					delete(store.tokens, userID)
+				}
+			}
+			for userID, token := range store.grace {
+				if now.Sub(token.createdAt) > csrfGracePeriod {
+					delete(store.grace, userID)
 				}
 			}
 			store.mu.Unlock()
@@ -119,10 +135,13 @@ func generateCSRFToken(userID uint) string {
 	return generateNewToken(userID)
 }
 
-// rotateCSRFToken 在验证成功后强制生成新 token
+// rotateCSRFToken 在验证成功后强制生成新 token，并把旧的放进宽限期。
 func rotateCSRFToken(userID uint) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	if old, ok := store.tokens[userID]; ok {
+		store.grace[userID] = old
+	}
 	generateNewToken(userID)
 }
 
@@ -150,16 +169,24 @@ func validateCSRFToken(userID uint, token string) bool {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 
-	stored, ok := store.tokens[userID]
-	if !ok {
-		return false
+	// 当前 token
+	if stored, ok := store.tokens[userID]; ok {
+		if time.Since(stored.createdAt) <= csrfTokenExpiry &&
+			subtle.ConstantTimeCompare([]byte(token), []byte(stored.token)) == 1 {
+			return true
+		}
 	}
 
-	// 检查是否过���
-	if time.Since(stored.createdAt) > csrfTokenExpiry {
-		return false
+	// 刚被轮换掉的上一枚 token：宽限期内仍然接受。
+	// 客户端（App）并发写请求会各自取一次 token，服务端轮换后另一个请求
+	// 带着刚作废的 token 会直接 403 —— 用户侧就是「支付点了没反应 /
+	// 取消订单没反应 / 提示 CSRF 过期」。给旧 token 一个宽限窗口即可。
+	if prev, ok := store.grace[userID]; ok {
+		if time.Since(prev.createdAt) <= csrfGracePeriod &&
+			subtle.ConstantTimeCompare([]byte(token), []byte(prev.token)) == 1 {
+			return true
+		}
 	}
 
-	// 常量时间比较防止时序攻击
-	return subtle.ConstantTimeCompare([]byte(token), []byte(stored.token)) == 1
+	return false
 }

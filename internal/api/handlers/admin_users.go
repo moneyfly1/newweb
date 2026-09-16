@@ -1008,85 +1008,227 @@ func AdminUpdateUserNotes(c *gin.Context) {
 	utils.SuccessMessage(c, "备注已更新")
 }
 
-func AdminUpdateGeoIP(c *gin.Context) {
-	resources := map[string]string{
-		"geoip.dat":             "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
-		"geosite.dat":           "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
-		"geoip.metadb":          "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb",
-		"GeoLite2-City.mmdb.gz": "https://github.com/wp-statistics/GeoLite2-City/raw/master/GeoLite2-City.mmdb.gz",
-		"ip2region_v4.xdb":      "https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region_v4.xdb",
-		"ip2region_v6.xdb":      "https://github.com/lionsoul2014/ip2region/raw/master/data/ip2region_v6.xdb",
+// ==================== GeoIP 数据库更新 ====================
+//
+// 历史问题：原实现是**同步**下载 6 个文件（其中 GeoLite2-City.mmdb.gz 63MB、
+// ip2region_v6.xdb 36MB、v4 10MB 都在 GitHub 上），后端 60 秒超时、前端 axios
+// 只有 15 秒 —— 用户点“更新 GeoIP 数据库”后必然超时，表现为“点了没反应”。
+//
+// 现在改为**后台异步任务**：接口立即返回，前端轮询 /update-geoip/status 看进度；
+// 下载走“多镜像源 + 临时文件 + 原子替换”，单个源失败不会破坏已有可用库；
+// 全部结束后统一调用 utils.ReloadGeoIP()，否则 sync.Once 缓存的旧句柄会让更新不生效。
+
+type geoIPFileResult struct {
+	File   string `json:"file"`
+	OK     bool   `json:"ok"`
+	Size   int64  `json:"size"`
+	Source string `json:"source,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+type geoIPUpdateState struct {
+	mu         sync.Mutex
+	Running    bool
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Results    []geoIPFileResult
+	Message    string
+}
+
+var geoIPState = &geoIPUpdateState{}
+
+type geoIPResource struct {
+	name string
+	urls []string
+	gzip bool
+}
+
+// geoIPResources 待更新资源。每个文件给出多个镜像源，按顺序尝试（国内直连 GitHub 常超时）。
+func geoIPResources() []geoIPResource {
+	jsd := func(p string) string { return "https://fastly.jsdelivr.net/gh/" + p }
+	ghp := func(p string) string { return "https://ghproxy.net/https://github.com/" + p }
+	raw := func(p string) string { return "https://github.com/" + p }
+	return []geoIPResource{
+		{name: "geoip.dat", urls: []string{
+			jsd("MetaCubeX/meta-rules-dat@release/geoip.dat"),
+			ghp("MetaCubeX/meta-rules-dat/raw/release/geoip.dat"),
+		}},
+		{name: "geosite.dat", urls: []string{
+			jsd("MetaCubeX/meta-rules-dat@release/geosite.dat"),
+			ghp("MetaCubeX/meta-rules-dat/raw/release/geosite.dat"),
+		}},
+		{name: "geoip.metadb", urls: []string{
+			jsd("MetaCubeX/meta-rules-dat@release/geoip.metadb"),
+			ghp("MetaCubeX/meta-rules-dat/raw/release/geoip.metadb"),
+		}},
+		{name: "GeoLite2-City.mmdb", gzip: true, urls: []string{
+			ghp("wp-statistics/GeoLite2-City/raw/master/GeoLite2-City.mmdb.gz"),
+			raw("wp-statistics/GeoLite2-City/raw/master/GeoLite2-City.mmdb.gz"),
+		}},
+		{name: "ip2region_v4.xdb", urls: []string{
+			jsd("lionsoul2014/ip2region@master/data/ip2region_v4.xdb"),
+			ghp("lionsoul2014/ip2region/raw/master/data/ip2region_v4.xdb"),
+		}},
+		{name: "ip2region_v6.xdb", urls: []string{
+			ghp("lionsoul2014/ip2region/raw/master/data/ip2region_v6.xdb"),
+			raw("lionsoul2014/ip2region/raw/master/data/ip2region_v6.xdb"),
+		}},
 	}
+}
+
+// AdminUpdateGeoIP 启动 GeoIP 数据库更新（后台执行，立即返回）。
+func AdminUpdateGeoIP(c *gin.Context) {
+	geoIPState.mu.Lock()
+	if geoIPState.Running {
+		geoIPState.mu.Unlock()
+		utils.BadRequest(c, "GeoIP 更新任务正在执行中，请稍候")
+		return
+	}
+	geoIPState.Running = true
+	geoIPState.StartedAt = time.Now()
+	geoIPState.FinishedAt = time.Time{}
+	geoIPState.Results = nil
+	geoIPState.Message = "任务已启动，正在后台下载…"
+	geoIPState.mu.Unlock()
 
 	if err := os.MkdirAll(filepath.Join("uploads", "config"), 0750); err != nil {
+		geoIPState.mu.Lock()
+		geoIPState.Running = false
+		geoIPState.Message = "创建目录失败: " + err.Error()
+		geoIPState.mu.Unlock()
 		utils.InternalError(c, "创建 GeoIP 目录失败: "+err.Error())
 		return
 	}
 
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-	updated := make([]string, 0, len(resources))
-	for fileName, fileURL := range resources {
-		resp, err := httpClient.Get(fileURL)
-		if err != nil {
-			utils.InternalError(c, "下载 "+fileName+" 失败: "+err.Error())
-			return
-		}
-		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			utils.InternalError(c, "下载 "+fileName+" 失败: "+resp.Status)
-			return
-		}
-		targetPath := filepath.Join("uploads", "config", fileName)
+	go runGeoIPUpdateTask()
 
-		// 如果是 .gz 文件，需要解压
-		if strings.HasSuffix(fileName, ".gz") {
-			gzReader, err := gzip.NewReader(resp.Body)
-			if err != nil {
-				resp.Body.Close()
-				utils.InternalError(c, "解压 "+fileName+" 失败: "+err.Error())
-				return
-			}
-			defer gzReader.Close()
+	utils.CreateAuditLog(c, "update_geoip", "settings", 0, "更新GeoIP数据库（后台任务）")
+	utils.Success(c, gin.H{
+		"running": true,
+		"message": "GeoIP 更新任务已在后台启动，请稍候查看结果",
+	})
+}
 
-			// 去掉 .gz 后缀
-			targetPath = strings.TrimSuffix(targetPath, ".gz")
-			file, err := os.Create(targetPath)
-			if err != nil {
-				utils.InternalError(c, "写入 "+fileName+" 失败: "+err.Error())
-				return
-			}
-			if _, err := io.Copy(file, gzReader); err != nil {
-				file.Close()
-				utils.InternalError(c, "保存 "+fileName+" 失败: "+err.Error())
-				return
-			}
-			file.Close()
-			resp.Body.Close()
-			updated = append(updated, strings.TrimSuffix(fileName, ".gz"))
-		} else {
-			file, err := os.Create(targetPath)
-			if err != nil {
-				resp.Body.Close()
-				utils.InternalError(c, "写入 "+fileName+" 失败: "+err.Error())
-				return
-			}
-			if _, err := io.Copy(file, resp.Body); err != nil {
-				file.Close()
-				resp.Body.Close()
-				utils.InternalError(c, "保存 "+fileName+" 失败: "+err.Error())
-				return
-			}
-			file.Close()
-			resp.Body.Close()
-			updated = append(updated, fileName)
-		}
+// AdminGeoIPUpdateStatus 查询 GeoIP 更新进度（前端轮询）。
+func AdminGeoIPUpdateStatus(c *gin.Context) {
+	geoIPState.mu.Lock()
+	defer geoIPState.mu.Unlock()
+	utils.Success(c, gin.H{
+		"running":     geoIPState.Running,
+		"started_at":  geoIPState.StartedAt,
+		"finished_at": geoIPState.FinishedAt,
+		"results":     geoIPState.Results,
+		"message":     geoIPState.Message,
+	})
+}
+
+func runGeoIPUpdateTask() {
+	dir := filepath.Join("uploads", "config")
+	resources := geoIPResources()
+	results := make([]geoIPFileResult, len(resources))
+	// 预填文件名：任务进行中时前端也能看到“哪些文件待完成”，而不是空白行
+	for i, res := range resources {
+		results[i] = geoIPFileResult{File: res.name}
 	}
 
-	utils.CreateAuditLog(c, "update_geoip", "settings", 0, "更新GeoIP数据库")
-	utils.Success(c, gin.H{
-		"updated": updated,
-		"message": "GeoIP 数据更新成功",
-	})
+	// 并行下载：串行下载 100MB+ 太慢，且单个文件失败会拖垮整体
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	for i, res := range resources {
+		wg.Add(1)
+		go func(idx int, r geoIPResource) {
+			defer wg.Done()
+			item := downloadGeoIPResource(dir, r)
+			mu.Lock()
+			results[idx] = item
+			snapshot := make([]geoIPFileResult, len(results))
+			copy(snapshot, results)
+			mu.Unlock()
+
+			geoIPState.mu.Lock()
+			geoIPState.Results = snapshot
+			geoIPState.mu.Unlock()
+		}(i, res)
+	}
+	wg.Wait()
+
+	// 让新库立即生效（sync.Once 缓存不重载 = 更新无效）
+	utils.ReloadGeoIP()
+
+	okCount := 0
+	for _, r := range results {
+		if r.OK {
+			okCount++
+		}
+	}
+	msg := fmt.Sprintf("更新完成：成功 %d/%d，地理位置库已重载", okCount, len(results))
+
+	geoIPState.mu.Lock()
+	geoIPState.Running = false
+	geoIPState.FinishedAt = time.Now()
+	geoIPState.Results = results
+	geoIPState.Message = msg
+	geoIPState.mu.Unlock()
+
+	utils.SysInfo("settings", "GeoIP "+msg)
+}
+
+func downloadGeoIPResource(dir string, res geoIPResource) geoIPFileResult {
+	item := geoIPFileResult{File: res.name}
+	// 大文件（63MB 的 mmdb.gz / 36MB 的 v6 库）需要比原 60s 更宽松的超时
+	client := &http.Client{Timeout: 10 * time.Minute}
+	finalPath := filepath.Join(dir, res.name)
+	tmpPath := finalPath + ".tmp"
+
+	for _, u := range res.urls {
+		size, err := downloadToFile(client, u, tmpPath, res.gzip)
+		if err != nil {
+			item.Error = err.Error()
+			_ = os.Remove(tmpPath)
+			continue
+		}
+		// 原子替换：只有完整下载成功后才覆盖正式文件，
+		// 下载中断/校验失败时旧库保持可用，不会把能用的库写坏
+		if err := os.Rename(tmpPath, finalPath); err != nil {
+			item.Error = err.Error()
+			_ = os.Remove(tmpPath)
+			continue
+		}
+		item.OK = true
+		item.Size = size
+		item.Source = u
+		item.Error = ""
+		return item
+	}
+	return item
+}
+
+func downloadToFile(client *http.Client, url, path string, isGzip bool) (int64, error) {
+	resp, err := client.Get(url)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("HTTP %s", resp.Status)
+	}
+
+	file, err := os.Create(path)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	var reader io.Reader = resp.Body
+	if isGzip {
+		gzReader, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return 0, err
+		}
+		defer gzReader.Close()
+		reader = gzReader
+	}
+	return io.Copy(file, reader)
 }
 
 func AdminCreateUser(c *gin.Context) {

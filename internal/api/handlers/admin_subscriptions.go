@@ -411,16 +411,19 @@ func AdminUpdateSubscription(c *gin.Context) {
 			// null 剔除，防 Updates(map) 写 SQL NULL（device_limit/is_active/protocol_filter）
 			continue
 		}
-		// 处理 expire_time 的时间格式转换
+		// 处理 expire_time：解析失败必须**报错**，不能静默跳过
+		// （静默跳过的后果：接口回成功、面板显示已改，数据库里还是旧值，
+		//   客户端自然一直显示旧的到期时间）。
 		if k == "expire_time" {
-			if expireTimeStr, ok := v.(string); ok && expireTimeStr != "" {
-				if expireTime, err := time.Parse(time.RFC3339, expireTimeStr); err == nil {
-					updates[k] = expireTime
-				}
+			expireTime, perr := parseExpireTimeParam(v)
+			if perr != nil {
+				utils.BadRequest(c, perr.Error())
+				return
 			}
-		} else {
-			updates[k] = v
+			updates[k] = expireTime
+			continue
 		}
+		updates[k] = v
 	}
 	if len(updates) == 0 {
 		utils.BadRequest(c, "没有可更新的字段")

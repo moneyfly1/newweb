@@ -73,6 +73,13 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	api.GET("/subscribe/:url", subRL, handlers.GetSubscription)
 	api.GET("/sub/*path", subRL, handlers.GetSubscription)
 
+	// 客户端在线心跳（自有客户端 Mclash/MoneyFly/ClashMi 定时上报）
+	// 订阅拉取无法反映「此刻是否在用」，在线状态由心跳判定。
+	// 无需登录：凭订阅 token + 设备标识（X-App-Device-Id / x-hwid）识别设备。
+	hbRL := middleware.RateLimit(60, time.Minute)
+	api.POST("/client/heartbeat", hbRL, handlers.ClientHeartbeat)
+	api.GET("/client/heartbeat", hbRL, handlers.ClientHeartbeat)
+
 	// 公开配置
 	api.GET("/config", handlers.GetPublicConfig)
 	api.GET("/packages", handlers.ListPackages)

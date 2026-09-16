@@ -79,6 +79,9 @@ func AdminListSubscriptions(c *gin.Context) {
 		CustomNodeCount int     `json:"custom_node_count"`
 		DedicatedOnly   bool    `json:"dedicated_only"`
 		LineType        string  `json:"line_type"`
+		// OnlineDevices 当前在线设备数：自有客户端看 3 分钟内心跳，
+		// 其他客户端按「24 小时内拉取过订阅」近似（与 models.Device.ComputeOnline 口径一致）。
+		OnlineDevices int `json:"online_devices"`
 	}
 
 	// 批量查询 user 和 package，避免 N+1
@@ -108,6 +111,31 @@ func AdminListSubscriptions(c *gin.Context) {
 		}
 	}
 
+	// 批量统计各订阅的在线设备数（SQL 聚合，避免逐订阅查询）
+	onlineMap := make(map[uint]int)
+	if len(subs) > 0 {
+		subIDs := make([]uint, 0, len(subs))
+		for _, sub := range subs {
+			subIDs = append(subIDs, sub.ID)
+		}
+		type onlineRow struct {
+			SubscriptionID uint
+			Cnt            int
+		}
+		var rows []onlineRow
+		now := time.Now()
+		db.Model(&models.Device{}).
+			Select("subscription_id, COUNT(*) AS cnt").
+			Where("subscription_id IN ? AND is_active = ?", subIDs, true).
+			Where("last_heartbeat > ? OR last_access > ?",
+				now.Add(-models.HeartbeatOnlineWindow), now.Add(-models.SubscriptionOnlineWindow)).
+			Group("subscription_id").
+			Scan(&rows)
+		for _, r := range rows {
+			onlineMap[r.SubscriptionID] = r.Cnt
+		}
+	}
+
 	items := make([]SubItem, 0, len(subs))
 	for _, sub := range subs {
 		item := SubItem{Subscription: sub}
@@ -124,6 +152,7 @@ func AdminListSubscriptions(c *gin.Context) {
 			item.CustomNodeCount = summary.Count
 			item.DedicatedOnly = summary.DedicatedOnly
 		}
+		item.OnlineDevices = onlineMap[sub.ID]
 		if u, ok := userMap[sub.UserID]; ok {
 			item.LineType = effectiveUserLineType(u.SpecialNodeSubscriptionType, item.CustomNodeCount, item.DedicatedOnly)
 		} else {

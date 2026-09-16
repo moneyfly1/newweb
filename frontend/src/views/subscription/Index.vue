@@ -279,18 +279,23 @@
           <div v-else class="mobile-device-list">
             <div v-if="devices.length === 0" class="empty-device-list">暂无设备记录</div>
             <div v-for="dev in devices" :key="dev.id" class="mobile-device-item">
-              <div class="device-name">{{ dev.name || dev.ip || '未知设备' }}</div>
+              <div class="device-name">
+                {{ dev.device_name || dev.software_name || '未知设备' }}
+                <n-tag :type="dev.is_online ? 'success' : 'default'" size="tiny" :bordered="false">
+                  {{ dev.is_online ? '在线' : '离线' }}
+                </n-tag>
+              </div>
               <div class="device-info-row">
                 <span class="device-label">IP</span>
-                <span class="device-value">{{ dev.ip || '-' }}</span>
+                <span class="device-value">{{ dev.ip_address || '-' }}</span>
               </div>
               <div class="device-info-row">
                 <span class="device-label">位置</span>
                 <span class="device-value">{{ formatCountryOnly(dev.location || dev.region) }}</span>
               </div>
               <div class="device-info-row">
-                <span class="device-label">最后在线</span>
-                <span class="device-value">{{ dev.last_active ? formatDateTime(dev.last_active) : '-' }}</span>
+                <span class="device-label">最后访问</span>
+                <span class="device-value">{{ dev.last_access ? formatDateTime(dev.last_access) : '-' }}</span>
               </div>
             </div>
           </div>
@@ -548,8 +553,8 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated, onUnmounted, nextTick, watch } from 'vue'
-import { useMessage } from 'naive-ui'
+import { ref, computed, onMounted, onActivated, onUnmounted, nextTick, watch, h } from 'vue'
+import { NTag, useMessage } from 'naive-ui'
 import QRCode from 'qrcode'
 import {
   CopyOutline, TimeOutline, PhonePortraitOutline, TrashOutline,
@@ -588,6 +593,14 @@ const devicePageSize = ref(10)
 const deviceTotal = ref(0)
 const deviceColumns = [
   { title: '设备名称', key: 'device_name', width: 150 },
+  {
+    title: '状态', key: 'is_online', width: 80,
+    render: (row: any) => h(NTag, {
+      type: row.is_online ? 'success' : 'default',
+      size: 'small',
+      bordered: false
+    }, { default: () => row.is_online ? '在线' : '离线' })
+  },
   { title: '客户端', key: 'software_name', width: 120, render: (row: any) => row.software_name || '未知' },
   { title: '版本', key: 'software_version', width: 80 },
   { title: '系统', key: 'os_name', width: 80, render: (row: any) => row.os_name || '未知' },

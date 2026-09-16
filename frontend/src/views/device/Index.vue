@@ -31,7 +31,12 @@
             <div v-for="device in devices" :key="device.id" class="mobile-card">
               <div class="card-row">
                 <span class="label">设备名称</span>
-                <span class="value">{{ device.device_name || device.software_name || '未知设备' }}</span>
+                <span class="value">
+                  {{ device.device_name || device.software_name || '未知设备' }}
+                  <n-tag :type="device.is_online ? 'success' : 'default'" size="tiny" :bordered="false">
+                    {{ device.is_online ? '在线' : '离线' }}
+                  </n-tag>
+                </span>
               </div>
               <div class="card-row">
                 <span class="label">客户端</span>
@@ -100,7 +105,7 @@
 
 <script setup lang="tsx">
 import { ref, h, onMounted } from 'vue'
-import { NButton, NTime, NInput, useMessage } from 'naive-ui'
+import { NButton, NTime, NInput, NTag, useMessage } from 'naive-ui'
 import { getSubscriptionDevices, deleteDevice, updateDeviceRemark } from '@/api/subscription'
 import { useAppStore } from '@/stores/app'
 import { parseDeviceInfo, formatLocation } from '@/utils/i18n'
@@ -124,6 +129,8 @@ interface Device {
   remark: string
   device_fingerprint: string
   last_access: string
+  // is_online 后端按「3 分钟内心跳」或「24 小时内拉过订阅」计算得出
+  is_online?: boolean
   created_at: string
   _origRemark?: string
 }
@@ -151,6 +158,16 @@ const columns = [
     render: (row: Device) => {
       return h('span', row.device_name || row.software_name || '未知设备')
     }
+  },
+  {
+    title: '状态',
+    key: 'is_online',
+    width: 80,
+    render: (row: Device) => h(NTag, {
+      type: row.is_online ? 'success' : 'default',
+      size: 'small',
+      bordered: false
+    }, { default: () => row.is_online ? '在线' : '离线' })
   },
   {
     title: '备注',

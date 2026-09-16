@@ -417,15 +417,15 @@ func extractVersion(ua, keyword string) string {
 func GenerateDeviceFingerprint(ua, ip string) string {
 	info := ParseUserAgent(ua)
 
+	// 只使用**稳定特征**：客户端名 + 系统 + 硬件型号。
+	// 刻意不含 os_version：系统升级（macOS 15 → 26.6）不代表换了设备，
+	// 否则同一台机器会凭空多出一台。客户端版本号同理不参与。
 	var features []string
 	if info.SoftwareName != "Unknown" {
 		features = append(features, "software:"+info.SoftwareName)
 	}
 	if info.OSName != "Unknown" {
 		features = append(features, "os:"+info.OSName)
-	}
-	if info.OSVersion != "" {
-		features = append(features, "os_version:"+info.OSVersion)
 	}
 	if info.DeviceModel != "" {
 		features = append(features, "model:"+info.DeviceModel)

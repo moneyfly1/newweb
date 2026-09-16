@@ -281,6 +281,20 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 	var device models.Device
 	err = db.Where("subscription_id = ? AND device_fingerprint = ? AND is_active = ?", sub.ID, fingerprint, true).First(&device).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// 指纹未命中时先尝试复用「同一台设备」的既有记录，避免同机被算成多台。
+		// 原因见 findReusableDevice 的注释：指纹会随客户端上报字段变化 / Did 变化而改变。
+		if reused, ok := findReusableDevice(db, sub.ID, ip, clientInfo); ok {
+			device = reused
+			// 把指纹刷新为新口径，后续请求即可按新指纹直接命中
+			if updErr := db.Model(&models.Device{}).Where("id = ?", reused.ID).
+				Update("device_fingerprint", fingerprint).Error; updErr != nil {
+				utils.SysError("subscription", fmt.Sprintf("刷新设备指纹失败: device=%d err=%v", reused.ID, updErr))
+			}
+			// 置回 nil 以走下方「已有设备」分支（复用更新，而不是新建）
+			err = nil
+		}
+	}
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.SysError("subscription", fmt.Sprintf("查询设备失败: sub=%d err=%v", sub.ID, err))
@@ -542,6 +556,45 @@ func fetchUserCustomNodes(db *gorm.DB, userID uint, subExpireTime time.Time) (no
 		})
 	}
 	return nodes, hasDedicatedOnly, hasUnlimitedDevices
+}
+
+// findReusableDevice 在指纹未命中时，尝试找出「同一台设备」的既有记录。
+//
+// 为什么需要：设备指纹由客户端上报的信息构成，而这些信息**并不稳定** ——
+//   - 字段会随客户端版本变化（早期 Mclash 不发 x-device-model，后来才发，
+//     于是同一台机器在「字段为空」和「字段齐全」时算出两个不同指纹）；
+//   - 客户端的 Did 也可能变化（重装 App、Keychain/注册表读取失败）；
+//   - 系统升级、客户端升级同样会改变上报内容。
+//
+// 结果就是同一台机器在后台被算成多台、设备数虚高（线上实测：同一台 macOS、
+// 同一 IP 出现 4 条设备记录）。这里在新建之前做一次相似匹配并复用旧记录。
+//
+// 复用条件（需全部满足）：
+//   - 同订阅、is_active、同 IP；
+//   - 客户端名一致、系统名一致（值为空或 Unknown 时该项不参与判断）；
+//   - 型号不冲突：双方都有型号时必须相同（用于区分同一网络下的不同硬件）。
+func findReusableDevice(db *gorm.DB, subID uint, ip string, info *services.ClientInfo) (models.Device, bool) {
+	var candidate models.Device
+	if ip == "" || info == nil {
+		return candidate, false
+	}
+	q := db.Where("subscription_id = ? AND is_active = ? AND ip_address = ?", subID, true, ip)
+	if info.SoftwareName != "" && info.SoftwareName != "Unknown" {
+		q = q.Where("software_name = ?", info.SoftwareName)
+	}
+	if info.OSName != "" && info.OSName != "Unknown" {
+		q = q.Where("os_name = ?", info.OSName)
+	}
+	// 取最早的一条，避免反复在中间记录之间跳
+	if err := q.Order("id ASC").First(&candidate).Error; err != nil {
+		return candidate, false
+	}
+	// 型号不冲突才算同一台：双方都有型号且不同 → 判定为两台不同硬件
+	if info.DeviceModel != "" && candidate.DeviceModel != nil &&
+		*candidate.DeviceModel != "" && *candidate.DeviceModel != info.DeviceModel {
+		return candidate, false
+	}
+	return candidate, true
 }
 
 func buildDeviceName(info *services.ClientInfo) string {

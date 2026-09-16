@@ -522,26 +522,33 @@ func AdminUpdateUser(c *gin.Context) {
 		}
 		var subscription models.Subscription
 		if err := db.Where("user_id = ?", user.ID).First(&subscription).Error; err == nil {
-			// 处理 expire_time 的时间格式转换
-			if expireTimeStr, ok := subscriptionUpdates["expire_time"].(string); ok && expireTimeStr != "" {
-				if expireTime, err := time.Parse(time.RFC3339, expireTimeStr); err == nil {
-					subscriptionUpdates["expire_time"] = expireTime
+			// 处理 expire_time：解析失败必须**报错**，不能静默跳过
+			// （静默跳过会让面板显示「已改好」而数据库里还是旧值，
+			//   用户看到的就是「后台改了到期时间，客户端没变」）。
+			if raw, ok := subscriptionUpdates["expire_time"]; ok {
+				expireTime, perr := parseExpireTimeParam(raw)
+				if perr != nil {
+					utils.BadRequest(c, perr.Error())
+					return
+				}
+				subscriptionUpdates["expire_time"] = expireTime
 
-					// 同步更新 status
-					now := time.Now()
-					if expireTime.After(now) {
-						// 未过期
-						if time.Until(expireTime) <= 7*24*time.Hour {
-							subscriptionUpdates["status"] = models.SubStatusExpiring
-						} else {
-							subscriptionUpdates["status"] = models.SubStatusActive
-						}
-						// 确保 is_active 为 true
-						subscriptionUpdates["is_active"] = true
+				// 同步更新 status
+				now := time.Now()
+				if expireTime.After(now) {
+					// 未过期
+					if time.Until(expireTime) <= 7*24*time.Hour {
+						subscriptionUpdates["status"] = models.SubStatusExpiring
 					} else {
-						// 已过期
-						subscriptionUpdates["status"] = models.SubStatusExpired
+						subscriptionUpdates["status"] = models.SubStatusActive
 					}
+					// 确保 is_active 为 true
+					if _, hasIsActive := subscriptionUpdates["is_active"]; !hasIsActive {
+						subscriptionUpdates["is_active"] = true
+					}
+				} else {
+					// 已过期
+					subscriptionUpdates["status"] = models.SubStatusExpired
 				}
 			}
 

@@ -243,6 +243,25 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	if appDeviceID == "" {
 		appDeviceID = strings.TrimSpace(c.Query("app_device_id"))
 	}
+	// ClashMi 系客户端（含 Mclash / MoneyFly 桌面端）用 `x-hwid` 报设备指纹，
+	// 并附带 `x-device-os` / `x-ver-os` / `x-device-model` 设备详情。
+	// 以前后端只读 X-App-Device-Id，于是这些客户端只能靠 UA 指纹 ——
+	// UA 里带版本号，**升级一次版本就多一台"新设备"**，设备数量自然识别不准。
+	if appDeviceID == "" {
+		appDeviceID = strings.TrimSpace(c.GetHeader("x-hwid"))
+	}
+
+	// 用客户端上报的设备详情补齐 UA 解析不到的信息（比 UA 更准，且与版本无关）
+	if v := strings.TrimSpace(c.GetHeader("x-device-os")); v != "" {
+		clientInfo.OSName = v
+	}
+	if v := strings.TrimSpace(c.GetHeader("x-ver-os")); v != "" {
+		clientInfo.OSVersion = v
+	}
+	if v := strings.TrimSpace(c.GetHeader("x-device-model")); v != "" {
+		clientInfo.DeviceModel = v
+	}
+
 	fingerprint := services.GenerateDeviceFingerprint(ua, ip)
 	if appDeviceID != "" {
 		fingerprint = services.GenerateDeviceFingerprint("MoneyFly-App-Device:"+appDeviceID, "")

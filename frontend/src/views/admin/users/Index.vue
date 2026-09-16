@@ -449,7 +449,13 @@ const actionOptions = (row) => [
 const columns = [
   { type: 'selection' },
   { title: 'ID', key: 'id', width: 70, sorter: 'default', resizable: true },
-  { title: '用户名', key: 'username', ellipsis: { tooltip: true }, width: 130, resizable: true },
+  { title: '用户名', key: 'username', ellipsis: { tooltip: true }, width: 160, resizable: true,
+    render: (row) => row.is_admin
+      ? h('span', { class: 'user-name-cell' }, [
+          h('span', { class: 'user-name-text' }, row.username),
+          h(NTag, { type: 'warning', size: 'small', bordered: false }, { default: () => '管理员' }),
+        ])
+      : row.username },
   { title: '邮箱', key: 'email', ellipsis: { tooltip: true }, width: 200, resizable: true },
   {
     title: '线路类型',
@@ -882,6 +888,19 @@ onActivated(() => {
 </script>
 
 <style scoped>
+/* 用户名列：管理员账号附加「管理员」标签（与移动端卡片保持一致） */
+.user-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+.user-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Mobile card styles */
 .mobile-card-list {
   display: flex;

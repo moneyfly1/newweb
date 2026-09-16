@@ -409,7 +409,9 @@ func Login(c *gin.Context) {
 	}
 
 	var user models.User
-	userNotFound := db.Where("email = ? OR username = ?", req.Email, req.Email).First(&user).Error != nil
+	// 用户名大小写不敏感：req.Email 已转小写，SQLite/MySQL 的 = 对文本大小写敏感，
+	// 若用户名为 "Dylan" 这类含大写的值则永远匹配不上，故用 LOWER(username) 匹配。
+	userNotFound := db.Where("email = ? OR LOWER(username) = ?", req.Email, req.Email).First(&user).Error != nil
 
 	// Always run bcrypt to prevent timing-based user enumeration
 	passwordToCheck := user.Password

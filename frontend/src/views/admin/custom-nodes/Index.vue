@@ -231,10 +231,13 @@
         <n-form-item label="选择用户">
           <n-select
             v-model:value="assignUserIds"
+            class="assign-user-select"
             multiple
             remote
             filterable
             clearable
+            size="medium"
+            :max-tag-count="2"
             placeholder="输入邮箱/用户名搜索并选择用户"
             :options="userOptions"
             :loading="loadingUsers"
@@ -575,11 +578,12 @@ const handleSorterChange = (sorter) => {
 const fetchUsers = async (keyword = '') => {
   loadingUsers.value = true
   try {
-    const params = { page: 1, page_size: 50 }
+    const params = { page: 1, page_size: 100 }
     if (String(keyword).trim()) params.search = String(keyword).trim()
     const res = await listUsers(params)
     const newOptions = (res.data.items || []).map(user => ({
-      label: `${user.email}${user.username ? ' · ' + user.username : ''} (ID: ${user.id})`,
+      // 管理员账号同样可被搜索/分配，用后缀标识出来便于辨认
+      label: `${user.email}${user.username ? ' · ' + user.username : ''} (ID: ${user.id})${user.is_admin ? ' [管理员]' : ''}`,
       value: user.id
     }))
     // 保留已选中的用户选项（远程搜索切换时已选的不消失）
@@ -856,6 +860,15 @@ onActivated(() => {
 </script>
 
 <style scoped>
+/* 多选下拉的输入框宽度由内部 mirror 撑开：空输入时只有几像素，
+   视觉上像「大框里套了个极小的输入框」，也让人不易察觉这里可以打字搜索。
+   必须用 :deep()：scoped 会把 [data-v-x] 加到最后一个选择器上，而 naive-ui 内部元素没有该属性。 */
+.assign-user-select :deep(.n-base-selection-input-tag),
+.assign-user-select :deep(.n-base-selection-input-tag__input),
+.assign-user-select :deep(.n-base-selection-input-tag__mirror) {
+  min-width: 100px;
+}
+
 .desktop-toolbar {
   display: flex;
   align-items: center;

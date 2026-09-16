@@ -13,7 +13,7 @@
             v-model:value="form.email"
             placeholder="用户名/邮箱"
             size="large"
-            :input-props="{ autocomplete: 'email' }"
+            :input-props="{ autocomplete: 'username' }"
           >
             <template #prefix><n-icon :component="PersonOutline" /></template>
           </n-input>

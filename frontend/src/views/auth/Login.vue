@@ -4,8 +4,8 @@
     <p class="auth-form-subtitle">登录你的账户继续使用</p>
 
     <n-form ref="formRef" :model="form" :rules="rules" label-placement="top" size="large">
-      <n-form-item path="email" label="邮箱">
-        <n-input v-model:value="form.email" placeholder="请输入邮箱" :input-props="{ autocomplete: 'email' }">
+      <n-form-item path="email" label="邮箱/用户名">
+        <n-input v-model:value="form.email" placeholder="请输入邮箱或用户名" :input-props="{ autocomplete: 'username' }">
           <template #prefix><n-icon :component="MailOutline" /></template>
         </n-input>
       </n-form-item>
@@ -74,8 +74,7 @@ const form = ref({ email: '', password: '' })
 // 校验错误由 n-form-item 内联 feedback 展示（非仅 toast）
 const rules = {
   email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email' as const, message: '邮箱格式不正确', trigger: 'blur' },
+    { required: true, message: '请输入邮箱或用户名', trigger: 'blur' },
   ],
   password: { required: true, message: '请输入密码', trigger: 'blur' },
 }

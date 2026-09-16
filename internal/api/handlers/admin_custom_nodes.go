@@ -29,7 +29,7 @@ func AdminListCustomNodes(c *gin.Context) {
 			Pluck("user_custom_nodes.custom_node_id", &matchedNodeIDs)
 
 		query = query.Where(
-			db.Where("custom_nodes.name LIKE ? OR custom_nodes.display_name LIKE ? OR custom_nodes.domain LIKE ? OR CAST(custom_nodes.port AS CHAR) LIKE ?", like, like, like, like).
+			db.Where("custom_nodes.name LIKE ? OR custom_nodes.display_name LIKE ? OR custom_nodes.domain LIKE ? OR custom_nodes.protocol LIKE ? OR CAST(custom_nodes.port AS CHAR) LIKE ?", like, like, like, like, like).
 				Or("custom_nodes.id IN ?", matchedNodeIDs),
 		)
 	}

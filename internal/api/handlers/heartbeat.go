@@ -103,6 +103,29 @@ func ClientHeartbeat(c *gin.Context) {
 		return
 	}
 
+	// ---- 4.5 补齐设备详情（型号/系统/品牌）----
+	// 客户端一直在心跳里发 x-device-model / x-device-brand / x-device-os /
+	// x-ver-os（HwidUtils.getHwidHeaders），但以前这里收下就丢了 ——
+	// 面板里的「型号」因此永远是空的（用户实测反馈）。
+	// 只补空字段，不覆盖已有值，也**不影响指纹**（指纹只看 Did）。
+	if detail := deviceDetailUpdates(
+		c.GetHeader("x-device-model"),
+		c.GetHeader("x-device-brand"),
+		c.GetHeader("x-device-os"),
+		c.GetHeader("x-ver-os"),
+		device.DeviceModel,
+		device.DeviceBrand,
+		device.OSName,
+		device.OSVersion,
+	); len(detail) > 0 {
+		// 不放进上面那条带去抖的更新里：去抖窗口内的心跳会被跳过，
+		// 补详情没必要等，而且失败也不该让心跳报错（下一次心跳会再补）。
+		if err := db.Model(&models.Device{}).Where("id = ?", device.ID).
+			Updates(detail).Error; err != nil {
+			utils.LogError("[heartbeat] 补写设备详情失败 device=%d err=%v", device.ID, err)
+		}
+	}
+
 	// ---- 5. 返回建议间隔，客户端据此自适应（服务端可随时调整）----
 	utils.Success(c, gin.H{
 		"online":      true,

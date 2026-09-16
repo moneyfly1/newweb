@@ -152,7 +152,11 @@ func AdminGetUser(c *gin.Context) {
 	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&orders) }()
 	go func() {
 		defer wg.Done()
-		db.Where("subscription_id = ?", subscription.ID).Order("last_access DESC").Limit(50).Find(&devices)
+		// 只列活跃设备：设备指纹会随客户端上报字段 / Did 变化而产生历史遗留记录，
+		// 若把已停用的一并列出，同一台机器会显示成多条，管理员会误以为“设备数虚高”。
+		// 真正的设备占用数以 current_devices（同样只统计 is_active）为准。
+		db.Where("subscription_id = ? AND is_active = ?", subscription.ID, true).
+			Order("last_access DESC").Limit(50).Find(&devices)
 	}()
 	go func() { defer wg.Done(); db.Where("user_id = ?", id).Order("created_at DESC").Limit(20).Find(&resets) }()
 	go func() {

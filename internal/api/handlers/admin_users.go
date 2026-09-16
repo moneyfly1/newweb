@@ -1043,34 +1043,35 @@ type geoIPResource struct {
 	gzip bool
 }
 
-// geoIPResources 待更新资源。每个文件给出多个镜像源，按顺序尝试（国内直连 GitHub 常超时）。
+// geoIPResources 待更新资源。每个文件给出多个源，按顺序尝试。
+//
+// 源顺序按**实测速度**排（线上 VPS 在美国，实测直连 GitHub 7.58MB/s，
+// jsdelivr 2.08MB/s，ghproxy 0.35MB/s —— 直连快 20 倍以上），因此直连优先，
+// 镜像仅作兜底（jsdelivr 对 >20MB 单文件有大小限制，v6 库与 mmdb 需靠直连）。
 func geoIPResources() []geoIPResource {
-	jsd := func(p string) string { return "https://fastly.jsdelivr.net/gh/" + p }
-	ghp := func(p string) string { return "https://ghproxy.net/https://github.com/" + p }
 	raw := func(p string) string { return "https://github.com/" + p }
+	jsd := func(p string) string { return "https://fastly.jsdelivr.net/gh/" + p }
 	return []geoIPResource{
 		{name: "geoip.dat", urls: []string{
+			raw("MetaCubeX/meta-rules-dat/raw/release/geoip.dat"),
 			jsd("MetaCubeX/meta-rules-dat@release/geoip.dat"),
-			ghp("MetaCubeX/meta-rules-dat/raw/release/geoip.dat"),
 		}},
 		{name: "geosite.dat", urls: []string{
+			raw("MetaCubeX/meta-rules-dat/raw/release/geosite.dat"),
 			jsd("MetaCubeX/meta-rules-dat@release/geosite.dat"),
-			ghp("MetaCubeX/meta-rules-dat/raw/release/geosite.dat"),
 		}},
 		{name: "geoip.metadb", urls: []string{
+			raw("MetaCubeX/meta-rules-dat/raw/release/geoip.metadb"),
 			jsd("MetaCubeX/meta-rules-dat@release/geoip.metadb"),
-			ghp("MetaCubeX/meta-rules-dat/raw/release/geoip.metadb"),
 		}},
 		{name: "GeoLite2-City.mmdb", gzip: true, urls: []string{
-			ghp("wp-statistics/GeoLite2-City/raw/master/GeoLite2-City.mmdb.gz"),
 			raw("wp-statistics/GeoLite2-City/raw/master/GeoLite2-City.mmdb.gz"),
 		}},
 		{name: "ip2region_v4.xdb", urls: []string{
+			raw("lionsoul2014/ip2region/raw/master/data/ip2region_v4.xdb"),
 			jsd("lionsoul2014/ip2region@master/data/ip2region_v4.xdb"),
-			ghp("lionsoul2014/ip2region/raw/master/data/ip2region_v4.xdb"),
 		}},
 		{name: "ip2region_v6.xdb", urls: []string{
-			ghp("lionsoul2014/ip2region/raw/master/data/ip2region_v6.xdb"),
 			raw("lionsoul2014/ip2region/raw/master/data/ip2region_v6.xdb"),
 		}},
 	}

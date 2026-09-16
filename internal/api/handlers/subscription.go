@@ -268,6 +268,11 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	if v := strings.TrimSpace(c.GetHeader("x-device-model")); v != "" {
 		clientInfo.DeviceModel = v
 	}
+	// 品牌同样是客户端上报的（macOS=Apple / Android=厂商 / Windows=BIOS 厂商），
+	// 比从 UA 猜准得多（UA 里往往只有一个客户端名）。
+	if v := strings.TrimSpace(c.GetHeader("x-device-brand")); v != "" {
+		clientInfo.DeviceBrand = v
+	}
 
 	fingerprint := services.GenerateDeviceFingerprint(ua, ip)
 	if appDeviceID != "" {
@@ -414,22 +419,24 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 			// 这些字段以前只在设备首次登记时写入，而旧版客户端拿不到型号
 			// （例如早期 Mclash 还不发 x-device-model），于是永远为空——
 			// 线上 152 台设备中 99 台型号为空即由此而来。此后每次拉取都尝试补写，可自愈。
-			if device.DeviceModel == nil && clientInfo.DeviceModel != "" {
-				updates["device_model"] = clientInfo.DeviceModel
+			// 注意：**空串也算缺失**（blankStrPtr）。首次登记时客户端若没发
+			// x-device-model，落库的是空串而非 NULL，旧的 `== nil` 判断永远补不上。
+			for k, v := range deviceDetailUpdates(
+				clientInfo.DeviceModel,
+				clientInfo.DeviceBrand,
+				clientInfo.OSName,
+				clientInfo.OSVersion,
+				device.DeviceModel,
+				device.DeviceBrand,
+				device.OSName,
+				device.OSVersion,
+			) {
+				updates[k] = v
 			}
-			if device.DeviceBrand == nil && clientInfo.DeviceBrand != "" {
-				updates["device_brand"] = clientInfo.DeviceBrand
-			}
-			if (device.OSName == nil || *device.OSName == "") && clientInfo.OSName != "" {
-				updates["os_name"] = clientInfo.OSName
-			}
-			if device.OSVersion == nil && clientInfo.OSVersion != "" {
-				updates["os_version"] = clientInfo.OSVersion
-			}
-			if device.SoftwareVersion == nil && clientInfo.SoftwareVersion != "" {
+			if blankStrPtr(device.SoftwareVersion) && clientInfo.SoftwareVersion != "" {
 				updates["software_version"] = clientInfo.SoftwareVersion
 			}
-			if (device.DeviceType == nil || *device.DeviceType == "") && clientInfo.DeviceType != "" {
+			if blankStrPtr(device.DeviceType) && clientInfo.DeviceType != "" {
 				updates["device_type"] = clientInfo.DeviceType
 			}
 			// 客户端识别规则修正后（原先只能识别出内核名 Mihomo、现在能认出 Mclash），

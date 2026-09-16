@@ -59,7 +59,9 @@
                     filterable
                     remote
                     clearable
-                    placeholder="搜索并选择专线节点"
+                    size="medium"
+                    :max-tag-count="2"
+                    placeholder="搜索专线节点（名称 / 类型 / 域名 / 端口）"
                     :options="customNodeOptions"
                     :loading="loadingCustomNodeOptions"
                     @search="fetchCustomNodeOptions"
@@ -289,15 +291,27 @@ const fetchUserCustomNodes = async (userId = userDetail.value.id) => {
 const fetchCustomNodeOptions = async (query = '') => {
   loadingCustomNodeOptions.value = true
   try {
+    // page_size 取后端上限：线上专线节点可能上百个，取太少会导致“展开下拉看不到目标节点”
     const res = await listCustomNodes({
       page: 1,
-      page_size: 50,
+      page_size: 100,
       search: String(query || '').trim()
     })
-    customNodeOptions.value = (res.data?.items || []).map(node => ({
+    const items = res.data?.items || []
+    const total = res.data?.total ?? items.length
+    const options = items.map(node => ({
       label: `${node.display_name || node.name || `专线节点 ${node.id}`} · ${node.protocol || '-'} · ${node.domain || '-'}`,
       value: node.id
     }))
+    // 命中数超过一次返回量时给出提示，避免用户误以为“只有这么多节点”
+    if (total > items.length) {
+      options.unshift({
+        label: `共 ${total} 个节点，已显示前 ${items.length} 个 —— 输入关键词可精确匹配`,
+        value: -1,
+        disabled: true
+      })
+    }
+    customNodeOptions.value = options
   } catch (error) {
     message.error('获取专线节点失败')
   } finally {
@@ -535,6 +549,13 @@ const rechargeCols = [
   border: 1px solid rgba(0,0,0,0.08);
   border-radius: 6px;
   background: rgba(0,0,0,0.02);
+}
+/* 多选下拉的输入框由内部 mirror 撑宽：空输入时只有几像素，看起来像「框里套了个极小的输入框」。
+   给定最小宽度后，输入区域始终可见可点，也便于用户发现这里可以搜索。 */
+.assign-panel :deep(.n-base-selection-input-tag),
+.assign-panel :deep(.n-base-selection-input-tag__input),
+.assign-panel :deep(.n-base-selection-input-tag__mirror) {
+  min-width: 100px;
 }
 .assign-actions {
   display: flex;

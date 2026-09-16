@@ -234,10 +234,23 @@
                     立即清理旧日志
                   </n-button>
                   <n-divider />
-                  <n-h3 prefix="bar">数据维护</n-h3>
-                  <n-space>
-                    <n-button secondary @click="handleUpdateGeoIP">更新 GeoIP 数据库</n-button>
+                  <n-h3 prefix="bar">数据维护 · IP 地区库</n-h3>
+                  <n-space align="center">
+                    <n-button secondary :loading="geoIPUpdating" :disabled="geoIPUpdating" @click="handleUpdateGeoIP">
+                      {{ geoIPUpdating ? '正在后台更新…' : '更新 GeoIP 数据库' }}
+                    </n-button>
+                    <n-button secondary :loading="backfilling" @click="handleBackfillLocations">回填历史地区</n-button>
                   </n-space>
+                  <n-alert v-if="geoIPMessage" :type="geoIPHasFailure ? 'warning' : 'info'" style="margin-top: 10px;" :show-icon="true">
+                    {{ geoIPMessage }}
+                    <div v-if="geoIPResults.length" style="margin-top: 6px; font-size: 12px; line-height: 1.7;">
+                      <div v-for="r in geoIPResults" :key="r.file">
+                        {{ r.ok ? '✅' : '❌' }} {{ r.file }}
+                        <span v-if="r.ok"> · {{ (r.size / 1024 / 1024).toFixed(1) }} MB</span>
+                        <span v-else-if="r.error"> · {{ r.error }}</span>
+                      </div>
+                    </div>
+                  </n-alert>
                 </div>
 
                 <!-- 备份恢复 -->
@@ -517,7 +530,7 @@ import {
   MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline,
   FunnelOutline, CloudDownloadOutline, DownloadOutline, GitBranchOutline
 } from '@vicons/ionicons5'
-import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs, runSoftwareSync, checkSoftwareVersions } from '@/api/admin'
+import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, getGeoIPUpdateStatus, backfillLocations, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs, runSoftwareSync, checkSoftwareVersions } from '@/api/admin'
 import { formatDateTime } from '@/utils/date'
 import { useAppStore } from '@/stores/app'
 
@@ -532,6 +545,13 @@ const sendingTest = ref(false)
 const testingBark = ref(false)
 const backupCreating = ref(false)
 const cleaningLogs = ref(false)
+// GeoIP 后台更新任务的状态（前端轮询展示进度）
+const geoIPUpdating = ref(false)
+const geoIPMessage = ref('')
+const geoIPResults = ref<any[]>([])
+const geoIPHasFailure = computed(() => geoIPResults.value.some((r: any) => !r.ok))
+const backfilling = ref(false)
+let geoIPTimer: any = null
 const testEmail = ref('')
 const backupList = ref<any[]>([])
 const backupListLoading = ref(false)
@@ -1108,9 +1128,63 @@ const handleCleanOldLogs = async () => {
 const handleUpdateGeoIP = async () => {
   try {
     await updateGeoIPFiles()
-    message.success('GeoIP 库更新任务已启动')
-  } catch {}
+  } catch (e: any) {
+    message.error(e?.message || '启动 GeoIP 更新失败')
+    return
+  }
+  // 后台任务：下载 100MB+ 需要时间，必须轮询展示进度，否则用户只会看到“没反应”
+  geoIPUpdating.value = true
+  geoIPMessage.value = '任务已启动，正在后台下载…'
+  geoIPResults.value = []
+  message.success('GeoIP 更新已在后台启动')
+  pollGeoIPStatus()
 }
+
+const pollGeoIPStatus = async () => {
+  if (geoIPTimer) clearInterval(geoIPTimer)
+  const tick = async () => {
+    try {
+      const res: any = await getGeoIPUpdateStatus()
+      const d = res.data || {}
+      geoIPMessage.value = d.message || ''
+      geoIPResults.value = Array.isArray(d.results) ? d.results : []
+      if (!d.running) {
+        geoIPUpdating.value = false
+        if (geoIPTimer) { clearInterval(geoIPTimer); geoIPTimer = null }
+        const results = d.results || []
+        const okCount = results.filter((r: any) => r.ok).length
+        if (results.length && okCount === results.length) {
+          message.success('GeoIP 数据库更新完成，已重新加载')
+        } else if (results.length) {
+          message.warning(`更新完成：成功 ${okCount}/${results.length}，失败原因见下方列表`)
+        }
+      }
+    } catch {
+      // 轮询失败静默，下一轮重试
+    }
+  }
+  await tick()
+  geoIPTimer = setInterval(tick, 3000)
+}
+
+// 回填历史地区：修复 ip2region 加载错误期间写入的“未知”（含 devices 表）
+const handleBackfillLocations = async () => {
+  backfilling.value = true
+  try {
+    const res: any = await backfillLocations()
+    const detail = res.data?.backfilled || {}
+    const parts = Object.entries(detail)
+      .filter(([, v]) => Number(v) > 0)
+      .map(([k, v]) => `${k} ${v} 条`)
+    message.success(parts.length ? `回填完成：${parts.join('，')}` : '回填完成（没有需要更新的记录）')
+  } catch (e: any) {
+    message.error(e?.message || '回填失败')
+  } finally {
+    backfilling.value = false
+  }
+}
+
+onBeforeUnmount(() => { if (geoIPTimer) clearInterval(geoIPTimer) })
 
 onMounted(() => { loadSettings(); loadProtocolFilter(); loadVersionCheck() })
 

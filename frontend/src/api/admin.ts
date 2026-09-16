@@ -155,6 +155,8 @@ export const restoreBackup = (data: { path: string }) => request.post('/admin/ba
 export const listGitHubBackups = () => request.get('/admin/backup/github')
 export const restoreGitHubBackup = (data: { path: string, download_url: string }) => request.post('/admin/backup/restore-github', data)
 export const updateGeoIPFiles = () => request.post('/admin/settings/update-geoip')
+// GeoIP 更新为后台任务（下载 100MB+ 需要时间），用该接口轮询进度
+export const getGeoIPUpdateStatus = () => request.get('/admin/settings/update-geoip/status')
 export const cleanOldLogs = () => request.post('/admin/settings/clean-logs')
 export const backfillLocations = () => request.post('/admin/settings/backfill-locations')
 

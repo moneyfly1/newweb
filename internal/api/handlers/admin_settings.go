@@ -307,8 +307,29 @@ func AdminBackfillLocations(c *gin.Context) {
 	db := database.GetDB()
 	backfilled := map[string]int64{}
 
-	updateTable := func(tableName string) error {
-		rows, err := db.Table(tableName).Select("id, ip_address").Where("(location IS NULL OR location = '') AND ip_address IS NOT NULL AND ip_address != ''").Rows()
+	// 表名 → 地区列名。devices 用的列是 region，其余日志表用 location，
+	// 因此不能像以前那样对所有表硬编码 location。
+	targets := []struct {
+		table  string
+		column string
+	}{
+		{"login_history", "location"},
+		{"user_activities", "location"},
+		{"registration_logs", "location"},
+		{"subscription_logs", "location"},
+		{"balance_logs", "location"},
+		{"audit_logs", "location"},
+		{"devices", "region"},
+	}
+
+	updateTable := func(tableName, column string) error {
+		// 必须在筛选条件里包含 '未知'：此前只处理 NULL/''，而 ip2region 加载错误期间
+		// 写入的全是字符串“未知”，那些行永远不会被回填（线上 86 条即属此类）。
+		where := fmt.Sprintf(
+			"(%s IS NULL OR %s = '' OR %s = '未知') AND ip_address IS NOT NULL AND ip_address != ''",
+			column, column, column,
+		)
+		rows, err := db.Table(tableName).Select("id, ip_address").Where(where).Rows()
 		if err != nil {
 			return err
 		}
@@ -322,10 +343,11 @@ func AdminBackfillLocations(c *gin.Context) {
 				continue
 			}
 			location := utils.GetIPLocation(ip)
-			if location == "" {
+			// 只写入有效结果：查不到时保持原值，避免把“未知”清成空串
+			if location == "" || location == "未知" {
 				continue
 			}
-			if err := db.Table(tableName).Where("id = ?", id).Update("location", location).Error; err == nil {
+			if err := db.Table(tableName).Where("id = ?", id).Update(column, location).Error; err == nil {
 				count++
 			}
 		}
@@ -333,9 +355,9 @@ func AdminBackfillLocations(c *gin.Context) {
 		return nil
 	}
 
-	for _, tableName := range []string{"login_history", "user_activities", "registration_logs", "subscription_logs", "balance_logs"} {
-		if err := updateTable(tableName); err != nil {
-			utils.InternalError(c, "回填 "+tableName+" 失败: "+err.Error())
+	for _, t := range targets {
+		if err := updateTable(t.table, t.column); err != nil {
+			utils.InternalError(c, "回填 "+t.table+" 失败: "+err.Error())
 			return
 		}
 	}

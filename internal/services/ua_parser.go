@@ -79,6 +79,13 @@ func detectSoftware(lower, ua string, info *ClientInfo) {
 		keyword string
 		name    string
 	}{
+		// ⚠️ 顺序即优先级：自有客户端的 UA 里同时带内核标识
+		// （`Mclash/0.0.7 platform/macos mihomo/1.19.31`），必须排在
+		// mihomo/clash 之前，否则设备会被识别成 "Mihomo"（内核名）——
+		// 网站就认不出这是哪个客户端了（实测库里确实出现了 Mihomo 行）。
+		{"mclash", "Mclash"},
+		{"moneyfly", "MoneyFly"},
+		{"clashmi", "ClashMi"},
 		{"shadowrocket", "Shadowrocket"},
 		{"quantumult%20x", "Quantumult X"},
 		{"quantumult x", "Quantumult X"},
@@ -155,6 +162,28 @@ func detectSoftware(lower, ua string, info *ClientInfo) {
 }
 
 func detectOS(lower, ua string, info *ClientInfo) {
+	// 自有客户端（Mclash / MoneyFly）用 `platform/<os>` 明确标注平台，
+	// 标准 UA 关键词（windows / mac os x / android…）里一个都没有，
+	// 不先认这个标记就会得到 OSName=Unknown → 设备类型 unknown、
+	// 特征不足导致指纹退化成整个 UA 的哈希（版本一变就多出一台"新设备"）。
+	switch {
+	case strings.Contains(lower, "platform/windows"):
+		info.OSName = "Windows"
+		return
+	case strings.Contains(lower, "platform/macos") || strings.Contains(lower, "platform/mac"):
+		info.OSName = "macOS"
+		return
+	case strings.Contains(lower, "platform/android"):
+		info.OSName = "Android"
+		return
+	case strings.Contains(lower, "platform/ios"):
+		info.OSName = "iOS"
+		return
+	case strings.Contains(lower, "platform/linux"):
+		info.OSName = "Linux"
+		return
+	}
+
 	switch {
 	case strings.Contains(lower, "iphone") || strings.Contains(lower, "ipad"):
 		info.OSName = "iOS"

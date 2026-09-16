@@ -58,3 +58,5 @@ vendor/
 tmp/
 temp/
 *.pid
+uploads/config/*.xdb
+uploads/config/*.tmp

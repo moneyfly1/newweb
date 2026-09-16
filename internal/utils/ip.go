@@ -33,13 +33,17 @@ type mmdbCityRecord struct {
 const ipCacheMaxSize = 2048
 
 var (
-	ipLocationCache   = make(map[string]ipLocationCacheEntry)
-	ipLocationMu      sync.RWMutex
-	ipLocationTTL     = 30 * time.Minute
-	mmdbReader        *maxminddb.Reader
-	mmdbOnce          sync.Once
-	ip2regionSearcher *xdb.Searcher
-	ip2regionOnce     sync.Once
+	ipLocationCache = make(map[string]ipLocationCacheEntry)
+	ipLocationMu    sync.RWMutex
+	ipLocationTTL   = 30 * time.Minute
+	mmdbReader      *maxminddb.Reader
+	mmdbOnce        sync.Once
+	// ip2region 的 v4/v6 是两个独立的库，必须分别加载并各自用对应 Version，
+	// 查询时再按 IP 类型选择（详见 loadIP2RegionSearchers）。
+	ip4Searcher   *xdb.Searcher
+	ip6Searcher   *xdb.Searcher
+	ip2regionOnce sync.Once
+	geoIPReloadMu sync.Mutex
 )
 
 func init() {
@@ -62,33 +66,50 @@ func ipCacheCleaner() {
 	}
 }
 
-func loadIP2RegionSearcher() *xdb.Searcher {
+// loadIP2RegionSearchers 分别加载 IPv4 / IPv6 库（各只加载一次）。
+//
+// 关键：加载时**必须**传入与实际库匹配的 Version —— SDK 的 Search() 会用
+// `len(ip) != version.Bytes` 做长度校验，而 IPvx 是空 Version（Bytes=0），
+// 传它会导致**任何** IP 都报 `invalid ip address( expected)`，地理位置全部退化成
+// “未知”（线上实测：1.198.223.178 这类普通 IPv4 也照样失败）。
+//
+// 另外 v4/v6 是两套库，不能只加载其中一个就返回，否则另一族地址永远查不到。
+func loadIP2RegionSearchers() (*xdb.Searcher, *xdb.Searcher) {
 	ip2regionOnce.Do(func() {
-		// 优先尝试 v4，然后 v6
-		candidates := []string{
-			filepath.Join("uploads", "config", "ip2region_v4.xdb"),
-			filepath.Join("uploads", "config", "ip2region_v6.xdb"),
-		}
-		for _, xdbPath := range candidates {
-			if _, err := os.Stat(xdbPath); err != nil {
-				continue
+		load := func(version *xdb.Version, name string) *xdb.Searcher {
+			path := filepath.Join("uploads", "config", name)
+			if _, err := os.Stat(path); err != nil {
+				fmt.Printf("[IP2Region] 文件不存在: %s\n", path)
+				return nil
 			}
-			searcher, err := xdb.NewWithFileOnly(xdb.IPvx, xdbPath)
+			searcher, err := xdb.NewWithFileOnly(version, path)
 			if err != nil {
-				fmt.Printf("[IP2Region] 创建失败 %s: %v\n", xdbPath, err)
-				continue
+				fmt.Printf("[IP2Region] 创建失败 %s: %v\n", path, err)
+				return nil
 			}
-			ip2regionSearcher = searcher
-			fmt.Printf("[IP2Region] 成功加载: %s\n", xdbPath)
-			return
+			fmt.Printf("[IP2Region] 成功加载: %s (%s)\n", path, version.Name)
+			return searcher
 		}
-		fmt.Printf("[IP2Region] 所有数据库文件加载失败\n")
+		ip4Searcher = load(xdb.IPv4, "ip2region_v4.xdb")
+		ip6Searcher = load(xdb.IPv6, "ip2region_v6.xdb")
+		if ip4Searcher == nil && ip6Searcher == nil {
+			fmt.Printf("[IP2Region] 所有数据库文件加载失败\n")
+		}
 	})
-	return ip2regionSearcher
+	return ip4Searcher, ip6Searcher
 }
 
 func lookupLocationFromIP2Region(ip string) string {
-	searcher := loadIP2RegionSearcher()
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return ""
+	}
+	v4Searcher, v6Searcher := loadIP2RegionSearchers()
+	// 按地址族选择对应库：IPv4 用 v4 库，IPv6 用 v6 库
+	searcher := v6Searcher
+	if parsed.To4() != nil {
+		searcher = v4Searcher
+	}
 	if searcher == nil {
 		return ""
 	}
@@ -247,4 +268,34 @@ func isPrivateIP(ip string) bool {
 		}
 	}
 	return false
+}
+
+// ReloadGeoIP 重新加载地理位置库（GeoIP 数据库更新后调用）。
+//
+// 为什么必须重载：ip2region/mmdb 的句柄由 sync.Once 缓存，进程启动后只加载一次；
+// 只替换磁盘文件而不重载，更新会“看起来成功但完全不生效”。同时清空 IP 缓存，
+// 避免旧结果（例如历史上失败留下的“未知”）继续被复用。
+func ReloadGeoIP() {
+	geoIPReloadMu.Lock()
+	defer geoIPReloadMu.Unlock()
+
+	// 重置懒加载状态
+	ip2regionOnce = sync.Once{}
+	ip4Searcher = nil
+	ip6Searcher = nil
+	if mmdbReader != nil {
+		_ = mmdbReader.Close()
+	}
+	mmdbReader = nil
+	mmdbOnce = sync.Once{}
+
+	// 清空 IP → 地区 缓存
+	ipLocationMu.Lock()
+	ipLocationCache = make(map[string]ipLocationCacheEntry)
+	ipLocationMu.Unlock()
+
+	// 立即触发加载，让调用方随后就能用上新库
+	v4, v6 := loadIP2RegionSearchers()
+	loadMMDBReader()
+	fmt.Printf("[GeoIP] 已重载地理位置库: ip2region_v4=%v ip2region_v6=%v\n", v4 != nil, v6 != nil)
 }

@@ -129,17 +129,29 @@ func createAlipayDirectPayment(c *gin.Context, db *gorm.DB, target paymentTarget
 	}
 	outTradeNo := safeTransactionID(transaction.TransactionID)
 	utils.LogPayment("[CreatePayment] 使用 txID 作为 out_trade_no: %s (order_no: %s)", outTradeNo, target.OrderNo)
-	var paymentURL string
-	if isMobile {
-		paymentURL, err = services.AlipayCreateWapOrder(alipayCfg, outTradeNo, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
+	var (
+		payRes *services.AlipayPayResult
+		perr   error
+	)
+	amountStr := fmt.Sprintf("%.2f", target.PayAmount)
+	if isMobile && !services.AlipayPreferQrOnMobile() {
+		// 手机端走手机网站支付：得到的是可跳转支付宝 App 的网页
+		// （只有该产品已签约时才该走这里，见 AlipayPreferQrOnMobile 的说明）
+		payURL, werr := services.AlipayCreateWapOrder(alipayCfg, outTradeNo, target.Subject, amountStr, notifyURL, returnURL)
+		perr = werr
+		if werr == nil {
+			payRes = &services.AlipayPayResult{URL: payURL, Mode: "page"}
+		}
 	} else {
-		paymentURL, err = services.AlipayCreateOrder(alipayCfg, outTradeNo, target.Subject, fmt.Sprintf("%.2f", target.PayAmount), notifyURL, returnURL)
+		// 桌面端，或手机端选择二维码：走当面付（唯一已签约、能真正付掉的产品）
+		payRes, perr = services.AlipayCreateOrderEx(alipayCfg, outTradeNo, target.Subject, amountStr, notifyURL, returnURL)
 	}
-	if err != nil {
-		utils.LogError("[payment] 直接支付宝失败: %v", err)
-		utils.BadRequest(c, "支付宝直连创建失败: "+err.Error())
+	if perr != nil {
+		utils.LogError("[payment] 直接支付宝失败: %v", perr)
+		utils.BadRequest(c, perr.Error())
 		return true
 	}
+	paymentURL, paymentMode := payRes.URL, payRes.Mode
 	if target.Order != nil {
 		ptxID := outTradeNo
 		if err := db.Model(target.Order).Update("payment_transaction_id", &ptxID).Error; err != nil {
@@ -156,8 +168,8 @@ func createAlipayDirectPayment(c *gin.Context, db *gorm.DB, target paymentTarget
 			return true
 		}
 	}
-	utils.LogPayment("[CreatePayment] ✅ 支付宝订单创建成功 - txID=%s, order_no=%s", outTradeNo, target.OrderNo)
-	utils.Success(c, buildPaymentURLResult("alipay", target.OrderNo, outTradeNo, target.PayAmount, paymentURL, nil))
+	utils.LogPayment("[CreatePayment] ✅ 支付宝订单创建成功 - txID=%s, order_no=%s, mode=%s", outTradeNo, target.OrderNo, paymentMode)
+	utils.Success(c, buildPaymentURLResult("alipay", target.OrderNo, outTradeNo, target.PayAmount, paymentURL, gatewayResponseExtras{"payment_mode": paymentMode}))
 	return true
 }
 

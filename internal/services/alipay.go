@@ -113,11 +113,41 @@ func newAlipayClient(cfg *AlipayConfig) (*alipay.Client, error) {
 	return client, nil
 }
 
+// AlipayPayResult 是「支付宝下单」的结果：二维码内容或收银台网页，外加降级说明。
+//
+// Mode 会透给客户端（`payment_mode`）：`qrcode` = 客户端应在软件内出码，
+// `page` = 客户端应打开浏览器。
+type AlipayPayResult struct {
+	URL  string
+	Mode string
+	// PreCreateSubCode / PreCreateSubMsg 是当面付失败的原因（成功为空）。
+	PreCreateSubCode string
+	PreCreateSubMsg  string
+}
+
 // AlipayCreateOrder creates a payment via direct Alipay API.
+//
+// 只返回 URL 的老签名（其它调用方还在用），模式信息请用 AlipayCreateOrderEx。
 func AlipayCreateOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notifyURL, returnURL string) (string, error) {
-	client, err := newAlipayClient(cfg)
+	res, err := AlipayCreateOrderEx(cfg, outTradeNo, subject, amount, notifyURL, returnURL)
 	if err != nil {
 		return "", err
+	}
+	return res.URL, nil
+}
+
+// AlipayCreateOrderEx 先尝试当面付（当面付 = 二维码），失败时才可能降级到电脑网站支付。
+//
+// 为什么要显式区分：实测本商户当面付**单笔限额 ¥1000**（超过即
+// `ACQ.BEYOND_PER_RECEIPT_SINGLE_RESTRICTION`），而电脑网站支付**没签约**
+// （打开降级出来的网页只会看到 `insufficient-isv-permissions` 报错页）。
+// 以前这里不管失败原因一律降级，用户点「支付宝」就得到一个必然报错的网页 ——
+// 看起来像「支付坏了」。现在默认**不降级**（要降级需显式开启
+// `pay_alipay_allow_page_pay`），并把真实原因如实返回给客户端。
+func AlipayCreateOrderEx(cfg *AlipayConfig, outTradeNo, subject, amount, notifyURL, returnURL string) (*AlipayPayResult, error) {
+	client, err := newAlipayClient(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	if cfg.NotifyURL != "" {
@@ -142,12 +172,26 @@ func AlipayCreateOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notifyURL
 	rsp, err := client.TradePreCreate(ctx, preCreate)
 	if err == nil && !rsp.IsFailure() && rsp.QRCode != "" {
 		log.Printf("[alipay] TradePreCreate成功, QR: %s (订单: %s)", rsp.QRCode, outTradeNo)
-		return rsp.QRCode, nil
+		return &AlipayPayResult{URL: rsp.QRCode, Mode: "qrcode"}, nil
 	}
+
+	subCode, subMsg, reason := "", "", ""
 	if err != nil {
-		log.Printf("[alipay] TradePreCreate失败: %v, 尝试页面支付", err)
+		reason = err.Error()
+		log.Printf("[alipay] TradePreCreate失败: %v", err)
 	} else if rsp.IsFailure() {
-		log.Printf("[alipay] TradePreCreate业务失败: Code=%s Msg=%s SubMsg=%s, 尝试页面支付", rsp.Code, rsp.Msg, rsp.SubMsg)
+		subCode, subMsg = rsp.SubCode, rsp.SubMsg
+		reason = fmt.Sprintf("code=%s msg=%s sub_code=%s sub_msg=%s", rsp.Code, rsp.Msg, rsp.SubCode, rsp.SubMsg)
+		log.Printf("[alipay] TradePreCreate业务失败: %s", reason)
+	} else {
+		reason = "支付宝未返回二维码"
+		log.Printf("[alipay] TradePreCreate未返回二维码 (订单: %s)", outTradeNo)
+	}
+
+	// 降级到电脑网站支付：只有显式开启才走（没签约的产品降级过去必然是报错页）
+	if !alipayAllowPagePay() {
+		log.Printf("[alipay] 当面付不可用且未开启页面支付降级：%s", reason)
+		return nil, fmt.Errorf("%s", alipayFailureMessage(subCode, subMsg, amount))
 	}
 
 	// Fallback to TradePagePay (redirect)
@@ -161,14 +205,64 @@ func AlipayCreateOrder(cfg *AlipayConfig, outTradeNo, subject, amount, notifyURL
 
 	payURL, err := client.TradePagePay(pagePay)
 	if err != nil {
-		return "", fmt.Errorf("创建支付宝订单失败: %v", err)
+		return nil, fmt.Errorf("创建支付宝订单失败: %v", err)
 	}
 	if payURL == nil {
-		return "", fmt.Errorf("支付宝返回的支付URL为空")
+		return nil, fmt.Errorf("支付宝返回的支付URL为空")
 	}
 
-	log.Printf("[alipay] TradePagePay成功 (订单: %s)", outTradeNo)
-	return payURL.String(), nil
+	log.Printf("[alipay] TradePagePay成功 (订单: %s)（当面付失败原因：%s）", outTradeNo, reason)
+	return &AlipayPayResult{
+		URL:              payURL.String(),
+		Mode:             "page",
+		PreCreateSubCode: subCode,
+		PreCreateSubMsg:  subMsg,
+	}, nil
+}
+
+// alipayAllowPagePay 是否允许在当面付失败时降级到电脑网站支付。
+//
+// 默认关闭：本部署的支付宝应用没有签约电脑网站支付，降级出来的网页必定是
+// 支付宝的 `insufficient-isv-permissions` 报错页（用户实测「点了支付宝只看到报错」）。
+func alipayAllowPagePay() bool {
+	v := strings.ToLower(strings.TrimSpace(utils.GetSetting("pay_alipay_allow_page_pay")))
+	return v == "true" || v == "1" || v == "yes" || v == "on"
+}
+
+// AlipayPreferQrOnMobile 手机端是否也用当面付二维码（对应 sys_config
+// `pay_alipay_mobile_mode`，默认 `qrcode`）。
+//
+// 为什么默认二维码：本部署的支付宝应用只签约了**当面付**，手机网站支付没有签约 ——
+// wap 链接打开就是 `insufficient-isv-permissions` 报错页（实测）。而二维码在客户端
+// 可以包成 `alipays://...startapp?saId=10000007&qrcode=<码>` 直接唤起支付宝 App，
+// 手机上的体验反而更顺。若以后签约了手机网站支付，把该配置改成 `wap` 即可。
+func AlipayPreferQrOnMobile() bool {
+	v := strings.ToLower(strings.TrimSpace(utils.GetSetting("pay_alipay_mobile_mode")))
+	return v != "wap"
+}
+
+// alipayFailureMessage 把当面付的失败原因翻译成用户能看懂、且能据此行动的一句话。
+//
+// 纯函数，便于单测钉住（真实失败码来自线上实测）：
+//   - `ACQ.BEYOND_PER_RECEIPT_SINGLE_RESTRICTION`：超出单笔收款限额（实测本商户 ¥1000）
+//   - `insufficient-isv-permissions` / `isv.*`：应用没签约对应产品
+//
+// 底层网络/协议细节只写日志，不进这句话 —— 用户看不懂 `dial tcp` / `EOF`。
+func alipayFailureMessage(subCode, subMsg, amount string) string {
+	code := strings.ToLower(subCode)
+	switch {
+	case strings.Contains(code, "beyond_per_receipt_single_restriction"):
+		return fmt.Sprintf("支付宝当面付单笔限额不足：本单 ¥%s 超出商户限额，请改用其它支付方式或联系客服提高限额", amount)
+	case strings.Contains(code, "insufficient-isv-permissions"),
+		strings.Contains(code, "isv.invalid-permission"),
+		strings.Contains(code, "no-permission"),
+		strings.Contains(code, "unsupport"):
+		return "支付宝应用未签约当面付（无权限），请改用其它支付方式或联系客服开通"
+	case subMsg != "":
+		return "支付宝下单失败：" + subMsg
+	default:
+		return "支付宝下单失败，请改用其它支付方式或稍后再试"
+	}
 }
 
 // AlipayVerifyCallback verifies and parses an Alipay async notification.
@@ -519,15 +613,16 @@ func (g *AlipayGateway) CreatePayment(orderNo string, amount float64, subject, r
 	}
 
 	amountStr := fmt.Sprintf("%.2f", amount)
-	payURL, err := AlipayCreateOrder(g.config, orderNo, subject, amountStr, notifyURL, returnURL)
+	res, err := AlipayCreateOrderEx(g.config, orderNo, subject, amountStr, notifyURL, returnURL)
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]interface{}{
-		"pay_url":  payURL,
-		"order_no": orderNo,
-		"amount":   amount,
+		"pay_url":      res.URL,
+		"payment_mode": res.Mode,
+		"order_no":     orderNo,
+		"amount":       amount,
 	}, nil
 }
 

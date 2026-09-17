@@ -492,7 +492,7 @@ func AdminSendSubscriptionEmail(c *gin.Context) {
 	}
 	subject, body := services.RenderEmail("subscription", map[string]string{
 		"clash_url": clashURL, "universal_url": universalURL,
-		"expire_time":     sub.ExpireTime.Format("2006-01-02 15:04"),
+		"expire_time":     sub.ExpireTime.Format(utils.LayoutDateTimeShort),
 		"username":        user.Username,
 		"remaining_days":  fmt.Sprintf("%d", remainingDays),
 		"device_limit":    fmt.Sprintf("%d", sub.DeviceLimit),
@@ -518,16 +518,13 @@ func AdminSetSubscriptionExpireTime(c *gin.Context) {
 		utils.BadRequest(c, "参数错误")
 		return
 	}
-	expireTime, err := time.Parse("2006-01-02T15:04:05Z", req.ExpireTime)
+	// 与用户管理的「设置到期时间」共用同一个解析实现。
+	// 此前这里自己写了一套 time.Parse 链：不接受时间戳（前端 Date.getTime() 直接报错），
+	// 且日期回退布局按 UTC 解释，同一个日期在两个后台入口写进数据库的时刻差 8 小时。
+	expireTime, err := parseExpireTimeParam(req.ExpireTime)
 	if err != nil {
-		expireTime, err = time.Parse("2006-01-02 15:04:05", req.ExpireTime)
-		if err != nil {
-			expireTime, err = time.Parse("2006-01-02", req.ExpireTime)
-			if err != nil {
-				utils.BadRequest(c, "时间格式错误，支持: 2006-01-02 或 2006-01-02 15:04:05")
-				return
-			}
-		}
+		utils.BadRequest(c, "时间格式错误，支持: 2029-01-01、2029-01-01 15:04:05 或时间戳")
+		return
 	}
 
 	// Validate date range
@@ -554,8 +551,8 @@ func AdminSetSubscriptionExpireTime(c *gin.Context) {
 		return
 	}
 	adminID := c.GetUint("user_id")
-	utils.CreateSubscriptionLog(sub.ID, sub.UserID, "update", "admin", &adminID, fmt.Sprintf("管理员设置到期时间: %s", expireTime.Format("2006-01-02")), nil, nil)
-	utils.CreateAuditLog(c, "set_expire_time", "subscription", uint(id), fmt.Sprintf("设置订阅到期时间: %s (用户ID: %d)", expireTime.Format("2006-01-02"), sub.UserID))
+	utils.CreateSubscriptionLog(sub.ID, sub.UserID, "update", "admin", &adminID, fmt.Sprintf("管理员设置到期时间: %s", expireTime.Format(utils.LayoutDate)), nil, nil)
+	utils.CreateAuditLog(c, "set_expire_time", "subscription", uint(id), fmt.Sprintf("设置订阅到期时间: %s (用户ID: %d)", expireTime.Format(utils.LayoutDate), sub.UserID))
 	utils.Success(c, gin.H{"expire_time": expireTime})
 }
 

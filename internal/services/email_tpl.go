@@ -628,7 +628,7 @@ func writeTicketHistoryItem(sb *strings.Builder, author string, createdAt time.T
 	sb.WriteString(fmt.Sprintf(`<div style="border-left: 4px solid %s; background: %s; padding: 12px 14px; margin: 12px 0; border-radius: 4px;">`, borderColor, bgColor))
 	sb.WriteString(fmt.Sprintf(`<div style="font-size: 13px; color: #666; margin-bottom: 8px;"><strong>%s</strong><span style="margin-left: 8px;">%s</span></div>`,
 		template.HTMLEscapeString(author),
-		template.HTMLEscapeString(createdAt.Format("2006-01-02 15:04:05")),
+		template.HTMLEscapeString(createdAt.Format(utils.LayoutDateTime)),
 	))
 	sb.WriteString(fmt.Sprintf(`<div style="line-height: 1.7; color: #333;">%s</div>`, escapeEmailMultiline(content)))
 	sb.WriteString(`</div>`)

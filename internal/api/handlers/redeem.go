@@ -145,7 +145,9 @@ func RedeemCode(c *gin.Context) {
 			}
 		}
 
-		ip := c.ClientIP()
+		// 必须用 GetRealClientIP：站点在 Cloudflare 之后，c.ClientIP() 拿到的是
+		// 回源 IP（162.159.x.x 之类），会把兑换记录的来源 IP 写错。
+		ip := utils.GetRealClientIP(c)
 		return tx.Create(&models.RedeemRecord{
 			RedeemCodeID: code.ID, UserID: userID, Code: code.Code,
 			Type: code.Type, Value: code.Value,

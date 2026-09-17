@@ -24,17 +24,11 @@ func AdminListCoupons(c *gin.Context) {
 	utils.SuccessPage(c, coupons, total, p.Page, p.PageSize)
 }
 
-// parseCouponTime 解析优惠券生效/失效时间（RFC3339 或 2006-01-02）
+// parseCouponTime 解析优惠券生效/失效时间。
+// 实现已收敛到 utils.ParseFlexibleTime，与「设置到期时间」、CSV 导入共用同一规则
+// （此前这里和 AdminCreateCoupon 各写一套，日期-only 的解释时区也不一致）。
 func parseCouponTime(s string) (time.Time, error) {
-	t, err := time.Parse(time.RFC3339, s)
-	if err == nil {
-		return t, nil
-	}
-	t, err = time.Parse("2006-01-02", s)
-	if err == nil {
-		return t, nil
-	}
-	return t, err
+	return utils.ParseFlexibleTime(s)
 }
 
 func AdminCreateCoupon(c *gin.Context) {
@@ -57,21 +51,15 @@ func AdminCreateCoupon(c *gin.Context) {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
-	validFrom, err := time.Parse(time.RFC3339, req.ValidFrom)
+	validFrom, err := parseCouponTime(req.ValidFrom)
 	if err != nil {
-		validFrom, err = time.Parse("2006-01-02", req.ValidFrom)
-		if err != nil {
-			utils.BadRequest(c, "valid_from 日期格式错误")
-			return
-		}
+		utils.BadRequest(c, "valid_from 日期格式错误")
+		return
 	}
-	validUntil, err := time.Parse(time.RFC3339, req.ValidUntil)
+	validUntil, err := parseCouponTime(req.ValidUntil)
 	if err != nil {
-		validUntil, err = time.Parse("2006-01-02", req.ValidUntil)
-		if err != nil {
-			utils.BadRequest(c, "valid_until 日期格式错误")
-			return
-		}
+		utils.BadRequest(c, "valid_until 日期格式错误")
+		return
 	}
 	adminID := c.GetUint("user_id")
 	adminIDInt64 := int64(adminID)
@@ -135,16 +123,20 @@ func AdminUpdateCoupon(c *gin.Context) {
 		utils.BadRequest(c, "无有效更新字段")
 		return
 	}
-	// 日期字符串统一转 time.Time（前端提交 RFC3339 字符串）
-	if v, ok := updates["valid_from"].(string); ok && v != "" {
-		if t, err := parseCouponTime(v); err == nil {
-			updates["valid_from"] = t
+	// 日期字符串统一转 time.Time（前端提交 RFC3339 字符串）。
+	// 解析失败必须报错：此前是 `if err == nil { 转换 }`——失败就把原始字符串
+	// 直接写进 time 列，接口照样回成功，面板显示已保存而库里是脏值。
+	for _, field := range []string{"valid_from", "valid_until"} {
+		v, ok := updates[field].(string)
+		if !ok || v == "" {
+			continue
 		}
-	}
-	if v, ok := updates["valid_until"].(string); ok && v != "" {
-		if t, err := parseCouponTime(v); err == nil {
-			updates["valid_until"] = t
+		t, err := parseCouponTime(v)
+		if err != nil {
+			utils.BadRequest(c, field+" 日期格式错误")
+			return
 		}
+		updates[field] = t
 	}
 	if err := db.Model(&coupon).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新优惠券失败")

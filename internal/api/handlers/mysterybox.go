@@ -309,7 +309,7 @@ func OpenMysteryBox(c *gin.Context) {
 		return
 	}
 	if pool.MaxOpensPerDay != nil {
-		today := now.Format("2006-01-02")
+		today := now.Format(utils.LayoutDate)
 		var todayCount int64
 		db.Model(&models.MysteryBoxRecord{}).
 			Where("user_id = ? AND pool_id = ? AND DATE(created_at) = ?", userID, pool.ID, today).

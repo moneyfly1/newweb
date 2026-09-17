@@ -33,19 +33,21 @@ func UserCheckIn(c *gin.Context) {
 		minReward = maxReward
 	}
 
-	// Settings are in 分 (cents), convert to 元 (yuan) for balance
+	// 后台配置的单位是「分」，入账用的是「元」——必须换算。
+	// 这里此前漏了换算，把「分」当「元」入账：面板上写着 ¥0.1~¥0.5，
+	// 实际每个用户每天签到能拿到 ¥10~¥50（线上已有 15 元的签到入账记录）。
 	rangeSize := maxReward - minReward + 1
 	n, _ := rand.Int(rand.Reader, big.NewInt(int64(rangeSize)))
 	rewardCents := minReward + int(n.Int64())
-	amount := utils.Round2(float64(rewardCents))
+	amount := utils.CentsToYuan(rewardCents)
 
 	var newBalance float64
 
 	// 使用事务防止重放攻击和竞态条件
 	err := db.Transaction(func(tx *gorm.DB) error {
 		// 在事务内再次检查是否已签到（防重放）
-		today := time.Now().Format("2006-01-02")
-		todayStart, _ := time.ParseInLocation("2006-01-02", today, time.Now().Location())
+		today := time.Now().Format(utils.LayoutDate)
+		todayStart, _ := time.ParseInLocation(utils.LayoutDate, today, time.Now().Location())
 		tomorrowStart := todayStart.AddDate(0, 0, 1)
 		var count int64
 		tx.Model(&models.CheckIn{}).Where("user_id = ? AND created_at >= ? AND created_at < ?", userID, todayStart, tomorrowStart).Count(&count)
@@ -124,8 +126,8 @@ func GetCheckInStatus(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	db := database.GetDB()
 
-	today := time.Now().Format("2006-01-02")
-	todayStart, _ := time.ParseInLocation("2006-01-02", today, time.Now().Location())
+	today := time.Now().Format(utils.LayoutDate)
+	todayStart, _ := time.ParseInLocation(utils.LayoutDate, today, time.Now().Location())
 	tomorrowStart := todayStart.AddDate(0, 0, 1)
 
 	var (
@@ -190,7 +192,7 @@ func calcConsecutiveDays(db *gorm.DB, userID uint) int {
 	// 查最近 365 天，覆盖最长连续签到
 	// 统一使用 check_in_date 列（与防双签唯一索引同口径），避免 DATE(created_at)
 	// 在 UTC 存储与本地时区下的跨午夜偏差
-	since := time.Now().AddDate(0, 0, -365).Format("2006-01-02")
+	since := time.Now().AddDate(0, 0, -365).Format(utils.LayoutDate)
 	var dates []DateRow
 	db.Model(&models.CheckIn{}).
 		Select("check_in_date as d").
@@ -209,7 +211,7 @@ func calcConsecutiveDays(db *gorm.DB, userID uint) int {
 	checkDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	for _, row := range dates {
-		d, err := time.Parse("2006-01-02", row.D)
+		d, err := time.Parse(utils.LayoutDate, row.D)
 		if err != nil {
 			break
 		}

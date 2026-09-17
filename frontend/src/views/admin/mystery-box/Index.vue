@@ -24,7 +24,7 @@
           <template #header-extra>
             <n-space :size="8" @click.stop>
               <n-tag :type="pool.is_active ? 'success' : 'default'" size="small">{{ pool.is_active ? '启用' : '停用' }}</n-tag>
-              <n-tag size="small">{{ pool.price }} 元</n-tag>
+              <n-tag size="small">{{ formatAmount(pool.price) }} 元</n-tag>
               <n-button size="tiny" @click.stop="handleEditPool(pool)">编辑</n-button>
               <n-button size="tiny" type="error" @click.stop="handleDeletePool(pool.id)">删除</n-button>
             </n-space>
@@ -87,7 +87,7 @@
 import { ref, reactive, computed, h, onActivated, onMounted } from 'vue'
 import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
-import { formatCurrency } from '@/utils/amount'
+import { formatCurrency, formatAmount } from '@/utils/amount'
 import {
   listAdminMysteryBoxPools, createMysteryBoxPool, updateMysteryBoxPool, deleteMysteryBoxPool,
   addMysteryBoxPrize, updateMysteryBoxPrize, deleteMysteryBoxPrize, getMysteryBoxStats,

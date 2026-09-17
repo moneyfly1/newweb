@@ -9,6 +9,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
+import { formatCurrency } from '@/utils/amount'
 
 const props = defineProps<{
   data: Array<{ date: string; revenue: number; recharge: number; orders?: number }>
@@ -25,7 +26,7 @@ const option = computed(() => ({
       if (!first) return ''
       const item = props.data[first.dataIndex] || {}
       let html = `${item.date}<br/>`
-      params.forEach(p => { html += `${p.marker}${p.seriesName}: ¥${Number(p.value || 0).toFixed(2)}<br/>` })
+      params.forEach(p => { html += `${p.marker}${p.seriesName}: ${formatCurrency(p.value || 0)}<br/>` })
       if (item.orders != null) html += `订单: ${item.orders} 单`
       return html
     },

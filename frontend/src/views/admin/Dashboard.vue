@@ -46,7 +46,7 @@
         <n-grid-item>
           <div class="metric-card metric-warning">
             <div class="metric-label">今日营收</div>
-            <div class="metric-value">¥{{ stats.today_revenue || 0 }}</div>
+            <div class="metric-value">¥{{ formatAmount(stats.today_revenue) }}</div>
             <div class="metric-sub">待支付: {{ stats.pending_orders || 0 }}</div>
             <div class="metric-icon"><n-icon :size="48"><trending-up-outline /></n-icon></div>
           </div>
@@ -54,7 +54,7 @@
         <n-grid-item>
           <div class="metric-card metric-info">
             <div class="metric-label">月度营收</div>
-            <div class="metric-value">¥{{ stats.month_revenue || 0 }}</div>
+            <div class="metric-value">¥{{ formatAmount(stats.month_revenue) }}</div>
             <div class="metric-sub">待处理工单: {{ stats.pending_tickets || 0 }}</div>
             <div class="metric-icon"><n-icon :size="48"><wallet-outline /></n-icon></div>
           </div>
@@ -105,7 +105,7 @@
                   <div class="activity-meta">账号：{{ user.username || '-' }}</div>
                 </div>
                 <div class="activity-side">
-                  <div class="activity-time">{{ formatFullTime(user.created_at) }}</div>
+                  <div class="activity-time">{{ formatCompactDateTime(user.created_at) }}</div>
                   <div class="activity-relative">{{ formatRelativeTime(user.created_at) }}</div>
                 </div>
               </button>
@@ -137,7 +137,7 @@
                   </div>
                 </div>
                 <div class="activity-side">
-                  <div class="activity-time">{{ formatFullTime(order.created_at) }}</div>
+                  <div class="activity-time">{{ formatCompactDateTime(order.created_at) }}</div>
                   <div class="activity-relative">{{ formatRelativeTime(order.created_at) }}</div>
                 </div>
               </button>
@@ -210,7 +210,7 @@
               <div class="checkin-sub">
                 <span>累计签到 {{ checkinStats.total_count || 0 }} 次</span>
                 <span v-if="checkinStats.settings">
-                  奖励区间 ¥{{ (checkinStats.settings.min_reward || 0) / 100 }} ~ ¥{{ (checkinStats.settings.max_reward || 0) / 100 }}
+                  奖励区间 {{ formatCents(checkinStats.settings.min_reward) }} ~ {{ formatCents(checkinStats.settings.max_reward) }}
                   <n-tag v-if="checkinStats.settings.enabled === false" size="tiny" type="error" :bordered="false" style="margin-left: 6px">已关闭</n-tag>
                 </span>
               </div>
@@ -238,7 +238,9 @@ import {
 import { useRouter } from 'vue-router'
 import { getAdminDashboard, getMonitoring, getCheckInStats } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
-import { formatCurrency } from '@/utils/amount'
+import { formatAmount, formatCents, formatCurrency } from '@/utils/amount'
+import { formatCompactDateTime } from '@/utils/date'
+import { formatRelativeTime } from '@/utils/format'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -289,28 +291,6 @@ const getOrderStatusType = (s: string): TagProps['type'] => {
 }
 
 const getOrderStatusText = (s: string) => ({ paid: '已支付', pending: '待支付', cancelled: '已取消', refunded: '已退款', completed: '已完成' }[s] || s)
-
-const formatFullTime = (time: string) => {
-  if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
-const formatRelativeTime = (time: string) => {
-  if (!time) return '-'
-  const diff = Date.now() - new Date(time).getTime()
-  const minute = 60 * 1000
-  const hour = 60 * minute
-  const day = 24 * hour
-
-  if (diff < hour) {
-    const minutes = Math.max(1, Math.floor(diff / minute))
-    return `${minutes} 分钟前`
-  }
-  if (diff < day) {
-    return `${Math.floor(diff / hour)} 小时前`
-  }
-  return `${Math.floor(diff / day)} 天前`
-}
 
 const goToUserSubscription = (user: any) => {
   router.push({ path: '/admin/subscriptions', query: { search: user.email || user.username || String(user.id) } })

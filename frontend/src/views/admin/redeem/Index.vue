@@ -44,7 +44,7 @@
             <div class="card-body">
               <div class="card-row">
                 <span class="card-label">类型</span>
-                <span>{{ row.type === 'balance' ? `¥${row.value}` : `套餐#${row.value}` }}</span>
+                <span>{{ row.type === 'balance' ? formatCurrency(row.value) : `套餐#${row.value}` }}</span>
               </div>
               <div class="card-row">
                 <span class="card-label">状态</span>
@@ -176,6 +176,7 @@ import { listRedeemCodes, createRedeemCodes, deleteRedeemCode } from '@/api/admi
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatFullDateTime } from '@/utils/date'
+import { formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
@@ -259,7 +260,7 @@ const columns = [
     key: 'value',
     width: 100,
     resizable: true,
-    render: (row: any) => row.type === 'balance' ? `¥${row.value}` : `套餐#${row.value}`
+    render: (row: any) => row.type === 'balance' ? formatCurrency(row.value) : `套餐#${row.value}`
   },
   {
     title: '状态',

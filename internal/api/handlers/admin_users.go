@@ -1614,7 +1614,7 @@ func AdminExportUsersCSV(c *gin.Context) {
 		return
 	}
 
-	filename := fmt.Sprintf("users_%s.csv", time.Now().Format("2006-01-02"))
+	filename := fmt.Sprintf("users_%s.csv", time.Now().Format(utils.LayoutDate))
 	utils.CreateAuditLog(c, "export_users_csv", "user", 0, "导出用户CSV")
 	c.Status(200)
 	c.Header("Content-Type", "text/csv; charset=utf-8")
@@ -1641,7 +1641,7 @@ func AdminExportUsersCSV(c *gin.Context) {
 		}
 		lastLogin := ""
 		if u.LastLogin != nil {
-			lastLogin = u.LastLogin.Format("2006-01-02 15:04:05")
+			lastLogin = u.LastLogin.Format(utils.LayoutDateTime)
 		}
 		if err := writer.Write([]string{
 			strconv.FormatUint(uint64(u.ID), 10),
@@ -1649,7 +1649,7 @@ func AdminExportUsersCSV(c *gin.Context) {
 			sanitizeCSVCell(u.Email),
 			fmt.Sprintf("%.2f", u.Balance),
 			isActive,
-			u.CreatedAt.Format("2006-01-02 15:04:05"),
+			u.CreatedAt.Format(utils.LayoutDateTime),
 			lastLogin,
 		}); err != nil {
 			utils.InternalError(c, "导出失败")
@@ -1796,6 +1796,23 @@ func AdminImportUsersCSV(c *gin.Context) {
 			continue
 		}
 
+		// 默认 1 年后过期；CSV 里给了「到期时间」就按它解析（解析失败整行跳过并报错）
+		expireTime := time.Now().AddDate(1, 0, 0)
+		if idx, ok := colMap["到期时间"]; ok && idx < len(record) {
+			if val := strings.TrimSpace(record[idx]); val != "" {
+				// 与后台「设置到期时间」共用同一个解析实现。
+				// 此前是自带一份布局清单 + 解析失败静默沿用默认值（当前时间+1年），
+				// 导入完的结果和 CSV 里写的完全对不上，用户却在表格里看不到任何报错。
+				parsed, perr := utils.ParseFlexibleTimeString(val)
+				if perr != nil {
+					errors = append(errors, fmt.Sprintf("第%d行: 到期时间格式无效 (%s)", rowNum, val))
+					skipped++
+					continue
+				}
+				expireTime = parsed
+			}
+		}
+
 		user := models.User{
 			Username:                    username,
 			Email:                       email,
@@ -1828,24 +1845,11 @@ func AdminImportUsersCSV(c *gin.Context) {
 		// 收集订阅（UserID 在批量创建用户后回填）
 		subURL := utils.GenerateHexToken()
 		deviceLimit := 3
-		expireTime := time.Now().AddDate(1, 0, 0) // 默认1年后过期
 
 		if idx, ok := colMap["设备限制"]; ok && idx < len(record) {
 			if val := strings.TrimSpace(record[idx]); val != "" {
 				if limit, err := strconv.Atoi(val); err == nil && limit > 0 {
 					deviceLimit = limit
-				}
-			}
-		}
-
-		if idx, ok := colMap["到期时间"]; ok && idx < len(record) {
-			if val := strings.TrimSpace(record[idx]); val != "" {
-				formats := []string{"2006-01-02", "2006/01/02", "2006-01-02 15:04:05", time.RFC3339}
-				for _, format := range formats {
-					if t, err := time.Parse(format, val); err == nil {
-						expireTime = t
-						break
-					}
 				}
 			}
 		}

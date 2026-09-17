@@ -109,7 +109,7 @@
           <div v-else class="mobile-card-list">
             <div v-for="row in users" :key="row.id" class="mobile-card">
               <div class="card-header">
-                <div class="card-title">{{ row.username }}</div>
+                <div class="card-title email-link" title="点击查看该用户详情" @click="handleViewDetail(row)">{{ row.username }}</div>
                 <n-space :size="4">
                   <n-tag :type="row.is_active ? 'success' : 'error'" size="small">
                     {{ row.is_active ? '激活' : '禁用' }}
@@ -154,13 +154,15 @@
                   <span class="card-value">{{ formatFullDateTime(row.created_at) }}</span>
                 </div>
               </div>
-              <div class="card-actions">
-                <n-button size="small" @click="handleViewDetail(row)">详情</n-button>
-                <n-button size="small" @click="handleEdit(row)">编辑</n-button>
-                <n-button size="small" @click="handleToggleActive(row)">
+              <!-- 与电脑端操作列一一对应：编辑 / 禁用(启用) / 重置 / 代登 / 解封 / 删除，
+                   3 列网格排成两行三列（详情入口是上面的用户名和邮箱） -->
+              <div class="card-actions card-actions-grid">
+                <n-button size="small" type="primary" @click="handleEdit(row)">编辑</n-button>
+                <n-button size="small" :type="row.is_active ? 'warning' : 'success'" @click="handleToggleActive(row)">
                   {{ row.is_active ? '禁用' : '启用' }}
                 </n-button>
-                <n-button size="small" @click="openResetPwdModal(row)">重置密码</n-button>
+                <n-button size="small" secondary type="warning" @click="openResetPwdModal(row)">重置</n-button>
+                <n-button size="small" type="success" @click="handleLoginAs(row)">代登</n-button>
                 <n-button size="small" secondary type="success" @click="handleUnlockLoginRow(row)">解封</n-button>
                 <n-button size="small" type="error" @click="handleDelete(row)">删除</n-button>
               </div>
@@ -1017,6 +1019,16 @@ onActivated(() => {
   padding: 10px 14px;
   border-top: 1px solid var(--border-color, #f0f0f0);
   flex-wrap: wrap;
+}
+
+/* 移动端卡片操作区：与电脑端操作列一样，6 个按钮排成两行三列 */
+.card-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.card-actions-grid :deep(.n-button) {
+  width: 100%;
 }
 .line-type-trigger {
   display: inline-flex;

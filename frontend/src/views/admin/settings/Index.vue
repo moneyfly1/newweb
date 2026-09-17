@@ -532,6 +532,7 @@ import {
 } from '@vicons/ionicons5'
 import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, getGeoIPUpdateStatus, backfillLocations, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs, runSoftwareSync, checkSoftwareVersions } from '@/api/admin'
 import { formatDateTime } from '@/utils/date'
+import { formatSize } from '@/utils/format'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
@@ -1106,12 +1107,6 @@ const handleRestore = (item: any) => {
       }
     }
   })
-}
-
-const formatSize = (bytes: number) => {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / 1024 / 1024).toFixed(2) + ' MB'
 }
 
 const handleCleanOldLogs = async () => {

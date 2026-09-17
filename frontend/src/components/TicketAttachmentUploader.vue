@@ -60,7 +60,7 @@
           </div>
           <div class="item-info">
             <div class="item-name">{{ item.file_name }}</div>
-            <div class="item-size">{{ formatSize(item.file_size) }}</div>
+            <div class="item-size">{{ formatSize(item.file_size, '') }}</div>
           </div>
           <n-button
             v-if="!uploading"
@@ -85,6 +85,7 @@ import { NButton, NIcon, NSpin, useMessage } from 'naive-ui'
 import { AttachOutline, TrashOutline, DocumentOutline, ImageOutline, VideocamOutline, ImagesOutline, FolderOpenOutline } from '@vicons/ionicons5'
 import { uploadTicketAttachment, deleteTicketAttachment } from '@/api/ticket'
 import { useAppStore } from '@/stores/app'
+import { formatSize } from '@/utils/format'
 
 const message = useMessage()
 const appStore = useAppStore()
@@ -161,14 +162,6 @@ function itemIcon(name: string) {
   if (IMAGE_EXTS.has(ext)) return ImageOutline
   if (VIDEO_EXTS.has(ext)) return VideocamOutline
   return DocumentOutline
-}
-
-function formatSize(size: number): string {
-  if (!size && size !== 0) return ''
-  if (size < 1024) return size + ' B'
-  if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
-  if (size < 1024 * 1024 * 1024) return (size / 1024 / 1024).toFixed(1) + ' MB'
-  return (size / 1024 / 1024 / 1024).toFixed(2) + ' GB'
 }
 
 let uidSeq = 1

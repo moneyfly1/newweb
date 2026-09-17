@@ -17,7 +17,7 @@ func AdminRevenueStats(c *gin.Context) {
 	var totalRevenue float64
 	db.Model(&models.Order{}).Where("status IN ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}).Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&totalRevenue)
 	var todayRevenue float64
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().Format(utils.LayoutDate)
 	db.Model(&models.Order{}).Where("status IN ? AND DATE(payment_time) = ?", []string{models.OrderStatusPaid, models.OrderStatusCompleted}, today).
 		Select("COALESCE(SUM(COALESCE(final_amount, amount)), 0)").Scan(&todayRevenue)
 	var monthRevenue float64
@@ -41,7 +41,7 @@ func AdminUserStats(c *gin.Context) {
 	var activeUsers int64
 	db.Model(&models.User{}).Where("is_active = ?", true).Count(&activeUsers)
 	var todayNew int64
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().Format(utils.LayoutDate)
 	db.Model(&models.User{}).Where("DATE(created_at) = ?", today).Count(&todayNew)
 	var paidUsers int64
 	db.Model(&models.Order{}).Where("status = ?", models.OrderStatusPaid).Distinct("user_id").Count(&paidUsers)
@@ -64,7 +64,7 @@ func AdminFinancialReport(c *gin.Context) {
 	now := time.Now()
 	var start, end time.Time
 	if startDate != "" {
-		s, err := time.Parse("2006-01-02", startDate)
+		s, err := time.Parse(utils.LayoutDate, startDate)
 		if err != nil {
 			utils.BadRequest(c, "start_date 格式错误，应为 YYYY-MM-DD")
 			return
@@ -74,7 +74,7 @@ func AdminFinancialReport(c *gin.Context) {
 		start = now.AddDate(0, 0, -29)
 	}
 	if endDate != "" {
-		e, err := time.Parse("2006-01-02", endDate)
+		e, err := time.Parse(utils.LayoutDate, endDate)
 		if err != nil {
 			utils.BadRequest(c, "end_date 格式错误，应为 YYYY-MM-DD")
 			return
@@ -83,8 +83,8 @@ func AdminFinancialReport(c *gin.Context) {
 	} else {
 		end = now
 	}
-	startStr := start.Format("2006-01-02")
-	endStr := end.Format("2006-01-02")
+	startStr := start.Format(utils.LayoutDate)
+	endStr := end.Format(utils.LayoutDate)
 
 	// ---- Summary ----
 	var totalRevenue float64
@@ -272,7 +272,7 @@ func AdminExportFinancialReport(c *gin.Context) {
 	now := time.Now()
 	var start, end time.Time
 	if startDate != "" {
-		s, err := time.Parse("2006-01-02", startDate)
+		s, err := time.Parse(utils.LayoutDate, startDate)
 		if err != nil {
 			utils.BadRequest(c, "start_date 格式错误")
 			return
@@ -282,7 +282,7 @@ func AdminExportFinancialReport(c *gin.Context) {
 		start = now.AddDate(0, 0, -29)
 	}
 	if endDate != "" {
-		e, err := time.Parse("2006-01-02", endDate)
+		e, err := time.Parse(utils.LayoutDate, endDate)
 		if err != nil {
 			utils.BadRequest(c, "end_date 格式错误")
 			return
@@ -291,8 +291,8 @@ func AdminExportFinancialReport(c *gin.Context) {
 	} else {
 		end = now
 	}
-	startStr := start.Format("2006-01-02")
-	endStr := end.Format("2006-01-02")
+	startStr := start.Format(utils.LayoutDate)
+	endStr := end.Format(utils.LayoutDate)
 
 	var dateExpr string
 	switch period {
@@ -369,7 +369,7 @@ func AdminExportFinancialReport(c *gin.Context) {
 		userMap[u.Date] = u.NewUsers
 	}
 
-	filename := fmt.Sprintf("financial_report_%s.csv", now.Format("2006-01-02"))
+	filename := fmt.Sprintf("financial_report_%s.csv", now.Format(utils.LayoutDate))
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	// BOM for Excel UTF-8

@@ -237,7 +237,7 @@ func SendTestTelegram() error {
 	if siteName == "" {
 		siteName = "CBoard"
 	}
-	now := time.Now().Format("2006-01-02 15:04:05")
+	now := time.Now().Format(utils.LayoutDateTime)
 
 	// 使用模板系统构建测试消息
 	var sb strings.Builder
@@ -264,7 +264,7 @@ func SendTestBark() error {
 	if siteName == "" {
 		siteName = "CBoard"
 	}
-	now := time.Now().Format("2006-01-02 15:04:05")
+	now := time.Now().Format(utils.LayoutDateTime)
 
 	title := fmt.Sprintf("[%s] ✅ Bark 测试", siteName)
 	body := fmt.Sprintf("🏷️ 站点: %s\n🕐 时间: %s\n\n📡 通知服务运行正常", siteName, now)

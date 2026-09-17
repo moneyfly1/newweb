@@ -469,7 +469,7 @@ func Login(c *gin.Context) {
 			go services.NotifyUser(user.ID, "abnormal_login", map[string]string{
 				"ip": loginIP, "location": loginLocation,
 				"last_ip": *lastLogin.IPAddress,
-				"time":    time.Now().Format("2006-01-02 15:04:05"), "user_agent": loginUA,
+				"time":    time.Now().Format(utils.LayoutDateTime), "user_agent": loginUA,
 			})
 			go services.NotifyAdmin("abnormal_login", map[string]string{
 				"username": user.Username,

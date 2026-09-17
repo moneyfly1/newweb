@@ -195,7 +195,7 @@ func GetRechargeStatus(c *gin.Context) {
 		"status":   record.Status,
 	}
 	if record.PaidAt != nil {
-		result["paid_at"] = record.PaidAt.Format("2006-01-02 15:04:05")
+		result["paid_at"] = record.PaidAt.Format(utils.LayoutDateTime)
 	}
 	utils.Success(c, result)
 }

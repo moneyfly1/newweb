@@ -161,6 +161,7 @@ import { formatCurrency } from '@/utils/amount'
 import { parseDeviceInfo, translateBalanceChangeType, translateLoginStatus } from '@/utils/i18n'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatFullDateTime } from '@/utils/date'
+import { formatCountryOnly } from '@/utils/format'
 
 const appStore = useAppStore()
 const message = useMessage()
@@ -386,60 +387,6 @@ const handleRemoveAllCustomNodes = async () => {
   } finally {
     removingAllCustomNodes.value = false
   }
-}
-
-const countryNameMap = {
-  CN: '中国', HK: '中国香港', MO: '中国澳门', TW: '中国台湾',
-  US: '美国', JP: '日本', KR: '韩国', SG: '新加坡',
-  GB: '英国', UK: '英国', DE: '德国', FR: '法国',
-  CA: '加拿大', AU: '澳大利亚', RU: '俄罗斯', IN: '印度',
-  TH: '泰国', VN: '越南', MY: '马来西亚', PH: '菲律宾',
-  ID: '印度尼西亚'
-}
-const countryAliasMap = {
-  china: '中国', hongkong: '中国香港', 'hong kong': '中国香港',
-  macao: '中国澳门', macau: '中国澳门', taiwan: '中国台湾',
-  'united states': '美国', usa: '美国', 'united kingdom': '英国',
-  uk: '英国', japan: '日本', korea: '韩国', 'south korea': '韩国',
-  singapore: '新加坡', germany: '德国', france: '法国',
-  canada: '加拿大', australia: '澳大利亚', russia: '俄罗斯',
-  india: '印度', thailand: '泰国', vietnam: '越南',
-  malaysia: '马来西亚', philippines: '菲律宾', indonesia: '印度尼西亚'
-}
-const regionDisplayNames = typeof Intl !== 'undefined' && Intl.DisplayNames
-  ? new Intl.DisplayNames(['zh-CN'], { type: 'region' })
-  : null
-
-const countryNameFromText = (value) => {
-  if (!value || typeof value !== 'string') return ''
-  const text = value.trim()
-  if (!text) return ''
-  const code = text.toUpperCase()
-  if (/^[A-Z]{2}$/.test(code)) return countryNameMap[code] || regionDisplayNames?.of(code) || code
-  return countryAliasMap[text.toLowerCase()] || ''
-}
-
-const parseMaybeJSON = (value) => {
-  if (typeof value !== 'string') return value
-  const text = value.trim()
-  if (!text || !/^[{[]/.test(text)) return value
-  try { return JSON.parse(text) } catch { return value }
-}
-
-const formatCountryOnly = (location) => {
-  const parsed = parseMaybeJSON(location)
-  if (!parsed) return '-'
-  if (typeof parsed === 'object') {
-    const code = parsed.country_code || parsed.countryCode || parsed.country_iso || parsed.countryISO || parsed.iso_code
-    const name = parsed.country_name || parsed.countryName || parsed.country || parsed.region || parsed.location
-    return countryNameFromText(code) || countryNameFromText(name) || name || '-'
-  }
-  if (typeof parsed !== 'string') return '-'
-  const text = parsed.trim()
-  const directName = countryNameFromText(text)
-  if (directName) return directName
-  const firstSegment = text.split(/[,·|/]+/).filter(Boolean)[0]?.trim() || text
-  return countryNameFromText(firstSegment) || firstSegment || '-'
 }
 
 const handleDeleteDevice = (device) => {

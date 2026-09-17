@@ -51,7 +51,7 @@
           </n-input-group>
         </n-form-item>
         <n-alert v-if="inviteEnabled && inviteValid === true" type="success" :bordered="false" size="small" style="margin-bottom: 16px">
-          邀请码有效{{ inviteReward > 0 ? `，注册后可获得 ¥${inviteReward} 奖励` : '' }}
+          邀请码有效{{ inviteReward > 0 ? `，注册后可获得 ${formatCurrency(inviteReward)} 奖励` : '' }}
         </n-alert>
         <n-alert v-else-if="inviteEnabled && inviteValid === false" type="error" :bordered="false" size="small" style="margin-bottom: 16px">
           {{ inviteError }}
@@ -84,6 +84,7 @@ import AuthLayout from '@/components/AuthLayout.vue'
 import { register, sendVerificationCode } from '@/api/auth'
 import { getPublicConfig, validateInviteCode } from '@/api/common'
 import { getErrorMessage, silentCatch } from '@/utils/error'
+import { formatCurrency } from '@/utils/amount'
 
 const router = useRouter()
 const route = useRoute()

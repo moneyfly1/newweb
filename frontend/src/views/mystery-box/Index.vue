@@ -30,7 +30,7 @@
                 <template #header>
                   <div style="display:flex;align-items:center;justify-content:space-between">
                     <span>{{ pool.name }}</span>
-                    <n-tag type="warning" size="small">{{ pool.price }} 元/次</n-tag>
+                    <n-tag type="warning" size="small">{{ formatAmount(pool.price) }} 元/次</n-tag>
                   </div>
                 </template>
                 <p v-if="pool.description" style="color:#666;font-size:13px;margin:0 0 12px">{{ pool.description }}</p>
@@ -55,7 +55,7 @@
                   </n-space>
                 </div>
                 <n-button type="primary" block :loading="openingPoolId === pool.id" @click="handleOpen(pool)">
-                  开启盲盒（{{ pool.price }} 元）
+                  开启盲盒（{{ formatAmount(pool.price) }} 元）
                 </n-button>
               </n-card>
             </n-gi>
@@ -121,6 +121,7 @@ import { NTag, useMessage, NTooltip } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { getMysteryBoxPools, openMysteryBox, getMysteryBoxHistory } from '@/api/common'
 import { formatDateTime } from '@/utils/date'
+import { formatAmount } from '@/utils/amount'
 
 const appStore = useAppStore()
 const message = useMessage()

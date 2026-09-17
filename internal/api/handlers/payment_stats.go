@@ -34,8 +34,8 @@ func AdminPaymentStats(c *gin.Context) {
 	db := database.GetDB()
 
 	// 获取时间范围参数
-	startDate := c.DefaultQuery("start_date", time.Now().AddDate(0, 0, -30).Format("2006-01-02"))
-	endDate := c.DefaultQuery("end_date", time.Now().Format("2006-01-02"))
+	startDate := c.DefaultQuery("start_date", time.Now().AddDate(0, 0, -30).Format(utils.LayoutDate))
+	endDate := c.DefaultQuery("end_date", time.Now().Format(utils.LayoutDate))
 
 	// 按支付方式统计
 	type PaymentMethodStat struct {
@@ -151,11 +151,11 @@ func AdminPaymentMethodComparison(c *gin.Context) {
 
 	// 获取时间范围
 	days := c.DefaultQuery("days", "30")
-	startDate := time.Now().AddDate(0, 0, -30).Format("2006-01-02")
+	startDate := time.Now().AddDate(0, 0, -30).Format(utils.LayoutDate)
 	if days == "7" {
-		startDate = time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+		startDate = time.Now().AddDate(0, 0, -7).Format(utils.LayoutDate)
 	} else if days == "90" {
-		startDate = time.Now().AddDate(0, 0, -90).Format("2006-01-02")
+		startDate = time.Now().AddDate(0, 0, -90).Format(utils.LayoutDate)
 	}
 
 	type MethodComparison struct {
@@ -209,8 +209,8 @@ func AdminPaymentAnalysis(c *gin.Context) {
 	}
 
 	// 获取时间范围
-	startDate := c.DefaultQuery("start_date", time.Now().AddDate(0, 0, -30).Format("2006-01-02"))
-	endDate := c.DefaultQuery("end_date", time.Now().Format("2006-01-02"))
+	startDate := c.DefaultQuery("start_date", time.Now().AddDate(0, 0, -30).Format(utils.LayoutDate))
+	endDate := c.DefaultQuery("end_date", time.Now().Format(utils.LayoutDate))
 
 	// 按小时统计（用于分析高峰时段）
 	type HourlyStat struct {

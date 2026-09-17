@@ -56,7 +56,7 @@
                 </div>
                 <div class="card-row">
                   <span class="label">实付</span>
-                  <span class="value amount">¥{{ order.final_amount }}</span>
+                  <span class="value amount">¥{{ formatAmount(order.final_amount) }}</span>
                 </div>
                 <div class="card-row">
                   <span class="label">状态</span>
@@ -110,7 +110,7 @@
                 </div>
                 <div class="card-row">
                   <span class="label">金额</span>
-                  <span class="value amount">¥{{ record.amount }}</span>
+                  <span class="value amount">¥{{ formatAmount(record.amount) }}</span>
                 </div>
                 <div class="card-row">
                   <span class="label">状态</span>
@@ -159,12 +159,12 @@
         <n-descriptions :column="1" bordered>
           <n-descriptions-item label="订单号">{{ currentOrder?.order_no }}</n-descriptions-item>
           <n-descriptions-item label="套餐名称">{{ currentOrder?.package_name }}</n-descriptions-item>
-          <n-descriptions-item label="原价">¥{{ currentOrder?.amount }}</n-descriptions-item>
+          <n-descriptions-item label="原价">¥{{ formatAmount(currentOrder?.amount) }}</n-descriptions-item>
           <n-descriptions-item v-if="currentOrder?.discount_amount" label="优惠">
-            <span style="color: var(--danger-color);">-¥{{ currentOrder?.discount_amount }}</span>
+            <span style="color: var(--danger-color);">-¥{{ formatAmount(currentOrder?.discount_amount) }}</span>
           </n-descriptions-item>
           <n-descriptions-item label="实付金额">
-            <span style="color: var(--success-color); font-size: 18px; font-weight: bold;">¥{{ currentOrder?.final_amount }}</span>
+            <span style="color: var(--success-color); font-size: 18px; font-weight: bold;">¥{{ formatAmount(currentOrder?.final_amount) }}</span>
           </n-descriptions-item>
         </n-descriptions>
         <div>
@@ -226,7 +226,7 @@
         <n-descriptions :column="1" bordered>
           <n-descriptions-item label="订单号">{{ currentRecharge?.order_no }}</n-descriptions-item>
           <n-descriptions-item label="充值金额">
-            <span style="color: var(--success-color); font-size: 18px; font-weight: bold;">¥{{ currentRecharge?.amount }}</span>
+            <span style="color: var(--success-color); font-size: 18px; font-weight: bold;">¥{{ formatAmount(currentRecharge?.amount) }}</span>
           </n-descriptions-item>
         </n-descriptions>
         <div>
@@ -288,10 +288,10 @@
             <span style="color: var(--success-color); font-weight: 600; font-size: 13px;">{{ detailOrder.new_expire_time }}</span>
           </div>
         </n-descriptions-item>
-        <n-descriptions-item label="原价">¥{{ detailOrder.amount }}</n-descriptions-item>
-        <n-descriptions-item label="优惠金额">¥{{ detailOrder.discount_amount || '0.00' }}</n-descriptions-item>
+        <n-descriptions-item label="原价">¥{{ formatAmount(detailOrder.amount) }}</n-descriptions-item>
+        <n-descriptions-item label="优惠金额">¥{{ formatAmount(detailOrder.discount_amount) }}</n-descriptions-item>
         <n-descriptions-item label="实付金额">
-          <span style="color: var(--success-color); font-weight: 600;">¥{{ detailOrder.final_amount }}</span>
+          <span style="color: var(--success-color); font-weight: 600;">¥{{ formatAmount(detailOrder.final_amount) }}</span>
         </n-descriptions-item>
         <n-descriptions-item label="支付方式">{{ detailOrder.payment_method_name || '-' }}</n-descriptions-item>
         <n-descriptions-item label="状态">
@@ -429,6 +429,8 @@ import { useAppStore } from '@/stores/app'
 import { safeRedirect } from '@/utils/security'
 import { isQrCodeUrl, isCodepayPayType, isCodepayPageUrl } from '@/utils/payment'
 import { getErrorMessage, silentCatch } from '@/utils/error'
+import { formatDateTime } from '@/utils/date'
+import { formatAmount, formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const router = useRouter()
@@ -557,21 +559,14 @@ const rechargePagination = ref({
   onUpdatePageSize: (ps: number) => { rechargePagination.value.pageSize = ps; rechargePagination.value.page = 1; loadRechargeRecords() },
 })
 
-const formatDateTime = (dateStr: string) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-  })
-}
-
 const orderColumns: DataTableColumns<any> = [
   { title: '订单号', key: 'order_no', width: 180, resizable: true, ellipsis: { tooltip: true } },
   { title: '套餐名称', key: 'package_name', width: 140, resizable: true },
-  { title: '原价', key: 'amount', width: 90, resizable: true, render: (r) => `¥${r.amount}` },
-  { title: '优惠', key: 'discount_amount', width: 90, resizable: true, render: (r) => r.discount_amount ? `-¥${r.discount_amount}` : '-' },
+  { title: '原价', key: 'amount', width: 90, resizable: true, render: (r) => formatCurrency(r.amount) },
+  { title: '优惠', key: 'discount_amount', width: 90, resizable: true, render: (r) => r.discount_amount ? `-${formatCurrency(r.discount_amount)}` : '-' },
   {
     title: '实付', key: 'final_amount', width: 90, resizable: true,
-    render: (r) => h('span', { style: 'color:var(--success-color);font-weight:600' }, `¥${r.final_amount}`),
+    render: (r) => h('span', { style: 'color:var(--success-color);font-weight:600' }, formatCurrency(r.final_amount)),
   },
   { title: '状态', key: 'status', width: 90, resizable: true, render: (r) => h(NTag, { type: getStatusType(r.status), size: 'small' }, { default: () => getStatusText(r.status) }) },
   { title: '支付方式', key: 'payment_method_name', width: 90, resizable: true, render: (r) => r.payment_method_name || '-' },
@@ -593,7 +588,7 @@ const orderColumns: DataTableColumns<any> = [
 
 const rechargeColumns: DataTableColumns<any> = [
   { title: '订单号', key: 'order_no', width: 180, resizable: true, ellipsis: { tooltip: true } },
-  { title: '金额', key: 'amount', width: 100, resizable: true, render: (r) => h('span', { style: 'color:var(--success-color);font-weight:600' }, `¥${r.amount}`) },
+  { title: '金额', key: 'amount', width: 100, resizable: true, render: (r) => h('span', { style: 'color:var(--success-color);font-weight:600' }, formatCurrency(r.amount)) },
   { title: '状态', key: 'status', width: 100, resizable: true, render: (r) => h(NTag, { type: getStatusType(r.status), size: 'small' }, { default: () => getStatusText(r.status) }) },
   { title: '支付方式', key: 'payment_method', width: 100, resizable: true, render: (r) => r.payment_method || '-' },
   { title: '创建时间', key: 'created_at', width: 170, resizable: true, render: (r) => formatDateTime(r.created_at) },
@@ -868,7 +863,7 @@ const handleCancelOrder = (order: any) => {
 const handleCancelRecharge = (record: any) => {
   dialog.warning({
     title: '取消充值',
-    content: `确定要取消此充值记录（¥${record.amount}）吗？`,
+    content: `确定要取消此充值记录（${formatCurrency(record.amount)}）吗？`,
     positiveText: '确定', negativeText: '取消',
     onPositiveClick: async () => {
       try { await cancelRecharge(record.id); message.success('充值已取消'); loadRechargeRecords() }

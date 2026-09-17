@@ -578,6 +578,7 @@ import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
 import { formatDate, formatDateTime } from '@/utils/date'
+import { formatCountryOnly, formatRelativeTime } from '@/utils/format'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
@@ -628,59 +629,6 @@ const protocolExcludeOptions = [
   { label: 'HTTP', value: 'http' },
   { label: 'WireGuard', value: 'wireguard' },
 ]
-
-const countryNameMap: Record<string, string> = {
-  CN: '中国', HK: '中国香港', MO: '中国澳门', TW: '中国台湾',
-  US: '美国', JP: '日本', KR: '韩国', SG: '新加坡',
-  GB: '英国', UK: '英国', DE: '德国', FR: '法国',
-  CA: '加拿大', AU: '澳大利亚', RU: '俄罗斯', IN: '印度',
-  TH: '泰国', VN: '越南', MY: '马来西亚', PH: '菲律宾',
-  ID: '印度尼西亚', BR: '巴西', TR: '土耳其', NL: '荷兰',
-  ES: '西班牙', IT: '意大利', SE: '瑞典', CH: '瑞士',
-}
-const countryAliasMap: Record<string, string> = {
-  china: '中国', 'hong kong': '中国香港', macao: '中国澳门', macau: '中国澳门',
-  taiwan: '中国台湾', 'united states': '美国', usa: '美国',
-  'united kingdom': '英国', uk: '英国', japan: '日本',
-  korea: '韩国', 'south korea': '韩国', singapore: '新加坡',
-  germany: '德国', france: '法国', canada: '加拿大',
-  australia: '澳大利亚', russia: '俄罗斯', india: '印度',
-  thailand: '泰国', vietnam: '越南', malaysia: '马来西亚',
-  philippines: '菲律宾', indonesia: '印度尼西亚',
-}
-const countryDisplayNames = typeof Intl !== 'undefined' && Intl.DisplayNames
-  ? new Intl.DisplayNames(['zh-CN'], { type: 'region' })
-  : null
-
-const getCountryName = (value: any) => {
-  const text = String(value || '').trim()
-  if (!text) return ''
-  const code = text.toUpperCase()
-  if (/^[A-Z]{2}$/.test(code)) return countryNameMap[code] || countryDisplayNames?.of(code) || code
-  return countryAliasMap[text.toLowerCase()] || ''
-}
-
-const formatCountryOnly = (location: any) => {
-  if (!location) return '-'
-  let value = location
-  if (typeof value === 'string') {
-    const text = value.trim()
-    if (!text) return '-'
-    if (/^[{[]/.test(text)) {
-      try { value = JSON.parse(text) } catch { value = text }
-    }
-  }
-  if (typeof value === 'object') {
-    const code = value.country_code || value.countryCode || value.country_iso || value.countryISO || value.iso_code
-    const name = value.country_name || value.countryName || value.country || value.region || value.location
-    return getCountryName(code) || getCountryName(name) || name || '-'
-  }
-  const text = String(value).trim()
-  const direct = getCountryName(text)
-  if (direct) return direct
-  const firstSegment = text.split(/[,·|/]+/).filter(Boolean)[0]?.trim() || text
-  return getCountryName(firstSegment) || firstSegment || '-'
-}
 
 function maskUrl(url: string) {
   if (!url || url.length < 20) return '••••••••'
@@ -931,20 +879,6 @@ const openUpgradeModal = () => {
   showUpgradeModal.value = true
 }
 
-const formatRelativeTime = (dateStr: string) => {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}小时前`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}天前`
-  return date.toLocaleDateString('zh-CN')
-}
 const copyToClipboard = async (text: string, label: string) => {
   if (!text) { message.warning('暂无可用订阅'); return }
   const ok = await clipboardCopy(text)

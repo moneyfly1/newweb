@@ -49,7 +49,7 @@ func logCallbackRequest(c *gin.Context) {
 	utils.LogCallback("收到支付回调请求")
 	utils.LogCallback("  Method: %s", c.Request.Method)
 	utils.LogCallback("  Path: %s", c.Request.URL.Path)
-	utils.LogCallback("  Client IP: %s", c.ClientIP())
+	utils.LogCallback("  Client IP: %s", utils.GetRealClientIP(c))
 	utils.LogCallback("  User-Agent: %s", c.Request.Header.Get("User-Agent"))
 	utils.LogCallback("  Content-Type: %s", c.Request.Header.Get("Content-Type"))
 

@@ -42,13 +42,13 @@
         <n-grid-item>
           <div class="mini-stat-card">
             <div class="stat-label">今日营收</div>
-            <div class="stat-value">¥{{ orderStats.today_revenue || '0.00' }}</div>
+            <div class="stat-value">¥{{ formatAmount(orderStats.today_revenue) }}</div>
           </div>
         </n-grid-item>
         <n-grid-item>
           <div class="mini-stat-card">
             <div class="stat-label">本月营收</div>
-            <div class="stat-value">¥{{ orderStats.month_revenue || '0.00' }}</div>
+            <div class="stat-value">¥{{ formatAmount(orderStats.month_revenue) }}</div>
           </div>
         </n-grid-item>
         <n-grid-item>
@@ -69,13 +69,13 @@
         <n-grid-item>
           <div class="mini-stat-card mobile-stat">
             <div class="stat-label">今日营收</div>
-            <div class="stat-value">¥{{ orderStats.today_revenue || '0.00' }}</div>
+            <div class="stat-value">¥{{ formatAmount(orderStats.today_revenue) }}</div>
           </div>
         </n-grid-item>
         <n-grid-item>
           <div class="mini-stat-card mobile-stat">
             <div class="stat-label">本月营收</div>
-            <div class="stat-value">¥{{ orderStats.month_revenue || '0.00' }}</div>
+            <div class="stat-value">¥{{ formatAmount(orderStats.month_revenue) }}</div>
           </div>
         </n-grid-item>
         <n-grid-item>
@@ -269,7 +269,7 @@ import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import SearchFilterBar from '@/components/SearchFilterBar.vue'
 import { useRoute } from 'vue-router'
-import { formatCurrency } from '@/utils/amount'
+import { formatAmount, formatCurrency } from '@/utils/amount'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatDateTime, formatFullDateTime } from '@/utils/date'
 import '@/styles/admin-common.css'

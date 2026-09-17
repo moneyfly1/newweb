@@ -8,7 +8,7 @@
             <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
           </n-icon>
         </template>
-        邀请好友注册，您将获得 <strong>¥{{ rewardInfo.inviter_reward }}</strong> 奖励，好友将获得 <strong>¥{{ rewardInfo.invitee_reward }}</strong> 奖励
+        邀请好友注册，您将获得 <strong>¥{{ formatAmount(rewardInfo.inviter_reward) }}</strong> 奖励，好友将获得 <strong>¥{{ formatAmount(rewardInfo.invitee_reward) }}</strong> 奖励
       </n-alert>
 
       <!-- 统计卡片 - 4个 -->
@@ -95,7 +95,7 @@
                 </div>
                 <div class="card-row">
                   <span class="label">奖励</span>
-                  <span class="value">邀请人 ¥{{ code.inviter_reward }} / 受邀人 ¥{{ code.invitee_reward }}</span>
+                  <span class="value">邀请人 ¥{{ formatAmount(code.inviter_reward) }} / 受邀人 ¥{{ formatAmount(code.invitee_reward) }}</span>
                 </div>
                 <div class="card-row">
                   <span class="label">状态</span>
@@ -239,7 +239,7 @@ import { NButton, NSpace, NTag, NTime, useMessage, useDialog } from 'naive-ui'
 import { listInviteCodes, createInviteCode, getInviteStats, deleteInviteCode, getPublicConfig } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
-import { formatCurrency } from '@/utils/amount'
+import { formatAmount, formatCurrency } from '@/utils/amount'
 import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
@@ -434,8 +434,8 @@ const columns = [
         { size: 4, vertical: true },
         {
           default: () => [
-            h('span', { style: 'font-size: 12px' }, `邀请人: ¥${row.inviter_reward}`),
-            h('span', { style: 'font-size: 12px' }, `受邀人: ¥${row.invitee_reward}`)
+            h('span', { style: 'font-size: 12px' }, `邀请人: ${formatCurrency(row.inviter_reward)}`),
+            h('span', { style: 'font-size: 12px' }, `受邀人: ${formatCurrency(row.invitee_reward)}`)
           ]
         }
       )

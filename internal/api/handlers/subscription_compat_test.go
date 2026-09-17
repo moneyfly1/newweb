@@ -9,6 +9,7 @@ import (
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/worker"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
@@ -27,6 +28,10 @@ func setupSubscriptionCompatTestDB(t *testing.T) *gorm.DB {
 	}
 	database.DB = db
 	t.Cleanup(func() {
+		// 设备记录更新/地区查询是通过全局 worker 池异步执行的，
+		// 必须先等这些任务跑完再还原 DB——否则异步任务会在测试结束后
+		// 拿到旧的（已失效的）DB 句柄，随机 panic，让 `go test ./...` 时好时坏。
+		worker.GetDefaultPool().Wait()
 		database.DB = oldDB
 	})
 	return db

@@ -10,7 +10,7 @@ import (
 
 func AdminGetCheckInStats(c *gin.Context) {
 	db := database.GetDB()
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().Format(utils.LayoutDate)
 
 	var todayCount, totalCount int64
 	db.Model(&models.CheckIn{}).Where("DATE(created_at) = ?", today).Count(&todayCount)

@@ -364,7 +364,7 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 				amount = parsed
 			}
 		}
-		paymentTime := time.Now().Format("2006-01-02 15:04:05")
+		paymentTime := time.Now().Format(utils.LayoutDateTime)
 		paymentMethod := data["payment_method"]
 		if paymentMethod == "" {
 			paymentMethod = "在线支付"
@@ -379,7 +379,7 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 				amount = parsed
 			}
 		}
-		paymentTime := time.Now().Format("2006-01-02 15:04:05")
+		paymentTime := time.Now().Format(utils.LayoutDateTime)
 		paymentMethod := data["payment_method"]
 		if paymentMethod == "" {
 			paymentMethod = "在线支付"
@@ -422,11 +422,11 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 		htmlBody = builder.GetBroadcastNotificationTemplate("账户已恢复", fmt.Sprintf("<p>您好，您的 %s 账户已被管理员恢复启用。</p><p>✅ 您现在可以正常登录和使用服务了。</p>", siteName))
 	case "account_deleted":
 		subject = fmt.Sprintf("账户已删除 - %s", siteName)
-		deletionDate := time.Now().Format("2006-01-02")
+		deletionDate := time.Now().Format(utils.LayoutDate)
 		htmlBody = builder.GetAccountDeletionTemplate(data["username"], deletionDate, "管理员删除", "30天")
 	case "subscription_reset":
 		subject = fmt.Sprintf("订阅地址已重置 - %s", siteName)
-		resetTime := time.Now().Format("2006-01-02 15:04:05")
+		resetTime := time.Now().Format(utils.LayoutDateTime)
 		htmlBody = builder.GetSubscriptionResetTemplate(data["username"], data["universal_url"], data["clash_url"], data["expire_time"], resetTime, data["reset_by"])
 	case "ticket_reply":
 		subject = fmt.Sprintf("您的工单已有管理员回复 - %s", siteName)
@@ -447,7 +447,7 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 				amount = parsed
 			}
 		}
-		orderTime := time.Now().Format("2006-01-02 15:04:05")
+		orderTime := time.Now().Format(utils.LayoutDateTime)
 		htmlBody = builder.GetOrderConfirmationTemplate(data["username"], data["order_no"], data["package_name"], amount, "待支付", orderTime)
 	case "new_order":
 		subject = fmt.Sprintf("新订单通知 - %s", siteName)
@@ -458,7 +458,7 @@ func RenderEmail(templateName string, data map[string]string) (subject, htmlBody
 				amount = parsed
 			}
 		}
-		orderTime := time.Now().Format("2006-01-02 15:04:05")
+		orderTime := time.Now().Format(utils.LayoutDateTime)
 		htmlBody = builder.GetOrderConfirmationTemplate(data["username"], data["order_no"], data["package_name"], amount, "待支付", orderTime)
 	default:
 		subject = fmt.Sprintf("通知 - %s", siteName)

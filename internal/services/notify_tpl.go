@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"cboard/v2/internal/utils"
 )
 
 // NotifyTemplate 通知模板结构
@@ -191,7 +193,7 @@ func RenderTelegramMessage(template *NotifyTemplate, data map[string]string) str
 	}
 
 	// 时间
-	now := time.Now().Format("2006-01-02 15:04:05")
+	now := time.Now().Format(utils.LayoutDateTime)
 	sb.WriteString(fmt.Sprintf("🕐 <b>时间</b>: %s\n", now))
 
 	// 页脚
@@ -223,7 +225,7 @@ func RenderBarkMessage(template *NotifyTemplate, data map[string]string) string 
 	}
 
 	// 时间
-	now := time.Now().Format("2006-01-02 15:04:05")
+	now := time.Now().Format(utils.LayoutDateTime)
 	sb.WriteString(fmt.Sprintf("🕐 时间: %s\n", now))
 
 	// 页脚

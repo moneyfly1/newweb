@@ -21,6 +21,18 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// 支付金额换算的统一口径。
+//
+// 默认汇率与最低金额此前散落在三个地方各写一遍（创建 Stripe 支付、创建加密货币支付、
+// Stripe 回调金额校验），必须永远一致，否则会出现「按 7.2 下单、按别的汇率校验」
+// 这种金额不匹配告警。集中为常量，改一处即全局生效。
+const (
+	// defaultUSDExchangeRate 后台未配置 pay_stripe_exchange_rate / pay_crypto_exchange_rate 时使用的默认汇率
+	defaultUSDExchangeRate = 7.2
+	// stripeMinAmountCents Stripe 允许的最低金额（美分）
+	stripeMinAmountCents = 50
+)
+
 type paymentTarget struct {
 	Order             *models.Order
 	Recharge          *models.RechargeRecord
@@ -230,17 +242,11 @@ func createNonAlipayPayment(db *gorm.DB, payConfig models.PaymentConfig, target 
 		if err != nil {
 			return nil, fmt.Errorf("Stripe 未配置")
 		}
-		rate := 7.2
-		if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
-			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
-				rate = parsed
-			}
-		}
+		// 汇率读取与「元→分」换算统一走 utils：
+		// 此前创建与回调校验各写一套（一个截断、一个四舍五入），同一个订单两边可能差 1 分。
+		rate := utils.ExchangeRate("pay_stripe_exchange_rate", defaultUSDExchangeRate)
 		amountUSD := target.PayAmount / rate
-		amountCents := int64(amountUSD * 100)
-		if amountCents < 50 {
-			amountCents = 50
-		}
+		amountCents := utils.YuanToCentsAtLeast(amountUSD, stripeMinAmountCents)
 		successURL := buildPaymentSuccessURL(target.OrderNo)
 		if successURL == "" {
 			return nil, fmt.Errorf("站点域名未配置，请检查 site_url")
@@ -261,12 +267,7 @@ func createNonAlipayPayment(db *gorm.DB, payConfig models.PaymentConfig, target 
 		if err != nil {
 			return nil, fmt.Errorf("加密货币支付未配置")
 		}
-		rate := 7.2
-		if r := utils.GetSetting("pay_crypto_exchange_rate"); r != "" {
-			if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
-				rate = parsed
-			}
-		}
+		rate := utils.ExchangeRate("pay_crypto_exchange_rate", defaultUSDExchangeRate)
 		amountUSDT := target.PayAmount / rate
 		return buildPaymentURLResult("crypto", target.OrderNo, txID, target.PayAmount, "", gatewayResponseExtras{
 			"message": "请转账到以下地址",
@@ -1141,7 +1142,7 @@ func handleAlipayNotify(c *gin.Context, db *gorm.DB) {
 	utils.LogCallback("========== 开始处理支付宝回调 ==========")
 	utils.LogCallback("Method: %s", c.Request.Method)
 	utils.LogCallback("URL: %s", utils.MaskSensitiveParams(c.Request.URL.String()))
-	utils.LogCallback("Remote: %s", c.ClientIP())
+	utils.LogCallback("Remote: %s", utils.GetRealClientIP(c))
 
 	alipayCfg, err := services.GetAlipayConfig()
 	if err != nil {
@@ -1414,17 +1415,10 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 			}
 
 			if amountTotal, ok := obj["amount_total"].(float64); ok {
-				rate := 7.2
-				if r := utils.GetSetting("pay_stripe_exchange_rate"); r != "" {
-					if parsed, err := strconv.ParseFloat(r, 64); err == nil && parsed > 0 {
-						rate = parsed
-					}
-				}
+				// 与创建支付时同一套汇率与换算规则，否则会出现「按 7.2 下单、按别的汇率校验」。
+				rate := utils.ExchangeRate("pay_stripe_exchange_rate", defaultUSDExchangeRate)
 				amountUSD := txn.Amount / rate
-				expectedCents := int64(math.Round(amountUSD * 100))
-				if expectedCents < 50 {
-					expectedCents = 50
-				}
+				expectedCents := utils.YuanToCentsAtLeast(amountUSD, stripeMinAmountCents)
 				actualCents := int64(amountTotal)
 
 				if math.Abs(float64(actualCents-expectedCents)) > 1 {

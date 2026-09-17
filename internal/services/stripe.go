@@ -182,8 +182,8 @@ func (g *StripeGateway) CreatePayment(orderNo string, amount float64, subject, r
 		g.config = config
 	}
 
-	// Stripe 使用美分作为单位
-	amountCents := int64(math.Round(amount * 100))
+	// Stripe 使用美分作为单位（换算统一走 utils，与支付创建/回调校验同一口径）
+	amountCents := utils.YuanToCents(amount)
 	currency := "usd" // 默认使用美元
 
 	sessionID, checkoutURL, err := StripeCreateCheckoutSession(

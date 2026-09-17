@@ -41,7 +41,7 @@
           </div>
           <div class="att-file-info">
             <div class="att-file-name" :title="att.file_name">{{ att.file_name }}</div>
-            <div class="att-file-size">{{ formatSize(att.file_size) }}</div>
+            <div class="att-file-size">{{ formatSize(att.file_size, '') }}</div>
           </div>
           <n-button text size="small" type="primary">
             <template #icon><n-icon><DownloadOutline /></n-icon></template>
@@ -57,6 +57,7 @@ import { reactive, watch, onBeforeUnmount } from 'vue'
 import { NIcon, NSpin, NImage, useMessage } from 'naive-ui'
 import { DocumentOutline, DownloadOutline } from '@vicons/ionicons5'
 import request from '@/utils/request'
+import { formatSize } from '@/utils/format'
 
 export interface TicketAttachmentItem {
   id: number
@@ -80,13 +81,6 @@ function isImage(att: TicketAttachmentItem): boolean {
 }
 function isVideo(att: TicketAttachmentItem): boolean {
   return VIDEO_TYPES.includes(att.file_type || '') || /\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(att.file_name)
-}
-
-function formatSize(size?: number | null): string {
-  if (!size) return ''
-  if (size < 1024) return size + ' B'
-  if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
-  return (size / 1024 / 1024).toFixed(1) + ' MB'
 }
 
 async function loadBlob(att: TicketAttachmentItem) {

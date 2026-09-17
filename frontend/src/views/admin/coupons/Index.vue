@@ -68,7 +68,7 @@
                 </div>
                 <div class="card-row">
                   <span class="card-label">优惠</span>
-                  <span>{{ coupon.type === 'discount' ? `${coupon.discount_value}%` : coupon.type === 'fixed' ? `¥${coupon.discount_value}` : `${coupon.discount_value}天` }}</span>
+                  <span>{{ coupon.type === 'discount' ? `${coupon.discount_value}%` : coupon.type === 'fixed' ? formatCurrency(coupon.discount_value) : `${coupon.discount_value}天` }}</span>
                 </div>
                 <div class="card-row">
                   <span class="card-label">使用情况</span>
@@ -197,6 +197,7 @@ import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatFullDateTime } from '@/utils/date'
+import { formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
@@ -321,7 +322,7 @@ const columns = [
     resizable: true,
     render: (row) => {
       if (row.type === 'discount') return `${row.discount_value}%`
-      if (row.type === 'fixed') return `¥${row.discount_value}`
+      if (row.type === 'fixed') return formatCurrency(row.discount_value)
       if (row.type === 'free_days') return `${row.discount_value}天`
       return row.discount_value
     }

@@ -130,7 +130,7 @@ func (s *GithubNodesService) addLog(level, message string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry := LogEntry{
-		Time:    time.Now().Format("2006-01-02 15:04:05"),
+		Time:    time.Now().Format(utils.LayoutDateTime),
 		Message: message,
 		Level:   level,
 	}
@@ -269,7 +269,7 @@ func (s *GithubNodesService) Status() GithubNodesStatus {
 		PublicPrefix:  GithubNodesPublicPrefix,
 	}
 	if !s.lastSyncAt.IsZero() {
-		st.LastSyncAt = s.lastSyncAt.Format("2006-01-02 15:04:05")
+		st.LastSyncAt = s.lastSyncAt.Format(utils.LayoutDateTime)
 	}
 	s.mu.Unlock()
 
@@ -286,7 +286,7 @@ func (s *GithubNodesService) Status() GithubNodesStatus {
 		files = append(files, GithubNodesFile{
 			Path:      filepath.ToSlash(rel),
 			Size:      info.Size(),
-			UpdatedAt: info.ModTime().Format("2006-01-02 15:04:05"),
+			UpdatedAt: info.ModTime().Format(utils.LayoutDateTime),
 		})
 		return nil
 	})

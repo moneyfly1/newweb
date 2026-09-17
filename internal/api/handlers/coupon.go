@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -72,8 +71,9 @@ func ValidateAndApplyCoupon(code string, userID uint, orderAmount float64, packa
 	var discountAmount float64
 	switch coupon.Type {
 	case models.CouponTypeDiscount:
-		// 百分比折扣：value 为百分数（如 10 = 10%），按分位舍入防浮点误差
-		discountAmount = math.Round(orderAmount*coupon.DiscountValue) / 100
+		// 百分比折扣：value 为百分数（如 10 = 10%），统一走 utils.PercentOf
+		// （与代理佣金等其它按比例算钱的入口同一取舍口径，避免抹零方式不一致）
+		discountAmount = utils.PercentOf(orderAmount, coupon.DiscountValue)
 	case models.CouponTypeFixed:
 		discountAmount = coupon.DiscountValue
 	case models.CouponTypeFreeDays:

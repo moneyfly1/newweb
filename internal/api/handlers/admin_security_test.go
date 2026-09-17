@@ -211,3 +211,110 @@ func TestUnlockRequiresTarget(t *testing.T) {
 		t.Errorf("没有任何目标时不应返回成功: %s", w.Body.String())
 	}
 }
+
+// 客服只拿得到客户邮箱时的完整链路：按邮箱查 → 看到「已锁定 + 剩余时间 + 来源 IP」→ 解封 → 立即能登录。
+func TestLookupByEmailShowsLockAndSourceIP(t *testing.T) {
+	db := setupSecurityTestDB(t)
+	setIntSetting(t, db, "max_login_attempts", 5)
+	setIntSetting(t, db, "login_lockout_minutes", 30)
+
+	user := models.User{Username: "kelly", Email: "kelly@example.com", Password: "x", IsActive: true}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	const ip = "198.51.100.24"
+	for i := 0; i < 5; i++ {
+		addr := ip
+		db.Create(&models.LoginAttempt{Username: "kelly@example.com", IPAddress: &addr, Success: false})
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/security/lookup?identifier=kelly@example.com", nil)
+	AdminLookupLoginLimit(c)
+
+	data := decodeBody(t, w)["data"].(map[string]any)
+	if data["found"] != true {
+		t.Fatalf("应能按邮箱找到用户: %s", w.Body.String())
+	}
+	if data["limited"] != true {
+		t.Errorf("5 次失败应显示为已锁定")
+	}
+	if data["remaining_seconds"].(float64) <= 0 {
+		t.Errorf("应给出剩余锁定时间")
+	}
+	ips := data["source_ips"].([]any)
+	if len(ips) != 1 || ips[0].(map[string]any)["ip_address"] != ip {
+		t.Errorf("应列出失败来源 IP，实际 %v", ips)
+	}
+	if len(data["notes"].([]any)) == 0 {
+		t.Errorf("应给出客服可读的说明")
+	}
+
+	// 邮箱大小写不敏感
+	w2 := httptest.NewRecorder()
+	c2, _ := gin.CreateTestContext(w2)
+	c2.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/security/lookup?identifier=Kelly@Example.com", nil)
+	AdminLookupLoginLimit(c2)
+	if decodeBody(t, w2)["data"].(map[string]any)["found"] != true {
+		t.Errorf("邮箱查询应大小写不敏感")
+	}
+}
+
+// 账号被禁用（is_active=false）不是登录限制，必须明确提示，否则客服会一直纠结为什么解封了还登不上。
+func TestLookupReportsDisabledAccount(t *testing.T) {
+	db := setupSecurityTestDB(t)
+	setIntSetting(t, db, "max_login_attempts", 5)
+	setIntSetting(t, db, "login_lockout_minutes", 30)
+
+	user := models.User{Username: "disabled_user", Email: "disabled@example.com", Password: "x"}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	// is_active 列有 default true，Create 时零值会被默认值覆盖，必须显式更新
+	if err := db.Model(&user).Update("is_active", false).Error; err != nil {
+		t.Fatalf("disable user: %v", err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/security/lookup?identifier=disabled@example.com", nil)
+	AdminLookupLoginLimit(c)
+
+	data := decodeBody(t, w)["data"].(map[string]any)
+	if data["found"] != true {
+		t.Fatalf("应找到用户: %s", w.Body.String())
+	}
+	u := data["user"].(map[string]any)
+	if u["is_active"] != false {
+		t.Errorf("应返回账号禁用状态")
+	}
+	found := false
+	for _, n := range data["notes"].([]any) {
+		if strings.Contains(n.(string), "禁用") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("应提示账号已被禁用，实际 %v", data["notes"])
+	}
+}
+
+// 查不到用户时也必须能给出「没有这个用户」的明确结论，而不是空结果。
+func TestLookupUnknownUser(t *testing.T) {
+	setupSecurityTestDB(t)
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/security/lookup?identifier=nobody@example.com", nil)
+	AdminLookupLoginLimit(c)
+	data := decodeBody(t, w)["data"].(map[string]any)
+	if data["found"] != false {
+		t.Errorf("不存在的邮箱应为 found=false")
+	}
+	if len(data["notes"].([]any)) == 0 {
+		t.Errorf("应有「没有找到这个邮箱」的说明")
+	}
+}

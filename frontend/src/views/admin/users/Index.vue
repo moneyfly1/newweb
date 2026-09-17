@@ -43,6 +43,10 @@
                 <template #icon><n-icon :component="RefreshOutline" /></template>
                 刷新
               </n-button>
+              <n-button size="small" @click="showLoginLimit = true">
+                <template #icon><n-icon :component="LockOpenOutline" /></template>
+                登录限制 / 解封
+              </n-button>
             </div>
             <div class="mobile-toolbar-row">
               <n-button size="small" type="primary" @click="openCreateModal">
@@ -311,7 +315,7 @@ import {
   listUsers, updateUser, deleteUser, toggleUserActive,
   createUser, resetUserPassword,
   batchUserAction, exportUsersCSV, importUsersCSV, loginAsUser,
-  updateUserLineType
+  updateUserLineType, unlockLoginLimit
 } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
 import { listUserLevels } from '@/api/admin'
@@ -450,6 +454,8 @@ const actionOptions = (row) => [
   { label: '编辑', key: 'edit' },
   { label: row.is_active ? '禁用' : '启用', key: 'toggle' },
   { label: '重置密码', key: 'resetPwd' },
+  // 客户被限制登录时最常用的动作，直接放在每行菜单里，不用先打开详情
+  { label: '解除登录限制', key: 'unlockLogin' },
   { label: '删除', key: 'delete' }
 ]
 // Table columns
@@ -509,7 +515,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 210,
+    width: 240,
     fixed: 'right',
     render: (row) => h('div', { class: 'action-btn-grid' }, [
       h(NButton, { size: 'small', secondary: true, type: 'info', onClick: () => handleAction('detail', row) }, { default: () => '详情' }),
@@ -517,6 +523,14 @@ const columns = [
       h(NButton, { size: 'small', type: row.is_active ? 'warning' : 'success', onClick: () => handleAction('toggle', row) }, { default: () => row.is_active ? '禁用' : '启用' }),
       h(NButton, { size: 'small', secondary: true, type: 'warning', onClick: () => handleAction('resetPwd', row) }, { default: () => '重置' }),
       h(NButton, { size: 'small', type: 'success', onClick: () => handleAction('loginAs', row) }, { default: () => '代登' }),
+      // 客户连续输错密码被锁定 / 被 IP 限流时用这个（客户打电话说"登不上"最常见的原因）
+      h(NButton, {
+        size: 'small',
+        secondary: true,
+        type: 'success',
+        title: '解除该账号的登录限制（连续输错密码被锁定，或来源 IP 被限流）',
+        onClick: () => handleAction('unlockLogin', row),
+      }, { default: () => '解封' }),
       h(NButton, { size: 'small', type: 'error', onClick: () => handleAction('delete', row) }, { default: () => '删除' }),
     ])
   }
@@ -558,6 +572,21 @@ const getRowProps = (row) => ({
 })
 
 // Action dispatcher
+// 行级「解除登录限制」：清掉该账号的登录失败记录与限流计数
+const handleUnlockLoginRow = async (row) => {
+  try {
+    const res = await unlockLoginLimit({ user_id: row.id })
+    const d = res.data || {}
+    const parts = []
+    if (d.deleted_login_attempts) parts.push(`清除失败记录 ${d.deleted_login_attempts} 条`)
+    if (d.cleared_redis_keys) parts.push(`清除 Redis 限流 ${d.cleared_redis_keys} 个`)
+    if (d.cleared_memory_entries) parts.push(`清除内存限流 ${d.cleared_memory_entries} 条`)
+    message.success(parts.length ? `已解除 ${row.username || row.email} 的登录限制：${parts.join('，')}` : `${row.username || row.email} 当前没有登录限制记录`)
+  } catch (e) {
+    message.error(e?.message || '解除登录限制失败')
+  }
+}
+
 const handleAction = (key, row) => {
   switch (key) {
     case 'detail': handleViewDetail(row); break
@@ -566,6 +595,7 @@ const handleAction = (key, row) => {
     case 'resetPwd': openResetPwdModal(row); break
     case 'delete': handleDelete(row); break
     case 'loginAs': handleLoginAs(row); break
+    case 'unlockLogin': handleUnlockLoginRow(row); break
   }
 }
 

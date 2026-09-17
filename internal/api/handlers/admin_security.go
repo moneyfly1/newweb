@@ -431,3 +431,228 @@ func AdminUnlockSuggestion(c *gin.Context) {
 		"last_attempt_at":    latest,
 	})
 }
+
+// LoginLimitLookup 客服查单个客户：是否被限制、还剩多久、从哪个 IP 失败、账号是否被禁用。
+//
+// 为什么需要：客服只拿到客户邮箱（有时只有 IP），光看「被锁定账号」列表要一行行找；
+// 而且「客户登不上」并不只有登录限制一种原因（账号被禁用、密码错、验证码被限），
+// 这里一次把判断依据给全，避免客服反复试。
+func AdminLookupLoginLimit(c *gin.Context) {
+	db := database.GetDB()
+	identifier := strings.TrimSpace(strings.ToLower(c.Query("identifier")))
+	ipQuery := strings.TrimSpace(c.Query("ip"))
+	if identifier == "" && ipQuery == "" {
+		utils.BadRequest(c, "请提供 identifier（邮箱/用户名）或 ip")
+		return
+	}
+
+	maxAttempts, lockoutMinutes, enabled := loginLockoutConfig()
+	result := gin.H{
+		"lockout_enabled":    enabled,
+		"max_login_attempts": maxAttempts,
+		"lockout_minutes":    lockoutMinutes,
+		"found":              false,
+		"limited":            false,
+		"fail_count":         int64(0),
+		"verify_fail_count":  int64(0),
+		"source_ips":         []gin.H{},
+		"notes":              []string{},
+	}
+	notes := []string{}
+
+	// 窗口：启用锁定用配置窗口；未启用时看近 24 小时，方便判断"是不是刚输错过密码"
+	since := time.Now().Add(-time.Duration(lockoutMinutes) * time.Minute)
+	if !enabled {
+		since = time.Now().Add(-24 * time.Hour)
+	}
+
+	identifiers := []string{}
+	var user models.User
+	if identifier != "" {
+		if err := db.Where("LOWER(email) = ? OR LOWER(username) = ?", identifier, identifier).First(&user).Error; err == nil {
+			result["found"] = true
+			if user.Email != "" {
+				identifiers = append(identifiers, strings.ToLower(user.Email))
+			}
+			if user.Username != "" {
+				identifiers = append(identifiers, strings.ToLower(user.Username))
+			}
+			result["user"] = gin.H{
+				"id":         user.ID,
+				"username":   user.Username,
+				"email":      user.Email,
+				"is_active":  user.IsActive,
+				"is_admin":   user.IsAdmin,
+				"balance":    user.Balance,
+				"last_login": user.LastLogin,
+				"created_at": user.CreatedAt,
+			}
+			if !user.IsActive {
+				notes = append(notes, "该账号已被禁用（用户列表里的「禁用」），这不是登录限制导致的：需要在用户列表里启用该账号")
+			}
+		} else {
+			// 没找到用户也要照常查失败记录：可能客户输的是别的邮箱，或账号已删除
+			identifiers = append(identifiers, identifier)
+			notes = append(notes, "没有找到这个邮箱/用户名对应的用户，下面只显示登录失败记录")
+		}
+	}
+	if ipQuery != "" {
+		identifiers = append(identifiers, "") // 占位，保证后续按 IP 查询的分支生效
+	}
+	result["identifiers"] = identifiers
+
+	// 1) 登录失败统计
+	var failCount int64
+	var firstAt, lastAt *time.Time
+	query := db.Model(&models.LoginAttempt{}).Where("success = 0 AND created_at > ?", since)
+	if identifier != "" && len(identifiers) > 0 {
+		query = query.Where("LOWER(username) IN ?", nonEmpty(identifiers))
+	}
+	if ipQuery != "" {
+		query = query.Where("ip_address = ?", ipQuery)
+	}
+	query.Count(&failCount)
+
+	type trow struct {
+		First *flexTime
+		Last  *flexTime
+	}
+	var tr trow
+	agg := db.Model(&models.LoginAttempt{}).
+		Select("MIN(created_at) as first, MAX(created_at) as last").
+		Where("success = 0 AND created_at > ?", since)
+	if identifier != "" {
+		agg = agg.Where("LOWER(username) IN ?", nonEmpty(identifiers))
+	}
+	if ipQuery != "" {
+		agg = agg.Where("ip_address = ?", ipQuery)
+	}
+	agg.Scan(&tr)
+	if tr.First != nil {
+		t := tr.First.Time
+		firstAt = &t
+	}
+	if tr.Last != nil {
+		t := tr.Last.Time
+		lastAt = &t
+	}
+	result["fail_count"] = failCount
+	result["first_attempt_at"] = firstAt
+	result["last_attempt_at"] = lastAt
+
+	// 2) 是否处于锁定状态（只有启用锁定才算）
+	limited := enabled && failCount >= int64(maxAttempts)
+	result["limited"] = limited
+	if limited && firstAt != nil {
+		unlockAt := firstAt.Add(time.Duration(lockoutMinutes) * time.Minute)
+		result["unlock_at"] = unlockAt
+		remaining := int64(time.Until(unlockAt).Seconds())
+		if remaining < 0 {
+			remaining = 0
+		}
+		result["remaining_seconds"] = remaining
+	} else {
+		result["unlock_at"] = nil
+		result["remaining_seconds"] = int64(0)
+	}
+
+	// 3) 该账号的邮箱验证码失败（找回密码/注册流程也会被限）
+	if identifier != "" {
+		var vfails int64
+		db.Model(&models.VerificationAttempt{}).
+			Where("success = 0 AND created_at > ? AND LOWER(email) IN ?", since, nonEmpty(identifiers)).
+			Count(&vfails)
+		result["verify_fail_count"] = vfails
+		if enabled && vfails >= int64(maxAttempts) {
+			notes = append(notes, "该邮箱的验证码校验也已达上限（注册/找回密码会被暂时拦下），解封会一并清除")
+		}
+	}
+
+	// 4) 来源 IP 明细 + 该 IP 当前是否被接口限流
+	type ipRow struct {
+		IPAddress   string
+		FailCount   int64
+		LastAttempt flexTime
+	}
+	var ipRows []ipRow
+	ipAgg := db.Model(&models.LoginAttempt{}).
+		Select("ip_address, COUNT(*) as fail_count, MAX(created_at) as last_attempt").
+		Where("success = 0 AND created_at > ? AND ip_address IS NOT NULL AND ip_address != ''", since).
+		Group("ip_address").
+		Order("fail_count DESC").
+		Limit(10)
+	if identifier != "" {
+		ipAgg = ipAgg.Where("LOWER(username) IN ?", nonEmpty(identifiers))
+	}
+	if ipQuery != "" {
+		ipAgg = ipAgg.Where("ip_address = ?", ipQuery)
+	}
+	ipAgg.Scan(&ipRows)
+
+	rateLimited := map[string]middleware.RateLimitEntry{}
+	for _, e := range middleware.ListRedisRateLimits() {
+		rateLimited[e.IP] = e
+	}
+	for _, e := range middleware.ListMemoryLimiters() {
+		rateLimited[e.IP] = e
+	}
+
+	sourceIPs := []gin.H{}
+	for _, r := range ipRows {
+		entry := gin.H{
+			"ip_address":   r.IPAddress,
+			"fail_count":   r.FailCount,
+			"last_attempt": r.LastAttempt.Time,
+			"rate_limited": false,
+		}
+		if e, ok := rateLimited[r.IPAddress]; ok {
+			entry["rate_limited"] = true
+			entry["rate_limit_scope"] = e.Scope
+			entry["rate_limit_path"] = e.Path
+			entry["rate_limit_ttl"] = e.TTLSeconds
+			entry["rate_limit_count"] = e.Count
+			notes = append(notes, fmt.Sprintf("来源 IP %s 当前正被接口限流（%s，剩余 %d 秒），解封会一并清除", r.IPAddress, e.Path, e.TTLSeconds))
+		}
+		sourceIPs = append(sourceIPs, entry)
+	}
+	result["source_ips"] = sourceIPs
+
+	// 5) 最近一次成功登录（用于判断客户到底是"输错密码"还是"根本没连上"）
+	if result["found"] == true {
+		var lastSuccess models.LoginAttempt
+		if err := db.Where("success = 1 AND LOWER(username) IN ?", nonEmpty(identifiers)).
+			Order("created_at DESC").First(&lastSuccess).Error; err == nil {
+			result["last_success_at"] = lastSuccess.CreatedAt
+		} else {
+			result["last_success_at"] = nil
+		}
+	}
+
+	if len(notes) == 0 {
+		if !enabled {
+			notes = append(notes, "后台未启用账号锁定（最大失败次数 / 锁定时长有一项为 0），该账号不会因输错密码被锁定；若客户登不上，请核对密码或账号是否被禁用")
+		} else if limited {
+			notes = append(notes, "该账号已被锁定，点「立即解封」即可让客户马上重试")
+		} else {
+			notes = append(notes, "该账号当前没有被锁定；若客户仍无法登录，请核对密码、账号是否被禁用，或让客户更换网络（同一 IP 的接口限流也会拦下登录请求）")
+		}
+	}
+	result["notes"] = notes
+
+	utils.Success(c, result)
+}
+
+// nonEmpty 去掉空串元素（identifiers 里可能有占位空值）
+func nonEmpty(in []string) []string {
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		if strings.TrimSpace(v) != "" {
+			out = append(out, v)
+		}
+	}
+	if len(out) == 0 {
+		// 全是空值时给一个不可能匹配的值，避免 IN () 退化成全表匹配
+		return []string{"__none__"}
+	}
+	return out
+}

@@ -162,19 +162,66 @@ func lookupLocationFromIP2Region(ip string) string {
 		fmt.Printf("[IP2Region] 查询错误 %s: %v\n", ip, err)
 		return ""
 	}
-	// ip2region 格式: 国家|区域|省份|城市|ISP
-	parts := strings.Split(region, "|")
+	// 注意字段布局：不能写死下标（见 parseIP2RegionFields）
+	return joinLocationParts(parseIP2RegionFields(strings.Split(region, "|")))
+}
+
+// parseIP2RegionFields 解析 ip2region 的返回串，返回 国家/省份/城市。
+//
+// 为什么需要这个函数：xdb 文件有两种字段布局，而代码此前一律按
+// 「国家|区域|省份|城市|ISP」取下标 —— 线上实际的库是新版布局
+// 「国家|省份|城市|ISP|国家码」，于是取到的是
+//
+//	省份 ← 城市（郑州市）、城市 ← ISP（电信）
+//
+// 结果存进数据库的地区是「中国 郑州市 电信」「United States Google LLC」：
+// 省份列里放的是城市、城市列里放的是运营商，后台按 国家/省份/城市 聚合统计自然错位。
+// 现在按内容判断布局（新版末位是两位国家码），两种库都能得到 国家 省份 城市。
+func parseIP2RegionFields(parts []string) (country, province, city string) {
 	if len(parts) < 2 {
+		return "", "", ""
+	}
+	country = cleanRegionPart(parts[0])
+	// 新版布局的第 2 段是省份（真实地名），旧版布局的第 2 段是「区域」，
+	// 实际数据里恒为 "0" 或空 —— 用它来区分两种布局最可靠。
+	if len(parts) >= 5 && !isEmptyRegionPart(parts[1]) && isCountryCode(parts[4]) {
+		// 新版 ip2region_v4.xdb / ip2region_v6.xdb: 国家|省份|城市|ISP|国家码
+		return country, cleanRegionPart(parts[1]), cleanRegionPart(parts[2])
+	}
+	// 旧版 ip2region.db 时代: 国家|区域|省份|城市|ISP
+	if len(parts) > 3 {
+		return country, cleanRegionPart(parts[2]), cleanRegionPart(parts[3])
+	}
+	return country, "", ""
+}
+
+// cleanRegionPart 把 ip2region 用来表示「无数据」的 "0" 归一成空串。
+func cleanRegionPart(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "0" {
 		return ""
 	}
-	country, province, city := parts[0], "", ""
-	if len(parts) > 2 {
-		province = parts[2]
+	return s
+}
+
+func isEmptyRegionPart(s string) bool {
+	return cleanRegionPart(s) == ""
+}
+
+// isCountryCode 判断字符串是否为两位国家码（新版 xdb 用 "0" 表示无数据）。
+func isCountryCode(s string) bool {
+	if s == "0" {
+		return true
 	}
-	if len(parts) > 3 {
-		city = parts[3]
+	if len(s) != 2 {
+		return false
 	}
-	return joinLocationParts(country, province, city)
+	for _, r := range s {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
 }
 
 func loadMMDBReader() *maxminddb.Reader {

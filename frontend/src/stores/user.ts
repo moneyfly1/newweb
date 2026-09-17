@@ -4,7 +4,7 @@ import { login as loginApi, telegramLogin as telegramLoginApi } from '@/api/auth
 import { getCurrentUser } from '@/api/user'
 import request, { clearRequestSessionCache, prefetchCSRFToken } from '@/utils/request'
 
-export interface UserInfo {
+interface UserInfo {
   id: number
   username: string
   email: string

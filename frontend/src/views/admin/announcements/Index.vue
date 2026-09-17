@@ -131,12 +131,11 @@
 </template>
 
 <script setup lang="tsx">
-import { ref, reactive, h, onActivated, onMounted } from 'vue'
+import { ref, h, onActivated, onMounted } from 'vue'
 import {
   NCard,
   NButton,
   NDataTable,
-  NModal,
   NForm,
   NFormItem,
   NInput,
@@ -279,11 +278,10 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
-    let res: any
     if (isEdit.value) {
-      res = await updateAnnouncement(formData.value.id, formData.value)
+      await updateAnnouncement(formData.value.id, formData.value)
     } else {
-      res = await createAnnouncement(formData.value)
+      await createAnnouncement(formData.value)
     }
     message.success(isEdit.value ? '更新成功' : '创建成功')
     showDrawer.value = false
@@ -297,7 +295,7 @@ const handleSubmit = async () => {
 
 const handleDelete = async (id: number) => {
   try {
-    const res = await deleteAnnouncement(id)
+    await deleteAnnouncement(id)
     message.success('删除成功')
     loadData()
   } catch (error: any) {

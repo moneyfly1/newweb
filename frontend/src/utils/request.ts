@@ -1,9 +1,9 @@
 import axios from 'axios'
-import type { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
+import type { AxiosRequestConfig } from 'axios'
 import { useUserStore } from '@/stores/user'
 import router from '@/router'
 
-export interface ApiResponse<T = any> {
+interface ApiResponse<T = any> {
   code: number
   message: string
   data: T
@@ -129,7 +129,6 @@ async function ensureCSRFToken(): Promise<string> {
   return csrfTokenPromise
 }
 
-let isLoggingOut = false
 
 instance.interceptors.request.use(async (config) => {
   const userStore = useUserStore()

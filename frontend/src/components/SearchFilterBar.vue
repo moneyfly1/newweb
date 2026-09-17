@@ -40,14 +40,14 @@
 <script setup lang="ts">
 import { SearchOutline } from '@vicons/ionicons5'
 
-export interface SearchFilterConfig {
+interface SearchFilterConfig {
   key: string
   placeholder?: string
   options: any[]
 }
 
 // 统一搜索筛选工具栏：桌面端强制单行（不换行），移动端响应式两列
-const props = defineProps<{
+defineProps<{
   searchPlaceholder?: string
   filters?: SearchFilterConfig[]
   /** 搜索/筛选值对象（{ search, [filterKey]: value }） */

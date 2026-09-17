@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { zhCN, dateZhCN } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
 import { getPublicConfig } from '@/api/common'

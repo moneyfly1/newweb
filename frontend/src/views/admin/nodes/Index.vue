@@ -223,8 +223,7 @@ import { ref, reactive, h, onActivated, onMounted, onBeforeUnmount, computed } f
 import { NButton, NTag, NSpace, NIcon, NSwitch, useMessage, useDialog, type DataTableColumns, type FormInst, type TagProps } from 'naive-ui'
 import {
   CloudDownloadOutline, LinkOutline, RefreshOutline,
-  SpeedometerOutline, GlobeOutline, ShieldCheckmarkOutline, SearchOutline,
-  EllipsisVertical
+  SpeedometerOutline, GlobeOutline, ShieldCheckmarkOutline, SearchOutline
 } from '@vicons/ionicons5'
 import { listAdminNodes, updateNode, deleteNode, importNodes, batchNodeAction, testNode, getConfigUpdateConfig } from '@/api/admin'
 import { useTable } from '@/composables/useTable'

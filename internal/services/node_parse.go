@@ -49,8 +49,8 @@ func ParseSubscriptionContent(content string) ([]models.Node, error) {
 		}
 	}
 
-	if nodes, ok, err := parseClashSubscription(content); ok {
-		return nodes, err
+	if nodes, ok := parseClashSubscription(content); ok {
+		return nodes, nil
 	}
 
 	return ParseNodeLinks(content)
@@ -243,13 +243,15 @@ func extractDomainPortFromVmessLink(link string) (string, int, error) {
 	return stringFromMap(proxy, "server"), intFromMap(proxy, "port", 0), nil
 }
 
-func parseClashSubscription(content string) ([]models.Node, bool, error) {
+// parseClashSubscription 解析 Clash 订阅；第二个返回值表示"是否识别为 Clash 订阅"。
+// 解析失败按"不是 Clash 格式"处理，不再返回永远为 nil 的 error（unparam 检出的死返回值）。
+func parseClashSubscription(content string) ([]models.Node, bool) {
 	var sub clashSubscription
 	if err := yaml.Unmarshal([]byte(content), &sub); err != nil {
-		return nil, false, nil
+		return nil, false
 	}
 	if len(sub.Proxies) == 0 {
-		return nil, false, nil
+		return nil, false
 	}
 
 	var nodes []models.Node
@@ -260,7 +262,7 @@ func parseClashSubscription(content string) ([]models.Node, bool, error) {
 		}
 		nodes = append(nodes, *node)
 	}
-	return nodes, true, nil
+	return nodes, true
 }
 
 func clashProxyToNode(proxy map[string]interface{}) (*models.Node, error) {
@@ -475,18 +477,4 @@ func encodeNameFragment(name string) string {
 		return ""
 	}
 	return "#" + url.QueryEscape(name)
-}
-
-func encodeHostPortQuery(host string, path string) string {
-	if host == "" && path == "" {
-		return ""
-	}
-	q := url.Values{}
-	if host != "" {
-		q.Set("host", host)
-	}
-	if path != "" {
-		q.Set("path", path)
-	}
-	return q.Encode()
 }

@@ -424,7 +424,7 @@ func handleFormGatewayNotify(c *gin.Context, db *gorm.DB, callbackType string, c
 			utils.LogCallback("[%s] 支付事务已标记为 paid: out_trade_no=%s trade_no=%s", paymentMethod, outTradeNo, tradeNo)
 			switch getPaymentBusinessKind(&txn) {
 			case "recharge":
-				if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
+				if err := handleEpayRechargeCallback(tx, outTradeNo); err != nil {
 					return err
 				}
 			case "order":
@@ -817,7 +817,7 @@ func GetPaymentStatus(c *gin.Context) {
 		return
 	}
 	if tx.Status == models.PayStatusPending {
-		if status, _, err := tryCompensateAlipayPayment(db, &tx, "status_poll"); err != nil {
+		if status, err := tryCompensateAlipayPayment(db, &tx, "status_poll"); err != nil {
 			utils.LogError("[Alipay] 状态轮询补偿失败: tx_id=%s error=%v", safeTransactionID(tx.TransactionID), err)
 		} else {
 			tx.Status = status
@@ -888,7 +888,7 @@ func finalizeAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, 
 
 		switch getPaymentBusinessKind(&txn) {
 		case "recharge":
-			if err := handleEpayRechargeCallback(tx, &txn, outTradeNo); err != nil {
+			if err := handleEpayRechargeCallback(tx, outTradeNo); err != nil {
 				return err
 			}
 		case "order":
@@ -907,39 +907,40 @@ func finalizeAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, 
 	return finalStatus, finalStatus == models.PayStatusPaid, nil
 }
 
-func tryCompensateAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, source string) (string, bool, error) {
+// tryCompensateAlipayPayment 主动查单补偿；原先还返回一个恒被忽略的 bool，已删除（unparam）
+func tryCompensateAlipayPayment(db *gorm.DB, transaction *models.PaymentTransaction, source string) (string, error) {
 	if transaction == nil || transaction.Status != models.PayStatusPending || transaction.TransactionID == nil || *transaction.TransactionID == "" {
 		if transaction == nil {
-			return models.PayStatusPending, false, nil
+			return models.PayStatusPending, nil
 		}
-		return transaction.Status, false, nil
+		return transaction.Status, nil
 	}
 	if strings.HasPrefix(*transaction.TransactionID, "RCH") == false && transaction.OrderID == 0 {
-		return transaction.Status, false, nil
+		return transaction.Status, nil
 	}
 
 	cfg, err := services.GetAlipayConfig()
 	if err != nil {
-		return transaction.Status, false, err
+		return transaction.Status, err
 	}
 
 	outTradeNo := *transaction.TransactionID
 	utils.LogCallback("[Alipay] 主动查单补偿: source=%s out_trade_no=%s", source, outTradeNo)
 	result, err := services.AlipayQueryTrade(cfg, outTradeNo)
 	if err != nil {
-		return transaction.Status, false, err
+		return transaction.Status, err
 	}
 	if result.OutTradeNo != "" && result.OutTradeNo != outTradeNo {
-		return transaction.Status, false, fmt.Errorf("查单返回的 out_trade_no 不匹配: expected=%s actual=%s", outTradeNo, result.OutTradeNo)
+		return transaction.Status, fmt.Errorf("查单返回的 out_trade_no 不匹配: expected=%s actual=%s", outTradeNo, result.OutTradeNo)
 	}
 	if result.TradeStatus != "TRADE_SUCCESS" && result.TradeStatus != "TRADE_FINISHED" {
 		utils.LogCallback("[Alipay] 主动查单未确认支付成功: source=%s out_trade_no=%s status=%s", source, outTradeNo, result.TradeStatus)
-		return transaction.Status, false, nil
+		return transaction.Status, nil
 	}
 
 	status, compensated, err := finalizeAlipayPayment(db, transaction, result.TradeNo, result.TotalAmount, source)
 	if err != nil {
-		return transaction.Status, false, err
+		return transaction.Status, err
 	}
 
 	callbackJSON := buildAlipayCallbackPayload(result)
@@ -957,7 +958,7 @@ func tryCompensateAlipayPayment(db *gorm.DB, transaction *models.PaymentTransact
 	}
 
 	transaction.Status = status
-	return status, compensated, nil
+	return status, nil
 }
 
 func PaymentNotify(c *gin.Context) {
@@ -1046,7 +1047,9 @@ func handleCodepayNotify(c *gin.Context, db *gorm.DB) {
 	})
 }
 
-func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) error {
+// handleEpayRechargeCallback 处理易支付充值回调；原先还接收一个完全没用到的
+// transaction 参数，已删除（unparam）
+func handleEpayRechargeCallback(db *gorm.DB, txID string) error {
 	// Use a transaction to atomically check status + update balance (prevents double-spend)
 	var notifyUser *models.User
 	var notifyRecord *models.RechargeRecord
@@ -1099,10 +1102,6 @@ func handleEpayRechargeCallback(db *gorm.DB, transaction *models.PaymentTransact
 		})
 	}
 	return nil
-}
-
-func handleEpayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction) error {
-	return handleGatewayOrderCallback(db, transaction, "epay")
 }
 
 func handleGatewayOrderCallback(db *gorm.DB, transaction *models.PaymentTransaction, paymentMethod string) error {
@@ -1291,7 +1290,7 @@ func handleAlipayOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 	if transaction.OrderID == 0 {
 		utils.LogCallback("[Alipay] 💰 这是充值订单，调用充值处理逻辑")
 		if transaction.TransactionID != nil {
-			return handleEpayRechargeCallback(db, transaction, *transaction.TransactionID)
+			return handleEpayRechargeCallback(db, *transaction.TransactionID)
 		}
 		utils.LogError("[Alipay] ❌ 充值订单缺少 transaction_id")
 		return fmt.Errorf("充值订单缺少 transaction_id")
@@ -1454,7 +1453,7 @@ func handleStripeWebhook(c *gin.Context, db *gorm.DB) {
 
 			switch getPaymentBusinessKind(&txn) {
 			case "recharge":
-				if err := handleStripeRechargeCallback(tx, &txn, txIDVal); err != nil {
+				if err := handleStripeRechargeCallback(tx, txIDVal); err != nil {
 					return err
 				}
 			case "order":
@@ -1489,8 +1488,9 @@ func handleStripeOrderCallback(db *gorm.DB, transaction *models.PaymentTransacti
 	return handleGatewayOrderCallback(db, transaction, "stripe")
 }
 
-func handleStripeRechargeCallback(db *gorm.DB, transaction *models.PaymentTransaction, txID string) error {
-	return handleEpayRechargeCallback(db, transaction, txID)
+// handleStripeRechargeCallback 处理 Stripe 充值回调；原先的 transaction 参数完全没用到（unparam）
+func handleStripeRechargeCallback(db *gorm.DB, txID string) error {
+	return handleEpayRechargeCallback(db, txID)
 }
 
 // PaymentReturn handles synchronous return from payment gateway (e.g., Alipay return_url)
@@ -1513,7 +1513,7 @@ func PaymentReturn(c *gin.Context) {
 		var transaction models.PaymentTransaction
 		if err := db.Where("transaction_id = ?", outTradeNo).First(&transaction).Error; err == nil {
 			if transaction.Status == models.PayStatusPending {
-				if _, _, err := tryCompensateAlipayPayment(db, &transaction, "sync_return"); err != nil {
+				if _, err := tryCompensateAlipayPayment(db, &transaction, "sync_return"); err != nil {
 					utils.LogError("[Alipay] 同步返回补偿失败: out_trade_no=%s error=%v", outTradeNo, err)
 				}
 			}

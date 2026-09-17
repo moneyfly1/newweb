@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { GlobalThemeOverrides } from 'naive-ui'
 
-export interface ThemeConfig {
+interface ThemeConfig {
   primary: string
   success: string
   warning: string
@@ -19,7 +19,7 @@ export interface ThemeConfig {
   sidebarActive: string
 }
 
-export interface ThemeOption {
+interface ThemeOption {
   value: string
   label: string
   color: string

@@ -648,7 +648,7 @@ func (b *EmailTemplateBuilder) GetAdminNotificationTemplate(notificationType, ti
 	case "order_paid", "payment_success": // payment_success 与 order_paid 共用支付成功模板
 		orderNo := getStringFromData(data, "order_no", "N/A")
 		username := getStringFromData(data, "username", "N/A")
-		amount := getFloatFromData(data, "amount", 0)
+		amount := getAmountFromData(data)
 		packageName := getStringFromData(data, "package_name", "未知套餐")
 		paymentMethod := getStringFromData(data, "payment_method", "未知")
 		paymentTime := getStringFromData(data, "payment_time", "N/A")
@@ -800,7 +800,7 @@ func (b *EmailTemplateBuilder) GetAdminNotificationTemplate(notificationType, ti
 		orderNo := getStringFromData(data, "order_no", "N/A")
 		username := getStringFromData(data, "username", "N/A")
 		packageName := getStringFromData(data, "package_name", "未知套餐")
-		amount := getFloatFromData(data, "amount", 0)
+		amount := getAmountFromData(data)
 		content = fmt.Sprintf(`<h2>📦 新订单创建</h2>
             <p>系统检测到新订单创建，等待用户支付：</p>
             <div class="info-box">
@@ -819,7 +819,7 @@ func (b *EmailTemplateBuilder) GetAdminNotificationTemplate(notificationType, ti
 	case "recharge_success":
 		orderNo := getStringFromData(data, "order_no", "N/A")
 		username := getStringFromData(data, "username", "N/A")
-		amount := getFloatFromData(data, "amount", 0)
+		amount := getAmountFromData(data)
 		content = fmt.Sprintf(`<h2>💰 充值成功</h2>
             <p>系统检测到用户余额充值成功：</p>
             <div class="success-box">
@@ -886,7 +886,7 @@ func (b *EmailTemplateBuilder) GetAdminNotificationTemplate(notificationType, ti
 	case "unpaid_order":
 		orderNo := getStringFromData(data, "order_no", "N/A")
 		username := getStringFromData(data, "username", "N/A")
-		amount := getFloatFromData(data, "amount", 0)
+		amount := getAmountFromData(data)
 		content = fmt.Sprintf(`<h2>⏳ 未支付订单提醒</h2>
             <p>系统检测到用户订单超时未支付：</p>
             <div class="warning-box">
@@ -937,8 +937,11 @@ func getStringFromData(data map[string]interface{}, key string, defaultValue str
 	return defaultValue
 }
 
-func getFloatFromData(data map[string]interface{}, key string, defaultValue float64) float64 {
-	if val, ok := data[key]; ok {
+// getAmountFromData 从模板数据里取金额。
+// 原实现带 key 与 defaultValue 两个参数，实际调用方一个永远传 "amount"、一个永远传 0，
+// 都是死参数（unparam），已固定。
+func getAmountFromData(data map[string]interface{}) float64 {
+	if val, ok := data["amount"]; ok {
 		switch v := val.(type) {
 		case float64:
 			return v
@@ -958,5 +961,5 @@ func getFloatFromData(data map[string]interface{}, key string, defaultValue floa
 			}
 		}
 	}
-	return defaultValue
+	return 0
 }

@@ -195,8 +195,8 @@ func DownloadTicketAttachment(c *gin.Context) {
 		// 浏览器内联预览（图片/视频/pdf）
 		c.File(fullPath)
 	} else {
-		// 下载
-		disposition := "attachment"
+		// 下载（下面 if/else 两条分支都会赋值，不需要初始值）
+		var disposition string
 		if !isASCIIFileName(att.FileName) {
 			// 中文文件名用 RFC 5987 编码，避免乱码
 			disposition = "attachment; filename*=UTF-8''" + urlPathEscape(att.FileName)

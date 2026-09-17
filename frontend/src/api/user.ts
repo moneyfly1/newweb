@@ -10,8 +10,6 @@ export const getNotificationSettings = () => request.get('/users/notification-se
 export const updateNotificationSettings = (data: any) => request.put('/users/notification-settings', data)
 export const getPrivacySettings = () => request.get('/users/privacy-settings')
 export const updatePrivacySettings = (data: any) => request.put('/users/privacy-settings', data)
-export const getMyLevel = () => request.get('/users/my-level')
-export const getSubscriptionResets = (params?: any) => request.get('/users/subscription-resets', { params })
 
 // Telegram
 export const bindTelegram = (data: any) => request.post('/users/bind-telegram', data)

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 )
 
@@ -33,70 +32,6 @@ func decodeBase64Flexible(s string) (string, error) {
 // Non-standard format: protocol://Base64(user:pass@server:port)?query_params#fragment
 // or: protocol://Base64(method:pass@server:port)#fragment
 // Returns the normalized link and whether it was converted.
-
-func normalizeNonStandardLink(link string) (string, bool) {
-	// Find the scheme
-	schemeEnd := strings.Index(link, "://")
-	if schemeEnd < 0 {
-		return link, false
-	}
-	scheme := link[:schemeEnd]
-	rest := link[schemeEnd+3:]
-
-	// Split off query and fragment
-	base64Part := rest
-	queryPart := ""
-	fragmentPart := ""
-
-	if idx := strings.Index(base64Part, "?"); idx != -1 {
-		queryPart = base64Part[idx:]
-		base64Part = base64Part[:idx]
-		// Fragment might be in query part
-		if fidx := strings.Index(queryPart, "#"); fidx != -1 {
-			fragmentPart = queryPart[fidx:]
-			queryPart = queryPart[:fidx]
-		}
-	} else if idx := strings.Index(base64Part, "#"); idx != -1 {
-		fragmentPart = base64Part[idx:]
-		base64Part = base64Part[:idx]
-	}
-
-	// Try to decode the base64 part
-	decoded, err := decodeBase64Flexible(base64Part)
-	if err != nil {
-		return link, false
-	}
-
-	// Check if decoded looks like user:pass@server:port or server:port
-	if !strings.Contains(decoded, "@") && !strings.Contains(decoded, ":") {
-		return link, false
-	}
-
-	// URL-decode the decoded string (some have %3A etc)
-	if unescaped, err := url.QueryUnescape(decoded); err == nil {
-		decoded = unescaped
-	}
-
-	// Reconstruct as standard link
-	normalized := scheme + "://" + decoded + queryPart + fragmentPart
-
-	// For query-based params, convert remarks to fragment if no fragment
-	if fragmentPart == "" && queryPart != "" {
-		parsed, err := url.Parse(normalized)
-		if err == nil {
-			remarks := parsed.Query().Get("remarks")
-			if remarks != "" {
-				q := parsed.Query()
-				q.Del("remarks")
-				parsed.RawQuery = q.Encode()
-				parsed.Fragment = remarks
-				normalized = parsed.String()
-			}
-		}
-	}
-
-	return normalized, true
-}
 
 // convertNonStandardToClashMap handles non-standard Base64 links with query-based params
 // and converts them to Clash proxy maps directly.
@@ -360,12 +295,4 @@ func getRawQueryParam(rawQuery string, key string) string {
 		}
 	}
 	return ""
-}
-
-func portToInt(port string) int {
-	p, err := strconv.Atoi(port)
-	if err != nil {
-		return 0
-	}
-	return p
 }

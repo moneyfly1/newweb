@@ -1,9 +1,8 @@
 import { ref } from 'vue'
 import { listAdminOrders } from '@/api/admin'
-import { notifyNewOrder, notifyNewTicket } from './notification'
+import { notifyNewOrder } from './notification'
 
 const lastOrderId = ref(0)
-const lastTicketId = ref(0)
 let pollingTimer: any = null
 
 // 检查新订单

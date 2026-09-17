@@ -75,7 +75,6 @@ const confettiPieces = Array.from({ length: 16 }, (_, i) => {
   }
 })
 
-const source = computed(() => route.query.source || 'purchase')
 const shouldAutoRedirect = computed(() => route.query.redirect === 'dashboard')
 const redirectTarget = computed(() => ({ name: 'Dashboard' as const }))
 

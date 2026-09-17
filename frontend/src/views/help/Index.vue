@@ -178,14 +178,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useMessage } from 'naive-ui'
 import { DownloadOutline, ChevronDownOutline, ChevronUpOutline, MailOutline, ChatbubblesOutline, SendOutline } from '@vicons/ionicons5'
 import { getPublicConfig } from '@/api/common'
 import { resolvePanDownloadUrl } from '@/utils/githubDownload'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
-const message = useMessage()
 const loadingConfig = ref(false)
 const config = ref<Record<string, string>>({})
 const expandedTut = ref('')

@@ -282,7 +282,6 @@ const showCryptoDrawer = ref(false)
 const cryptoInfo = ref<any>(null)
 const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
-let pollingRecordId = 0
 let pollAttempts = 0
 const maxPollAttempts = 20
 
@@ -346,7 +345,6 @@ const checkRechargeStatus = async (recordId: number) => {
 
 const startPolling = (recordId: number) => {
   stopPolling()
-  pollingRecordId = recordId
   pollAttempts = 0
   pollingStatus.value = true
   checkRechargeStatus(recordId).catch(() => {})

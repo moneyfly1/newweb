@@ -84,27 +84,6 @@ func AdminCreateBackup(c *gin.Context) {
 	utils.Success(c, response)
 }
 
-// addFileToZip adds a file to the zip archive
-func addFileToZip(zipWriter *zip.Writer, filePath, nameInZip string) error {
-	if strings.Contains(nameInZip, "..") || strings.ContainsAny(nameInZip, `/\`) {
-		return fmt.Errorf("invalid zip entry name")
-	}
-	// #nosec G304 -- filePath comes from controlled backup generation flow.
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	writer, err := zipWriter.Create(nameInZip)
-	if err != nil {
-		return err
-	}
-
-	_, err = io.Copy(writer, file)
-	return err
-}
-
 func AdminListBackups(c *gin.Context) {
 	backupDir := "backups"
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {

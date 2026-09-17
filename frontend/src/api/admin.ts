@@ -85,7 +85,6 @@ export const deleteTicketAttachment = (attId: number) => request.delete(`/ticket
 export const getSettings = () => request.get('/admin/settings')
 export const updateSettings = (data: any) => request.put('/admin/settings', data)
 export const sendTestEmail = (data: { email: string }) => request.post('/admin/settings/test-email', data)
-export const testTelegram = () => request.post('/admin/settings/test-telegram')
 export const testBark = () => request.post('/admin/settings/test-bark')
 export const getProtocolFilter = () => request.get('/admin/settings/protocol-filter')
 export const updateProtocolFilter = (data: any) => request.put('/admin/settings/protocol-filter', data)
@@ -196,9 +195,6 @@ export const listAdminInviteRelations = (params?: any) => request.get('/admin/in
 export const deleteAdminInviteCode = (id: number) => request.delete(`/admin/invites/${id}`)
 export const toggleAdminInviteCode = (id: number) => request.post(`/admin/invites/${id}/toggle`)
 
-// Payment Gateways
-export const listPaymentGateways = () => request.get('/admin/payment-gateways')
-export const testPaymentGateway = (type: string) => request.post(`/admin/payment-gateways/${type}/test`)
 
 // Payment Stats
 export const getPaymentStats = (params?: any) => request.get('/admin/stats/payment', { params })
@@ -207,10 +203,7 @@ export const getPaymentAnalysis = (params?: any) => request.get('/admin/stats/pa
 
 // 软件同步（版本自动检测）
 export const runSoftwareSync = () => request.post('/admin/software-sync/run')
-export const getSoftwareSyncStatus = () => request.get('/admin/software-sync/status')
 export const checkSoftwareVersions = () => request.get('/admin/software-sync/check')
-export const getSoftwareSyncConfig = () => request.get('/admin/software-sync/config')
-export const saveSoftwareSyncConfig = (data: any) => request.post('/admin/software-sync/config', data)
 
 // 专线节点导入（订阅/链接，订阅支持同步更新）
 export const importCustomNodes = (data: { type: string, url?: string, links?: string }) => request.post('/admin/custom-nodes/import', data)

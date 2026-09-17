@@ -262,8 +262,8 @@
 <script setup lang="ts">
 import { ref, reactive, h, onActivated, onMounted, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
-import { NButton, NTag, NSpace, NIcon, NSelect, useMessage, useDialog, type DataTableColumns, type TagProps } from 'naive-ui'
-import { RefreshOutline, ReceiptOutline, TimeOutline, MailOutline, LayersOutline } from '@vicons/ionicons5'
+import { NButton, NTag, NSpace, NIcon, useMessage, useDialog, type DataTableColumns, type TagProps } from 'naive-ui'
+import { RefreshOutline, TimeOutline, MailOutline, LayersOutline } from '@vicons/ionicons5'
 import { listAdminOrders, refundOrder, cancelOrder, completeOrder, deleteOrder, markOrderPaid, batchOrderAction, getAdminDashboard } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'

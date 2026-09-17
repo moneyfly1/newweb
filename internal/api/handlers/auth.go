@@ -375,9 +375,14 @@ func Login(c *gin.Context) {
 	userAgent := c.GetHeader("User-Agent")
 
 	// 检查登录锁定（基于IP+用户名，防止攻击者锁死他人账号）
+	//
+	// max_login_attempts 或 login_lockout_minutes 任一为 0 都表示「不锁定」。
+	// 必须显式判断：锁定时长为 0 时窗口会退化成空区间，锁定会静默失效，
+	// 而后台设置页显示的是「0 分钟」——两边对不上的话，出问题时根本查不出原因。
 	maxAttempts := utils.GetIntSetting("max_login_attempts", 5)
 	lockoutMinutes := utils.GetIntSetting("login_lockout_minutes", 30)
-	if maxAttempts > 0 {
+	lockoutEnabled := maxAttempts > 0 && lockoutMinutes > 0
+	if lockoutEnabled {
 		var failCount int64
 		since := time.Now().Add(-time.Duration(lockoutMinutes) * time.Minute)
 		db.Model(&models.LoginAttempt{}).
@@ -922,6 +927,10 @@ func recordVerificationAttempt(email, purpose, ip string, success bool) {
 func checkVerificationLocked(email, purpose string) (bool, int) {
 	maxAttempts := utils.GetIntSetting("max_login_attempts", 5)
 	lockoutMinutes := utils.GetIntSetting("login_lockout_minutes", 30)
+	// 与登录锁定同一口径：任一为 0 表示不限制
+	if maxAttempts <= 0 || lockoutMinutes <= 0 {
+		return false, 0
+	}
 	since := time.Now().Add(-time.Duration(lockoutMinutes) * time.Minute)
 	var failCount int64
 	database.GetDB().Model(&models.VerificationAttempt{}).

@@ -19,6 +19,13 @@ export const exportUsersCSV = (params?: any) => request.get('/admin/users/export
 export const importUsersCSV = (data: FormData) => request.post('/admin/users/import', data, { headers: { 'Content-Type': 'multipart/form-data' } })
 export const updateUserNotes = (userId: number, notes: string) => request.put(`/admin/users/${userId}/notes`, { notes })
 
+// 登录限制 / 解封：客户连续输错密码被锁定或被 IP 限流后，客服在这里查看并解除
+export const listLoginLimits = () => request.get('/admin/security/login-limits')
+export const unlockLoginLimit = (data: { user_id?: number; identifier?: string; ip_address?: string }) =>
+  request.post('/admin/security/unlock', data)
+export const getUserLoginLimit = (userId: number) => request.get(`/admin/users/${userId}/login-limit`)
+export const clearAllRateLimits = () => request.post('/admin/security/rate-limits/clear')
+
 // Orders
 export const listAdminOrders = (params?: any) => request.get('/admin/orders', { params })
 export const refundOrder = (id: number) => request.post(`/admin/orders/${id}/refund`)

@@ -28,13 +28,8 @@ func decodeBase64Flexible(s string) (string, error) {
 	return "", fmt.Errorf("not base64")
 }
 
-// normalizeNonStandardLink converts non-standard Base64 encoded links to standard format.
-// Non-standard format: protocol://Base64(user:pass@server:port)?query_params#fragment
-// or: protocol://Base64(method:pass@server:port)#fragment
-// Returns the normalized link and whether it was converted.
-
-// convertNonStandardToClashMap handles non-standard Base64 links with query-based params
-// and converts them to Clash proxy maps directly.
+// convertNonStandardToClashMap 处理「非标准 Base64 链接」（协议 + Base64 编码的
+// user:pass@server:port，可能带 query/fragment），直接转成 Clash proxy map。
 
 func convertNonStandardToClashMap(link string, name string, nodeType string) (map[string]interface{}, error) {
 	schemeEnd := strings.Index(link, "://")

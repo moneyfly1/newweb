@@ -127,7 +127,7 @@
               <div class="card-body">
                 <div class="card-row">
                   <span class="card-label">邮箱</span>
-                  <span class="card-value">{{ row.email }}</span>
+                  <span class="card-value email-link" title="点击查看该用户详情" @click="handleViewDetail(row)">{{ row.email }}</span>
                 </div>
                 <div class="card-row">
                   <span class="card-label">余额</span>
@@ -161,6 +161,7 @@
                   {{ row.is_active ? '禁用' : '启用' }}
                 </n-button>
                 <n-button size="small" @click="openResetPwdModal(row)">重置密码</n-button>
+                <n-button size="small" secondary type="success" @click="handleUnlockLoginRow(row)">解封</n-button>
                 <n-button size="small" type="error" @click="handleDelete(row)">删除</n-button>
               </div>
             </div>
@@ -469,7 +470,18 @@ const columns = [
           h(NTag, { type: 'warning', size: 'small', bordered: false }, { default: () => '管理员' }),
         ])
       : row.username },
-  { title: '邮箱', key: 'email', ellipsis: { tooltip: true }, width: 200, resizable: true },
+  {
+    title: '邮箱',
+    key: 'email',
+    width: 200,
+    resizable: true,
+    // 邮箱本身就是详情入口（原先靠整行点击的副作用，现在显式做成可点链接）
+    render: (row) => h('span', {
+      class: 'email-link',
+      title: '点击查看该用户详情',
+      onClick: (e) => { e.stopPropagation(); handleViewDetail(row) },
+    }, row.email || '-')
+  },
   {
     title: '线路类型',
     key: 'line_type',
@@ -515,10 +527,10 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 240,
+    width: 216,
     fixed: 'right',
+    // 6 个按钮：3 列网格 → 两行三列。详情入口在邮箱列（点邮箱即可），这里不再重复放
     render: (row) => h('div', { class: 'action-btn-grid' }, [
-      h(NButton, { size: 'small', secondary: true, type: 'info', onClick: () => handleAction('detail', row) }, { default: () => '详情' }),
       h(NButton, { size: 'small', type: 'primary', onClick: () => handleAction('edit', row) }, { default: () => '编辑' }),
       h(NButton, { size: 'small', type: row.is_active ? 'warning' : 'success', onClick: () => handleAction('toggle', row) }, { default: () => row.is_active ? '禁用' : '启用' }),
       h(NButton, { size: 'small', secondary: true, type: 'warning', onClick: () => handleAction('resetPwd', row) }, { default: () => '重置' }),
@@ -925,6 +937,15 @@ onActivated(() => {
 </script>
 
 <style scoped>
+/* 邮箱即详情入口：视觉上做成可点链接，替代被移除的「详情」按钮 */
+.email-link {
+  color: var(--primary-color, #4f46e5);
+  cursor: pointer;
+}
+.email-link:hover {
+  text-decoration: underline;
+}
+
 /* 用户名列：管理员账号附加「管理员」标签（与移动端卡片保持一致） */
 .user-name-cell {
   display: inline-flex;

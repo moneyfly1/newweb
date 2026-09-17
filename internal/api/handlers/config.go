@@ -26,6 +26,9 @@ func GetPublicConfig(c *gin.Context) {
 		"support_email", "support_qq", "support_telegram",
 		"register_enabled", "register_email_verify", "register_invite_required",
 		// Client download URLs
+		// 自研客户端 Mclash（优先推荐）：Windows / Android / macOS(Apple 芯片) / macOS(Intel)
+		"client_mclash_windows_url", "client_mclash_android_url",
+		"client_mclash_macos_url", "client_mclash_macos_arm_url",
 		"client_clash_windows_url", "client_v2rayn_url", "client_clashparty_windows_url",
 		"client_hiddify_windows_url", "client_flclash_windows_url",
 		"client_clash_android_url", "client_v2rayng_url", "client_hiddify_android_url",

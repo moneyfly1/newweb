@@ -216,8 +216,14 @@
                 <div v-else-if="activeTab === 'security'" key="security">
                   <n-h3 prefix="bar">后台安全控制</n-h3>
                   <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
-                    <n-form-item-gi label="最大登录失败次数"><n-input-number v-model:value="form.max_login_attempts" style="width:100%" /></n-form-item-gi>
-                    <n-form-item-gi label="锁定时长 (分钟)"><n-input-number v-model:value="form.login_lockout_minutes" style="width:100%" /></n-form-item-gi>
+                    <n-form-item-gi label="最大登录失败次数">
+                      <n-input-number v-model:value="form.max_login_attempts" style="width:100%" />
+                      <template #feedback>同一账号在同一 IP 上失败达到该次数即锁定；填 0 表示不锁定</template>
+                    </n-form-item-gi>
+                    <n-form-item-gi label="锁定时长 (分钟)">
+                      <n-input-number v-model:value="form.login_lockout_minutes" style="width:100%" />
+                      <template #feedback>填 0 表示不锁定；客户被锁后可在「用户管理 → 登录限制 / 解封」里立即解除</template>
+                    </n-form-item-gi>
                     <n-form-item-gi label="管理后台 IP 白名单" span="2">
                       <n-input v-model:value="form.ip_whitelist" type="textarea" :rows="3" placeholder="每行一个 IP 地址，留空则不限制" />
                     </n-form-item-gi>

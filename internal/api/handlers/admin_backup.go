@@ -226,6 +226,9 @@ func AdminRestoreGitHubBackup(c *gin.Context) {
 	})
 }
 
+// maxGithubBackupDBSize 从 GitHub 备份包解压 DB 的体积上限（正常备份库只有几十 MB）
+const maxGithubBackupDBSize = 1 << 30 // 1 GiB
+
 func extractDBFromZip(zipPath string) (string, error) {
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -245,7 +248,10 @@ func extractDBFromZip(zipPath string) (string, error) {
 			return "", err
 		}
 
-		outPath := filepath.Join("backups", "_github_download", f.Name)
+		// 双保险防目录穿越：上面已拒绝含 ".." 与 "/" 的条目，
+		// 这里再用 filepath.Base 兜一层，保证写出的文件一定落在目标目录内。
+		safeName := filepath.Base(f.Name)
+		outPath := filepath.Join("backups", "_github_download", safeName)
 		if err := os.MkdirAll(filepath.Dir(outPath), 0750); err != nil {
 			rc.Close()
 			return "", err
@@ -255,11 +261,16 @@ func extractDBFromZip(zipPath string) (string, error) {
 			rc.Close()
 			return "", err
 		}
-		_, err = io.Copy(out, rc)
+		// 限制解压体积，避免异常压缩包把磁盘写满（正常备份库只有几十 MB）
+		_, err = io.Copy(out, io.LimitReader(rc, maxGithubBackupDBSize))
 		rc.Close()
 		out.Close()
 		if err != nil {
 			return "", err
+		}
+		if info, statErr := os.Stat(outPath); statErr == nil && info.Size() >= maxGithubBackupDBSize {
+			_ = os.Remove(outPath)
+			return "", fmt.Errorf("压缩包内的数据库文件过大（超过 %d MB），已中止", maxGithubBackupDBSize/(1024*1024))
 		}
 		return outPath, nil
 	}

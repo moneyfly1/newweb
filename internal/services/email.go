@@ -110,7 +110,7 @@ func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
 	switch encryption {
 	case "ssl":
 		// Implicit TLS (通常 465)
-		conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: cfg.Host})
+		conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: cfg.Host, MinVersion: tls.VersionTLS12})
 		if err != nil {
 			return fmt.Errorf("TLS 连接失败: %w", err)
 		}
@@ -151,7 +151,7 @@ func SendEmailWithConfig(cfg *SMTPConfig, to, subject, body string) error {
 			return fmt.Errorf("SMTP 客户端创建失败: %w", err)
 		}
 		defer client.Close()
-		if err = client.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
+		if err = client.StartTLS(&tls.Config{ServerName: cfg.Host, MinVersion: tls.VersionTLS12}); err != nil {
 			return fmt.Errorf("STARTTLS 失败: %w", err)
 		}
 		if err = client.Auth(auth); err != nil {

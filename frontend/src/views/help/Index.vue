@@ -12,7 +12,8 @@
             <p>购买套餐后，前往「我的订阅」页面复制订阅链接，然后将链接导入到您使用的客户端中即可。不同客户端的导入方式略有不同，请参考下方客户端说明。</p>
           </n-collapse-item>
           <n-collapse-item title="支持哪些客户端" name="clients">
-            <p>我们支持主流的代理客户端，包括 Clash for Windows、V2rayN、Clash Party、Hiddify、FlClash、Shadowrocket、Stash 等。请参考下方客户端下载区域获取对应平台的客户端。</p>
+            <p><strong>推荐使用本站自研客户端 Mclash</strong> —— 官方开发、界面简洁、方便好用，登录后自动同步订阅，无需手动复制链接。支持 Windows、Android、macOS（含 Apple 芯片 / Intel 芯片）。</p>
+            <p>同时也兼容主流第三方客户端：Clash Verge、Clash for Windows、V2rayN、Clash Party、Hiddify、FlClash、Shadowrocket、Stash 等，请参考下方软件下载区域选择对应平台。</p>
           </n-collapse-item>
           <n-collapse-item title="如何重置订阅" name="reset">
             <p>前往「我的订阅」页面，点击「重置订阅链接」按钮即可生成新的订阅链接。重置后旧链接将失效，请及时更新客户端中的订阅地址。</p>
@@ -71,11 +72,12 @@
             <n-tabs type="segment" size="small" animated>
               <n-tab-pane name="windows" tab="Windows" v-if="windowsClients.length">
                 <div class="client-grid">
-                  <button v-for="c in windowsClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
+                  <button v-for="c in windowsClients" :key="c.key" class="client-card" :class="{ 'client-card-self': c.self }" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
                       <span class="client-name">
                         {{ c.name }}
+                        <span v-if="c.self" class="client-badge-self">自研推荐</span>
                         <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
                       </span>
                       <span class="client-desc">{{ c.desc }}</span>
@@ -87,11 +89,12 @@
               </n-tab-pane>
               <n-tab-pane name="android" tab="Android" v-if="androidClients.length">
                 <div class="client-grid">
-                  <button v-for="c in androidClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
+                  <button v-for="c in androidClients" :key="c.key" class="client-card" :class="{ 'client-card-self': c.self }" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
                       <span class="client-name">
                         {{ c.name }}
+                        <span v-if="c.self" class="client-badge-self">自研推荐</span>
                         <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
                       </span>
                       <span class="client-desc">{{ c.desc }}</span>
@@ -103,11 +106,12 @@
               </n-tab-pane>
               <n-tab-pane name="macos" tab="macOS" v-if="macClients.length">
                 <div class="client-grid">
-                  <button v-for="c in macClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
+                  <button v-for="c in macClients" :key="c.key" class="client-card" :class="{ 'client-card-self': c.self }" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
                       <span class="client-name">
                         {{ c.name }}
+                        <span v-if="c.self" class="client-badge-self">自研推荐</span>
                         <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
                       </span>
                       <span class="client-desc">{{ c.desc }}</span>
@@ -119,11 +123,12 @@
               </n-tab-pane>
               <n-tab-pane name="ios" tab="iOS" v-if="iosClients.length">
                 <div class="client-grid">
-                  <button v-for="c in iosClients" :key="c.key" class="client-card" type="button" @click="handleClientClick(c)">
+                  <button v-for="c in iosClients" :key="c.key" class="client-card" :class="{ 'client-card-self': c.self }" type="button" @click="handleClientClick(c)">
                     <span class="client-icon">{{ c.icon }}</span>
                     <div class="client-info">
                       <span class="client-name">
                         {{ c.name }}
+                        <span v-if="c.self" class="client-badge-self">自研推荐</span>
                         <span v-if="c.chip" class="client-chip" :class="c.chip === 'Apple 芯片' ? 'chip-arm' : 'chip-intel'">{{ c.chip }}</span>
                       </span>
                       <span class="client-desc">{{ c.desc }}</span>
@@ -221,6 +226,29 @@ interface Tutorial {
 }
 
 const tutorials: Tutorial[] = [
+  {
+    key: 'mclash', tab: 'Mclash（推荐）', icon: '🚀', platform: '全平台',
+    title: 'Mclash 自研客户端使用教程',
+    note: 'Mclash 是本站官方自研客户端，界面简洁、方便好用，登录后订阅自动同步，无需手动复制链接。推荐优先使用。',
+    sections: [
+      { subtitle: '第一步：下载安装', steps: [
+        '在上方「软件下载」区域选择 <strong>Mclash</strong>，按你的平台下载（Windows / Android / macOS）。',
+        'macOS 用户请注意区分：<strong>Apple 芯片</strong>（M1/M2/M3/M4）与 <strong>Intel 芯片</strong>，选错会无法安装。',
+        '下载完成后安装并打开 Mclash。',
+      ] },
+      { subtitle: '第二步：登录账号（自动同步订阅）', steps: [
+        '在 Mclash 登录页输入你<strong>本站的邮箱或用户名</strong>与密码，与网页端同一套账号。',
+        '登录成功后，Mclash 会<strong>自动拉取你的订阅</strong>并更新节点，无需手动导入。',
+        '若提示暂无订阅，请先在网页端「购买套餐」完成订阅。',
+      ] },
+      { subtitle: '第三步：选择节点并连接', steps: [
+        '在节点列表中选择一个节点（推荐延迟较低的）。',
+        '打开主页的连接开关即可开始使用。',
+        '后续订阅到期时间、节点更新都会自动同步，无需手动操作。',
+      ] },
+    ],
+    tip: '提示：登录后本设备会自动登记到你的账号下，可在「我的设备」查看。同一台设备升级软件版本不会重复计算设备数。',
+  },
   {
     key: 'shadowrocket', tab: 'Shadowrocket', icon: '🚀', platform: 'iOS',
     title: 'Shadowrocket 使用教程',
@@ -335,8 +363,21 @@ const tutorials: Tutorial[] = [
   },
 ]
 
-const allClients = {
+interface ClientItem {
+  key: string
+  name: string
+  icon: string
+  desc: string
+  clientKey?: string
+  armKey?: string
+  chip?: string
+  /** 自研客户端：用户端会打上「自研推荐」标签并高亮显示 */
+  self?: boolean
+}
+
+const allClients: Record<'windows' | 'android' | 'macos' | 'ios', ClientItem[]> = {
   windows: [
+    { key: 'client_mclash_windows_url', name: 'Mclash', icon: '🚀', self: true, desc: '官方自研客户端，方便好用，登录即自动同步订阅' },
     { key: 'client_clash_windows_url', name: 'Clash for Windows', icon: '🔵', desc: 'Clash 内核，支持多种协议' },
     { key: 'client_v2rayn_url', name: 'V2rayN', clientKey: 'v2rayN', icon: '🟢', desc: 'V2Ray 图形化客户端' },
     { key: 'client_clashparty_windows_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', desc: 'Clash Party GUI 客户端' },
@@ -345,12 +386,14 @@ const allClients = {
     { key: 'client_flclash_windows_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'Flutter 跨平台 Clash 客户端' },
   ],
   android: [
+    { key: 'client_mclash_android_url', name: 'Mclash', icon: '🚀', self: true, desc: '官方自研客户端，方便好用，登录即自动同步订阅' },
     { key: 'client_clash_android_url', name: 'Clash Meta', clientKey: 'clash-meta', icon: '🔵', desc: 'Android Clash 客户端' },
     { key: 'client_v2rayng_url', name: 'V2rayNG', clientKey: 'v2rayNG', icon: '🟢', desc: 'Android V2Ray 客户端' },
     { key: 'client_hiddify_android_url', name: 'Hiddify', clientKey: 'hiddify-app', icon: '🟠', desc: 'Android 多协议客户端' },
     { key: 'client_flclash_android_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'Android FlClash 客户端' },
   ],
   macos: [
+    { key: 'client_mclash_macos_url', armKey: 'client_mclash_macos_arm_url', name: 'Mclash', icon: '🚀', self: true, desc: '官方自研客户端，方便好用，登录即自动同步订阅' },
     { key: 'client_flclash_macos_url', armKey: 'client_flclash_macos_arm_url', name: 'FlClash', clientKey: 'FlClash', icon: '⚡', desc: 'macOS Clash 客户端' },
     { key: 'client_clashparty_macos_url', armKey: 'client_clashparty_macos_arm_url', name: 'Clash Party', clientKey: 'clash-party', icon: '🟣', desc: 'macOS Clash Party 客户端' },
     { key: 'client_clashverge_macos_url', armKey: 'client_clashverge_macos_arm_url', name: 'Clash Verge', clientKey: 'clash-verge', icon: '🟣', desc: 'macOS Clash Verge 客户端' },
@@ -470,6 +513,27 @@ onMounted(async () => {
   background: rgba(0,0,0,0.04);
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* 自研客户端：视觉上优先推荐 */
+.client-card-self {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.10), rgba(79, 70, 229, 0.03));
+  box-shadow: inset 0 0 0 1px var(--primary-color);
+}
+.client-card-self:hover {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.16), rgba(79, 70, 229, 0.06));
+}
+.client-badge-self {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  border-radius: 4px;
+  color: #fff;
+  background: var(--primary-color);
+  vertical-align: middle;
 }
 
 .client-icon { font-size: 24px; flex-shrink: 0; }

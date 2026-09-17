@@ -104,11 +104,29 @@ function withAlpha(color: string, alpha: number): string {
   return color
 }
 
+// 数据行之间的分隔线颜色。
+//
+// 为什么不用 --border-color：主题里的 border 是给卡片/面板描边用的，
+// 多数主题取的是极浅的同色系（#e2e8f0、#e0f2fe、#fce7f3 …），铺在白色行背景上
+// 几乎看不见——后台各种列表「行与行之间的网格线看不清」就是这个原因。
+// 表格和列表的行分隔线改用「正文色 + 透明度」推导：与主题同源、在 8 套主题
+// （含暗色）下都保持一致的可见度，也不用逐个主题去调。
+function tableDividerColor(config: ThemeConfig): string {
+  return withAlpha(config.text, isDarkBackground(config.bg) ? 0.36 : 0.32)
+}
+
+// 列与列之间的竖线。比行分隔线略淡：读表时主要靠「行与行」的边界定位，
+// 竖线太重会让整张表看起来像电子表格。
+function tableColumnDividerColor(config: ThemeConfig): string {
+  return withAlpha(config.text, isDarkBackground(config.bg) ? 0.28 : 0.24)
+}
+
 function buildNaiveOverrides(config: ThemeConfig): GlobalThemeOverrides {
   const primarySoft = withAlpha(config.primary, 0.08)
   const primaryHover = withAlpha(config.primary, 0.12)
   const primaryActive = withAlpha(config.primary, 0.18)
   const primaryStrong = withAlpha(config.primary, 0.24)
+  const divider = tableDividerColor(config)
 
   return {
     common: {
@@ -169,7 +187,8 @@ function buildNaiveOverrides(config: ThemeConfig): GlobalThemeOverrides {
       groupTextColor: config.textSecondary,
     },
     DataTable: {
-      borderColor: config.border,
+      // 行/列分隔线（含表头下边线、外框）——比卡片描边更清晰
+      borderColor: divider,
       thColor: primarySoft,
       thColorHover: primaryHover,
       thColorSorting: primaryHover,
@@ -185,7 +204,7 @@ function buildNaiveOverrides(config: ThemeConfig): GlobalThemeOverrides {
       textColor: config.text,
       color: config.bg,
       colorHover: primaryHover,
-      borderColor: config.border,
+      borderColor: divider,
       borderRadius: '10px',
     },
     Card: {
@@ -249,6 +268,9 @@ function applyCSSVariables(config: ThemeConfig) {
     '--text-color': config.text,
     '--text-color-secondary': config.textSecondary,
     '--border-color': config.border,
+    // 数据行分隔线（表格/列表/移动端卡片行），见 tableDividerColor 注释
+    '--table-divider-color': tableDividerColor(config),
+    '--table-column-divider-color': tableColumnDividerColor(config),
     '--primary-color-soft': withAlpha(config.primary, 0.08),
     '--primary-color-hover': withAlpha(config.primary, 0.12),
     '--primary-color-active': withAlpha(config.primary, 0.2),

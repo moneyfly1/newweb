@@ -84,6 +84,25 @@ a {
   background: var(--list-active-color, rgba(102, 126, 234, 0.2)) !important;
 }
 
+/* 数据表格的行/列分隔线。
+ *
+ * 为什么单独一条：主题里的 --n-border-color 取的是给卡片描边用的极浅色
+ * （#e2e8f0、#e0f2fe、#fce7f3 …），铺在白色行背景上几乎看不出网格线，
+ * 后台各种列表「行与行之间的线看不清」就是这个原因。
+ * 这里统一用 --table-divider-color（由主题正文色推导，8 套主题含暗色一致），
+ * 作为主题变量之外的一层兜底。 */
+.n-data-table .n-data-table-td,
+.n-data-table .n-data-table-th {
+  border-bottom-color: var(--table-divider-color, #b4b6bb) !important;
+}
+
+/* 列与列之间的竖线略淡：行边界是读表的主要依据，竖线太重会像电子表格。
+ * （naive 的 td/th 本身带 1px 右边框，这里只调颜色，不动宽度） */
+.n-data-table .n-data-table-td,
+.n-data-table .n-data-table-th {
+  border-right-color: var(--table-column-divider-color, #c6c8cd) !important;
+}
+
 .n-menu .n-menu-item-content.n-menu-item-content--selected::before,
 .n-menu .n-menu-item-content.n-menu-item-content--child-active::before {
   box-shadow: inset 3px 0 0 var(--primary-color, #667eea);

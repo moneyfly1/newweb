@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -466,10 +467,16 @@ func autoBackupTask() {
 	if len(parts) != 2 {
 		return
 	}
-	hour := 3
-	minute := 0
-	fmt.Sscanf(parts[0], "%d", &hour)
-	fmt.Sscanf(parts[1], "%d", &minute)
+	// 解析失败时保持默认 03:00，但要留下告警：否则后台把时间填错（例如 "3点:0"）
+	// 会被静默当成 03:00，备份在用户没预期的时间点执行，谁也查不出原因。
+	hour, minute := 3, 0
+	parsedHour, errHour := strconv.Atoi(strings.TrimSpace(parts[0]))
+	parsedMinute, errMinute := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if errHour != nil || errMinute != nil || parsedHour < 0 || parsedHour > 23 || parsedMinute < 0 || parsedMinute > 59 {
+		utils.SysWarn("backup", fmt.Sprintf("自动备份时间配置无效: %q，已按默认 03:00 执行（正确格式如 03:30）", autoTime))
+	} else {
+		hour, minute = parsedHour, parsedMinute
+	}
 
 	targetTime := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
 	if now.Before(targetTime) || now.After(targetTime.Add(35*time.Minute)) {

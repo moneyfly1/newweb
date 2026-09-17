@@ -251,7 +251,8 @@ func probeHead(rawURL string) bool {
 		return false
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, io.LimitReader(resp.Body, 512))
+	// 读掉少量响应体以便复用连接；这里不关心内容与错误
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 512))
 	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
 		return false
 	}

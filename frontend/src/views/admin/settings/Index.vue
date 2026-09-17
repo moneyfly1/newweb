@@ -1082,7 +1082,10 @@ const handleClearGithubNodesLogs = async () => {
     await clearGithubNodesLogs()
     ghLogs.value = []
     message.success('日志已清空')
-  } catch {}
+  } catch (e: any) {
+    // 用户主动点的写操作失败必须给出提示，否则点了没反应、以为已经清空
+    message.error(e?.message || '清空日志失败')
+  }
 }
 
 const handleRestore = (item: any) => {

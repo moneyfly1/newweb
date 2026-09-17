@@ -13,6 +13,19 @@
         <n-descriptions-item label="等级">{{ userDetail.level_name || '无' }}</n-descriptions-item>
         <n-descriptions-item label="注册时间">{{ formatFullDateTime(userDetail.created_at) }}</n-descriptions-item>
         <n-descriptions-item label="最后登录">{{ formatFullDateTime(userDetail.last_login) }}</n-descriptions-item>
+        <n-descriptions-item label="登录限制">
+          <n-tag v-if="loginLimit?.limited" type="error" size="small">已限制（{{ loginLimit.fail_count }} 次失败）</n-tag>
+          <n-tag v-else-if="loginLimit && loginLimit.fail_count > 0" type="warning" size="small">
+            {{ loginLimit.fail_count }} 次失败（未达阈值）
+          </n-tag>
+          <n-tag v-else size="small">正常</n-tag>
+          <n-button size="tiny" style="margin-left: 8px" :loading="unlockingLogin" @click="handleUnlockLogin">
+            解除登录限制
+          </n-button>
+          <div v-if="!loginLimit?.lockout_enabled" class="login-limit-note">
+            当前后台未启用账号锁定（最大失败次数 / 锁定时长有一项为 0）
+          </div>
+        </n-descriptions-item>
       </n-descriptions>
 
       <n-divider>订阅信息</n-divider>
@@ -161,6 +174,7 @@ import { formatCurrency } from '@/utils/amount'
 import { parseDeviceInfo, translateBalanceChangeType, translateLoginStatus } from '@/utils/i18n'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatFullDateTime } from '@/utils/date'
+import { getUserLoginLimit, unlockLoginLimit } from '@/api/admin'
 import { formatCountryOnly } from '@/utils/format'
 
 const appStore = useAppStore()
@@ -199,7 +213,9 @@ const open = async (userOrId) => {
     }
     await Promise.all([
       fetchUserCustomNodes(userId),
-      fetchCustomNodeOptions('')
+      fetchCustomNodeOptions(''),
+      // 同时查一次该账号的登录限制状态（是否被锁、失败次数）
+      loadLoginLimit()
     ])
     showDetailDrawer.value = true
   } catch (error) {
@@ -389,6 +405,39 @@ const handleRemoveAllCustomNodes = async () => {
   }
 }
 
+const loginLimit = ref(null)
+const unlockingLogin = ref(false)
+
+// 客户说「登不上」时，先看这个账号当前是否被限制，并能一键解除
+const loadLoginLimit = async () => {
+  if (!userDetail.value?.id) { loginLimit.value = null; return }
+  try {
+    const res = await getUserLoginLimit(userDetail.value.id)
+    loginLimit.value = res.data || null
+  } catch {
+    loginLimit.value = null
+  }
+}
+
+const handleUnlockLogin = async () => {
+  if (!userDetail.value?.id) return
+  unlockingLogin.value = true
+  try {
+    const res = await unlockLoginLimit({ user_id: userDetail.value.id })
+    const d = res.data || {}
+    const parts = []
+    if (d.deleted_login_attempts) parts.push(`清除失败记录 ${d.deleted_login_attempts} 条`)
+    if (d.cleared_redis_keys) parts.push(`清除 Redis 限流 ${d.cleared_redis_keys} 个`)
+    if (d.cleared_memory_entries) parts.push(`清除内存限流 ${d.cleared_memory_entries} 条`)
+    message.success(parts.length ? `已解除登录限制：${parts.join('，')}` : '已解除（该账号当前没有限制记录）')
+    await loadLoginLimit()
+  } catch (e) {
+    message.error(e?.message || '解除失败')
+  } finally {
+    unlockingLogin.value = false
+  }
+}
+
 const handleDeleteDevice = (device) => {
   dialog.warning({
     title: '确认删除设备',
@@ -475,6 +524,12 @@ const rechargeCols = [
 </script>
 
 <style scoped>
+.login-limit-note {
+  font-size: 12px;
+  color: var(--text-color-secondary, #64748b);
+  margin-top: 2px;
+}
+
 .url-section { margin-top: 10px; }
 .url-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
 .url-label { flex: 0 0 86px; font-size: 12px; line-height: 28px; color: var(--text-color-secondary, #666); }

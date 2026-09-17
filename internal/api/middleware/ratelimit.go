@@ -29,6 +29,8 @@ const maxVisitors = 10000
 
 func newMemRateLimiter(rate int, window time.Duration) *memRateLimiter {
 	rl := &memRateLimiter{visitors: make(map[string]*visitor), rate: rate, window: window}
+	// 登记到全局表：后台「解封某个 IP」需要按 IP 清零内存计数
+	registerLimiter(rl)
 	go rl.cleanup()
 	return rl
 }

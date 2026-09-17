@@ -11,6 +11,10 @@
             <template #icon><n-icon :component="AddOutline" /></template>
             新增用户
           </n-button>
+          <n-button @click="showLoginLimit = true" secondary>
+            <template #icon><n-icon :component="LockOpenOutline" /></template>
+            登录限制 / 解封
+          </n-button>
           <n-button @click="fetchUsers" secondary>
             <template #icon><n-icon :component="RefreshOutline" /></template>
             刷新
@@ -295,13 +299,14 @@
         </n-space>
       </template>
     </n-modal>
+    <LoginLimitDrawer v-model:show="showLoginLimit" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, h, onActivated, onMounted, computed } from 'vue'
 import { NButton, NTag, NIcon, NDropdown, NSpin, useMessage, useDialog } from 'naive-ui'
-import { AddOutline, RefreshOutline, EllipsisVertical, DownloadOutline, CloudUploadOutline } from '@vicons/ionicons5'
+import { AddOutline, RefreshOutline, EllipsisVertical, DownloadOutline, CloudUploadOutline, LockOpenOutline } from '@vicons/ionicons5'
 import {
   listUsers, updateUser, deleteUser, toggleUserActive,
   createUser, resetUserPassword,
@@ -316,6 +321,7 @@ import { useRoute } from 'vue-router'
 import { formatCurrency } from '@/utils/amount'
 import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import LoginLimitDrawer from './components/LoginLimitDrawer.vue'
 import SearchFilterBar from '@/components/SearchFilterBar.vue'
 import UserDetailDrawer from './components/UserDetailDrawer.vue'
 import '@/styles/admin-common.css'
@@ -345,6 +351,7 @@ const fetchUsers = loadData
 // Import/Export
 const importFileInput = ref(null)
 const importing = ref(false)
+const showLoginLimit = ref(false)
 const showImportResultModal = ref(false)
 const importResult = ref({ total: 0, imported: 0, skipped: 0, errors: [] })
 

@@ -259,6 +259,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminUsers.PUT("/:id", handlers.AdminUpdateUser)
 			adminUsers.DELETE("/:id", handlers.AdminDeleteUser)
 			adminUsers.GET("/:id/custom-nodes", handlers.AdminGetUserCustomNodes)
+			adminUsers.GET("/:id/login-limit", handlers.AdminUnlockSuggestion)
 			adminUsers.POST("/:id/custom-nodes", handlers.AdminAssignCustomNodeToUser)
 			adminUsers.DELETE("/:id/custom-nodes/:nodeId", handlers.AdminUnassignCustomNodeFromUser)
 			adminUsers.PUT("/:id/line-type", handlers.AdminUpdateUserLineType)
@@ -460,6 +461,14 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/stats/payment", handlers.AdminPaymentStats)
 		admin.GET("/stats/payment/comparison", handlers.AdminPaymentMethodComparison)
 		admin.GET("/stats/payment/analysis", handlers.AdminPaymentAnalysis)
+
+		// 登录限制 / 解封：客户被限流或锁定后，客服可在这里看到并立即解除
+		adminSecurity := admin.Group("/security")
+		{
+			adminSecurity.GET("/login-limits", handlers.AdminListLoginLimits)
+			adminSecurity.POST("/unlock", middleware.CSRFProtection(), handlers.AdminUnlockLogin)
+			adminSecurity.POST("/rate-limits/clear", middleware.CSRFProtection(), handlers.AdminClearAllRateLimits)
+		}
 
 		// 日志
 		admin.DELETE("/logs/:type", middleware.CSRFProtection(), handlers.AdminClearLogs)

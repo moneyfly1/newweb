@@ -466,6 +466,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		adminSecurity := admin.Group("/security")
 		{
 			adminSecurity.GET("/login-limits", handlers.AdminListLoginLimits)
+			adminSecurity.GET("/lookup", handlers.AdminLookupLoginLimit)
 			adminSecurity.POST("/unlock", middleware.CSRFProtection(), handlers.AdminUnlockLogin)
 			adminSecurity.POST("/rate-limits/clear", middleware.CSRFProtection(), handlers.AdminClearAllRateLimits)
 		}

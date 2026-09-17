@@ -297,7 +297,7 @@ func AdminCleanOldLogs(c *gin.Context) {
 	utils.CreateAuditLog(c, "clean_logs", "logs", 0, fmt.Sprintf("清理 %d 天前的日志，共删除 %d 条记录", retentionDays, totalDeleted))
 	utils.Success(c, gin.H{
 		"retention_days": retentionDays,
-		"cutoff":         cutoff.Format("2006-01-02 15:04:05"),
+		"cutoff":         cutoff.Format(utils.LayoutDateTime),
 		"total_deleted":  totalDeleted,
 		"details":        results,
 	})
@@ -344,7 +344,7 @@ func AdminBackfillLocations(c *gin.Context) {
 			}
 			location := utils.GetIPLocation(ip)
 			// 只写入有效结果：查不到时保持原值，避免把“未知”清成空串
-			if location == "" || location == "未知" {
+			if utils.IsUnknownLocation(location) {
 				continue
 			}
 			if err := db.Table(tableName).Where("id = ?", id).Update(column, location).Error; err == nil {

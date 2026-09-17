@@ -23,7 +23,7 @@ func formatUpgradeTime(s string) string {
 		return ""
 	}
 	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t.Format("2006-01-02 15:04:05")
+		return t.Format(utils.LayoutDateTime)
 	}
 	return s
 }
@@ -543,7 +543,7 @@ func GetOrderStatus(c *gin.Context) {
 		result["final_amount"] = *order.FinalAmount
 	}
 	if order.PaymentTime != nil {
-		result["paid_at"] = order.PaymentTime.Format("2006-01-02 15:04:05")
+		result["paid_at"] = order.PaymentTime.Format(utils.LayoutDateTime)
 	}
 	// Get package name
 	if order.PackageID == 0 && order.ExtraData != nil {
@@ -764,9 +764,9 @@ func CreateCustomOrder(c *gin.Context) {
 // 背景（客户端提的 bug）：客户端界面上让用户选「增加天数」（add_days），
 // 而这里只认 extend_months —— 于是「只延长时间」的订单金额不变、到期时间也不变，
 // 用户花了钱却没续上。现在两边都认：
-//   * extend_months 为准；给了 add_days 就按 30 天/月向上取整换算；
-//   * add_devices 允许为 0（只要续期 > 0）—— 否则「只续期」根本无法下单；
-//   * 两者都为 0 才报参数错误。
+//   - extend_months 为准；给了 add_days 就按 30 天/月向上取整换算；
+//   - add_devices 允许为 0（只要续期 > 0）—— 否则「只续期」根本无法下单；
+//   - 两者都为 0 才报参数错误。
 func normalizeUpgradeRequest(addDevices, extendMonths, addDays int) (int, int, error) {
 	if addDevices < 0 {
 		return 0, 0, errors.New("增加台数不能为负")
@@ -856,9 +856,9 @@ func CalcUpgradePrice(c *gin.Context) {
 	utils.Success(c, gin.H{
 		"price_per_device_year": pricePerDeviceYear,
 		"current_device_limit":  currentDevices,
-		"current_expire_time":   currentExpire.Format("2006-01-02 15:04:05"),
+		"current_expire_time":   currentExpire.Format(utils.LayoutDateTime),
 		"new_device_limit":      newDeviceLimit,
-		"new_expire_time":       newExpire.Format("2006-01-02 15:04:05"),
+		"new_expire_time":       newExpire.Format(utils.LayoutDateTime),
 		"remaining_days":        int(math.Ceil(remainingDays)),
 		"add_devices":           req.AddDevices,
 		"extend_months":         req.ExtendMonths,
@@ -878,7 +878,7 @@ func CreateUpgradeOrder(c *gin.Context) {
 		return
 	}
 	var req struct {
-		AddDevices   int    `json:"add_devices"`   // 允许 0：只续期
+		AddDevices   int    `json:"add_devices"` // 允许 0：只续期
 		ExtendMonths int    `json:"extend_months"`
 		AddDays      int    `json:"add_days"` // 兼容按天选续期的客户端
 		CouponCode   string `json:"coupon_code"`

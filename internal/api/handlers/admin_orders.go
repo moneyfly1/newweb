@@ -25,22 +25,10 @@ type flexTime struct {
 	Valid bool
 }
 
-// parseSQLiteTime 解析 SQLite/GORM 存储的多种时间字符串格式
+// parseSQLiteTime 解析 SQLite/GORM 存储的多种时间字符串格式。
+// 实现已收敛到 utils.ParseStoredTime，与其它读取历史时间的地方共用同一套布局。
 func parseSQLiteTime(s string) (time.Time, error) {
-	layouts := []string{
-		"2006-01-02 15:04:05.999999999-07:00",
-		"2006-01-02 15:04:05.999999999",
-		"2006-01-02 15:04:05-07:00",
-		"2006-01-02 15:04:05",
-		time.RFC3339,
-		time.RFC3339Nano,
-	}
-	for _, layout := range layouts {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("无法解析时间字符串: %q", s)
+	return utils.ParseStoredTime(s)
 }
 
 // Scan 实现 sql.Scanner

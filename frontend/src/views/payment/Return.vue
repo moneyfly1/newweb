@@ -14,13 +14,13 @@
         >
           <template #footer>
             <n-alert v-if="status === 'success' && shouldAutoRedirect" type="success" :bordered="false" style="margin-bottom: 16px; text-align: left;">
-              已成功购买 <strong>{{ orderInfo?.package_name || '套餐' }}</strong>，支付金额 <strong>¥{{ orderInfo?.final_amount }}</strong>。页面将在 {{ countdown }} 秒后自动跳转到仪表盘。
+              已成功购买 <strong>{{ orderInfo?.package_name || '套餐' }}</strong>，支付金额 <strong>¥{{ formatAmount(orderInfo?.final_amount) }}</strong>。页面将在 {{ countdown }} 秒后自动跳转到仪表盘。
             </n-alert>
             <n-descriptions v-if="orderInfo" :column="1" bordered style="margin-bottom: 24px;">
               <n-descriptions-item label="订单号">{{ orderInfo.order_no }}</n-descriptions-item>
               <n-descriptions-item label="套餐名称">{{ orderInfo.package_name }}</n-descriptions-item>
               <n-descriptions-item label="支付金额">
-                <span style="color: var(--success-color); font-weight: 600;">¥{{ orderInfo.final_amount }}</span>
+                <span style="color: var(--success-color); font-weight: 600;">¥{{ formatAmount(orderInfo.final_amount) }}</span>
               </n-descriptions-item>
               <n-descriptions-item label="支付时间">{{ formatDateTime(orderInfo.paid_at) }}</n-descriptions-item>
             </n-descriptions>
@@ -43,6 +43,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import { getOrderStatus } from '@/api/order'
 import { formatDateTime } from '@/utils/date'
+import { formatAmount } from '@/utils/amount'
 
 const route = useRoute()
 const router = useRouter()

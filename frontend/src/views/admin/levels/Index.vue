@@ -44,7 +44,7 @@
               </div>
               <div class="card-row">
                 <span class="card-label">最低消费</span>
-                <span>¥{{ row.min_consumption || 0 }}</span>
+                <span>¥{{ formatAmount(row.min_consumption) }}</span>
               </div>
               <div class="card-row" v-if="row.benefits">
                 <span class="card-label">权益说明</span>
@@ -147,6 +147,7 @@ import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { listUserLevels, createUserLevel, updateUserLevel, deleteUserLevel } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
 import { useAppStore } from '@/stores/app'
+import { formatAmount, formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
@@ -195,7 +196,7 @@ const columns = [
     key: 'min_consumption',
     width: 120,
     resizable: true,
-    render: (row: any) => `¥${row.min_consumption || 0}`
+    render: (row: any) => formatCurrency(row.min_consumption)
   },
   {
     title: '权益说明',

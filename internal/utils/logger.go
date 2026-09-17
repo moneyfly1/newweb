@@ -20,7 +20,7 @@ func InitLogger() error {
 		return fmt.Errorf("创建日志目录失败: %v", err)
 	}
 
-	logFileName := filepath.Join(logDir, fmt.Sprintf("app-%s.log", time.Now().Format("2006-01-02")))
+	logFileName := filepath.Join(logDir, fmt.Sprintf("app-%s.log", time.Now().Format(LayoutDate)))
 	// #nosec G304 -- log path is fixed under internal "logs" directory.
 	file, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {

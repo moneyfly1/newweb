@@ -234,7 +234,7 @@ func AdminStats(c *gin.Context) {
 	var subCount, activeSubCount, nodeCount, newUsersToday int64
 	var totalRevenue float64
 
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().Format(utils.LayoutDate)
 	now := time.Now()
 
 	var wg sync.WaitGroup

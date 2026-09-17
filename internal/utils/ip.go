@@ -32,6 +32,29 @@ type mmdbCityRecord struct {
 
 const ipCacheMaxSize = 2048
 
+// 地区字符串的固定取值。
+//
+// 以前「查不到」这件事有三种写法：循环地址回 "本地"、内网回 "本地网络"、
+// 两个库都查不到回 "未知"，各处判断又各自手写字符串比较——
+// 少写一个分支就会把「未知」当成真实地区统计进去（历史回填就踩过这个坑）。
+const (
+	// LocationLocal 本机回环地址
+	LocationLocal = "本地"
+	// LocationPrivate 内网/保留地址
+	LocationPrivate = "本地网络"
+	// LocationUnknown 两个离线库都查不到
+	LocationUnknown = "未知"
+)
+
+// IsUnknownLocation 判断地区值是否为「没有真实地区信息」（空 / 未知 / 本机）。
+func IsUnknownLocation(location string) bool {
+	switch strings.TrimSpace(location) {
+	case "", LocationUnknown, LocationLocal, LocationPrivate:
+		return true
+	}
+	return false
+}
+
 var (
 	ipLocationCache = make(map[string]ipLocationCacheEntry)
 	ipLocationMu    sync.RWMutex
@@ -99,6 +122,27 @@ func loadIP2RegionSearchers() (*xdb.Searcher, *xdb.Searcher) {
 	return ip4Searcher, ip6Searcher
 }
 
+// joinLocationParts 拼装「国家 省份 城市」形式的地区字符串。
+//
+// 两个离线库此前各拼各的：ip2region 输出「国家 省份 城市」，MMDB 输出「国家 城市」
+// （注释里写着「跳过省份」）。同一个 IP 走不同库得到不同粒度的地区，
+// 后台的地区统计（按 国家/省份/城市 聚合）就会把同一批用户拆成两组。
+// 现在两个库都按同一形状输出，查不到的部分自动省略、相邻重复段去重。
+func joinLocationParts(parts ...string) string {
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" || p == "0" {
+			continue
+		}
+		if len(result) > 0 && result[len(result)-1] == p {
+			continue
+		}
+		result = append(result, p)
+	}
+	return strings.Join(result, " ")
+}
+
 func lookupLocationFromIP2Region(ip string) string {
 	parsed := net.ParseIP(ip)
 	if parsed == nil {
@@ -119,25 +163,18 @@ func lookupLocationFromIP2Region(ip string) string {
 		return ""
 	}
 	// ip2region 格式: 国家|区域|省份|城市|ISP
-	// 返回 国家 省份 城市（识别不到的自动省略）
 	parts := strings.Split(region, "|")
 	if len(parts) < 2 {
 		return ""
 	}
-	result := []string{}
-	// 国家
-	if parts[0] != "0" && parts[0] != "" {
-		result = append(result, parts[0])
+	country, province, city := parts[0], "", ""
+	if len(parts) > 2 {
+		province = parts[2]
 	}
-	// 省份
-	if len(parts) > 2 && parts[2] != "0" && parts[2] != "" && parts[2] != parts[0] {
-		result = append(result, parts[2])
+	if len(parts) > 3 {
+		city = parts[3]
 	}
-	// 城市
-	if len(parts) > 3 && parts[3] != "0" && parts[3] != "" && parts[3] != parts[2] {
-		result = append(result, parts[3])
-	}
-	return strings.Join(result, " ")
+	return joinLocationParts(country, province, city)
 }
 
 func loadMMDBReader() *maxminddb.Reader {
@@ -181,30 +218,40 @@ func lookupLocationFromMMDB(ip string) string {
 		return ""
 	}
 
-	// 只返回 国家 + 城市（跳过省份/州）
-	parts := make([]string, 0, 2)
-	if country := record.Country.Names["zh-CN"]; country != "" {
-		parts = append(parts, country)
-	} else if country := record.Country.Names["en"]; country != "" {
-		parts = append(parts, country)
+	// 与 ip2region 输出同一形状：国家 省份 城市
+	// （此前这里只取「国家 城市」，同一个 IP 走 MMDB 回退路径就少了省份，
+	//   后台按 国家/省份/城市 聚合时会把同一批用户拆成两组）
+	return formatMMDBLocation(record)
+}
+
+// formatMMDBLocation 把 MMDB 查询结果格式化成与 ip2region 一致的地区串。
+// 单独抽出来是为了能直接测：不必真的加载 60MB 的库文件就能验证输出形状。
+func formatMMDBLocation(record mmdbCityRecord) string {
+	country := pickLocalizedName(record.Country.Names)
+	province := ""
+	if len(record.Subdivisions) > 0 {
+		province = pickLocalizedName(record.Subdivisions[0].Names)
 	}
-	// 跳过省份（Subdivisions），直接取城市
-	if city := record.City.Names["zh-CN"]; city != "" {
-		parts = append(parts, city)
-	} else if city := record.City.Names["en"]; city != "" {
-		parts = append(parts, city)
-	}
-	if len(parts) == 0 {
+	city := pickLocalizedName(record.City.Names)
+	return joinLocationParts(country, province, city)
+}
+
+// pickLocalizedName 优先取中文名，其次英文名（两个离线库都按此规则）。
+func pickLocalizedName(names map[string]string) string {
+	if names == nil {
 		return ""
 	}
-	return strings.Join(parts, " ")
+	if v := names["zh-CN"]; v != "" {
+		return v
+	}
+	return names["en"]
 }
 
 // GetIPLocation returns a location string for the given IP address.
 // Uses only local offline databases (ip2region + MMDB) for zero network latency.
 func GetIPLocation(ip string) string {
 	if ip == "" || ip == "127.0.0.1" || ip == "::1" {
-		return "本地"
+		return LocationLocal
 	}
 
 	parsedIP := net.ParseIP(ip)
@@ -213,7 +260,7 @@ func GetIPLocation(ip string) string {
 	}
 
 	if isPrivateIP(ip) {
-		return "本地网络"
+		return LocationPrivate
 	}
 
 	now := time.Now()
@@ -232,7 +279,7 @@ func GetIPLocation(ip string) string {
 	}
 
 	if location == "" {
-		location = "未知"
+		location = LocationUnknown
 	}
 
 	ipLocationMu.Lock()

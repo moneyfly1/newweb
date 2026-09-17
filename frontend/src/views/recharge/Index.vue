@@ -15,7 +15,7 @@
         <div class="pending-list">
           <div v-for="r in pendingRecords" :key="r.id" class="pending-item">
             <div class="pending-info">
-              <span class="pending-amount">¥{{ r.amount }}</span>
+              <span class="pending-amount">¥{{ formatAmount(r.amount) }}</span>
               <span class="pending-time">{{ formatDateTime(r.created_at) }}</span>
             </div>
             <n-space :size="8">
@@ -36,7 +36,7 @@
                 v-for="a in presetAmounts" :key="a"
                 class="amount-chip" :class="{ active: amount === a }"
                 @click="amount = a"
-              >¥{{ a }}</div>
+              >¥{{ formatAmount(a) }}</div>
             </n-space>
           </div>
 
@@ -70,7 +70,7 @@
             :disabled="!amount || !paymentMethodId"
             @click="handleRecharge"
           >
-            立即充值 ¥{{ amount || 0 }}
+            立即充值 ¥{{ formatAmount(amount) }}
           </n-button>
         </n-space>
       </n-card>
@@ -89,7 +89,7 @@
       <n-space vertical :size="16">
         <n-descriptions :column="1" bordered>
           <n-descriptions-item label="充值金额">
-            <span style="color: var(--success-color); font-size: 18px; font-weight: bold;">¥{{ pendingTarget?.amount }}</span>
+            <span style="color: var(--success-color); font-size: 18px; font-weight: bold;">¥{{ formatAmount(pendingTarget?.amount) }}</span>
           </n-descriptions-item>
           <n-descriptions-item label="订单号">{{ pendingTarget?.order_no }}</n-descriptions-item>
         </n-descriptions>
@@ -511,7 +511,7 @@ const handlePendingPay = async () => {
 const handleCancel = (record: any) => {
   dialog.warning({
     title: '取消充值',
-    content: `确定要取消此充值记录（¥${record.amount}）吗？`,
+    content: `确定要取消此充值记录（${formatCurrency(record.amount)}）吗？`,
     positiveText: '确定', negativeText: '取消',
     onPositiveClick: async () => {
       try { await cancelRecharge(record.id); message.success('充值已取消'); loadData() }

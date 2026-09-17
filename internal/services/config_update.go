@@ -12,6 +12,7 @@ import (
 	"cboard/v2/internal/cache"
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/utils"
 
 	"gorm.io/gorm"
 )
@@ -91,7 +92,7 @@ func (s *ConfigUpdateService) addLog(level, message string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	entry := LogEntry{
-		Time:    time.Now().Format("2006-01-02 15:04:05"),
+		Time:    time.Now().Format(utils.LayoutDateTime),
 		Message: message,
 		Level:   level,
 	}
@@ -141,7 +142,7 @@ func (s *ConfigUpdateService) Stop() {
 
 func (s *ConfigUpdateService) addLogUnlocked(level, message string) {
 	entry := LogEntry{
-		Time:    time.Now().Format("2006-01-02 15:04:05"),
+		Time:    time.Now().Format(utils.LayoutDateTime),
 		Message: message,
 		Level:   level,
 	}
@@ -263,7 +264,7 @@ func (s *ConfigUpdateService) runUpdate() {
 					if parseErr == nil && len(cachedNodes) > 0 {
 						nodes = cachedNodes
 						usedCache = true
-						s.addLog("info", fmt.Sprintf("订阅源未解析到有效节点，已使用缓存 [%s]: cached_at=%s cached_nodes=%d", u, cachedAt.Format("2006-01-02 15:04:05"), cachedNodeCount))
+						s.addLog("info", fmt.Sprintf("订阅源未解析到有效节点，已使用缓存 [%s]: cached_at=%s cached_nodes=%d", u, cachedAt.Format(utils.LayoutDateTime), cachedNodeCount))
 					}
 				}
 			}
@@ -543,7 +544,7 @@ func (s *ConfigUpdateService) fetchSubscriptionContentWithCache(rawURL string, p
 	if cacheErr != nil {
 		return "", false, err
 	}
-	s.addLog("info", fmt.Sprintf("获取订阅失败，已使用缓存 [%s]: cached_at=%s cached_nodes=%d fetch_error=%v", rawURL, cachedAt.Format("2006-01-02 15:04:05"), cachedNodeCount, err))
+	s.addLog("info", fmt.Sprintf("获取订阅失败，已使用缓存 [%s]: cached_at=%s cached_nodes=%d fetch_error=%v", rawURL, cachedAt.Format(utils.LayoutDateTime), cachedNodeCount, err))
 	return cachedContent, true, nil
 }
 

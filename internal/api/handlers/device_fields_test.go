@@ -4,7 +4,7 @@ import "testing"
 
 // 设备详情（型号/系统/品牌）以前**永远补不上**：首次登记时客户端没发
 // x-device-model，落库的是空串；老代码用 `field == nil` 判缺失，于是
-// 线上两台 Mclash 桌面端的 device_model / os_version 一直是 ''。
+// 线上两台 Mclash 桌面端的 device_model / os_version 一直是 ”。
 // 这里钉住「空串也算缺失、只补不覆盖」的口径。
 func TestDeviceDetailUpdates(t *testing.T) {
 	str := func(s string) *string { return &s }

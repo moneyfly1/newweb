@@ -24,7 +24,7 @@
                 <h3 class="package-name">{{ pkg.name }}</h3>
                 <div class="price-section">
                   <span class="currency">¥</span>
-                  <span class="price">{{ pkg.price }}</span>
+                  <span class="price">{{ formatAmount(pkg.price) }}</span>
                 </div>
               </div>
 
@@ -77,7 +77,7 @@
                 </div>
                 <div class="custom-inline-price">
                   <span class="currency">¥</span>
-                  <span class="price">{{ customFinalPrice.toFixed(0) }}</span>
+                  <span class="price">{{ formatAmount(customFinalPrice) }}</span>
                 </div>
               </div>
               <div class="card-footer">
@@ -118,7 +118,7 @@
         <n-descriptions :column="1" bordered>
           <n-descriptions-item label="套餐名称">{{ selectedPackage?.name }}</n-descriptions-item>
           <n-descriptions-item label="有效期">{{ selectedPackage?.duration_days }} 天</n-descriptions-item>
-          <n-descriptions-item label="原价">¥{{ orderInfo?.amount }}</n-descriptions-item>
+          <n-descriptions-item label="原价">¥{{ formatAmount(orderInfo?.amount) }}</n-descriptions-item>
           <n-descriptions-item v-if="couponInfo" label="优惠">
             <span style="color: var(--danger-color);">-{{ formatCurrency(orderInfo?.amount - orderInfo?.final_amount) }}</span>
           </n-descriptions-item>
@@ -128,7 +128,7 @@
             </span>
           </n-descriptions-item>
           <n-descriptions-item label="实付金额">
-            <span style="color: var(--success-color); font-size: 20px; font-weight: bold;">¥{{ orderInfo?.final_amount }}</span>
+            <span style="color: var(--success-color); font-size: 20px; font-weight: bold;">¥{{ formatAmount(orderInfo?.final_amount) }}</span>
           </n-descriptions-item>
           <n-descriptions-item v-if="useBalanceDeduct && paymentMethod !== 'balance'" label="余额抵扣">
             <span style="color: var(--success-color);">-{{ formatCurrency(balanceDeductAmount) }}</span>
@@ -310,7 +310,7 @@ import { createOrder, payOrder, createPayment, getOrderStatus, createCustomOrder
 import { getDashboardInfo } from '@/api/user'
 import { safeRedirect } from '@/utils/security'
 import { isQrCodeUrl, isCodepayPayType, isCodepayPageUrl } from '@/utils/payment'
-import { formatCurrency } from '@/utils/amount'
+import { formatAmount, formatCurrency } from '@/utils/amount'
 import { getErrorMessage, silentCatch } from '@/utils/error'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 

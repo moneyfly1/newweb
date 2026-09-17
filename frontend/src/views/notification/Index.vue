@@ -32,7 +32,7 @@
           <div class="notif-main">
             <div class="notif-title">{{ n.title }}</div>
             <div class="notif-content">{{ n.content }}</div>
-            <div class="notif-time">{{ formatTime(n.created_at) }}</div>
+            <div class="notif-time">{{ formatRelativeTime(n.created_at, '') }}</div>
           </div>
           <n-button text size="tiny" type="error" @click.stop="handleDelete(n.id)">删除</n-button>
         </div>
@@ -60,6 +60,7 @@ import { useMessage } from 'naive-ui'
 import { listNotifications, getUnreadCount, markNotificationRead, markAllRead, deleteNotification } from '@/api/common'
 import { useTable } from '@/composables/useTable'
 import { usePullRefresh } from '@/composables/usePullRefresh'
+import { formatRelativeTime } from '@/utils/format'
 
 const message = useMessage()
 const filter = ref('all')
@@ -114,18 +115,6 @@ const handleDelete = async (id: number) => {
   } catch (e: any) {
     message.error(e.message || '删除失败')
   }
-}
-
-const formatTime = (t: string) => {
-  if (!t) return ''
-  const d = new Date(t)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  if (diff < 60 * 1000) return '刚刚'
-  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)} 小时前`
-  if (diff < 7 * 24 * 60 * 60 * 1000) return `${Math.floor(diff / 86400000)} 天前`
-  return d.toLocaleDateString('zh-CN')
 }
 
 onMounted(() => {

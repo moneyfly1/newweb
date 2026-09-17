@@ -189,7 +189,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 	} else {
 		// Extend existing subscription（乐观锁：条件更新 expire_time = 旧值，
 		// 防止同一订阅两个订单并发支付时丢失一次续期）
-		utils.SysError("subscription", fmt.Sprintf("续期现有订阅: subscription_id=%d, old_expire=%s, add_days=%d", sub.ID, sub.ExpireTime.Format("2006-01-02"), durationDays))
+		utils.SysError("subscription", fmt.Sprintf("续期现有订阅: subscription_id=%d, old_expire=%s, add_days=%d", sub.ID, sub.ExpireTime.Format(utils.LayoutDate), durationDays))
 		newExpire := sub.ExpireTime
 		if newExpire.Before(time.Now()) {
 			newExpire = time.Now()
@@ -244,7 +244,7 @@ func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string
 			}
 		}
 		utils.CreateSubscriptionLog(sub.ID, order.UserID, "extend", "system", nil, fmt.Sprintf("购买套餐续期订阅: %s, +%d天", pkgName, durationDays), nil, nil)
-		utils.SysError("subscription", fmt.Sprintf("订阅续期成功: subscription_id=%d, new_expire=%s", sub.ID, newExpire.Format("2006-01-02")))
+		utils.SysError("subscription", fmt.Sprintf("订阅续期成功: subscription_id=%d, new_expire=%s", sub.ID, newExpire.Format(utils.LayoutDate)))
 	}
 
 	var user models.User
@@ -301,7 +301,8 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 	if order.FinalAmount != nil {
 		payAmount = *order.FinalAmount
 	}
-	commission := utils.Round2(payAmount * rate / 100)
+	// 按比例算钱统一走 utils.PercentOf（与优惠券折扣同一取舍口径）
+	commission := utils.PercentOf(payAmount, rate)
 	if commission <= 0 {
 		return
 	}

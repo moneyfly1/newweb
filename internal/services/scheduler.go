@@ -183,11 +183,11 @@ func sendExpiryRemindersTask() {
 			pkgName = "订阅套餐"
 		}
 		subject, body := RenderEmail("expiry_reminder", map[string]string{
-			"username": r.Username, "days": "3", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"), "package_name": pkgName,
+			"username": r.Username, "days": "3", "expire_time": r.ExpireTime.Format(utils.LayoutDateTimeShort), "package_name": pkgName,
 		})
 		QueueEmail(r.Email, subject, body, "expiry_reminder")
 		go NotifyAdmin("expiry_reminder", map[string]string{
-			"username": r.Username, "expire_time": r.ExpireTime.Format("2006-01-02 15:04"), "package_name": pkgName,
+			"username": r.Username, "expire_time": r.ExpireTime.Format(utils.LayoutDateTimeShort), "package_name": pkgName,
 		})
 	}
 
@@ -209,11 +209,11 @@ func sendExpiryRemindersTask() {
 			pkgName = "订阅套餐"
 		}
 		subject, body := RenderEmail("expiry_reminder", map[string]string{
-			"username": r.Username, "days": "1", "expire_time": r.ExpireTime.Format("2006-01-02 15:04"), "package_name": pkgName,
+			"username": r.Username, "days": "1", "expire_time": r.ExpireTime.Format(utils.LayoutDateTimeShort), "package_name": pkgName,
 		})
 		QueueEmail(r.Email, subject, body, "expiry_reminder")
 		go NotifyAdmin("expiry_reminder", map[string]string{
-			"username": r.Username, "expire_time": r.ExpireTime.Format("2006-01-02 15:04"), "package_name": pkgName,
+			"username": r.Username, "expire_time": r.ExpireTime.Format(utils.LayoutDateTimeShort), "package_name": pkgName,
 		})
 	}
 
@@ -235,7 +235,7 @@ func sendExpiryRemindersTask() {
 			pkgName = "订阅套餐"
 		}
 		subject, body := RenderEmail("expiry_notice", map[string]string{
-			"username": r.Username, "expire_time": r.ExpireTime.Format("2006-01-02 15:04"), "package_name": pkgName,
+			"username": r.Username, "expire_time": r.ExpireTime.Format(utils.LayoutDateTimeShort), "package_name": pkgName,
 		})
 		QueueEmail(r.Email, subject, body, "expiry_notice")
 	}
@@ -425,7 +425,7 @@ func cleanOldLogFiles(retentionDays int) {
 			continue
 		}
 		dateStr := strings.TrimSuffix(strings.TrimPrefix(name, "app-"), ".log")
-		fileDate, err := time.Parse("2006-01-02", dateStr)
+		fileDate, err := time.Parse(utils.LayoutDate, dateStr)
 		if err != nil {
 			continue
 		}
@@ -456,7 +456,7 @@ func autoBackupTask() {
 	}
 
 	now := time.Now()
-	today := now.Format("2006-01-02")
+	today := now.Format(utils.LayoutDate)
 
 	if lastAutoBackupDate == today {
 		return

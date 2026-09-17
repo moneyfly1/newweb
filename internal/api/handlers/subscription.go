@@ -197,7 +197,7 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	// 防剥离滥用/防合并出售检测 (按天统计独立 IP 数)
 	r := database.GetRedis()
 	if r != nil && !clientInfo.IsBrowser {
-		today := time.Now().Format("2006-01-02")
+		today := time.Now().Format(utils.LayoutDate)
 		ipSetKey := fmt.Sprintf("sub_ips:%d:%s", sub.ID, today)
 		r.SAdd(context.Background(), ipSetKey, clientIP)
 		r.Expire(context.Background(), ipSetKey, 48*time.Hour)
@@ -400,9 +400,15 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		ipAddr := ip
 		pool := worker.GetDefaultPool()
 		pool.Submit(func() {
+			// 异步任务里 DB 句柄必须自取并判空：数据库不可用时应安静跳过，
+			// 而不是让整个进程在这个后台 goroutine 里 panic。
+			db := database.GetDB()
+			if db == nil {
+				return
+			}
 			region := utils.GetIPLocation(ipAddr)
 			if region != "" {
-				if err := database.GetDB().Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region).Error; err != nil {
+				if err := db.Model(&models.Device{}).Where("id = ?", deviceID).Update("region", region).Error; err != nil {
 					utils.SysError("subscription", fmt.Sprintf("更新设备地区失败: device=%d err=%v", deviceID, err))
 				}
 			}
@@ -416,7 +422,12 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 
 		pool := worker.GetDefaultPool()
 		pool.Submit(func() {
+			// 异步任务里 DB 句柄必须判空：数据库不可用时应安静跳过，
+			// 而不是让整个进程在这个后台 goroutine 里 panic。
 			asyncDB := database.GetDB()
+			if asyncDB == nil {
+				return
+			}
 			updates := map[string]interface{}{}
 
 			// 去抖：仅当距上次访问超过 5 分钟才更新 last_access/access_count，
@@ -460,8 +471,8 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 				updates["software_name"] = clientInfo.SoftwareName
 			}
 			// 地区为空/“未知”时也重算：IP 没变化的设备原先永远不会再算地区
-			if device.Region == "" || device.Region == "未知" {
-				if region := utils.GetIPLocation(ipAddr); region != "" && region != "未知" {
+			if utils.IsUnknownLocation(device.Region) {
+				if region := utils.GetIPLocation(ipAddr); !utils.IsUnknownLocation(region) {
 					updates["region"] = region
 				}
 			}
@@ -636,7 +647,7 @@ func getInfoNodes(ctx *subscriptionContext) []models.Node {
 	if ctx.Sub != nil {
 		expireStr := "无限期"
 		if !ctx.Sub.ExpireTime.IsZero() {
-			expireStr = ctx.Sub.ExpireTime.Format("2006-01-02")
+			expireStr = ctx.Sub.ExpireTime.Format(utils.LayoutDate)
 		}
 		infoNodes = append(infoNodes, createInfoNode("⏰ 到期: "+expireStr))
 		infoNodes = append(infoNodes, createInfoNode(fmt.Sprintf("📱 设备: %d/%d", ctx.CurrentDevices, ctx.DeviceLimit)))
@@ -665,7 +676,7 @@ func getErrorNodes(ctx *subscriptionContext) []models.Node {
 		reason = "订阅已过期"
 		expireStr := ""
 		if ctx.Sub != nil {
-			expireStr = ctx.Sub.ExpireTime.Format("2006-01-02")
+			expireStr = ctx.Sub.ExpireTime.Format(utils.LayoutDate)
 		}
 		solution = fmt.Sprintf("请前往官网续费 (过期时间: %s)", expireStr)
 	case subStatusInactive:
@@ -710,7 +721,7 @@ func generateSubscriptionName(ctx *subscriptionContext) string {
 	}
 	expireStr := "无限期"
 	if ctx.Sub != nil && !ctx.Sub.ExpireTime.IsZero() {
-		expireStr = fmt.Sprintf("到期: %s", ctx.Sub.ExpireTime.Format("2006-01-02"))
+		expireStr = fmt.Sprintf("到期: %s", ctx.Sub.ExpireTime.Format(utils.LayoutDate))
 	}
 	// 优先显示站点名 + 到期时间，便于 Sparkle 等客户端识别
 	if ctx.SiteURL != "" {
@@ -1008,7 +1019,7 @@ func GetUserSubscription(c *gin.Context) {
 		"is_active":              sub.IsActive,
 		"status":                 sub.Status,
 		"expire_time":            sub.ExpireTime,
-		"expire_at":              sub.ExpireTime.Format("2006-01-02"),
+		"expire_at":              sub.ExpireTime.Format(utils.LayoutDate),
 		"days_remaining":         int(time.Until(sub.ExpireTime).Hours() / 24),
 		"created_at":             sub.CreatedAt,
 		"updated_at":             sub.UpdatedAt,
@@ -1185,7 +1196,7 @@ func SendSubscriptionEmail(c *gin.Context) {
 	subject, body := services.RenderEmail("subscription", map[string]string{
 		"clash_url":       clashURL,
 		"universal_url":   universalURL,
-		"expire_time":     sub.ExpireTime.Format("2006-01-02 15:04"),
+		"expire_time":     sub.ExpireTime.Format(utils.LayoutDateTimeShort),
 		"username":        user.Username,
 		"remaining_days":  fmt.Sprintf("%d", remainingDays),
 		"device_limit":    fmt.Sprintf("%d", sub.DeviceLimit),

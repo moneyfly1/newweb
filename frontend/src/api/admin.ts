@@ -159,6 +159,8 @@ export const updateGeoIPFiles = () => request.post('/admin/settings/update-geoip
 export const getGeoIPUpdateStatus = () => request.get('/admin/settings/update-geoip/status')
 export const cleanOldLogs = () => request.post('/admin/settings/clean-logs')
 export const backfillLocations = () => request.post('/admin/settings/backfill-locations')
+// recompute=true：连已有地区值的行一起重算（用于修正历史上取错字段的地区串）
+export const recomputeLocations = () => request.post('/admin/settings/backfill-locations', { recompute: true })
 
 // Node Import & Test
 export const importNodes = (data: any) => request.post('/admin/nodes/import', data)

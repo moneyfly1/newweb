@@ -240,6 +240,7 @@
                       {{ geoIPUpdating ? '正在后台更新…' : '更新 GeoIP 数据库' }}
                     </n-button>
                     <n-button secondary :loading="backfilling" @click="handleBackfillLocations">回填历史地区</n-button>
+                    <n-button secondary :loading="recomputing" @click="handleRecomputeLocations">重算全部地区</n-button>
                   </n-space>
                   <n-alert v-if="geoIPMessage" :type="geoIPHasFailure ? 'warning' : 'info'" style="margin-top: 10px;" :show-icon="true">
                     {{ geoIPMessage }}
@@ -530,7 +531,7 @@ import {
   MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline,
   FunnelOutline, CloudDownloadOutline, DownloadOutline, GitBranchOutline
 } from '@vicons/ionicons5'
-import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, getGeoIPUpdateStatus, backfillLocations, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs, runSoftwareSync, checkSoftwareVersions } from '@/api/admin'
+import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, getGeoIPUpdateStatus, backfillLocations, recomputeLocations, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs, runSoftwareSync, checkSoftwareVersions } from '@/api/admin'
 import { formatDateTime } from '@/utils/date'
 import { formatSize } from '@/utils/format'
 import { useAppStore } from '@/stores/app'
@@ -552,6 +553,7 @@ const geoIPMessage = ref('')
 const geoIPResults = ref<any[]>([])
 const geoIPHasFailure = computed(() => geoIPResults.value.some((r: any) => !r.ok))
 const backfilling = ref(false)
+const recomputing = ref(false)
 let geoIPTimer: any = null
 const testEmail = ref('')
 const backupList = ref<any[]>([])
@@ -1184,6 +1186,32 @@ const handleBackfillLocations = async () => {
   } finally {
     backfilling.value = false
   }
+}
+
+// 重算全部地区：历史上地区串取错了字段（城市被当成省份、ISP 被当成城市），
+// 存成「中国 郑州市 电信」这类值；此操作按当前解析规则重算所有有 IP 的行。
+const handleRecomputeLocations = async () => {
+  dialog.warning({
+    title: '重算全部地区',
+    content: '将按当前解析规则重算所有含 IP 的记录的地区字段（只写地区列，查不到时保留原值），数据量大时耗时较长。确定继续？',
+    positiveText: '开始重算',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      recomputing.value = true
+      try {
+        const res: any = await recomputeLocations()
+        const detail = res.data?.backfilled || {}
+        const parts = Object.entries(detail)
+          .filter(([, v]) => Number(v) > 0)
+          .map(([k, v]) => `${k} ${v} 条`)
+        message.success(parts.length ? `重算完成：${parts.join('，')}` : '重算完成（没有需要更新的记录）')
+      } catch (e: any) {
+        message.error(e?.message || '重算失败')
+      } finally {
+        recomputing.value = false
+      }
+    },
+  })
 }
 
 onBeforeUnmount(() => { if (geoIPTimer) clearInterval(geoIPTimer) })

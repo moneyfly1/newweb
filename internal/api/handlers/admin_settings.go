@@ -307,6 +307,16 @@ func AdminBackfillLocations(c *gin.Context) {
 	db := database.GetDB()
 	backfilled := map[string]int64{}
 
+	// recompute=true：连已有地区值的行一起重算。
+	//
+	// 为什么需要：地区解析曾经取错字段（把城市当省份、把 ISP 当城市），历史行里存的是
+	// 「中国 郑州市 电信」这种串；只补「空/未知」的话这些行永远不会被修正，
+	// 新旧数据会长期混在一起。重算只写 region/location 列，且查不到有效结果时保持原值。
+	var req struct {
+		Recompute bool `json:"recompute"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
 	// 表名 → 地区列名。devices 用的列是 region，其余日志表用 location，
 	// 因此不能像以前那样对所有表硬编码 location。
 	targets := []struct {
@@ -329,7 +339,10 @@ func AdminBackfillLocations(c *gin.Context) {
 			"(%s IS NULL OR %s = '' OR %s = '未知') AND ip_address IS NOT NULL AND ip_address != ''",
 			column, column, column,
 		)
-		rows, err := db.Table(tableName).Select("id, ip_address").Where(where).Rows()
+		if req.Recompute {
+			where = fmt.Sprintf("%s IS NOT NULL AND ip_address IS NOT NULL AND ip_address != ''", column)
+		}
+		rows, err := db.Table(tableName).Select(fmt.Sprintf("id, ip_address, %s", column)).Where(where).Rows()
 		if err != nil {
 			return err
 		}
@@ -339,12 +352,16 @@ func AdminBackfillLocations(c *gin.Context) {
 		for rows.Next() {
 			var id uint
 			var ip string
-			if err := rows.Scan(&id, &ip); err != nil {
+			var oldLocation string
+			if err := rows.Scan(&id, &ip, &oldLocation); err != nil {
 				continue
 			}
 			location := utils.GetIPLocation(ip)
 			// 只写入有效结果：查不到时保持原值，避免把“未知”清成空串
 			if utils.IsUnknownLocation(location) {
+				continue
+			}
+			if location == oldLocation {
 				continue
 			}
 			if err := db.Table(tableName).Where("id = ?", id).Update(column, location).Error; err == nil {
@@ -362,10 +379,17 @@ func AdminBackfillLocations(c *gin.Context) {
 		}
 	}
 
-	utils.CreateAuditLog(c, "backfill_locations", "settings", 0, "回填IP位置信息")
+	action := "backfill_locations"
+	msg := "历史地区数据回填完成"
+	if req.Recompute {
+		action = "recompute_locations"
+		msg = "全部地区数据已按当前解析规则重算"
+	}
+	utils.CreateAuditLog(c, action, "settings", 0, msg)
 	utils.Success(c, gin.H{
 		"backfilled": backfilled,
-		"message":    "历史地区数据回填完成",
+		"recompute":  req.Recompute,
+		"message":    msg,
 	})
 }
 

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -213,5 +214,41 @@ func TestFormatMMDBLocationMatchesIP2RegionShape(t *testing.T) {
 	rec.City.Names = map[string]string{"en": "Los Angeles"}
 	if got := formatMMDBLocation(rec); got != "United States Los Angeles" {
 		t.Errorf("英文回退: %q", got)
+	}
+}
+
+// ip2region 的 xdb 有两种字段布局，这两组用例取自线上真实库的返回串。
+// 此前代码一律按旧版下标取值，把「城市」当「省份」、「ISP」当「城市」，
+// 线上存下来的地区因此是「中国 郑州市 电信」「United States Google LLC」。
+func TestParseIP2RegionFieldsBothLayouts(t *testing.T) {
+	cases := []struct {
+		raw                     string
+		country, province, city string
+	}{
+		// 新版布局（线上 ip2region_v4.xdb / ip2region_v6.xdb）：国家|省份|城市|ISP|国家码
+		{"中国|河南省|郑州市|电信|CN", "中国", "河南省", "郑州市"},
+		{"中国|江苏省|南京市|0|CN", "中国", "江苏省", "南京市"},
+		{"中国|北京市|北京市|联通|CN", "中国", "北京市", "北京市"},
+		{"United States|California|0|Google LLC|US", "United States", "California", ""},
+		{"United States|California|0|0|US", "United States", "California", ""},
+		{"United Kingdom|England|London|Cloudflare, Inc.|GB", "United Kingdom", "England", "London"},
+		{"Reserved|Reserved|Reserved|0|0", "Reserved", "Reserved", "Reserved"},
+		// 旧版布局（ip2region.db 时代）：国家|区域|省份|城市|ISP
+		{"中国|0|广东省|深圳市|电信", "中国", "广东省", "深圳市"},
+		{"美国|0|加利福尼亚州|洛杉矶|0", "美国", "加利福尼亚州", "洛杉矶"},
+	}
+	for _, tc := range cases {
+		c, p, ci := parseIP2RegionFields(strings.Split(tc.raw, "|"))
+		if c != tc.country || p != tc.province || ci != tc.city {
+			t.Errorf("%q → (%q, %q, %q)，期望 (%q, %q, %q)", tc.raw, c, p, ci, tc.country, tc.province, tc.city)
+		}
+	}
+
+	// 拼装后的展示串（两个库形状一致、不含 ISP）
+	if got := joinLocationParts(parseIP2RegionFields(strings.Split("中国|河南省|郑州市|电信|CN", "|"))); got != "中国 河南省 郑州市" {
+		t.Errorf("展示串应为「中国 河南省 郑州市」，实际 %q", got)
+	}
+	if got := joinLocationParts(parseIP2RegionFields(strings.Split("Reserved|Reserved|Reserved|0|0", "|"))); got != "Reserved" {
+		t.Errorf("重复段应去重，实际 %q", got)
 	}
 }

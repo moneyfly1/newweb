@@ -24,6 +24,9 @@ export const listLoginLimits = () => request.get('/admin/security/login-limits')
 export const unlockLoginLimit = (data: { user_id?: number; identifier?: string; ip_address?: string }) =>
   request.post('/admin/security/unlock', data)
 export const getUserLoginLimit = (userId: number) => request.get(`/admin/users/${userId}/login-limit`)
+// 客服按客户邮箱/用户名/IP 查该账号是否被限制（返回锁定状态、剩余时间、来源 IP、账号是否被禁用）
+export const lookupLoginLimit = (params: { identifier?: string; ip?: string }) =>
+  request.get('/admin/security/lookup', { params })
 export const clearAllRateLimits = () => request.post('/admin/security/rate-limits/clear')
 
 // Orders

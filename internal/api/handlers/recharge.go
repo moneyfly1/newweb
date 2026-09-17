@@ -178,7 +178,7 @@ func GetRechargeStatus(c *gin.Context) {
 		var transaction models.PaymentTransaction
 		if err := db.Where("transaction_id = ? AND user_id = ?", *record.PaymentTransactionID, userID).First(&transaction).Error; err == nil {
 			if transaction.Status == models.PayStatusPending {
-				if _, _, err := tryCompensateAlipayPayment(db, &transaction, "recharge_status_poll"); err != nil {
+				if _, err := tryCompensateAlipayPayment(db, &transaction, "recharge_status_poll"); err != nil {
 					utils.LogError("[Recharge] 状态轮询补偿失败: tx_id=%s error=%v", *record.PaymentTransactionID, err)
 				}
 				if err := db.Where("id = ? AND user_id = ?", id, userID).First(&record).Error; err != nil {

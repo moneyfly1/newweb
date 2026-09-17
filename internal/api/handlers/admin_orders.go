@@ -428,7 +428,9 @@ func AdminRefundOrder(c *gin.Context) {
 		gatewayTradeNo = stringValue(txn.ExternalTransactionID)
 	}
 
-	refundMethod := "余额"
+	// 退款渠道说明：switch 的每个分支（含 default 直接 return）都会赋值，
+	// 因此这里不需要初始值（原先的 "余额" 是永远用不到的死赋值）
+	var refundMethod string
 	switch channel {
 	case "alipay":
 		if merchantOrderNo == "" || gatewayTradeNo == "" {
@@ -545,7 +547,7 @@ func AdminRefundOrder(c *gin.Context) {
 	if db.First(&refundUser, order.UserID).Error == nil {
 		desc := fmt.Sprintf("管理员退款订单: %s (%s)", order.OrderNo, refundMethod)
 		if channel == "balance" {
-			utils.CreateBalanceLogEntry(order.UserID, "refund", refundAmount, refundUser.Balance-refundAmount, refundUser.Balance, func() *uint { id := uint(order.ID); return &id }(), desc, c)
+			utils.CreateBalanceLogEntry(order.UserID, "refund", refundAmount, refundUser.Balance-refundAmount, refundUser.Balance, func() *uint { return &order.ID }(), desc, c)
 		}
 	}
 	utils.CreateAuditLog(c, "refund_order", "order", uint(id), fmt.Sprintf("退款订单: %s, 金额: %.2f, 方式: %s, 商户单号: %s, 平台流水: %s", order.OrderNo, refundAmount, refundMethod, merchantOrderNo, gatewayTradeNo))

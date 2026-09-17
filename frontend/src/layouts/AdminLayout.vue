@@ -141,11 +141,10 @@ import { computed, ref, h, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NIcon, useMessage, type FormInst } from 'naive-ui'
 import {
-  GridOutline, PeopleOutline, CartOutline, CubeOutline, ServerOutline,
-  CloudOutline, PricetagOutline, ChatbubblesOutline, RibbonOutline,
-  KeyOutline, SettingsOutline, MegaphoneOutline, StatsChartOutline,
-  DocumentTextOutline, WarningOutline, GitNetworkOutline, MailOutline,
-  RefreshOutline, MenuOutline, EllipsisVertical, GiftOutline,
+  GridOutline, PeopleOutline, CartOutline, ServerOutline,
+  CloudOutline, ChatbubblesOutline,
+  SettingsOutline, StatsChartOutline,
+  MenuOutline, EllipsisVertical,
 } from '@vicons/ionicons5'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'

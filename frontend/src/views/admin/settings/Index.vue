@@ -717,8 +717,6 @@ const handleSaveProtocolFilter = async () => {
   }
 }
 
-const maskedFields = ref<Set<string>>(new Set())
-const sensitiveKeys = ['smtp_password', 'pay_alipay_private_key', 'pay_alipay_public_key', 'pay_epay_secret_key', 'pay_codepay_secret_key', 'pay_stripe_secret_key', 'pay_stripe_webhook_secret', 'notify_telegram_bot_token', 'backup_github_token', 'gh_nodes_token']
 
 const loadSettings = async () => {
   loading.value = true

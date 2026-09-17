@@ -557,14 +557,14 @@ import { ref, computed, onMounted, onActivated, onUnmounted, nextTick, watch, h 
 import { NTag, useMessage } from 'naive-ui'
 import QRCode from 'qrcode'
 import {
-  CopyOutline, TimeOutline, PhonePortraitOutline, TrashOutline,
-  RefreshOutline, SwapHorizontalOutline, MailOutline,
+  CopyOutline, TimeOutline, PhonePortraitOutline,
+  RefreshOutline, MailOutline,
   CheckmarkCircle, CloseCircle, AlertCircle, QrCodeOutline,
   ArrowUpCircleOutline, WalletOutline, CalendarOutline, EyeOutline, EyeOffOutline,
   ArrowForwardOutline, CartOutline, SettingsOutline
 } from '@vicons/ionicons5'
 import {
-  getSubscription, getSubscriptionDevices, deleteDevice,
+  getSubscription, getSubscriptionDevices,
   resetSubscription, convertToBalance, sendSubscriptionEmail
 } from '@/api/subscription'
 import { calcUpgradePrice, createUpgradeOrder, payOrder, createPayment, getOrderStatus } from '@/api/order'

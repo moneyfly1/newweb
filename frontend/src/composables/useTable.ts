@@ -1,7 +1,7 @@
 import { reactive, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 
-export interface TableFetcherParams {
+interface TableFetcherParams {
   page: number
   page_size: number
   sort: string
@@ -9,14 +9,14 @@ export interface TableFetcherParams {
   [key: string]: any
 }
 
-export interface TablePageResult {
+interface TablePageResult {
   data?: {
     items?: any[]
     total?: number
   }
 }
 
-export interface UseTableOptions {
+interface UseTableOptions {
   defaultPageSize?: number
   pageSizes?: number[]
   /** 默认排序（如节点列表按 order_index 升序） */

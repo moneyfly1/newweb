@@ -242,7 +242,7 @@ const handleDetail = (row) => {
 }
 
 // Stats：优先使用后端全队列统计（列表接口附带 stats），回退当前页估算
-const queueStats = ref<any>(null)
+const queueStats = ref(null)
 const stats = computed(() => {
   if (queueStats.value) {
     return {

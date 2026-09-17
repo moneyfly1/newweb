@@ -59,7 +59,7 @@ import { DocumentOutline, DownloadOutline } from '@vicons/ionicons5'
 import request from '@/utils/request'
 import { formatSize } from '@/utils/format'
 
-export interface TicketAttachmentItem {
+interface TicketAttachmentItem {
   id: number
   file_name: string
   file_type?: string | null

@@ -131,7 +131,7 @@ function triggerDesktopPicker() {
   fileInput.value?.click()
 }
 
-export interface UploadedItem {
+interface UploadedItem {
   uid: number // 本地唯一 id
   id: number // 服务端附件 id（pending）
   file_name: string

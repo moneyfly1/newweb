@@ -1,6 +1,6 @@
 import { onUnmounted, ref, watch } from 'vue'
 
-export interface UseCountUpOptions {
+interface UseCountUpOptions {
   /** 动画时长（ms），默认 600 */
   duration?: number
   /** 显示小数位；缺省时按目标值自动判断（整数 → 0 位，否则 2 位） */

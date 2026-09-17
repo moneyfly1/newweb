@@ -108,7 +108,7 @@ import { ref, h, onMounted } from 'vue'
 import { NButton, NTime, NInput, NTag, useMessage } from 'naive-ui'
 import { getSubscriptionDevices, deleteDevice, updateDeviceRemark } from '@/api/subscription'
 import { useAppStore } from '@/stores/app'
-import { parseDeviceInfo, formatLocation } from '@/utils/i18n'
+import { formatLocation } from '@/utils/i18n'
 import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import { usePageLoading } from '@/composables/usePageLoading'
@@ -144,11 +144,6 @@ const deleteDeviceId = ref<number | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const totalDevices = ref(0)
-
-const parseDeviceName = (userAgent: string): string => {
-  // 使用统一的设备解析函数
-  return parseDeviceInfo(userAgent)
-}
 
 const columns = [
   {

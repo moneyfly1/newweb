@@ -15,12 +15,11 @@ import (
 
 // 兑换结果哨兵错误（事务内不写 HTTP 响应，统一在事务外处理）
 var (
-	errRedeemNotFound  = errors.New("redeem_not_found")
-	errRedeemUsed      = errors.New("redeem_used")
-	errRedeemExpired   = errors.New("redeem_expired")
-	errRedeemLimit     = errors.New("redeem_limit")
-	errRedeemConflict  = errors.New("redeem_conflict")
-	errRedeemDuplicate = errors.New("redeem_duplicate")
+	errRedeemNotFound = errors.New("redeem_not_found")
+	errRedeemUsed     = errors.New("redeem_used")
+	errRedeemExpired  = errors.New("redeem_expired")
+	errRedeemLimit    = errors.New("redeem_limit")
+	errRedeemConflict = errors.New("redeem_conflict")
 )
 
 func RedeemCode(c *gin.Context) {

@@ -326,8 +326,8 @@ func Register(c *gin.Context) {
 	// 记录注册日志
 	var inviterIDPtr *uint
 	if user.InvitedBy != nil {
-		inviterIDPtr = new(uint)
-		*inviterIDPtr = uint(*user.InvitedBy)
+		// InvitedBy 本身就是 *uint，无需再转换（unconvert）
+		inviterIDPtr = user.InvitedBy
 	}
 	utils.CreateRegistrationLog(c, user.ID, user.Username, user.Email, req.InviteCode, inviterIDPtr)
 

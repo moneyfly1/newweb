@@ -36,7 +36,7 @@ const regionDisplayNames = typeof Intl !== 'undefined' && (Intl as any).DisplayN
   : null
 
 /** 把「国家码 / 英文名 / 中文名」统一成中文显示名；无法识别时返回空串 */
-export function countryNameFromText(value: unknown): string {
+function countryNameFromText(value: unknown): string {
   if (!value || typeof value !== 'string') return ''
   const text = value.trim()
   if (!text) return ''

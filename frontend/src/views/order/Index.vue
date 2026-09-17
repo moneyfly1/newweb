@@ -481,8 +481,6 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 let pollAttempts = 0
 const maxPollAttempts = 20
 // 记录当前轮询的对象，用于支付成功后刷新正确的列表
-type PollTarget = { type: 'order'; orderNo: string } | { type: 'recharge' }
-let pollTarget: PollTarget | null = null
 
 interface PmMeta { payType: string; label: string; brand: string; icon: string; desc: string }
 // 支付方式品牌元数据（与 Shop.vue 对齐，含 crypto 标签）
@@ -643,9 +641,10 @@ const openCodepayWindow = () => {
   }
 }
 
+type PollTarget = { type: 'order'; orderNo: string } | { type: 'recharge' }
+
 const startPolling = (target: PollTarget) => {
   stopPolling()
-  pollTarget = target
   pollAttempts = 0
   pollingStatus.value = true
   // 递归 setTimeout：上一次请求完成后再间隔 3s，避免慢请求与定时器重叠并发轮询

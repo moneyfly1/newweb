@@ -33,7 +33,7 @@ func AdminCreateBackup(c *gin.Context) {
 	}
 
 	// Check if GitHub backup is enabled
-	settings := utils.GetSettings("backup_github_enabled", "backup_github_token", "backup_github_repo")
+	settings := utils.GetSecretSettings("backup_github_enabled", "backup_github_token", "backup_github_repo")
 	if settings["backup_github_enabled"] == "true" || settings["backup_github_enabled"] == "1" {
 		token := settings["backup_github_token"]
 		repo := settings["backup_github_repo"]
@@ -146,7 +146,7 @@ func AdminRestoreBackup(c *gin.Context) {
 }
 
 func AdminListGitHubBackups(c *gin.Context) {
-	settings := utils.GetSettings("backup_github_enabled", "backup_github_token", "backup_github_repo")
+	settings := utils.GetSecretSettings("backup_github_enabled", "backup_github_token", "backup_github_repo")
 	if settings["backup_github_enabled"] != "true" && settings["backup_github_enabled"] != "1" {
 		utils.BadRequest(c, "GitHub 备份未启用")
 		return
@@ -182,7 +182,7 @@ func AdminRestoreGitHubBackup(c *gin.Context) {
 		return
 	}
 
-	settings := utils.GetSettings("backup_github_token", "backup_github_repo")
+	settings := utils.GetSecretSettings("backup_github_token", "backup_github_repo")
 	token := settings["backup_github_token"]
 	repo := settings["backup_github_repo"]
 	if token == "" || repo == "" {
@@ -299,7 +299,7 @@ func AdminTestGitHubConnection(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		// Fall back to saved settings
-		settings := utils.GetSettings("backup_github_token", "backup_github_repo")
+		settings := utils.GetSecretSettings("backup_github_token", "backup_github_repo")
 		req.Token = settings["backup_github_token"]
 		req.Repo = settings["backup_github_repo"]
 	}

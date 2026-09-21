@@ -145,7 +145,7 @@ func GitHubResolve(c *gin.Context) {
 	}
 
 	prefixes := loadDownloadProxyPrefixes()
-	release, err := cachedLatestRelease(sw.Repo, prefixes, utils.GetSetting("gh_nodes_token"))
+	release, err := cachedLatestRelease(sw.Repo, prefixes, utils.GetSecretSetting("gh_nodes_token"))
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"code": 1, "message": "获取 GitHub 版本失败: " + err.Error()})
 		return

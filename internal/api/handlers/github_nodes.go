@@ -28,7 +28,7 @@ func AdminGithubNodesTest(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		// Fall back to saved settings
-		settings := utils.GetSettings("gh_nodes_token", "gh_nodes_repo", "gh_nodes_branch", "gh_nodes_path")
+		settings := utils.GetSecretSettings("gh_nodes_token", "gh_nodes_repo", "gh_nodes_branch", "gh_nodes_path")
 		req.Token = settings["gh_nodes_token"]
 		req.Repo = settings["gh_nodes_repo"]
 		req.Branch = settings["gh_nodes_branch"]
@@ -42,7 +42,7 @@ func AdminGithubNodesTest(c *gin.Context) {
 
 	// 掩码占位符（**** 前缀）或空值：回退到已保存设置，避免把掩码当真实 Token 提交给 GitHub
 	if req.Token == "" || strings.HasPrefix(req.Token, "****") {
-		req.Token = strings.TrimSpace(utils.GetSetting("gh_nodes_token"))
+		req.Token = utils.GetSecretSetting("gh_nodes_token")
 	}
 	if req.Repo == "" || strings.HasPrefix(req.Repo, "****") {
 		req.Repo = strings.TrimSpace(utils.GetSetting("gh_nodes_repo"))

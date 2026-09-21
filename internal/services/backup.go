@@ -93,7 +93,7 @@ func PerformBackup() (*BackupResult, error) {
 
 // UploadBackupToGitHub uploads a backup zip to the configured GitHub repo.
 func UploadBackupToGitHub(zipPath string) {
-	settings := utils.GetSettings("backup_github_enabled", "backup_github_token", "backup_github_repo")
+	settings := utils.GetSecretSettings("backup_github_enabled", "backup_github_token", "backup_github_repo")
 	if settings["backup_github_enabled"] != "true" && settings["backup_github_enabled"] != "1" {
 		return
 	}

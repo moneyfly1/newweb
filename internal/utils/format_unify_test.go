@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"cboard/v2/internal/models"
 )
 
 // 这些用例钉住「同一件事只有一个实现」：
@@ -250,5 +252,21 @@ func TestParseIP2RegionFieldsBothLayouts(t *testing.T) {
 	}
 	if got := joinLocationParts(parseIP2RegionFields(strings.Split("Reserved|Reserved|Reserved|0|0", "|"))); got != "Reserved" {
 		t.Errorf("重复段应去重，实际 %q", got)
+	}
+}
+
+// 密钥类配置必须去掉首尾空白：后台粘贴 token 常带尾随空格/换行，
+// 而 HTTP 头容忍尾随空格、不容忍换行——同一份配置在测试按钮里可用、
+// 在真正任务里失败，很难排查。线上 gh_nodes_token 就带着一个尾随空格。
+func TestGetSecretSettingTrimsWhitespace(t *testing.T) {
+	db := setupSettingsTestDB(t)
+	db.Create(&models.SystemConfig{Key: "test_secret_token", Value: "  ghp_example_token \n"})
+	InvalidateSettingsCache()
+	if got := GetSecretSetting("test_secret_token"); got != "ghp_example_token" {
+		t.Errorf("应去掉首尾空白，实际 %q", got)
+	}
+	m := GetSecretSettings("test_secret_token")
+	if m["test_secret_token"] != "ghp_example_token" {
+		t.Errorf("批量读取也应去空白，实际 %q", m["test_secret_token"])
 	}
 }

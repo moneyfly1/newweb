@@ -155,7 +155,7 @@ func (s *GithubNodesService) setError(msg string) {
 func (s *GithubNodesService) LoadConfig() *GithubNodesConfig {
 	cfg := &GithubNodesConfig{
 		Enabled:  utils.IsBoolSetting("gh_nodes_enabled"),
-		Token:    strings.TrimSpace(utils.GetSetting("gh_nodes_token")),
+		Token:    utils.GetSecretSetting("gh_nodes_token"),
 		Repo:     strings.TrimSpace(utils.GetSetting("gh_nodes_repo")),
 		Branch:   strings.TrimSpace(utils.GetSetting("gh_nodes_branch")),
 		Path:     strings.TrimSpace(utils.GetSetting("gh_nodes_path")),

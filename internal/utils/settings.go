@@ -2,6 +2,7 @@ package utils
 
 import (
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -155,4 +156,24 @@ func InvalidatePublicCache(key string) {
 	publicCacheMu.Lock()
 	delete(publicCacheData, key)
 	publicCacheMu.Unlock()
+}
+
+// GetSecretSetting 读取密钥类配置（GitHub token、API key 等）并去掉首尾空白。
+//
+// 为什么需要：后台输入框里粘贴 token 很容易带一个尾随空格/换行，
+// 而 HTTP 头对尾部空白是容忍的、对换行却不是——同一份配置在「测试连接」按钮里
+// 被 TrimSpace 后可用、在真正的任务里没 trim 就失败，排查起来非常费劲。
+// 线上 gh_nodes_token 就带着一个尾随空格。凡密钥一律走这个函数读取。
+func GetSecretSetting(key string) string {
+	return strings.TrimSpace(GetSetting(key))
+}
+
+// GetSecretSettings 批量读取密钥类配置（同样去首尾空白）。
+func GetSecretSettings(keys ...string) map[string]string {
+	raw := GetSettings(keys...)
+	out := make(map[string]string, len(raw))
+	for k, v := range raw {
+		out[k] = strings.TrimSpace(v)
+	}
+	return out
 }

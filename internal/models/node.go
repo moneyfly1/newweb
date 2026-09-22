@@ -9,30 +9,44 @@ const (
 )
 
 type Node struct {
-	ID            uint       `gorm:"primaryKey" json:"id"`
-	Name          string     `gorm:"type:varchar(100)" json:"name"`
-	Region        string     `gorm:"type:varchar(50);index" json:"region"`
-	Type          string     `gorm:"type:varchar(20);index" json:"type"`
-	Status        string     `gorm:"type:varchar(20);default:'offline';index" json:"status"`
-	Load          float64    `gorm:"default:0" json:"load"`
-	Speed         float64    `gorm:"default:0" json:"speed"`
-	Uptime        int        `gorm:"default:0" json:"uptime"`
-	Latency       int        `gorm:"default:0" json:"latency"`
-	Description   *string    `gorm:"type:text" json:"description"`
-	Config        *string    `gorm:"type:text" json:"config"`
-	IsRecommended bool       `gorm:"default:false" json:"is_recommended"`
-	IsActive      bool       `gorm:"default:true;index" json:"is_active"`
-	IsManual      bool       `gorm:"default:false" json:"is_manual"`
-	SourceIndex   int        `gorm:"default:0" json:"source_index"`
-	SourceURL     string     `gorm:"type:text" json:"source_url"`
-	OrderIndex    int        `gorm:"default:0;index" json:"order_index"`
-	LastTest      *time.Time `json:"last_test"`
-	CreatedAt     time.Time  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt     time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
+	ID            uint    `gorm:"primaryKey" json:"id"`
+	Name          string  `gorm:"type:varchar(100)" json:"name"`
+	Region        string  `gorm:"type:varchar(50);index" json:"region"`
+	Type          string  `gorm:"type:varchar(20);index" json:"type"`
+	Status        string  `gorm:"type:varchar(20);default:'offline';index" json:"status"`
+	Load          float64 `gorm:"default:0" json:"load"`
+	Speed         float64 `gorm:"default:0" json:"speed"`
+	Uptime        int     `gorm:"default:0" json:"uptime"`
+	Latency       int     `gorm:"default:0" json:"latency"`
+	Description   *string `gorm:"type:text" json:"description"`
+	Config        *string `gorm:"type:text" json:"config"`
+	IsRecommended bool    `gorm:"default:false" json:"is_recommended"`
+	IsActive      bool    `gorm:"default:true;index" json:"is_active"`
+	IsManual      bool    `gorm:"default:false" json:"is_manual"`
+	// PinnedOnline 固定在线：节点只在部分地区可访问（例如仅中国境内可达的家庭宽带 IP），
+	// 服务端探测必然失败，若按探测结果判离线就会被订阅过滤掉。勾选后不再被自动探测改写状态，
+	// 且始终下发（见 NodeDeliverable）。
+	PinnedOnline bool       `gorm:"default:false;index" json:"pinned_online"`
+	SourceIndex  int        `gorm:"default:0" json:"source_index"`
+	SourceURL    string     `gorm:"type:text" json:"source_url"`
+	OrderIndex   int        `gorm:"default:0;index" json:"order_index"`
+	LastTest     *time.Time `json:"last_test"`
+	CreatedAt    time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt    time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 func (Node) TableName() string {
 	return "nodes"
+}
+
+// NodeDeliverableWhere 返回「该下发给客户」的查询片段：
+// 启用且（探测在线 或 管理员勾选了固定在线）。
+//
+// 为什么需要「固定在线」：部分节点只对特定地区开放（如仅中国境内可达的住宅 IP），
+// 服务端探测永远失败，按探测结果过滤会让这些节点永远下发给不出去——
+// 而客户在国内是能正常用的。
+func NodeDeliverableWhere() (string, []interface{}) {
+	return "is_active = ? AND (status = ? OR pinned_online = ?)", []interface{}{true, NodeStatusOnline, true}
 }
 
 type CustomNode struct {

@@ -289,6 +289,19 @@ const rules = { name: { required: true, message: '请输入节点名称' } }
 const protocolColorMap: Record<string, NonNullable<TagProps['type']>> = { vmess: 'info', vless: 'success', trojan: 'warning', hysteria2: 'error' }
 const statusColorMap: Record<string, NonNullable<TagProps['type']>> = { online: 'success', offline: 'error' }
 
+// 固定在线：跳过服务端探测、始终下发（用于仅部分地区可达的节点）
+const handleTogglePinned = async (row: any, value: boolean) => {
+  try {
+    await updateNode(row.id, { pinned_online: value })
+    row.pinned_online = value
+    if (value) row.status = 'online'
+    message.success(value ? '已设为固定在线（不再被自动探测改写，始终下发）' : '已取消固定在线')
+  } catch (e: any) {
+    message.error(e?.message || '设置失败')
+    reload()
+  }
+}
+
 const columns: DataTableColumns<any> = [
   { type: 'selection' },
   { title: 'ID', key: 'id', width: 70, sorter: 'default' },
@@ -338,6 +351,18 @@ const columns: DataTableColumns<any> = [
     key: 'status',
     width: 90,
     render: (row: any) => h(NTag, { type: statusColorMap[row.status] || 'default', size: 'small', ghost: true }, { default: () => row.status === 'online' ? '在线' : '离线' })
+  },
+  {
+    // 只对部分地区开放的节点（如仅中国境内可达的住宅 IP），服务端探测必然失败；
+    // 勾选后不再被自动探测改写状态，并始终下发给客户。
+    title: '固定在线',
+    key: 'pinned_online',
+    width: 96,
+    render: (row: any) => h(NSwitch, {
+      value: !!row.pinned_online,
+      size: 'small',
+      'onUpdate:value': (v: boolean) => handleTogglePinned(row, v),
+    })
   },
   {
     title: '延迟',

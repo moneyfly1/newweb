@@ -99,7 +99,7 @@ func AdminUpdateNode(c *gin.Context) {
 	allowed := map[string]bool{
 		"name": true, "region": true, "type": true, "status": true, "description": true,
 		"config": true, "is_recommended": true, "is_active": true, "is_manual": true,
-		"order_index": true, "source_index": true,
+		"order_index": true, "source_index": true, "pinned_online": true,
 	}
 	updates := make(map[string]interface{})
 	for k, v := range req {
@@ -114,6 +114,12 @@ func AdminUpdateNode(c *gin.Context) {
 	if len(updates) == 0 {
 		utils.BadRequest(c, "无有效更新字段")
 		return
+	}
+	// 勾选「固定在线」时同步把状态置为在线：否则列表仍显示离线，管理员会以为没生效
+	if v, ok := updates["pinned_online"]; ok {
+		if pinned, isBool := v.(bool); isBool && pinned {
+			updates["status"] = models.NodeStatusOnline
+		}
 	}
 	if err := db.Model(&node).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新节点失败")

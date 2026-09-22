@@ -219,7 +219,8 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		if hasDedicated {
 			nodes = customNodes
 		} else {
-			db.Where("is_active = ? AND status = ?", true, models.NodeStatusOnline).Order("order_index ASC").Find(&nodes)
+			where, args := models.NodeDeliverableWhere()
+			db.Where(where, args...).Order("order_index ASC").Find(&nodes)
 			nodes = append(customNodes, nodes...)
 		}
 		ctx.HasDedicatedOnly = hasDedicated
@@ -238,7 +239,8 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		ctx.Nodes = customNodes
 	} else {
 		var publicNodes []models.Node
-		db.Where("is_active = ? AND status = ?", true, models.NodeStatusOnline).Order("order_index ASC").Find(&publicNodes)
+		where, args := models.NodeDeliverableWhere()
+		db.Where(where, args...).Order("order_index ASC").Find(&publicNodes)
 		ctx.Nodes = append(customNodes, publicNodes...)
 	}
 	ctx.HasUnlimitedDevices = hasUnlimited

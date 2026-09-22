@@ -199,7 +199,9 @@ func extractHostPort(config string) (string, error) {
 func AutoTestActiveNodes() (int, int) {
 	db := database.GetDB()
 	var nodes []models.Node
-	db.Where("is_active = ? AND config IS NOT NULL AND config != ''", true).Find(&nodes)
+	// 固定在线的节点不做探测：它们的可达性与服务端所在地区无关（例如仅中国境内可达），
+	// 探测必然失败并把状态改写回 offline，等于把管理员的设置白设了。
+	db.Where("is_active = ? AND pinned_online = ? AND config IS NOT NULL AND config != ''", true, false).Find(&nodes)
 
 	if len(nodes) == 0 {
 		return 0, 0

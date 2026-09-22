@@ -3,8 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"cboard/v2/internal/database"
@@ -490,15 +492,67 @@ func GetProtocolFilter(filterType string) map[string]bool {
 	return m
 }
 
+// normalizeProtocol 归一化协议名，避免「同一个协议两种写法」被过滤器误伤。
+//
+// 实际踩到的坑：协议开关里存的是 socks5，而某些导入路径写出的类型是 socks，
+// 于是客户导入的 SOCKS 节点在订阅里「凭空消失」，后台又没有任何提示。
+// hysteria2/hy2、wireguard/wg 同理。
+func normalizeProtocol(p string) string {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case "socks":
+		return "socks5"
+	case "hy2", "hysteria-2":
+		return "hysteria2"
+	case "wg":
+		return "wireguard"
+	case "naive", "naive+https":
+		return "http"
+	}
+	return strings.ToLower(strings.TrimSpace(p))
+}
+
 func FilterNodesByProtocol(nodes []models.Node, allowed map[string]bool) []models.Node {
 	if allowed == nil {
 		return nodes
 	}
-	var result []models.Node
-	for _, n := range nodes {
-		if allowed[n.Type] {
-			result = append(result, n)
-		}
+	normalized := make(map[string]bool, len(allowed))
+	for k := range allowed {
+		normalized[normalizeProtocol(k)] = true
 	}
+	var result []models.Node
+	dropped := map[string]int{}
+	for _, n := range nodes {
+		if normalized[normalizeProtocol(n.Type)] {
+			result = append(result, n)
+			continue
+		}
+		dropped[n.Type]++
+	}
+	// 被过滤掉的节点必须留下痕迹：客户反馈「导入的节点不见了」时，
+	// 一眼就能看出是协议开关没勾选，而不是导入失败。
+	reportFilteredNodes(dropped)
 	return result
+}
+
+// reportFilteredNodes 记录被协议开关排除的节点（最多每 10 分钟记一次，避免刷屏）
+var lastFilterReport time.Time
+var filterReportMu sync.Mutex
+
+func reportFilteredNodes(dropped map[string]int) {
+	if len(dropped) == 0 {
+		return
+	}
+	filterReportMu.Lock()
+	defer filterReportMu.Unlock()
+	if time.Since(lastFilterReport) < 10*time.Minute {
+		return
+	}
+	lastFilterReport = time.Now()
+	parts := make([]string, 0, len(dropped))
+	for typ, cnt := range dropped {
+		parts = append(parts, fmt.Sprintf("%s×%d", typ, cnt))
+	}
+	sort.Strings(parts)
+	utils.SysWarn("subscription", "协议开关排除了节点: "+strings.Join(parts, ", ")+
+		"（如需下发请在「系统设置 → 协议过滤」里勾选对应协议）")
 }

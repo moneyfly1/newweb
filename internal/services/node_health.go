@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,12 +20,41 @@ import (
 // 节点状态自动刷新（对标 Xboard 节点主动上报：CBoard 节点是订阅源，无法上报，
 // 由调度器定期探测并回写，让节点页/订阅列表始终显示新鲜状态，无需手动点击测试）。
 
-// TestNodeConnectivity performs a TCP dial to the node and returns latency.
+// isUDPBasedProtocol 判断是否 UDP 系协议（QUIC / WireGuard）。
+//
+// 这些协议只监听 UDP：用 TCP 去连它的端口必然失败（端口上根本没有 TCP 监听），
+// 于是线上 114 条 hysteria2 节点被全线判为离线、延迟 0。
+func isUDPBasedProtocol(config string) bool {
+	switch detectNodeTypeFromLink(strings.TrimSpace(config)) {
+	case "hysteria", "hysteria2", "tuic", "wireguard":
+		return true
+	}
+	return false
+}
+
+// TestNodeConnectivity 探测节点可达性并返回延迟。
+//
+// TCP 系协议（vmess/vless/trojan/ss/ssr/socks5/http/anytls）：TCP 连接即可判断。
+// UDP 系协议（hysteria/hysteria2/tuic/wireguard）：TCP 探测毫无意义——
+// 只做「域名可解析 + UDP 可发」的弱校验，可达性不做断言（第二个返回值为 false
+// 但也不代表离线，调用方据 isUDPBasedProtocol 决定是否回写状态）。
 func TestNodeConnectivity(config string) (latencyMs int, reachable bool) {
 	addr, err := extractHostPort(config)
 	if err != nil {
 		return 0, false
 	}
+
+	if isUDPBasedProtocol(config) {
+		start := time.Now()
+		conn, err := net.DialTimeout("udp", addr, 5*time.Second)
+		if err != nil {
+			return 0, false
+		}
+		_ = conn.Close()
+		// UDP 无握手，「连上」不代表服务端在跑；这里只回报探测本身可用
+		return int(time.Since(start).Milliseconds()), true
+	}
+
 	start := time.Now()
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
@@ -43,9 +73,65 @@ func ExtractNodeAddressForTest(config string) string {
 	return addr
 }
 
+// detectNodeTypeFromLink 按链接 scheme 推断节点类型（与订阅生成用的类型名一致）。
+func detectNodeTypeFromLink(link string) string {
+	scheme := link
+	if i := strings.Index(link, "://"); i > 0 {
+		scheme = strings.ToLower(link[:i])
+	}
+	switch scheme {
+	case "vmess":
+		return "vmess"
+	case "vless":
+		return "vless"
+	case "trojan":
+		return "trojan"
+	case "ss":
+		return "ss"
+	case "ssr":
+		return "ssr"
+	case "hysteria":
+		return "hysteria"
+	case "hysteria2", "hy2":
+		return "hysteria2"
+	case "tuic":
+		return "tuic"
+	case "socks", "socks5":
+		return "socks5"
+	case "http", "https", "naive", "naive+https":
+		return "http"
+	case "anytls":
+		return "anytls"
+	case "wg", "wireguard":
+		return "wireguard"
+	}
+	return ""
+}
+
 // extractHostPort tries to extract host:port from a node config link.
+//
+// 关键：必须与「生成订阅」走同一套解析（NodeConfigToClashMap）。
+// 此前这里只认 vmess/vless/trojan/ss，其余协议一律返回 "unsupported protocol" 被判离线——
+// 线上 hysteria2 节点 114 条全部显示离线、延迟 0，客户导入 SOCKS/Hysteria2 节点后
+// 看到的就是「一直超时」，而订阅里其实是能用的。
 func extractHostPort(config string) (string, error) {
 	config = strings.TrimSpace(config)
+	if config == "" {
+		return "", fmt.Errorf("empty node config")
+	}
+
+	// 1) 先用与订阅生成一致的解析器取 server/port
+	if typ := detectNodeTypeFromLink(config); typ != "" {
+		if proxy, err := NodeConfigToClashMap(typ, config, "probe"); err == nil {
+			host := stringFromMap(proxy, "server")
+			port := intFromMap(proxy, "port", 0)
+			if host != "" && port > 0 {
+				return net.JoinHostPort(host, strconv.Itoa(port)), nil
+			}
+		}
+	}
+
+	// 2) 兜底：下面的老逻辑（处理个别非标准写法）
 
 	// vmess:// is base64-encoded JSON
 	if strings.HasPrefix(config, "vmess://") {
@@ -141,6 +227,14 @@ func AutoTestActiveNodes() (int, int) {
 			status := models.NodeStatusOffline
 			if reachable {
 				status = models.NodeStatusOnline
+			}
+			if _, err := extractHostPort(*n.Config); err != nil {
+				// 解析不出 host:port（未知/新增协议）时保持原状态：
+				// 探测能力不足不等于节点挂了，硬判离线会让客户以为节点全废。
+				mu.Lock()
+				results = append(results, n)
+				mu.Unlock()
+				return
 			}
 			// 只回写发生变化的状态，减少无谓的 DB 写入
 			if n.Status != status || n.Latency != latency {

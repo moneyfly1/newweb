@@ -14,6 +14,9 @@ SERVICE_NAME="cboard-v2"
 CBOARD_PORT=9000
 BACKEND_PORT=9000
 DOMAIN=""
+SUBSCRIPTION_DOMAIN=""   # 订阅专用域名（可选）：后台优先用它生成订阅地址
+EXTRA_DOMAINS=""         # 备用域名（可选，逗号分隔）：额外建 vhost + 证书 + 作为备用订阅地址
+MIRROR_DOMAINS=""        # 备用订阅域名（可选，逗号分隔），留空时自动用主域名+备用域名
 ENABLE_SSL="n"
 ADMIN_EMAIL=""
 ADMIN_PASSWORD=""
@@ -203,6 +206,20 @@ interactive_config() {
 
     [ -n "$DOMAIN" ] && read -rp "是否自动申请 SSL 证书? (y/n) [y]: " ENABLE_SSL && ENABLE_SSL=${ENABLE_SSL:-y}
 
+    # 域名分工（可选，推荐）：网站域名与订阅域名分开，域名被封时可切换备用域名。
+    # 留空则只用上面那个域名（与旧版行为一致）。
+    if [ -n "$DOMAIN" ]; then
+        echo -e "${CYAN}—— 可选的域名分工（直接回车跳过）——${NC}"
+        read -rp "订阅专用域名 (如 sub.example.com，留空=用主域名): " SUBSCRIPTION_DOMAIN
+        SUBSCRIPTION_DOMAIN=$(echo "$SUBSCRIPTION_DOMAIN" | sed 's|^https\?://||' | sed 's|/$||')
+        read -rp "备用域名 (可多个，逗号分隔，留空=不需要): " EXTRA_DOMAINS
+        EXTRA_DOMAINS=$(echo "$EXTRA_DOMAINS" | tr -d ' ')
+        if [ -n "$SUBSCRIPTION_DOMAIN" ] || [ -n "$EXTRA_DOMAINS" ]; then
+            MIRROR_DOMAINS="$DOMAIN"
+            [ -n "$EXTRA_DOMAINS" ] && MIRROR_DOMAINS="$MIRROR_DOMAINS,$EXTRA_DOMAINS"
+        fi
+    fi
+
     while true; do
         read -rp "管理员邮箱: " ADMIN_EMAIL
         validate_email "$ADMIN_EMAIL" && break || err "邮箱格式不正确"
@@ -216,7 +233,7 @@ interactive_config() {
     done
 
     echo -e "\n${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    info "安装目录: $INSTALL_DIR | 域名: ${DOMAIN:-IP访问} | SSL: ${ENABLE_SSL:-n} | 邮箱: $ADMIN_EMAIL"
+    info "安装目录: $INSTALL_DIR | 主域名: ${DOMAIN:-IP访问} | 订阅域名: ${SUBSCRIPTION_DOMAIN:-同主域名} | 备用域名: ${EXTRA_DOMAINS:-无} | SSL: ${ENABLE_SSL:-n} | 邮箱: $ADMIN_EMAIL"
     echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
     read -rp "确认以上配置? (y/n) [y]: " confirm
     [[ "${confirm:-y}" != "y" ]] && fatal "安装已取消"
@@ -298,15 +315,42 @@ EOF
     ok "systemd 服务已创建"
 }
 
+# 收集本次要配置的全部域名（主域名 + 订阅域名 + 备用域名），逗号去重
+collect_all_domains() {
+    local all="$DOMAIN"
+    [ -n "$SUBSCRIPTION_DOMAIN" ] && all="$all $SUBSCRIPTION_DOMAIN"
+    [ -n "$EXTRA_DOMAINS" ] && all="$all $(echo "$EXTRA_DOMAINS" | tr ',' ' ')"
+    echo "$all" | tr ' ' '\n' | grep -v '^$' | awk '!seen[$0]++' | paste -sd' ' -
+}
+
+# 把域名分工写入数据库设置（site_url / 订阅域名 / 备用域名）。
+# 这些值是「配置」，装完在后台也能改；重装时自动写一遍可避免漏配。
+apply_domain_settings_to_db() {
+    local wd; wd=$(get_work_dir)
+    [ ! -x "$wd/cboard" ] && return 0
+    local site=""; [ -n "$DOMAIN" ] && site="https://$DOMAIN"
+    local sub=""; [ -n "$SUBSCRIPTION_DOMAIN" ] && sub="https://$SUBSCRIPTION_DOMAIN"
+    local backup=""; [ -n "$EXTRA_DOMAINS" ] && backup="https://$(echo "$EXTRA_DOMAINS" | cut -d, -f1)"
+    if [ -z "$site" ] && [ -z "$sub" ]; then return 0; fi
+    ( cd "$wd" && ./cboard set-domain \
+        ${site:+--site "$site"} \
+        ${sub:+--sub "$sub"} \
+        ${MIRROR_DOMAINS:+--mirrors "$MIRROR_DOMAINS"} \
+        ${backup:+--backup "$backup"} ) 2>&1 | sed 's/^/    /'
+}
+
 setup_bt_nginx() {
     info "生成 Nginx 配置..."
     local CONF_FILE="$BT_NGINX_VHOST_DIR/cboard.conf"
     mkdir -p "$BT_NGINX_VHOST_DIR" /www/server/nginx/conf/vhost 2>/dev/null || true
 
+    # 所有域名（主 + 订阅 + 备用）共用同一后端与前端产物；
+    # 订阅接口只校验 token，因此同一 token 在任一域名下都可用。
+    local ALL_DOMAINS; ALL_DOMAINS=$(collect_all_domains)
     cat > "$CONF_FILE" <<EOF
 server {
     listen 80;
-    server_name ${DOMAIN:-_};
+    server_name ${ALL_DOMAINS:-_};
     root $INSTALL_DIR/frontend/dist;
     index index.html;
 
@@ -362,12 +406,14 @@ setup_ssl() {
         local nginx_was_running=false
         pgrep -x nginx >/dev/null 2>&1 && nginx_was_running=true
         
-        if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" --redirect 2>/dev/null; then
+        local CERT_D_ARGS=""
+        for d in $(collect_all_domains); do CERT_D_ARGS="$CERT_D_ARGS -d $d"; done
+        if certbot --nginx $CERT_D_ARGS --non-interactive --agree-tos -m "$ADMIN_EMAIL" --redirect 2>/dev/null; then
             mkdir -p "$CERT_PATH" && cp /etc/letsencrypt/live/$DOMAIN/*.pem "$CERT_PATH/" 2>/dev/null
             ok "SSL 申请成功 (nginx)"
         else
             [ "$nginx_was_running" = true ] && systemctl stop nginx 2>/dev/null || $BT_NGINX_BIN -s stop 2>/dev/null || true
-            if certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" 2>/dev/null; then
+            if certbot certonly --standalone $CERT_D_ARGS --non-interactive --agree-tos -m "$ADMIN_EMAIL" 2>/dev/null; then
                 mkdir -p "$CERT_PATH" && cp /etc/letsencrypt/live/$DOMAIN/*.pem "$CERT_PATH/" 2>/dev/null
                 ok "SSL 申请成功 (standalone)"
             else
@@ -400,6 +446,8 @@ install_system() {
     if wait_for_service active; then
         ok "服务启动成功"
         [ -n "$ADMIN_EMAIL" ] && (cd "$INSTALL_DIR" && ./cboard reset-password --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" >/dev/null 2>&1)
+        # 服务起来后写入域名分工（订阅域名/备用域名），重装时不会漏配
+        apply_domain_settings_to_db
     else
         err "服务启动失败"; journalctl -u ${SERVICE_NAME} -n 10 --no-pager
     fi
@@ -445,6 +493,17 @@ configure_domain() {
     local BASE_URL="http://$DOMAIN" SSL_ENABLED="false"
     [[ "${USE_HTTPS:-y}" =~ ^[Yy]$ ]] && { BASE_URL="https://$DOMAIN"; SSL_ENABLED="true"; ENABLE_SSL="y"; }
 
+    # 域名分工（可选）：改动会同时更新 nginx 证书与数据库里的订阅/备用域名设置
+    echo -e "${CYAN}—— 可选的域名分工（直接回车保持原值不变）——${NC}"
+    read -rp "订阅专用域名 [${SUBSCRIPTION_DOMAIN:-不设置}]: " input_sub
+    [ -n "$input_sub" ] && SUBSCRIPTION_DOMAIN=$(echo "$input_sub" | sed 's|^https\?://||' | sed 's|/$||')
+    read -rp "备用域名(逗号分隔) [${EXTRA_DOMAINS:-不设置}]: " input_extra
+    [ -n "$input_extra" ] && EXTRA_DOMAINS=$(echo "$input_extra" | tr -d ' ')
+    if [ -n "$SUBSCRIPTION_DOMAIN" ] || [ -n "$EXTRA_DOMAINS" ]; then
+        MIRROR_DOMAINS="$DOMAIN"
+        [ -n "$EXTRA_DOMAINS" ] && MIRROR_DOMAINS="$MIRROR_DOMAINS,$EXTRA_DOMAINS"
+    fi
+
     if [ -f .env ]; then
         for key in DOMAIN BASE_URL CORS_ORIGINS SSL_ENABLED SUBSCRIPTION_URL_PREFIX ALIPAY_NOTIFY_URL ALIPAY_RETURN_URL; do
             local val; case $key in
@@ -457,6 +516,7 @@ configure_domain() {
         ok ".env 已更新"
     fi
     setup_bt_nginx; [[ "${USE_HTTPS:-y}" =~ ^[Yy]$ ]] && setup_ssl
+    apply_domain_settings_to_db
     systemctl restart ${SERVICE_NAME} 2>/dev/null || true
     ok "配置完成: $BASE_URL"; pause
 }

@@ -72,6 +72,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	// 兼容旧订阅地址，旧 token 会映射到当前订阅记录，并继续受订阅状态、到期时间、设备数控制。
 	api.GET("/subscribe/:url", subRL, handlers.GetSubscription)
 	api.GET("/sub/*path", subRL, handlers.GetSubscription)
+	// 更短的中性别名（同一 token）：域名/路径特征被针对性封锁时多一层冗余。
+	// nginx 只需反代 /api/，无需额外配置。
+	api.GET("/s/:url", subRL, handlers.GetSubscription)
 
 	// 客户端在线心跳（自有客户端 Mclash/MoneyFly/ClashMi 定时上报）
 	// 订阅拉取无法反映「此刻是否在用」，在线状态由心跳判定。
@@ -440,6 +443,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			settings.POST("/backfill-locations", handlers.AdminBackfillLocations)
 			settings.GET("/protocol-filter", handlers.AdminGetProtocolFilter)
 			settings.PUT("/protocol-filter", handlers.AdminUpdateProtocolFilter)
+			// 域名设置 + 一键应用并体检（站点域名 / 订阅专用域名 / 备用域名）
+			settings.GET("/domain", handlers.AdminGetDomainSettings)
+			settings.POST("/domain/apply", handlers.AdminApplyDomainSettings)
 		}
 
 		// 公告

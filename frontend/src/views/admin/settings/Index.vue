@@ -212,6 +212,85 @@
                   </n-grid>
                 </div>
 
+                <!-- 域名设置：站点域名 / 订阅专用域名 / 备用域名 + 一键应用并体检 -->
+                <div v-else-if="activeTab === 'domain'" key="domain">
+                  <n-h3 prefix="bar">域名分工</n-h3>
+                  <n-alert type="info" :show-icon="true" style="margin-bottom: 14px">
+                    订阅接口只校验 token、不校验域名，所以<b>同一 token 在任意绑定到本机的域名下都能用</b>：
+                    换域名不需要迁移数据，客户也不用更换 token。
+                    这里设置只影响<b>新生成的订阅地址</b>，老域名地址继续有效。
+                  </n-alert>
+                  <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="32">
+                    <n-form-item-gi label="站点域名（打开网站用）">
+                      <n-input v-model:value="domainForm.site_url" placeholder="https://new.moneyfly.top" />
+                    </n-form-item-gi>
+                    <n-form-item-gi label="订阅专用域名（优先生成订阅地址）">
+                      <n-input v-model:value="domainForm.subscription_domain" placeholder="https://sub.dollarsfly.top" />
+                    </n-form-item-gi>
+                    <n-form-item-gi label="备用站点域名" span="2">
+                      <n-input v-model:value="domainForm.backup_site_url" placeholder="https://dollarsfly.top（网站打不开时的备用入口）" />
+                    </n-form-item-gi>
+                    <n-form-item-gi label="备用订阅域名（逗号分隔，可填多个）" span="2">
+                      <n-input
+                        v-model:value="domainForm.mirrorsText"
+                        type="textarea"
+                        :rows="2"
+                        placeholder="https://new.moneyfly.top,https://dollarsfly.top"
+                      />
+                      <template #feedback>这些域名会与主订阅地址一起展示给客户，主域名被屏蔽时可一键切换</template>
+                    </n-form-item-gi>
+                  </n-grid>
+
+                  <n-space align="center" style="margin-top: 8px">
+                    <n-button type="primary" :loading="applyingDomain" @click="handleApplyDomain">
+                      一键应用并体检
+                    </n-button>
+                    <n-button secondary :loading="checkingDomain" @click="loadDomainSettings">刷新体检结果</n-button>
+                    <span v-if="domainResult?.message" class="domain-msg">{{ domainResult.message }}</span>
+                  </n-space>
+
+                  <n-divider>体检结果</n-divider>
+                  <n-table v-if="domainChecks.length" :bordered="false" size="small">
+                    <thead>
+                      <tr>
+                        <th>域名</th>
+                        <th>用途</th>
+                        <th>解析</th>
+                        <th>HTTPS/证书</th>
+                        <th>接口</th>
+                        <th>证书剩余</th>
+                        <th>问题</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="chk in domainChecks" :key="chk.domain">
+                        <td>{{ chk.domain }}</td>
+                        <td>{{ chk.role }}</td>
+                        <td><n-tag size="tiny" :type="chk.dns_ok ? 'success' : 'error'">{{ chk.dns_ok ? '正常' : '失败' }}</n-tag></td>
+                        <td><n-tag size="tiny" :type="chk.https_ok && chk.cert_ok ? 'success' : 'error'">{{ chk.https_ok && chk.cert_ok ? '正常' : '异常' }}</n-tag></td>
+                        <td><n-tag size="tiny" :type="chk.api_reachable ? 'success' : 'error'">{{ chk.api_reachable ? '200' : '异常' }}</n-tag></td>
+                        <td>
+                          <span v-if="chk.cert_days_left">{{ chk.cert_days_left }} 天</span>
+                          <span v-else>-</span>
+                        </td>
+                        <td class="domain-problems">
+                          <span v-if="!chk.problems || !chk.problems.length">-</span>
+                          <div v-for="(pb, i) in chk.problems || []" :key="i">· {{ pb }}</div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </n-table>
+                  <n-empty v-else description="点「一键应用并体检」后显示结果" size="small" />
+
+                  <n-alert type="warning" :show-icon="true" style="margin-top: 14px">
+                    支付回调地址不受这里影响（仍按 <code>pay_*_notify_url</code> / <code>payment_public_base_url</code> 走），
+                    换域名不会导致支付回调失效。
+                  </n-alert>
+                  <n-alert type="default" :show-icon="true" style="margin-top: 10px">
+                    短订阅地址（路径特征更中性，被封时更耐扛）：<code>https://你的域名/api/v1/s/&lt;token&gt;</code>
+                  </n-alert>
+                </div>
+
                 <!-- 安全设置 -->
                 <div v-else-if="activeTab === 'security'" key="security">
                   <n-h3 prefix="bar">后台安全控制</n-h3>
@@ -535,9 +614,8 @@ import { useMessage, useDialog, NTag } from 'naive-ui'
 import {
   SaveOutline, SettingsOutline, RocketOutline, CardOutline,
   MailOutline, NotificationsOutline, ShieldCheckmarkOutline, RefreshOutline,
-  FunnelOutline, CloudDownloadOutline, DownloadOutline, GitBranchOutline
-} from '@vicons/ionicons5'
-import { getSettings, updateSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, getGeoIPUpdateStatus, backfillLocations, recomputeLocations, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs, runSoftwareSync, checkSoftwareVersions } from '@/api/admin'
+  FunnelOutline, CloudDownloadOutline, DownloadOutline, GitBranchOutline, GlobeOutline } from '@vicons/ionicons5'
+import { getSettings, updateSettings, getDomainSettings, applyDomainSettings, sendTestEmail, testBark, createBackup, listBackups, restoreBackup, listGitHubBackups, restoreGitHubBackup, updateGeoIPFiles, getGeoIPUpdateStatus, backfillLocations, recomputeLocations, cleanOldLogs, getProtocolFilter, updateProtocolFilter, getGithubNodesStatus, testGithubNodes, syncGithubNodes, getGithubNodesLogs, clearGithubNodesLogs, runSoftwareSync, checkSoftwareVersions } from '@/api/admin'
 import { formatDateTime } from '@/utils/date'
 import { formatSize } from '@/utils/format'
 import { useAppStore } from '@/stores/app'
@@ -622,6 +700,66 @@ const pagedBackupList = computed(() => {
 // 筛选变化时回到第 1 页
 watch([filterYear, filterMonth, restoreSource], () => { backupPage.value = 1 })
 
+// ===== 域名设置（站点域名 / 订阅专用域名 / 备用域名）=====
+const domainForm = ref({
+  site_url: '',
+  subscription_domain: '',
+  backup_site_url: '',
+  mirrorsText: '',
+})
+const domainChecks = ref<any[]>([])
+const domainResult = ref<any>(null)
+const applyingDomain = ref(false)
+const checkingDomain = ref(false)
+
+const loadDomainSettings = async () => {
+  checkingDomain.value = true
+  try {
+    const res: any = await getDomainSettings()
+    const d = res.data || {}
+    domainForm.value = {
+      site_url: d.site_url || '',
+      subscription_domain: d.subscription_domain || '',
+      backup_site_url: d.backup_site_url || '',
+      mirrorsText: (d.subscription_mirrors || []).join(','),
+    }
+    domainChecks.value = d.checks || []
+  } catch (e: any) {
+    message.error(e?.message || '读取域名设置失败')
+  } finally {
+    checkingDomain.value = false
+  }
+}
+
+// 一键应用并体检：保存 → 后端清缓存立即生效 → 逐域名体检（解析/证书/接口/跳转）
+const handleApplyDomain = async () => {
+  applyingDomain.value = true
+  try {
+    const mirrors = String(domainForm.value.mirrorsText || '')
+      .split(/[,\n;\s]+/)
+      .map((x) => x.trim())
+      .filter(Boolean)
+    const res: any = await applyDomainSettings({
+      site_url: domainForm.value.site_url,
+      subscription_domain: domainForm.value.subscription_domain,
+      backup_site_url: domainForm.value.backup_site_url,
+      subscription_mirrors: mirrors,
+    })
+    const d = res.data || {}
+    domainChecks.value = d.checks || []
+    domainResult.value = d
+    if (d.failing) {
+      message.warning(d.message || '已应用，但有域名未通过体检')
+    } else {
+      message.success('域名设置已应用，全部域名体检通过')
+    }
+  } catch (e: any) {
+    message.error(e?.message || '应用失败')
+  } finally {
+    applyingDomain.value = false
+  }
+}
+
 const menuOptions = [
   { label: '基础设置', key: 'basic', icon: SettingsOutline },
   { label: '运营参数', key: 'operation', icon: RocketOutline },
@@ -633,6 +771,7 @@ const menuOptions = [
   { label: 'GitHub 文件同步', key: 'github_nodes', icon: GitBranchOutline },
   { label: '软件下载', key: 'downloads', icon: DownloadOutline },
   { label: '协议过滤', key: 'protocol', icon: FunnelOutline },
+  { label: '域名设置', key: 'domain', icon: GlobeOutline },
 ]
 
 const encryptionOptions = [
@@ -1226,6 +1365,7 @@ onBeforeUnmount(() => { if (geoIPTimer) clearInterval(geoIPTimer) })
 onMounted(() => { loadSettings(); loadProtocolFilter(); loadVersionCheck() })
 
 watch(activeTab, (tab) => {
+  if (tab === 'domain') loadDomainSettings()
   if (tab === 'backup') loadBackupList()
   if (tab === 'github_nodes') {
     loadGithubNodesStatus()

@@ -23,15 +23,10 @@ import (
 // BuildSubscriptionURL 生成用户订阅链接（权威格式：/api/v1/client/subscribe?token=TOKEN[&type=xxx]）。
 // 全站统一在此生成，避免各处拼接出不同格式（旧代码曾混用 /api/v1/sub/、/api/v1/subscribe/ 两种）。
 func BuildSubscriptionURL(token, subType string) string {
-	siteURL := GetSiteURL()
-	if siteURL == "" || token == "" {
-		return ""
-	}
-	base := siteURL + "/api/v1/client/subscribe?token=" + url.QueryEscape(token)
-	if subType != "" {
-		base += "&type=" + url.QueryEscape(subType)
-	}
-	return base
+	// 优先使用「订阅专用域名」，未配置时回退站点域名。
+	// 见 internal/services/domain.go：订阅接口只校验 token、不校验 Host，
+	// 因此换域名不影响老地址，客户也不需要更换 token。
+	return SubscriptionEndpointURL(SubscriptionBaseURL(), token, subType)
 }
 
 // ErrSubscriptionConflict 订阅行被并发修改（乐观锁冲突）

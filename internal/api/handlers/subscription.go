@@ -995,9 +995,15 @@ func GetUserSubscription(c *gin.Context) {
 		}
 	}
 
+	// 备用订阅地址：与主地址同一 token，主域名被封时客户可直接切换
+	mirrorURLs := services.SubscriptionMirrorURL(sub.SubscriptionURL, "")
+	mirrorClash := services.SubscriptionMirrorURL(sub.SubscriptionURL, "clash")
+
 	result := gin.H{
 		"id":                     sub.ID,
 		"user_id":                sub.UserID,
+		"mirror_urls":            mirrorURLs,
+		"mirror_clash_urls":      mirrorClash,
 		"package_id":             sub.PackageID,
 		"package_name":           packageName,
 		"subscription_url":       sub.SubscriptionURL,

@@ -207,3 +207,12 @@ export const checkSoftwareVersions = () => request.get('/admin/software-sync/che
 
 // 专线节点导入（订阅/链接，订阅支持同步更新）
 export const importCustomNodes = (data: { type: string, url?: string, links?: string }) => request.post('/admin/custom-nodes/import', data)
+
+// 域名设置（站点域名 / 订阅专用域名 / 备用域名）+ 一键应用并体检
+export const getDomainSettings = () => request.get('/admin/settings/domain')
+export const applyDomainSettings = (data: {
+  site_url?: string
+  subscription_domain?: string
+  subscription_mirrors?: string[]
+  backup_site_url?: string
+}) => request.post('/admin/settings/domain/apply', data)

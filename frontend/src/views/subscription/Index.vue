@@ -219,6 +219,29 @@
                 </div>
               </n-collapse-item>
             </n-collapse>
+
+            <!-- 备用订阅地址：主域名被屏蔽时，客户可直接切换到其它域名（同一 token，无需重新配置） -->
+            <n-collapse v-if="mirrorSubscriptionUrls.length > 1" class="more-subscription-collapse mirror-collapse">
+              <n-collapse-item title="备用订阅地址（网站/主域名打不开时点这里复制）" name="mirror-subscription-urls">
+                <div class="more-url-list">
+                  <div v-for="item in mirrorSubscriptionUrls" :key="item.url" class="url-item more-url-item">
+                    <div class="url-header">
+                      <span class="url-type">{{ item.label }}</span>
+                      <n-tag size="small" :bordered="false">{{ item.domain }}</n-tag>
+                    </div>
+                    <div class="url-actions">
+                      <n-input class="url-input" :value="showSubUrls ? item.url : maskUrl(item.url)" readonly size="small" />
+                      <div class="url-buttons">
+                        <n-button type="primary" size="small" @click="copyToClipboard(item.url, `${item.domain} 订阅地址`)">
+                          <template #icon><n-icon :component="CopyOutline" /></template>
+                          复制
+                        </n-button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </n-collapse-item>
+            </n-collapse>
           </div>
         </div>
 
@@ -761,6 +784,9 @@ const formats = [
 ]
 
 // 通用订阅 URL（Shadowrocket / V2Ray / Hiddify 使用）
+// 备用订阅地址（后端按「订阅域名 → 备用订阅域名 → 站点域名」顺序返回，同一 token）
+const mirrorSubscriptionUrls = computed(() => subscription.value?.mirror_clash_urls || subscription.value?.mirror_urls || [])
+
 const subscriptionUrl = computed(() => withExcludedProtocols(subscription.value?.token_url || ''))
 // Clash 订阅 URL
 const clashUrl = computed(() => withExcludedProtocols(subscription.value?.token_clash_url || buildTypedSubscriptionUrl(subscription.value?.token_url || '', 'clash')))

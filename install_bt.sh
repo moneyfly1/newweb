@@ -279,7 +279,10 @@ deploy_and_build() {
 
     info "构建后端..."; cd "$INSTALL_DIR"
     export PATH=$PATH:/usr/local/go/bin
-    go build -o cboard cmd/server/main.go 2>&1 || { go clean -cache; go build -o cboard cmd/server/main.go || fatal "后端构建失败"; }
+    # 必须按「包」编译 ./cmd/server，而不是只编译 main.go：
+    # 后者会漏掉 cmd/server 下的其它文件（例如 domain_cli.go 的 set-domain 子命令），
+    # 报 undefined 且直接把线上服务停在构建失败那一步（真实踩过）。
+    go build -o cboard ./cmd/server 2>&1 || { go clean -cache; go build -o cboard ./cmd/server || fatal "后端构建失败"; }
     chmod +x cboard && ok "后端构建完成"
 
     info "构建前端..."; cd "$INSTALL_DIR/frontend"
@@ -594,7 +597,7 @@ update_code() {
 
         export PATH=$PATH:/usr/local/go/bin
         echo -e "\n${YELLOW}━━━ 步骤 1/3：构建后端 (go build) ━━━${NC}"
-        go build -o cboard cmd/server/main.go
+        go build -o cboard ./cmd/server
         if [ $? -ne 0 ]; then
             err "后端构建失败"; systemctl start ${SERVICE_NAME}; pause; return 1
         fi

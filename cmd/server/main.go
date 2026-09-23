@@ -27,6 +27,11 @@ func main() {
 		runResetPassword()
 		return
 	}
+	// 子命令: 写入域名设置（站点/订阅/备用），供安装脚本在重装时一次配好
+	if len(os.Args) >= 2 && os.Args[1] == "set-domain" {
+		runSetDomain()
+		return
+	}
 
 	log.Println("CBoard v2.0 启动中...")
 

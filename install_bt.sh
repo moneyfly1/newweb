@@ -40,8 +40,27 @@ pause() { echo ""; read -rp "按回车键继续..." _; }
 # ============================================================================
 
 # 获取实际工作目录
+#
+# 为什么不能只看 INSTALL_DIR 是否存在：INSTALL_DIR 是脚本里硬编码的
+# /www/wwwroot/cboard，而这个项目实际部署在 /www/wwwroot/new.moneyfly.top。
+# 一旦系统里恰好存在（或被人/面板新建）一个空的 /www/wwwroot/cboard，
+# 所有 git/go/npm 命令都会跑到那个空目录里执行，报「not a git repository」，
+# 部署直接失败且原因很难看出来（线上真实踩过：该目录只有一个空的 .well-known）。
+# 判定标准改为「哪个目录才像真正的项目」：含 go.mod（或 .git）的优先。
+is_project_dir() {
+    [ -f "$1/go.mod" ] || [ -d "$1/.git" ]
+}
+
 get_work_dir() {
-    [ -d "$INSTALL_DIR" ] && echo "$INSTALL_DIR" || echo "$PROJECT_PATH"
+    if [ -d "$INSTALL_DIR" ] && is_project_dir "$INSTALL_DIR"; then
+        echo "$INSTALL_DIR"
+    elif is_project_dir "$PROJECT_PATH"; then
+        echo "$PROJECT_PATH"
+    elif [ -d "$INSTALL_DIR" ]; then
+        echo "$INSTALL_DIR"
+    else
+        echo "$PROJECT_PATH"
+    fi
 }
 
 # 进入工作目录

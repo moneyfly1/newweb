@@ -261,16 +261,37 @@ func runSync() []ReportItem {
 		return report
 	}
 
+	// 仓库没有 Release 资产时的版本兜底（例如自研客户端只打了 tag）：
+	// 记下 tag 版本，并把下载入口指向仓库的 Releases 页面（仍走加速镜像），
+	// 避免"没发布资产 → 自动配置直接失效、前端按钮点了没反应"。
+	tagFallback := map[string]string{}
 	newVersions := 0
 	for _, sw := range Catalog {
 		release, ok := releaseCache[sw.Repo]
 		if !ok {
 			release, err = ghrelease.Latest(sw.Repo, prefixes, ghToken)
 			if err != nil {
-				for _, t := range sw.Targets {
-					report = append(report, ReportItem{Key: t.ConfigKey, Name: sw.Name, Label: t.Label, OS: t.OS, Arch: t.Arch, Status: "error", Message: "获取 GitHub 版本失败: " + err.Error()})
+				// 1) 再试 Releases 列表（只有预发布版本时 /releases/latest 会 404）
+				if listed, lerr := ghrelease.LatestListed(sw.Repo, prefixes, ghToken); lerr == nil && listed != nil {
+					release = listed
+				} else if tag, terr := ghrelease.LatestTag(sw.Repo, prefixes, ghToken); terr == nil && tag != "" {
+					// 2) 只有 tag：记录版本号，下载走 Releases 页面兜底
+					tagFallback[sw.Repo] = strings.TrimPrefix(tag, "v")
+					report = append(report, ReportItem{
+						Key: sw.Key, Name: sw.Name, Status: "ok", Version: tagFallback[sw.Repo],
+						Message: "仓库暂未发布 Release 资产，已识别版本号并指向 Releases 页面",
+					})
+					continue
+				} else {
+					msg := err.Error()
+					if lerr != nil {
+						msg += "；" + lerr.Error()
+					}
+					for _, t := range sw.Targets {
+						report = append(report, ReportItem{Key: t.ConfigKey, Name: sw.Name, Label: t.Label, OS: t.OS, Arch: t.Arch, Status: "error", Message: "获取 GitHub 版本失败: " + msg})
+					}
+					continue
 				}
-				continue
 			}
 			releaseCache[sw.Repo] = release
 		}

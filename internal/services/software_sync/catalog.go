@@ -211,3 +211,27 @@ func FindAssetFor(release *ghrelease.Release, t *Target) (*ghrelease.Asset, erro
 	}
 	return nil, fmt.Errorf("未找到匹配的下载文件（平台: %s, 架构: %s）", t.OS, t.Arch)
 }
+
+// AutoConfigKeys 返回所有支持自动解析的下载配置键。
+// 用于「留空即自动」：这些键为空时前端可直接按自动下发，不必等同步任务先跑一遍。
+func AutoConfigKeys() []string {
+	out := make([]string, 0, 16)
+	for _, sw := range Catalog {
+		for _, t := range sw.Targets {
+			out = append(out, t.ConfigKey)
+		}
+	}
+	return out
+}
+
+// IsAutoConfigKey 判断某个下载配置键是否支持自动解析
+func IsAutoConfigKey(key string) bool {
+	for _, sw := range Catalog {
+		for _, t := range sw.Targets {
+			if t.ConfigKey == key {
+				return true
+			}
+		}
+	}
+	return false
+}

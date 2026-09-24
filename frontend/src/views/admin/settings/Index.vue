@@ -882,6 +882,8 @@ const loadSettings = async () => {
 
 // 可自动配置的下载键（对应 GitHub Release 仓库，值为 pan://<键> 时自动解析）
 const AUTO_DOWNLOAD_KEYS = [
+  // 自研客户端优先：与其它客户端同样支持「留空即自动」按 GitHub Release 识别版本
+  'client_mclash_windows_url', 'client_mclash_macos_url', 'client_mclash_macos_arm_url', 'client_mclash_android_url',
   'client_v2rayn_url', 'client_clashparty_windows_url', 'client_hiddify_windows_url',
   'client_flclash_windows_url', 'client_clashverge_windows_url',
   'client_clash_android_url', 'client_v2rayng_url', 'client_hiddify_android_url',
@@ -899,7 +901,7 @@ const softwareGroups = [
   {
     name: 'windows', title: 'Windows 客户端',
     items: [
-      { key: 'client_mclash_windows_url', label: 'Mclash（自研 · 推荐）', auto: false },
+      { key: 'client_mclash_windows_url', label: 'Mclash（自研 · 推荐）', auto: true },
       { key: 'client_clash_windows_url', label: 'Clash for Windows', auto: false },
       { key: 'client_v2rayn_url', label: 'V2rayN', auto: true },
       { key: 'client_clashparty_windows_url', label: 'Clash Party', auto: true },
@@ -911,7 +913,7 @@ const softwareGroups = [
   {
     name: 'android', title: 'Android 客户端',
     items: [
-      { key: 'client_mclash_android_url', label: 'Mclash（自研 · 推荐）', auto: false },
+      { key: 'client_mclash_android_url', label: 'Mclash（自研 · 推荐）', auto: true },
       { key: 'client_clash_android_url', label: 'Clash Meta', auto: true },
       { key: 'client_v2rayng_url', label: 'V2rayNG', auto: true },
       { key: 'client_hiddify_android_url', label: 'Hiddify', auto: true },
@@ -921,8 +923,8 @@ const softwareGroups = [
   {
     name: 'macos', title: 'macOS 客户端（Intel / Apple 芯片）',
     items: [
-      { key: 'client_mclash_macos_arm_url', label: 'Mclash（自研 · Apple 芯片）', auto: false },
-      { key: 'client_mclash_macos_url', label: 'Mclash（自研 · Intel 芯片）', auto: false },
+      { key: 'client_mclash_macos_arm_url', label: 'Mclash（自研 · Apple 芯片）', auto: true },
+      { key: 'client_mclash_macos_url', label: 'Mclash（自研 · Intel 芯片）', auto: true },
       { key: 'client_flclash_macos_url', label: 'FlClash (Intel)', auto: true },
       { key: 'client_flclash_macos_arm_url', label: 'FlClash (Apple 芯片)', auto: true },
       { key: 'client_clashparty_macos_url', label: 'Clash Party (Intel)', auto: true },

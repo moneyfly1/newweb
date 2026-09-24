@@ -66,8 +66,37 @@ var dmgApple = rx(
 var clashPartyMacIntel = rx(`(?i)^(clash-party|mihomo-party)-macos.*[-_.](x64|amd64|intel)[^.]*\.(dmg|pkg)$`)
 var clashPartyMacApple = rx(`(?i)^(clash-party|mihomo-party)-macos.*[-_.](arm64|aarch64)[^.]*\.(dmg|pkg)$`)
 
+// Mclash（自研客户端，moneyfly004/Mclash）资产命名较灵活，规则取宽：
+// 只要平台/架构关键字能命中即可，避免以后改了打包命名前端按钮就失效。
+var mclashWin = rx(
+	`(?i)^.*(windows|win).*(x64|amd64|64)[^.]*\.(exe|zip|msi)$`,
+	`(?i)^.*\.(exe|msi)$`,
+	`(?i)^.*(windows|win)[^.]*\.zip$`,
+)
+var mclashMacIntel = rx(
+	`(?i)^.*(macos|darwin|osx).*[-_.](x64|amd64|intel)[^.]*\.(dmg|pkg|zip)$`,
+	`(?i)^.*[-_.](x64|amd64|intel)[^.]*\.(dmg|pkg)$`,
+)
+var mclashMacApple = rx(
+	`(?i)^.*(macos|darwin|osx).*[-_.](arm64|aarch64|apple|silicon|m[0-9]+)[^.]*\.(dmg|pkg|zip)$`,
+	`(?i)^.*[-_.](arm64|aarch64)[^.]*\.(dmg|pkg)$`,
+)
+var mclashAPK = rx(`(?i)\.apk$`)
+var mclashAPKArm = rx(`(?i)(arm64[-_]?v8a|arm64|aarch64)[^.]*\.apk$`)
+
 // Catalog 软件目录：配置键与 CBoard 现有 client_*_url 保持一致
 var Catalog = []Software{
+	{
+		// 自研客户端 Mclash：与其它客户端完全相同的自动逻辑 ——
+		// 未手工填写下载地址时按 GitHub Release 自动识别版本并给加速镜像直链。
+		Key: "mclash", Name: "Mclash（自研）", Repo: "moneyfly004/Mclash",
+		Targets: []Target{
+			{ConfigKey: "client_mclash_windows_url", OS: "windows", Arch: "x64", Label: "Windows x64", Patterns: mclashWin},
+			{ConfigKey: "client_mclash_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: mclashMacIntel},
+			{ConfigKey: "client_mclash_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: mclashMacApple},
+			{ConfigKey: "client_mclash_android_url", OS: "android", Arch: "universal", Label: "Android APK", Preferred: mclashAPKArm, Patterns: mclashAPK},
+		},
+	},
 	{
 		Key: "v2rayn", Name: "V2rayN", Repo: "2dust/v2rayN",
 		Targets: []Target{

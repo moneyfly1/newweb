@@ -145,14 +145,23 @@ func GitHubResolve(c *gin.Context) {
 	}
 
 	prefixes := loadDownloadProxyPrefixes()
-	release, err := cachedLatestRelease(sw.Repo, prefixes, utils.GetSecretSetting("gh_nodes_token"))
+	token := utils.GetSecretSetting("gh_nodes_token")
+	release, err := cachedLatestRelease(sw.Repo, prefixes, token)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"code": 1, "message": "获取 GitHub 版本失败: " + err.Error()})
+		// /releases/latest 在「只有预发布版本」时会 404，先退回 Releases 列表
+		if listed, lerr := ghrelease.LatestListed(sw.Repo, prefixes, token); lerr == nil && listed != nil {
+			release = listed
+		}
+	}
+	if release == nil {
+		// 仓库还没有任何 Release 资产（例如自研客户端只打了 tag）：
+		// 不能给用户一个报错页，直接把入口指到 Release 页面（同样走加速镜像）。
+		c.Redirect(http.StatusFound, pickMirrorURL(prefixes, "https://github.com/"+sw.Repo+"/releases"))
 		return
 	}
 	asset, aerr := software_sync.FindAssetFor(release, t)
 	if aerr != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 1, "message": aerr.Error()})
+		c.Redirect(http.StatusFound, pickMirrorURL(prefixes, "https://github.com/"+sw.Repo+"/releases"))
 		return
 	}
 

@@ -73,3 +73,30 @@ func TestMclashFallbackWhenNoAssets(t *testing.T) {
 		t.Error("没有资产时应返回错误，由调用方回退到 Releases 页面")
 	}
 }
+
+// 「留空 = 自动」与「手填 = 用手填」两条规则都要成立：
+//
+//	· 支持自动的键必须能识别出来（前端/保存逻辑据此判断）
+//	· 手填的自定义链接不属于自动键的处理范畴，同步任务会跳过（不覆盖用户填的地址）
+func TestAutoConfigKeysCoverMclash(t *testing.T) {
+	keys := AutoConfigKeys()
+	want := []string{
+		"client_mclash_windows_url", "client_mclash_macos_url",
+		"client_mclash_macos_arm_url", "client_mclash_android_url",
+	}
+	set := map[string]bool{}
+	for _, k := range keys {
+		set[k] = true
+	}
+	for _, w := range want {
+		if !set[w] {
+			t.Errorf("%s 应在自动解析键列表里", w)
+		}
+		if !IsAutoConfigKey(w) {
+			t.Errorf("%s 应被识别为可自动解析", w)
+		}
+	}
+	if IsAutoConfigKey("client_shadowrocket_url") {
+		t.Error("未接入自动解析的键不应被当作自动（否则会被强行改写）")
+	}
+}

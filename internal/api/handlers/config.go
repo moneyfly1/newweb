@@ -4,8 +4,10 @@ import (
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
+	"cboard/v2/internal/services/software_sync"
 	"cboard/v2/internal/utils"
 	"github.com/gin-gonic/gin"
+	"strings"
 )
 
 // ── Public config ──
@@ -52,6 +54,13 @@ func GetPublicConfig(c *gin.Context) {
 	result := make(map[string]string)
 	for _, cfg := range configs {
 		result[cfg.Key] = cfg.Value
+	}
+	// 「留空即自动」：支持自动解析的客户端入口若为空，直接按自动下发，
+	// 不必等同步任务跑过一遍（否则后台没填、同步又没跑时，前端按钮点了没反应）。
+	for _, key := range software_sync.AutoConfigKeys() {
+		if strings.TrimSpace(result[key]) == "" {
+			result[key] = "pan://" + key
+		}
 	}
 	utils.SetPublicCache("public_config", result)
 	utils.Success(c, result)

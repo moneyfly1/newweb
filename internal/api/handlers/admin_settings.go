@@ -12,6 +12,7 @@ import (
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
+	"cboard/v2/internal/services/software_sync"
 	"cboard/v2/internal/utils"
 
 	"github.com/gin-gonic/gin"
@@ -223,6 +224,11 @@ func AdminUpdateSettings(c *gin.Context) {
 			return
 		}
 		strVal := fmt.Sprintf("%v", v)
+		// 客户端下载入口：支持自动解析的键被清空时写回 pan://<键>，
+		// 语义就是「留空 = 自动」（与前端展示及同步任务一致），避免留空后下载按钮失效。
+		if strings.TrimSpace(strVal) == "" && software_sync.IsAutoConfigKey(k) {
+			strVal = "pan://" + k
+		}
 		// 值长度限制（防止注入超长文本）；site_icon 为 base64 图片数据，单独放宽
 		limit := 4096
 		if k == "site_icon" {

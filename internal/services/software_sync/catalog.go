@@ -66,21 +66,30 @@ var dmgApple = rx(
 var clashPartyMacIntel = rx(`(?i)^(clash-party|mihomo-party)-macos.*[-_.](x64|amd64|intel)[^.]*\.(dmg|pkg)$`)
 var clashPartyMacApple = rx(`(?i)^(clash-party|mihomo-party)-macos.*[-_.](arm64|aarch64)[^.]*\.(dmg|pkg)$`)
 
-// Mclash（自研客户端，moneyfly004/Mclash）资产命名较灵活，规则取宽：
-// 只要平台/架构关键字能命中即可，避免以后改了打包命名前端按钮就失效。
-var mclashWin = rx(
-	`(?i)^.*(windows|win).*(x64|amd64|64)[^.]*\.(exe|zip|msi)$`,
-	`(?i)^.*\.(exe|msi)$`,
-	`(?i)^.*(windows|win)[^.]*\.zip$`,
-)
+// Mclash（自研客户端，moneyfly004/Mclash）资产命名（实测 0.0.1）：
+//
+//	Mclash-setup-0.0.1.exe / Mclash-windows-x64-portable-0.0.1.zip
+//	Mclash-macos-x64-0.0.1.dmg / Mclash-macos-arm64-0.0.1.dmg / Mclash-macos-universal-0.0.1.dmg
+//	Mclash-android-arm64-v8a-0.0.1.apk / armeabi-v7a / x86_64 / .aab
+//	SHA256SUMS-*.txt（绝不能命中）
+//
+// 注意：不能用 `[^.]*` 去接扩展名 —— 资产名里带版本号（0.0.1）本身就有点，
+// 那样 macOS 两个目标会全部匹配失败（真实踩过）。改为显式允许中间出现点号。
+var mclashWinSetup = rx(`(?i)^.*(windows|win).*setup.*\.exe$`, `(?i)^.*setup.*\.exe$`, `(?i)^.*\.exe$`)
+var mclashWinPortable = rx(`(?i)^.*(windows|win).*(x64|amd64|64).*\.zip$`, `(?i)^.*(windows|win).*\.zip$`, `(?i)^.*\.zip$`)
 var mclashMacIntel = rx(
-	`(?i)^.*(macos|darwin|osx).*[-_.](x64|amd64|intel)[^.]*\.(dmg|pkg|zip)$`,
-	`(?i)^.*[-_.](x64|amd64|intel)[^.]*\.(dmg|pkg)$`,
+	`(?i)^.*(macos|darwin|osx)[-_.].*(x64|amd64|intel)[-_.].*\.(dmg|pkg)$`,
+	`(?i)^.*(macos|darwin|osx)[-_.].*(x64|amd64|intel)\.(dmg|pkg)$`,
+	`(?i)^.*[-_.](x64|amd64|intel)[-_.].*\.(dmg|pkg)$`,
 )
 var mclashMacApple = rx(
-	`(?i)^.*(macos|darwin|osx).*[-_.](arm64|aarch64|apple|silicon|m[0-9]+)[^.]*\.(dmg|pkg|zip)$`,
-	`(?i)^.*[-_.](arm64|aarch64)[^.]*\.(dmg|pkg)$`,
+	`(?i)^.*(macos|darwin|osx)[-_.].*(arm64|aarch64|apple|silicon|m[0-9]+)[-_.].*\.(dmg|pkg)$`,
+	`(?i)^.*(macos|darwin|osx)[-_.].*(arm64|aarch64|apple|silicon)\.(dmg|pkg)$`,
+	`(?i)^.*[-_.](arm64|aarch64)[-_.].*\.(dmg|pkg)$`,
 )
+
+// 通用包兜底（macos-universal）：只在精确架构都没匹配到时使用，避免优先下 91MB 的通用包
+var mclashMacUniversal = rx(`(?i)^.*(macos|darwin|osx).*universal.*\.(dmg|pkg)$`)
 var mclashAPK = rx(`(?i)\.apk$`)
 var mclashAPKArm = rx(`(?i)(arm64[-_]?v8a|arm64|aarch64)[^.]*\.apk$`)
 
@@ -91,9 +100,9 @@ var Catalog = []Software{
 		// 未手工填写下载地址时按 GitHub Release 自动识别版本并给加速镜像直链。
 		Key: "mclash", Name: "Mclash（自研）", Repo: "moneyfly004/Mclash",
 		Targets: []Target{
-			{ConfigKey: "client_mclash_windows_url", OS: "windows", Arch: "x64", Label: "Windows x64", Patterns: mclashWin},
-			{ConfigKey: "client_mclash_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Patterns: mclashMacIntel},
-			{ConfigKey: "client_mclash_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Patterns: mclashMacApple},
+			{ConfigKey: "client_mclash_windows_url", OS: "windows", Arch: "x64", Label: "Windows x64", Preferred: mclashWinSetup, Patterns: mclashWinPortable},
+			{ConfigKey: "client_mclash_macos_url", OS: "macos", Arch: "intel", Label: "macOS Intel", Preferred: mclashMacIntel, Patterns: mclashMacUniversal},
+			{ConfigKey: "client_mclash_macos_arm_url", OS: "macos", Arch: "apple", Label: "macOS Apple 芯片", Preferred: mclashMacApple, Patterns: mclashMacUniversal},
 			{ConfigKey: "client_mclash_android_url", OS: "android", Arch: "universal", Label: "Android APK", Preferred: mclashAPKArm, Patterns: mclashAPK},
 		},
 	},

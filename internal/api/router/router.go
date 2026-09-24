@@ -103,8 +103,13 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	api.GET("/invites/validate/:code", handlers.ValidateInviteCode)
 
 	// 软件下载解析（公开）：GitHub Release 直链 + 国内加速镜像 302
-	api.GET("/download/resolve", handlers.ResolveDownload)
-	api.GET("/download/gh", handlers.GitHubResolve)
+	// 下载解析：按 IP 限流（60 次/分钟）。
+	// 原来是在 handler 里用一个「全局 50ms 闸门」，任何两个请求挨得近就回 429 ——
+	// 页面上有多个下载按钮、用户连点、或两个用户同时点，都会莫名报「请求过于频繁」。
+	// GitHub API 结果本身有 30 分钟缓存，这里放开到按 IP 的宽松限制即可。
+	downloadRL := middleware.RateLimit(60, time.Minute)
+	api.GET("/download/resolve", downloadRL, handlers.ResolveDownload)
+	api.GET("/download/gh", downloadRL, handlers.GitHubResolve)
 	// 软件版本（公开，前台显示"最新版"）
 	api.GET("/software/versions", handlers.SoftwareVersions)
 

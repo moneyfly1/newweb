@@ -36,22 +36,6 @@ const (
 	mirrorProbeTTL    = 5 * time.Minute
 )
 
-// 公共解析接口全局限流：防止滥用（每次请求会消耗 GitHub API 额度）
-var resolveGate = struct {
-	mu   sync.Mutex
-	last time.Time
-}{}
-
-func resolveThrottled() bool {
-	resolveGate.mu.Lock()
-	defer resolveGate.mu.Unlock()
-	if time.Since(resolveGate.last) < 50*time.Millisecond {
-		return false
-	}
-	resolveGate.last = time.Now()
-	return true
-}
-
 // defaultDownloadProxyPrefixes 国内 GitHub 加速镜像（2026-08 实测可用）
 var defaultDownloadProxyPrefixes = []string{
 	"https://ghfast.top/{url}",
@@ -124,10 +108,6 @@ func normalizeProxyPrefixes(items []string) []string {
 
 // GitHubResolve 根据软件配置 key 解析 GitHub 最新 Release 资产并 302 到国内镜像直链
 func GitHubResolve(c *gin.Context) {
-	if !resolveThrottled() {
-		c.JSON(http.StatusTooManyRequests, gin.H{"code": 1, "message": "请求过于频繁，请稍后再试"})
-		return
-	}
 	key := strings.TrimSpace(c.Query("key"))
 	if key == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 1, "message": "缺少 key 参数"})

@@ -214,6 +214,7 @@ func AutoMigrate() error {
 		// 节点
 		&models.Node{},
 		&models.CustomNode{},
+		&models.CustomNodeSource{},
 		&models.UserCustomNode{},
 
 		// 订单与套餐

@@ -216,3 +216,15 @@ export const applyDomainSettings = (data: {
   subscription_mirrors?: string[]
   backup_site_url?: string
 }) => request.post('/admin/settings/domain/apply', data)
+
+// ===== 专线节点「订阅来源」=====
+// 查看/更换/立即更新/删除导入专线节点用的订阅链接；后端调度器按间隔自动重新拉取
+export const listCustomNodeSources = () => request.get('/admin/custom-nodes/sources')
+export const createCustomNodeSource = (data: { url: string; name?: string; interval_hours?: number; enabled?: boolean }) =>
+  request.post('/admin/custom-nodes/sources', data)
+export const updateCustomNodeSource = (id: number, data: { url?: string; name?: string; enabled?: boolean; interval_hours?: number }) =>
+  request.put(`/admin/custom-nodes/sources/${id}`, data)
+export const deleteCustomNodeSource = (id: number, deleteNodes = true) =>
+  request.delete(`/admin/custom-nodes/sources/${id}`, { params: { delete_nodes: deleteNodes } })
+export const syncCustomNodeSource = (id: number) => request.post(`/admin/custom-nodes/sources/${id}/sync`)
+export const syncAllCustomNodeSources = () => request.post('/admin/custom-nodes/sources/sync-all')

@@ -46,6 +46,98 @@
       </div>
     </div>
 
+    <!-- 订阅来源：专线节点是从哪个订阅链接导入的，可换链接/立即更新/删除，后端按间隔自动同步 -->
+    <n-card :bordered="false" class="admin-main-card source-card">
+      <div class="source-header">
+        <div class="source-title">
+          <span>订阅来源</span>
+          <n-tag size="small" :bordered="false">{{ sources.length }} 个</n-tag>
+        </div>
+        <n-space>
+          <n-button size="small" type="primary" @click="openSourceForm()">新增订阅来源</n-button>
+          <n-button size="small" :loading="syncingAll" :disabled="!sources.length" @click="handleSyncAllSources">全部更新</n-button>
+          <n-button size="small" secondary :loading="loadingSources" @click="loadSources">刷新</n-button>
+        </n-space>
+      </div>
+      <n-alert v-if="!sources.length" type="info" :bordered="false" style="margin-top: 10px">
+        还没有订阅来源。点「新增订阅来源」填入你的订阅链接，之后节点会<b>按间隔自动更新</b>，
+        订阅内容一变节点就跟着变；也可以随时换链接或删除整条来源。
+      </n-alert>
+      <!-- 窄屏（手机）放不下 7 列：让表格在卡片内横向滚动，避免整页被撑出横向滚动条 -->
+      <div v-else class="source-table-wrap">
+      <n-table :bordered="false" size="small">
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>订阅链接</th>
+            <th>节点</th>
+            <th>自动同步</th>
+            <th>上次同步</th>
+            <th>结果</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="src in sources" :key="src.id">
+            <td>{{ src.name || '-' }}</td>
+            <td class="source-url" :title="src.url">{{ maskSourceUrl(src.url) }}</td>
+            <td>
+              <n-tag size="tiny" type="success" :bordered="false">{{ src.active_nodes }} 启用</n-tag>
+              <n-tag v-if="src.inactive_nodes" size="tiny" :bordered="false" style="margin-left: 4px">{{ src.inactive_nodes }} 停用</n-tag>
+              <div v-if="src.assigned_users" class="source-sub">已分配 {{ src.assigned_users }} 次</div>
+            </td>
+            <td>
+              <n-switch :value="src.enabled" size="small" @update:value="(v) => handleToggleSource(src, v)" />
+              <div class="source-sub">每 {{ src.interval_hours || 0 }} 小时</div>
+            </td>
+            <td>{{ src.last_sync_at ? formatDateTime(src.last_sync_at) : '从未' }}</td>
+            <td>
+              <n-tag size="tiny" :type="src.last_status === 'ok' ? 'success' : (src.last_status ? 'error' : 'default')" :bordered="false">
+                {{ src.last_status === 'ok' ? '成功' : (src.last_status === 'error' ? '失败' : '未同步') }}
+              </n-tag>
+              <div class="source-sub">{{ src.last_message || '-' }}</div>
+            </td>
+            <td>
+              <n-space :size="4">
+                <n-button size="tiny" type="primary" :loading="syncingId === src.id" @click="handleSyncSource(src)">立即更新</n-button>
+                <n-button size="tiny" secondary @click="openSourceForm(src)">改链接</n-button>
+                <n-button size="tiny" type="error" secondary @click="handleDeleteSource(src)">删除</n-button>
+              </n-space>
+            </td>
+          </tr>
+        </tbody>
+      </n-table>
+      </div>
+    </n-card>
+
+    <!-- 新增/修改订阅来源 -->
+    <common-drawer
+      v-model:show="showSourceDrawer"
+      :title="sourceForm.id ? '修改订阅来源' : '新增订阅来源'"
+      :width="560"
+      show-footer
+      :loading="savingSource"
+      @confirm="handleSourceSubmit"
+      @cancel="showSourceDrawer = false"
+    >
+      <n-form label-placement="top">
+        <n-form-item label="订阅链接">
+          <n-input v-model:value="sourceForm.url" placeholder="https://example.com/sub?token=xxx" />
+        </n-form-item>
+        <n-form-item label="名称（可选，便于识别）">
+          <n-input v-model:value="sourceForm.name" placeholder="例如：某机场专线" />
+        </n-form-item>
+        <n-form-item label="自动同步间隔（小时，0 = 只手动更新）">
+          <n-input-number v-model:value="sourceForm.interval_hours" :min="0" :max="168" style="width: 100%" />
+        </n-form-item>
+        <n-alert type="info" :bordered="false">
+          保存后会立即同步一次：按节点名称更新配置（<b>已分配给用户的节点分配关系不变</b>），
+          新节点自动加入，订阅里已消失的节点会<b>停用</b>（不删除，也不再下发给用户，可在节点列表里手动删掉）。
+          换链接后旧链接导入的节点会先迁移到新链接再同步，新订阅里没有的同样转为停用。
+        </n-alert>
+      </n-form>
+    </common-drawer>
+
     <n-card :bordered="false" class="admin-main-card">
       <div v-if="appStore.isMobile" class="mobile-toolbar">
         <div class="mobile-toolbar-search">
@@ -367,7 +459,7 @@
 <script setup>
 import { ref, reactive, h, onActivated, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
-import { NButton, NTag, NSpace, NIcon, NSwitch, NRadioGroup, NRadioButton, useMessage } from 'naive-ui'
+import { NButton, NTag, NSpace, NIcon, NSwitch, NRadioGroup, NRadioButton, useMessage, useDialog } from 'naive-ui'
 import {
   CreateOutline,
   AddOutline,
@@ -389,14 +481,21 @@ import {
   importCustomNodeLinks,
   importCustomNodes,
   batchDeleteCustomNodes,
-  getCustomNodeLink
+  getCustomNodeLink,
+  listCustomNodeSources,
+  createCustomNodeSource,
+  updateCustomNodeSource,
+  deleteCustomNodeSource,
+  syncCustomNodeSource,
+  syncAllCustomNodeSources
 } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
-import { formatFullDateTime } from '@/utils/date'
+import { formatFullDateTime, formatDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const message = useMessage()
+const dialog = useDialog()
 const appStore = useAppStore()
 
 const { loading, beginLoad, endLoad } = usePageLoading()
@@ -425,6 +524,15 @@ const checkedRowKeys = ref([])
 const linkData = reactive({ link: '', name: '', protocol: '' })
 const sortState = ref({ sort: 'id', order: 'desc' })
 const searchKeyword = ref('')
+
+// ===== 订阅来源（专线节点的导入来源，可换链接/立即更新/删除）=====
+const sources = ref([])
+const loadingSources = ref(false)
+const syncingId = ref(null)
+const syncingAll = ref(false)
+const showSourceDrawer = ref(false)
+const savingSource = ref(false)
+const sourceForm = reactive({ id: null, name: '', url: '', interval_hours: 6 })
 
 const formData = reactive({
   name: '',
@@ -542,6 +650,140 @@ const columns = [
     }
   }
 ]
+
+// ===== 订阅来源管理 =====
+const loadSources = async () => {
+  loadingSources.value = true
+  try {
+    const res = await listCustomNodeSources()
+    sources.value = res.data.list || []
+  } catch (error) {
+    message.error(error.message || '获取订阅来源失败')
+  } finally {
+    loadingSources.value = false
+  }
+}
+
+// 链接过长时中间省略，鼠标悬停看完整链接（title 属性）
+const maskSourceUrl = (url) => {
+  const u = String(url || '')
+  if (u.length <= 52) return u
+  return u.slice(0, 30) + ' ... ' + u.slice(-18)
+}
+
+const openSourceForm = (src = null) => {
+  sourceForm.id = src ? src.id : null
+  sourceForm.name = src ? src.name || '' : ''
+  sourceForm.url = src ? src.url || '' : ''
+  sourceForm.interval_hours = src ? (src.interval_hours ?? 6) : 6
+  showSourceDrawer.value = true
+}
+
+const handleSourceSubmit = async () => {
+  const url = String(sourceForm.url || '').trim()
+  if (!/^https?:\/\//i.test(url)) {
+    message.warning('请填写以 http:// 或 https:// 开头的订阅链接')
+    return
+  }
+  savingSource.value = true
+  try {
+    const payload = {
+      name: String(sourceForm.name || '').trim(),
+      url,
+      interval_hours: Number(sourceForm.interval_hours) || 0
+    }
+    const res = sourceForm.id
+      ? await updateCustomNodeSource(sourceForm.id, payload)
+      : await createCustomNodeSource(payload)
+    // 首次同步失败时后端仍返回 200，但带 sync_error，要如实提示而不是假装成功
+    if (res.data && res.data.sync_error) {
+      message.warning(res.data.message || ('订阅已保存，但同步失败：' + res.data.sync_error), { duration: 6000 })
+    } else {
+      message.success((res.data && res.data.message) || '保存成功')
+    }
+    showSourceDrawer.value = false
+    await Promise.all([loadSources(), fetchData()])
+  } catch (error) {
+    message.error(error.message || '保存订阅来源失败')
+  } finally {
+    savingSource.value = false
+  }
+}
+
+const handleSyncSource = async (src) => {
+  syncingId.value = src.id
+  try {
+    const res = await syncCustomNodeSource(src.id)
+    message.success((res.data && res.data.message) || '同步完成')
+    await Promise.all([loadSources(), fetchData()])
+  } catch (error) {
+    message.error(error.message || '同步失败')
+    await loadSources()
+  } finally {
+    syncingId.value = null
+  }
+}
+
+const handleSyncAllSources = async () => {
+  syncingAll.value = true
+  try {
+    const res = await syncAllCustomNodeSources()
+    const d = (res.data || {})
+    // 后端返回：synced / skipped / inserted / updated / failed / messages
+    let text = `全部更新完成：已更新 ${d.synced || 0} 个来源，新增 ${d.inserted || 0}，更新 ${d.updated || 0}`
+    if (d.skipped) text += `（已跳过 ${d.skipped} 个关闭自动同步的来源）`
+    if (d.failed) {
+      text += `，失败 ${d.failed} 个`
+      const detail = (d.messages || []).join('；')
+      message.warning(detail ? `${text}（${detail}）` : text, { duration: 8000 })
+    } else {
+      message.success(text)
+    }
+    await Promise.all([loadSources(), fetchData()])
+  } catch (error) {
+    message.error(error.message || '全部更新失败')
+  } finally {
+    syncingAll.value = false
+  }
+}
+
+// 开关自动同步（关闭后仍可点「立即更新」手动同步）
+const handleToggleSource = async (src, value) => {
+  try {
+    await updateCustomNodeSource(src.id, { enabled: value })
+    src.enabled = value
+    message.success(value ? '已开启自动同步' : '已关闭自动同步（仍可手动更新）')
+  } catch (error) {
+    message.error(error.message || '修改失败')
+    await loadSources()
+  }
+}
+
+const handleDeleteSource = (src) => {
+  dialog.warning({
+    title: '删除订阅来源',
+    content: () =>
+      h('div', { style: 'line-height:1.9' }, [
+        h('div', `来源：${src.name || src.url}`),
+        h('div', `该来源下现有 ${src.active_nodes || 0} 个启用节点，已被分配 ${src.assigned_users || 0} 次。`),
+        h('div', { style: 'color:#d03050;margin-top:6px' }, '点「一起删除」会同时删掉该来源导入的节点和用户分配；点「保留节点」只删来源，节点留在列表里但不再自动更新。')
+      ]),
+    positiveText: '一起删除',
+    negativeText: '保留节点',
+    onPositiveClick: () => doDeleteSource(src, true),
+    onNegativeClick: () => doDeleteSource(src, false)
+  })
+}
+
+const doDeleteSource = async (src, deleteNodes) => {
+  try {
+    const res = await deleteCustomNodeSource(src.id, deleteNodes)
+    message.success((res.data && res.data.message) || '已删除订阅来源')
+    await Promise.all([loadSources(), fetchData()])
+  } catch (error) {
+    message.error(error.message || '删除失败')
+  }
+}
 
 const fetchData = async () => {
   beginLoad(tableData.value.length > 0)
@@ -851,15 +1093,63 @@ const handleCopyLink = async () => {
 
 onMounted(() => {
   fetchData()
+  loadSources()
 })
 
 // KeepAlive 缓存激活时静默刷新数据（不清 loading 遮罩、不重置分页）
 onActivated(() => {
   fetchData()
+  loadSources()
 })
 </script>
 
 <style scoped>
+/* ===== 订阅来源卡片 ===== */
+.source-card {
+  margin-bottom: 16px;
+}
+
+.source-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.source-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.source-table-wrap {
+  margin-top: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 列太挤会把链接折成一列一个字符，给表格一个最小宽度并允许横向滚动 */
+.source-table-wrap :deep(table) {
+  min-width: 760px;
+}
+
+.source-url {
+  max-width: 320px;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.source-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--n-text-color-3, #999);
+  word-break: break-all;
+}
+
 /* 多选下拉的输入框宽度由内部 mirror 撑开：空输入时只有几像素，
    视觉上像「大框里套了个极小的输入框」，也让人不易察觉这里可以打字搜索。
    必须用 :deep()：scoped 会把 [data-v-x] 加到最后一个选择器上，而 naive-ui 内部元素没有该属性。 */

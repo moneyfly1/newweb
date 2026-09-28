@@ -86,3 +86,40 @@ type UserCustomNode struct {
 func (UserCustomNode) TableName() string {
 	return "user_custom_nodes"
 }
+
+// CustomNodeSource 专线节点的「订阅来源」。
+//
+// 为什么需要：专线节点此前只能一次性导入（手工链接或订阅），订阅内容变了不会跟着更新，
+// 时间一长节点全部失效；而且后台看不到自己当初导入的是哪个订阅链接，
+// 想更新/更换/删除都无从下手。把来源单独建表后：
+//
+//	· 后台能看到订阅链接、节点数、上次同步时间与结果
+//	· 可随时改链接、立即更新、删除整条来源（连同它导入的节点）
+//	· 调度器按间隔自动重新拉取，订阅一变节点就跟着变
+type CustomNodeSource struct {
+	ID   uint   `gorm:"primaryKey" json:"id"`
+	Name string `gorm:"type:varchar(100)" json:"name"`
+	// URL 订阅地址（唯一）
+	URL string `gorm:"type:text;uniqueIndex" json:"url"`
+	// Enabled 是否参与自动同步。
+	// 不用 gorm default 标签：GORM 在 Create 时会把零值字段交给数据库默认值，
+	// 那样「新建时就关掉自动同步」（false）会被写成 true。
+	Enabled bool `gorm:"index" json:"enabled"`
+	// IntervalHours 自动同步间隔（小时），0 表示只用「立即更新」手动同步。
+	// 同样不用 default 标签，否则 0 会被默认值顶成 6，管理员设的「只手动更新」失效。
+	IntervalHours int `json:"interval_hours"`
+	// LastSyncAt 上次同步时间
+	LastSyncAt *time.Time `json:"last_sync_at"`
+	// LastStatus 上次同步结果：ok / error
+	LastStatus string `gorm:"type:varchar(20)" json:"last_status"`
+	// LastMessage 上次同步详情（新增/更新/停用数量或错误原因）
+	LastMessage string `gorm:"type:text" json:"last_message"`
+	// NodeTotal 上次同步时该来源的节点数
+	NodeTotal int       `gorm:"default:0" json:"node_total"`
+	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (CustomNodeSource) TableName() string {
+	return "custom_node_sources"
+}

@@ -1,17 +1,19 @@
 package handlers
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	"cboard/v2/internal/cache"
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
 	"cboard/v2/internal/services"
 	"cboard/v2/internal/utils"
-	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"strconv"
-	"strings"
-	"time"
 )
 
 func AdminListCustomNodes(c *gin.Context) {
@@ -450,4 +452,279 @@ func AdminGetCustomNodeUsers(c *gin.Context) {
 	})
 }
 
-// ==================== Subscription Management ====================
+// ==================== 专线节点「订阅来源」管理 ====================
+//
+// 让后台可以看到专线节点是从哪个订阅链接导入的、随时改链接/立即更新/删除整条来源，
+// 并由调度器按间隔自动重新拉取（订阅内容变化 → 节点跟着变化，不会长期不更新而失效）。
+
+// AdminListCustomNodeSources 列出全部订阅来源（含节点数统计与分配情况）
+func AdminListCustomNodeSources(c *gin.Context) {
+	db := database.GetDB()
+	sources, err := services.ListCustomNodeSources(db)
+	if err != nil {
+		utils.InternalError(c, "读取订阅来源失败: "+err.Error())
+		return
+	}
+
+	type row struct {
+		models.CustomNodeSource
+		ActiveNodes   int64 `json:"active_nodes"`
+		InactiveNodes int64 `json:"inactive_nodes"`
+		AssignedUsers int64 `json:"assigned_users"`
+	}
+	out := make([]row, 0, len(sources))
+	for _, src := range sources {
+		var active, inactive, assigned int64
+		db.Model(&models.CustomNode{}).Where("source_url = ? AND is_active = ?", src.URL, true).Count(&active)
+		db.Model(&models.CustomNode{}).Where("source_url = ? AND is_active = ?", src.URL, false).Count(&inactive)
+		db.Model(&models.UserCustomNode{}).
+			Where("custom_node_id IN (?)", db.Model(&models.CustomNode{}).Select("id").Where("source_url = ?", src.URL)).
+			Count(&assigned)
+		out = append(out, row{CustomNodeSource: src, ActiveNodes: active, InactiveNodes: inactive, AssignedUsers: assigned})
+	}
+	utils.Success(c, gin.H{"list": out, "total": len(out)})
+}
+
+// AdminCreateCustomNodeSource 新增订阅来源并立即同步一次
+func AdminCreateCustomNodeSource(c *gin.Context) {
+	var req struct {
+		URL           string `json:"url" binding:"required"`
+		Name          string `json:"name"`
+		IntervalHours *int   `json:"interval_hours"`
+		Enabled       *bool  `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+	req.URL = strings.TrimSpace(req.URL)
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		utils.BadRequest(c, "订阅链接必须以 http:// 或 https:// 开头")
+		return
+	}
+
+	db := database.GetDB()
+	var exists int64
+	db.Model(&models.CustomNodeSource{}).Where("url = ?", req.URL).Count(&exists)
+	if exists > 0 {
+		utils.BadRequest(c, "该订阅链接已存在")
+		return
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = req.URL
+		if i := strings.Index(name, "://"); i > 0 {
+			name = name[i+3:]
+		}
+		if len(name) > 60 {
+			name = name[:60]
+		}
+	}
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	// 没传间隔 → 默认 6 小时；显式传 0 → 只手动更新（不参与自动同步）
+	interval := 6
+	if req.IntervalHours != nil {
+		interval = *req.IntervalHours
+		if interval < 0 {
+			interval = 0
+		}
+	}
+
+	src := models.CustomNodeSource{Name: name, URL: req.URL, Enabled: enabled, IntervalHours: interval}
+	if err := db.Create(&src).Error; err != nil {
+		utils.InternalError(c, "创建订阅来源失败: "+err.Error())
+		return
+	}
+
+	result, syncErr := services.SyncCustomNodeSource(db, &src)
+	if syncErr != nil {
+		// 来源已创建，但首次同步失败：把失败原因返回给管理员，便于改链接重试
+		utils.Success(c, gin.H{
+			"id": src.ID, "url": src.URL,
+			"sync_error": syncErr.Error(),
+			"message":    "订阅来源已保存，但首次同步失败：" + syncErr.Error(),
+		})
+		return
+	}
+	utils.CreateAuditLog(c, "create_custom_node_source", "custom_node", src.ID,
+		"新增专线订阅来源: 新增 "+strconv.Itoa(result.Inserted)+" 更新 "+strconv.Itoa(result.Updated))
+	utils.Success(c, gin.H{
+		"id": src.ID, "url": src.URL,
+		"inserted": result.Inserted, "updated": result.Updated, "total": result.Total,
+		"message": fmt.Sprintf("同步完成：新增 %d，更新 %d", result.Inserted, result.Updated),
+	})
+}
+
+// AdminUpdateCustomNodeSource 修改订阅来源：换链接 / 改名称 / 开关自动同步 / 改间隔
+func AdminUpdateCustomNodeSource(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	db := database.GetDB()
+	var src models.CustomNodeSource
+	if err := db.First(&src, uint(id)).Error; err != nil {
+		utils.NotFound(c, "订阅来源不存在")
+		return
+	}
+
+	var req struct {
+		URL           *string `json:"url"`
+		Name          *string `json:"name"`
+		Enabled       *bool   `json:"enabled"`
+		IntervalHours *int    `json:"interval_hours"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if req.Name != nil {
+		updates["name"] = strings.TrimSpace(*req.Name)
+	}
+	if req.Enabled != nil {
+		updates["enabled"] = *req.Enabled
+	}
+	if req.IntervalHours != nil {
+		v := *req.IntervalHours
+		if v < 0 {
+			v = 0
+		}
+		updates["interval_hours"] = v
+	}
+	if len(updates) > 0 {
+		if err := db.Model(&models.CustomNodeSource{}).Where("id = ?", src.ID).Updates(updates).Error; err != nil {
+			utils.InternalError(c, "更新失败: "+err.Error())
+			return
+		}
+	}
+
+	// 换了链接：把节点归属搬到新链接并按新链接重新同步
+	if req.URL != nil && strings.TrimSpace(*req.URL) != "" && strings.TrimSpace(*req.URL) != src.URL {
+		newURL := strings.TrimSpace(*req.URL)
+		if !strings.HasPrefix(newURL, "http://") && !strings.HasPrefix(newURL, "https://") {
+			utils.BadRequest(c, "订阅链接必须以 http:// 或 https:// 开头")
+			return
+		}
+		var dup int64
+		db.Model(&models.CustomNodeSource{}).Where("url = ? AND id != ?", newURL, src.ID).Count(&dup)
+		if dup > 0 {
+			utils.BadRequest(c, "该订阅链接已被其它来源使用")
+			return
+		}
+		result, err := services.ChangeCustomNodeSourceURL(db, &src, newURL)
+		if err != nil {
+			utils.Success(c, gin.H{"id": src.ID, "url": newURL, "sync_error": err.Error(),
+				"message": "链接已更新，但同步失败：" + err.Error()})
+			return
+		}
+		utils.CreateAuditLog(c, "update_custom_node_source", "custom_node", src.ID, "更换专线订阅链接")
+		utils.Success(c, gin.H{"id": src.ID, "url": newURL, "inserted": result.Inserted,
+			"updated": result.Updated, "deactivated": result.Deactivated,
+			"message": fmt.Sprintf("链接已更新并同步：新增 %d，更新 %d，停用 %d", result.Inserted, result.Updated, result.Deactivated)})
+		return
+	}
+
+	db.First(&src, uint(id))
+	utils.Success(c, src)
+}
+
+// AdminSyncCustomNodeSource 立即更新一条来源
+func AdminSyncCustomNodeSource(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	db := database.GetDB()
+	var src models.CustomNodeSource
+	if err := db.First(&src, uint(id)).Error; err != nil {
+		utils.NotFound(c, "订阅来源不存在")
+		return
+	}
+	result, err := services.SyncCustomNodeSource(db, &src)
+	if err != nil {
+		utils.BadRequest(c, "同步失败: "+err.Error())
+		return
+	}
+	utils.CreateAuditLog(c, "sync_custom_node_source", "custom_node", src.ID, "手动更新专线订阅来源")
+	utils.Success(c, gin.H{
+		"inserted": result.Inserted, "updated": result.Updated,
+		"deactivated": result.Deactivated, "total": result.Total,
+		"message": fmt.Sprintf("同步完成：新增 %d，更新 %d，停用 %d", result.Inserted, result.Updated, result.Deactivated),
+	})
+}
+
+// AdminSyncAllCustomNodeSources 一键更新全部来源
+func AdminSyncAllCustomNodeSources(c *gin.Context) {
+	db := database.GetDB()
+	sources, err := services.ListCustomNodeSources(db)
+	if err != nil {
+		utils.InternalError(c, "读取订阅来源失败: "+err.Error())
+		return
+	}
+	totalInserted, totalUpdated, failed, skipped := 0, 0, 0, 0
+	messages := []string{}
+	for i := range sources {
+		src := &sources[i]
+		// 关掉自动同步的来源不参与「全部更新」（单条「立即更新」仍然可以手动刷新）
+		if !src.Enabled {
+			skipped++
+			continue
+		}
+		result, err := services.SyncCustomNodeSource(db, src)
+		if err != nil {
+			failed++
+			messages = append(messages, src.Name+": "+err.Error())
+			continue
+		}
+		totalInserted += result.Inserted
+		totalUpdated += result.Updated
+	}
+	utils.CreateAuditLog(c, "sync_all_custom_node_sources", "custom_node", 0, "一键更新全部专线订阅来源")
+	msg := fmt.Sprintf("已更新 %d 个来源：新增 %d，更新 %d，失败 %d", len(sources)-skipped, totalInserted, totalUpdated, failed)
+	if skipped > 0 {
+		msg += fmt.Sprintf("（已跳过 %d 个关闭自动同步的来源）", skipped)
+	}
+	utils.Success(c, gin.H{
+		"sources": len(sources), "synced": len(sources) - skipped, "skipped": skipped,
+		"inserted": totalInserted, "updated": totalUpdated, "failed": failed,
+		"messages": messages, "message": msg,
+	})
+}
+
+// AdminDeleteCustomNodeSource 删除订阅来源（默认连它导入的节点一起删）
+func AdminDeleteCustomNodeSource(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的ID")
+		return
+	}
+	// delete_nodes=false 时只解除来源关系，把节点保留成手工节点
+	deleteNodes := c.DefaultQuery("delete_nodes", "true") != "false"
+
+	db := database.GetDB()
+	var src models.CustomNodeSource
+	if err := db.First(&src, uint(id)).Error; err != nil {
+		utils.NotFound(c, "订阅来源不存在")
+		return
+	}
+	deleted, err := services.DeleteCustomNodeSource(db, &src, deleteNodes)
+	if err != nil {
+		utils.InternalError(c, "删除失败: "+err.Error())
+		return
+	}
+	utils.CreateAuditLog(c, "delete_custom_node_source", "custom_node", src.ID,
+		fmt.Sprintf("删除专线订阅来源（删除节点: %v, 影响 %d 个）", deleteNodes, deleted))
+	msg := fmt.Sprintf("已删除来源，并删除其导入的 %d 个节点", deleted)
+	if !deleteNodes {
+		msg = fmt.Sprintf("已删除来源，%d 个节点已转为手工节点保留", deleted)
+	}
+	utils.Success(c, gin.H{"deleted_nodes": deleted, "message": msg})
+}

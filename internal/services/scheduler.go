@@ -52,6 +52,9 @@ func (s *Scheduler) Start() {
 
 	s.startLoop("EmailQueue", 30*time.Second, processEmailQueueTask)
 	s.startLoop("NodeHealthCheck", 5*time.Minute, nodeHealthCheckTask)
+	// 专线节点订阅来源：按各来源自己的间隔判断是否到点（每 10 分钟检查一次），
+	// 订阅内容一变节点就跟着更新，避免导入的专线节点长期不更新而失效。
+	s.startLoop("CustomNodeSync", 10*time.Minute, customNodeSyncTask)
 	s.startLoop("SoftwareSync", 1*time.Hour, softwareSyncTask)
 	s.startLoop("DeactivateExpired", 30*time.Minute, deactivateExpiredTask)
 	s.startLoop("ExpiryCheck", 1*time.Hour, checkExpiryStatusTask)
@@ -113,6 +116,14 @@ func safeRun(name string, fn func()) {
 // processEmailQueueTask processes pending emails in the queue.
 func processEmailQueueTask() {
 	ProcessEmailQueue()
+}
+
+// customNodeSyncTask 检查并同步到点的专线订阅来源
+func customNodeSyncTask() {
+	synced, failed := SyncDueCustomNodeSources()
+	if synced > 0 || failed > 0 {
+		log.Printf("[CustomNodeSync] 专线订阅同步: 成功 %d 个来源, 失败 %d 个", synced, failed)
+	}
 }
 
 // nodeHealthCheckTask auto-refreshes active node status (like Xboard's node reporting).

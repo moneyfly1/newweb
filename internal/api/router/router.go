@@ -333,6 +333,14 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			adminCustomNodes.POST("/batch-assign", handlers.AdminBatchAssignCustomNodes)
 			adminCustomNodes.POST("/import-links", handlers.AdminImportCustomNodeLinks)
 			adminCustomNodes.POST("/import", handlers.AdminImportCustomNodes)
+			// 专线节点「订阅来源」：查看/更换/更新/删除导入用的订阅链接，
+			// 并由调度器按间隔自动重新拉取（订阅一变节点就跟着变）
+			adminCustomNodes.GET("/sources", handlers.AdminListCustomNodeSources)
+			adminCustomNodes.POST("/sources", handlers.AdminCreateCustomNodeSource)
+			adminCustomNodes.PUT("/sources/:id", handlers.AdminUpdateCustomNodeSource)
+			adminCustomNodes.DELETE("/sources/:id", handlers.AdminDeleteCustomNodeSource)
+			adminCustomNodes.POST("/sources/:id/sync", handlers.AdminSyncCustomNodeSource)
+			adminCustomNodes.POST("/sources/sync-all", handlers.AdminSyncAllCustomNodeSources)
 			adminCustomNodes.POST("/batch-delete", handlers.AdminBatchDeleteCustomNodes)
 			adminCustomNodes.GET("/:id/link", handlers.AdminGetCustomNodeLink)
 			adminCustomNodes.GET("/:id/users", handlers.AdminGetCustomNodeUsers)

@@ -150,6 +150,7 @@
 
 /* ---------- 可选中卡片（配合公共组件 BatchSelectBar + useBatchSelection） ---------- */
 .mobile-card.is-selectable {
+  /* 实际生效值在 mobile-app-ui.css（需要 !important 压过后台旧样式），这里作为兜底 */
   padding-left: 44px;
 }
 

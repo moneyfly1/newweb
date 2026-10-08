@@ -710,6 +710,13 @@ onActivated(() => {
 .card-sub { margin-top: 4px; font-size: 12px; color: var(--text-color-secondary, #999); word-break: break-all; }
 .card-value-strong { font-weight: 500; }
 
+/* 可选中卡片左侧给复选框留位：全局 .mobile-card.is-selectable 的 padding-left
+   会被 .admin-page-shell .mobile-card { padding: 0 !important } 盖掉，
+   不补回来的话复选框会压在卡片标题上（与其他后台页面的写法保持一致）。 */
+.mobile-card.is-selectable {
+  padding-left: 44px !important;
+}
+
 /* 卡片操作区：按钮较多，按最小宽度自动换行成多行，避免挤成一条点不准的窄按钮 */
 .mobile-card .card-actions.card-actions-grid {
   display: grid;

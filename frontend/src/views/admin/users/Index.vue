@@ -1014,6 +1014,13 @@ onActivated(() => {
   }
 }
 
+/* 可选中卡片左侧给复选框留位：全局 .mobile-card.is-selectable 的 padding-left
+   会被 .admin-page-shell .mobile-card { padding: 0 !important } 盖掉，
+   不补回来的话复选框会压在卡片标题上（与其他后台页面的写法保持一致）。 */
+.mobile-card.is-selectable {
+  padding-left: 44px !important;
+}
+
 /* 卡片标题即详情入口，长用户名要能截断 */
 .card-title {
   flex: 1;

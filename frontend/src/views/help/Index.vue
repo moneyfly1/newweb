@@ -1,29 +1,25 @@
 <template>
   <div class="help-page">
-    <n-space vertical :size="24">
-      <h1 class="title">帮助中心</h1>
+    <h1 class="title">帮助中心</h1>
 
-      <!-- 手机端：板块导航条（App 里的分段控件，点一下跳到对应板块，不跟着页面滚走） -->
-      <div
-        v-if="appStore.isMobile"
-        ref="navSlot"
-        class="help-nav-slot"
-        :style="navStuck ? { height: navHeight + 'px' } : undefined"
+    <!-- 手机端：板块导航条（点一下跳到对应板块）。
+         吸顶交给全局 .app-sticky-toolbar（position: sticky，贴在吸顶顶栏下沿）；
+         sticky 只能在「直接父盒」里移动，所以这里必须直接挂在 .help-page 下
+         （页面根容器够高才有滚动行程），别再套 wrapper。 -->
+    <div v-if="appStore.isMobile" class="app-sticky-toolbar help-nav-bar">
+      <button
+        v-for="s in pageSections"
+        :key="s.id"
+        type="button"
+        class="help-nav-chip"
+        :class="{ 'is-active': activeSection === s.id }"
+        @click="jumpTo(s.id)"
       >
-        <div class="app-sticky-toolbar help-nav-bar" :class="{ 'is-stuck': navStuck }">
-          <button
-            v-for="s in pageSections"
-            :key="s.id"
-            type="button"
-            class="help-nav-chip"
-            :class="{ 'is-active': activeSection === s.id }"
-            @click="jumpTo(s.id)"
-          >
-            {{ s.label }}
-          </button>
-        </div>
-      </div>
+        {{ s.label }}
+      </button>
+    </div>
 
+    <n-space vertical :size="24">
       <n-card id="sec-faq" title="常见问题" :bordered="false">
         <n-collapse>
           <n-collapse-item title="如何购买套餐" name="buy">
@@ -215,12 +211,9 @@ const toggleTut = (key: string) => {
   expandedTut.value = expandedTut.value === key ? '' : key
 }
 
-/* ---------------- 手机端板块导航（吸顶） ----------------
-   为什么不用纯 CSS：全局 .app-sticky-toolbar 是 position: sticky，但内容被
-   .n-scrollbar-container（overflow: scroll）包着，而真正滚动的是 window，
-   该容器自身不滚动 —— 实测滚动 600px 后 sticky 元素 top 变成 -588，照样滚走。
-   公共文件不可改，所以这里用等效实现：滚出视口顶部就切 fixed（.is-stuck），
-   未吸顶时留在文档流里（不会挡住顶部内容），滚动时给插槽补上等高占位避免跳动。 */
+/* ---------------- 手机端板块导航 ----------------
+   吸顶由全局 .app-sticky-toolbar 负责（position: sticky，top: var(--mobile-header-h)），
+   页面只管两件事：点一下平滑跳到对应板块 + 滚动时高亮当前板块。 */
 const pageSections = [
   { id: 'sec-faq', label: '常见问题' },
   { id: 'sec-tutorial', label: '使用教程' },
@@ -228,9 +221,6 @@ const pageSections = [
   { id: 'sec-contact', label: '联系我们' },
 ]
 
-const navSlot = ref<HTMLElement | null>(null)
-const navStuck = ref(false)
-const navHeight = ref(56)
 const activeSection = ref(pageSections[0].id)
 
 function jumpTo(id: string) {
@@ -239,23 +229,16 @@ function jumpTo(id: string) {
 }
 
 let scrollBound = false
-let navRaf = 0
-function measureNav() {
-  navRaf = 0
-  const slot = navSlot.value
-  if (!slot || !appStore.isMobile) {
-    navStuck.value = false
-    return
-  }
-  const bar = slot.firstElementChild as HTMLElement | null
-  const h = bar ? Math.round(bar.getBoundingClientRect().height) : 0
-  if (h > 0) navHeight.value = h
-  navStuck.value = slot.getBoundingClientRect().top < 0
-  // 当前板块 = 视口上沿往下 72px 处所在的那个卡片（让导航条有 App 的选中态）
+let spyRaf = 0
+
+function updateActiveSection() {
+  spyRaf = 0
+  if (!appStore.isMobile) return
+  // 当前板块 = 吸顶顶栏 + 导航条（52 + 58 ≈ 110px）下方那一屏里最靠上的卡片
   let current = pageSections[0].id
   for (const s of pageSections) {
     const el = document.getElementById(s.id)
-    if (el && el.getBoundingClientRect().top <= 72) current = s.id
+    if (el && el.getBoundingClientRect().top <= 130) current = s.id
   }
   // 滚到底时高亮最后一个板块（末节通常滚不到顶部，否则选中态会停在上一节）
   if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4) {
@@ -265,25 +248,24 @@ function measureNav() {
 }
 
 function onPageScroll() {
-  if (!navRaf) navRaf = requestAnimationFrame(measureNav)
+  if (!spyRaf) spyRaf = requestAnimationFrame(updateActiveSection)
 }
 
+// keep-alive 缓存的页面在重新激活时重新绑定滚动监听
 function bindScroll() {
   if (scrollBound) return
   scrollBound = true
   window.addEventListener('scroll', onPageScroll, { passive: true })
-  window.addEventListener('resize', onPageScroll, { passive: true })
-  measureNav()
+  updateActiveSection()
 }
 
 function unbindScroll() {
   if (!scrollBound) return
   scrollBound = false
   window.removeEventListener('scroll', onPageScroll)
-  window.removeEventListener('resize', onPageScroll)
-  if (navRaf) {
-    cancelAnimationFrame(navRaf)
-    navRaf = 0
+  if (spyRaf) {
+    cancelAnimationFrame(spyRaf)
+    spyRaf = 0
   }
 }
 
@@ -562,7 +544,6 @@ onMounted(async () => {
   finally { loadingConfig.value = false }
 })
 
-// 手机端吸顶导航需要监听 window 滚动；keep-alive 缓存的页面在重新激活时重新绑定
 onMounted(bindScroll)
 onActivated(bindScroll)
 onDeactivated(unbindScroll)
@@ -592,11 +573,9 @@ onUnmounted(unbindScroll)
   background-clip: text;
 }
 
-/* ---------------- 手机端板块导航条 ---------------- */
-.help-nav-slot {
-  display: block;
-}
-
+/* ---------------- 手机端板块导航条 ----------------
+   外观与吸顶（position: sticky + top: var(--mobile-header-h) + 毛玻璃 + 发丝线）
+   全部来自全局 .app-sticky-toolbar，这里只排一行可横滑的 chip。 */
 .help-nav-bar {
   display: flex;
   align-items: center;
@@ -604,28 +583,9 @@ onUnmounted(unbindScroll)
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  /* 全局 .app-sticky-toolbar 的 -12px 负边距是给「页面根容器自带 12px 内边距」的
-     页面用的；本页根容器手机端无左右内边距，负边距会把导航条撑出屏幕，这里归零。
-     边框左右留 1px 透明边，保证吸顶前后高度一致（不跳动）。 */
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid transparent;
 }
 .help-nav-bar::-webkit-scrollbar {
   display: none;
-}
-
-/* 吸顶态：sticky 在本布局被 .n-scrollbar-container（overflow: scroll 且不滚动）吃掉，
-   所以滚出视口顶部后改用 fixed 顶到屏幕最上方（未吸顶时仍在文档流里，不遮挡内容）。 */
-.help-nav-bar.is-stuck {
-  position: fixed;
-  top: 0;
-  left: 10px;
-  right: 10px;
-  z-index: 30;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 70%, transparent);
-  border-radius: 0 0 16px 16px;
 }
 
 .help-nav-chip {
@@ -887,7 +847,12 @@ onUnmounted(unbindScroll)
      （全局 user-mobile.css 用 !important 把 .help-page 的 padding 全清零了，
      这里用标题外边距补回顶部呼吸感，不动公共文件。） */
   .help-page { padding: 12px 0 0; }
-  .title { font-size: 22px; margin-top: 8px; }
+  .title { font-size: 22px; margin: 0 0 10px; }
+
+  /* 从导航条跳过去时，卡片标题不被顶栏（52px）+ 吸顶导航条挡住 */
+  .help-page :deep(.n-card) {
+    scroll-margin-top: calc(var(--mobile-header-h, 52px) + 66px);
+  }
 
   /* 手机端：卡片内容贴齐卡片（去掉 .client-grid 的纵向大间距） */
   .client-grid { padding: 4px 0 0; }

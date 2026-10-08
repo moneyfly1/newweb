@@ -205,18 +205,10 @@ onMounted(() => {
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
 
 @media (max-width: 767px) {
-  /* [class$="-page"]/[class$="-container"]（admin-mobile.css）会给根容器塞 12px !important，
-     这里按契约清零左右，纵向留一点节奏 */
+  /* 手机端左右留白由全局统一（10px），根容器只保留纵向节奏 */
   .history-page { padding: 8px 0 12px !important; }
-  /* [class$="-container"] 也命中 naive 的 .n-spin-container，会把卡片挤窄 */
-  .history-page :deep(.n-spin-container) { padding: 0 !important; }
-  /* 旧层 user-mobile.css 用 !important 把卡片压回 8px 圆角，这里拉回契约的 App 风格 */
-  .history-page :deep(.mobile-card),
-  .history-page :deep(.n-card) {
-    border-radius: 16px !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
-  }
-  .stat-card { padding: 12px 14px; border-radius: 16px !important; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important; }
+  /* 统计卡：手机端三列并排，字小一号避免换行 */
+  .stat-card { padding: 12px 14px; }
   .stat-value { font-size: 22px; }
   .stat-value-sm { font-size: 14px; }
   /* 分页按钮默认 28×28，手指点不准：手机端撑到 40px（父级已 flex-wrap，不会横向撑破） */

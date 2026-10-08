@@ -880,8 +880,9 @@ onUnmounted(() => {
 }
 .shadowrocket-qr-row { align-items: stretch; }
 .shadowrocket-qr-card {
-  width: 100%; padding: 12px; border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary-color-soft) 0%, var(--primary-color-hover) 100%);
+  width: 100%; padding: 12px; border-radius: 16px;
+  /* 契约 §1：卡片纯色底（原来这里是 135deg 渐变） */
+  background: var(--primary-color-soft);
   border: 1px solid var(--primary-color-hover);
 }
 .shadowrocket-qr-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -907,8 +908,8 @@ onUnmounted(() => {
 .client-card { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid transparent; border-radius: 10px; background: var(--primary-color-soft); color: inherit; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
 .client-card:hover { background: var(--primary-color-soft); border-color: #dfe4ee; }
 .client-card:focus-visible { outline: 2px solid rgba(102,126,234,0.45); outline-offset: 2px; }
-/* 自研客户端（Mclash）优先推荐：高亮边框 + 推荐标签 */
-.client-card-self { border-color: var(--primary-color); background: linear-gradient(135deg, rgba(102,126,234,0.14), rgba(102,126,234,0.04)); }
+/* 自研客户端（Mclash）优先推荐：高亮边框 + 推荐标签（纯色底，契约 §1 不要渐变） */
+.client-card-self { border-color: var(--primary-color); background: var(--primary-color-soft); }
 .client-card-self:hover { border-color: var(--primary-color); }
 .client-badge-self { font-size: 12px; font-weight: 600; padding: 0 5px; border-radius: 4px; color: #fff; background: var(--primary-color); white-space: nowrap; flex-shrink: 0; }
 .client-recommend-tip { margin: 0 0 8px; font-size: 12px; color: var(--text-color-secondary); }
@@ -945,9 +946,8 @@ onUnmounted(() => {
 @media (max-width: 767px) {
   /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白），
      原来这里写 padding: 12px 会和布局内边距叠加成白边。上下留白由全局提供。
-     卡片圆角：共享样式 user-mobile.css 用 var(--user-mobile-radius)（当前 8px）定义
-     用户端卡片圆角，页面内覆盖该 token 即可拿到契约要求的 16px，无需改公共文件。 */
-  .dashboard { padding: 0; --user-mobile-radius: 16px; }
+     卡片圆角（16px）由全局 token/规则统一提供，页面不再自己写。 */
+  .dashboard { padding: 0; }
   .welcome-card { padding: 18px 16px; margin-bottom: 12px; border-radius: 16px; }
   .welcome-content { display: grid; gap: 14px; }
   .welcome-left { min-width: 0; }
@@ -970,7 +970,7 @@ onUnmounted(() => {
     flex: 0 0 78%;
     min-width: 0;
     scroll-snap-align: start;
-    border-radius: 14px;
+    border-radius: 16px;
   }
   .welcome-stat .n-button {
     white-space: nowrap;
@@ -978,6 +978,8 @@ onUnmounted(() => {
   .main-grid { grid-template-columns: 1fr; }
   .card-header { align-items: center; gap: 8px; padding-bottom: 10px; }
   .client-grid { grid-template-columns: repeat(2, 1fr); }
+  /* 客户端下载磁贴：契约 §1 卡片 16px 圆角 + 触控目标 ≥40px（内容区 44px 高见 .client-card） */
+  .client-card { border-radius: 16px; }
   .quick-actions-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .quick-action { padding: 12px 4px; border-radius: 12px; }
   .quick-action span { font-size: 13px; }

@@ -78,15 +78,7 @@ onMounted(loadCoupons)
 .coupon-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
 
 @media (max-width: 767px) {
-  /* admin-mobile.css 的 [class$="-container"] 命中 naive 的 .n-spin-container：
-     它会给卡片再套 12px 内边距把卡片挤窄，这里清零（内容尽量宽） */
-  .my-coupons-page :deep(.n-spin-container) { padding: 0 !important; }
-  /* 旧层 user-mobile.css 用 !important 把卡片压回 8px 圆角，这里拉回契约的 App 风格 */
-  .my-coupons-page :deep(.mobile-card) {
-    border-radius: 16px !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
-  }
-  /* 卡片自身 padding 为 0（旧层设定），给标题行补内边距，避免金额贴边 */
+  /* 卡片自身 padding 为 0（全局列表行自带内边距），只给标题行补内边距避免金额贴边 */
   .my-coupons-page :deep(.mobile-card .card-header) { padding: 12px 12px 0; margin-bottom: 8px; }
 }
 </style>

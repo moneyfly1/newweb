@@ -543,6 +543,13 @@ onActivated(() => {
   font-weight: 600;
 }
 
+/* 可选中卡片左侧给复选框留位：全局 .mobile-card.is-selectable 的 padding-left
+   会被 .admin-page-shell .mobile-card { padding: 0 !important } 盖掉，
+   不补回来的话复选框会压在卡片标题上（与其他后台页面的写法保持一致）。 */
+.mobile-card.is-selectable {
+  padding-left: 44px !important;
+}
+
 /* 卡片外观、内边距、发丝分隔线、按压反馈、左侧多选框统一由全局 mobile-cards.css 提供，
    页面只保留内容布局（标题截断、价格配色）。 */
 .card-title {

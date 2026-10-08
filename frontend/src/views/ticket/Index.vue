@@ -381,24 +381,13 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  /* 手机端横向留白由全局统一（10px），页面根容器不能再叠加（admin-mobile.css 的
-     [class$="-container"] 会塞 12px !important，这里按契约清零） */
+  /* 手机端左右留白由全局统一给（10px），页面根容器不再自带左右 padding */
   .ticket-container { padding: 8px 0 12px !important; }
   .header-card { margin-bottom: 10px; }
   .header h2 { font-size: 20px; }
-  /* [class$="-container"] 也命中 naive 的 .n-spin-container：它会给卡片再套 12px 内边距，
-     卡片被挤窄（用户反馈「内容居中、边上很多空白」），这里清零 */
-  .ticket-container :deep(.n-spin-container) { padding: 0 !important; }
-  /* 旧层 user-mobile.css 用 !important 把卡片压回 8px 圆角，这里拉回契约的 App 风格 */
-  .ticket-container :deep(.mobile-card),
-  .ticket-container :deep(.n-card) {
-    border-radius: 16px !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
-  }
-  .ticket-container :deep(.mobile-card .card-actions .n-button) { border-radius: 10px !important; }
   /* 分页按钮默认 28×28，手指点不准：手机端撑到 40px（父级已 flex-wrap，不会横向撑破） */
   .ticket-container :deep(.n-pagination .n-pagination-item) { min-width: 40px; height: 40px; }
-  /* 卡片自身 padding 为 0（旧层设定），只给标题行补内边距，避免标题贴边 */
+  /* 卡片自身 padding 为 0（全局列表行自带 9px 12px 内边距），只给标题行补内边距避免标题贴边 */
   .ticket-container :deep(.mobile-card .card-header-row),
   .ticket-container :deep(.mobile-card .card-header) { padding: 12px 12px 0; }
 }

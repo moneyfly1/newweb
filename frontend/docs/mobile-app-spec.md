@@ -24,7 +24,7 @@
 | 触控目标 | 按钮 ≥ 40px 高；图标按钮 ≥ 40×40；复选框/开关/关闭按钮已由全局兜底 |
 | 字体 | 正文 ≥ 13px，说明文字 ≥ 12px；标题 15–17px |
 | 列表 | 优先用 `.mobile-card-list` + `.mobile-card`（已重写为 App 风格）；也可用 `.app-list` + `.app-list-item`（自带按压反馈、右侧箭头 `.app-list-item__chevron`） |
-| 工具栏 | 手机端筛选/搜索用 `.app-sticky-toolbar` 吸顶，不要跟着页面滚走 |
+| 工具栏 | 手机端筛选/搜索用 `.app-sticky-toolbar` 吸顶。**注意**：`position:sticky` 只能在直接父元素的盒子里移动，所以这个元素必须是「卡片内容区 / 页面根容器」的**直接子元素**；不要包在高度≈自身的短 wrapper（空 div、短 n-space）里，否则没有滚动行程、等于没吸顶（全局样式已对「短空 div 包裹」的情况做 `display:contents` 兜底，但别依赖它） |
 | 底部 | 内容区底部已由布局预留 tabbar + 批量栏空间，不要自己再加 `padding-bottom` |
 
 **判定「够不够宽」**：`手机视口宽 - 内容实际宽度` 应 ≤ 约 24px（含卡片自身内边距）。

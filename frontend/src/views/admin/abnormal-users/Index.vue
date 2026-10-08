@@ -34,6 +34,21 @@
 
       <n-space vertical :size="16">
 
+        <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方） -->
+        <BatchSelectBar
+          :total="selection.total.value"
+          :selected-count="selection.count.value"
+          :all-selected="selection.allSelected.value"
+          :indeterminate="selection.indeterminate.value"
+          :disabled="loading"
+          label="个异常用户"
+          @toggle-all="selection.toggleAll"
+          @clear="selection.clear"
+        >
+          <n-button size="small" type="success" :disabled="!selection.count.value" @click="handleBatchEnable">批量解封</n-button>
+          <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDisable">批量封禁</n-button>
+        </BatchSelectBar>
+
         <!-- Data table -->
         <template v-if="!appStore.isMobile">
           <n-data-table
@@ -44,12 +59,23 @@
             :pagination="false"
             :bordered="false"
             :single-line="false"
+            :row-key="(row) => row.user_id"
+            v-model:checked-row-keys="checkedRowKeys"
           />
         </template>
 
         <template v-else>
           <div class="mobile-card-list">
-            <div v-for="row in users" :key="row.user_id" class="mobile-card">
+            <div
+              v-for="row in users"
+              :key="row.user_id"
+              class="mobile-card is-selectable"
+              :class="{ 'is-selected': selection.isSelected(row) }"
+              @click="selection.toggle(row)"
+            >
+              <div class="card-check" @click.stop>
+                <n-checkbox :checked="selection.isSelected(row)" @update:checked="() => selection.toggle(row)" />
+              </div>
               <div class="card-header">
                 <span class="card-title">{{ row.username }}</span>
                 <n-tag :type="getTypeTag(row.abnormal_type).type" size="small">
@@ -70,7 +96,7 @@
                   <span>{{ formatFullDateTime(row.last_active) }}</span>
                 </div>
               </div>
-              <div class="card-actions">
+              <div class="card-actions" @click.stop>
                 <n-button size="small" type="primary" @click="handleViewUser(row.user_id)">
                   <template #icon><n-icon><PersonOutline /></n-icon></template>
                   查看用户
@@ -101,18 +127,23 @@
 </template>
 
 <script setup>
-import { ref, h, onActivated, onMounted } from 'vue'
-import { NButton, NTag, NSpace, NIcon, useMessage } from 'naive-ui'
+import { ref, h, computed, onActivated, onMounted } from 'vue'
+import { NButton, NTag, NSpace, NIcon, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, RefreshOutline, PersonOutline } from '@vicons/ionicons5'
 import { useRouter } from 'vue-router'
-import { getAbnormalUsers } from '@/api/admin'
+import { getAbnormalUsers, batchUserAction } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import { useAppStore } from '@/stores/app'
+import { useUserStore } from '@/stores/user'
 import { formatFullDateTime } from '@/utils/date'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 
 const message = useMessage()
+const dialog = useDialog()
 const router = useRouter()
 const appStore = useAppStore()
+const userStore = useUserStore()
 
 // State
 const typeFilter = ref(null)
@@ -125,6 +156,15 @@ const abnormalFetcher = async (params) => {
 }
 const { loading, tableData: users, pagination, loadData, reload } = useTable(abnormalFetcher, {
   getParams: () => ({ type: typeFilter.value || undefined }),
+})
+
+// 全选 / 多选：全站统一实现（桌面表格与手机卡片共用同一份选择状态）。
+// 异常用户行没有 id 字段，唯一标识是 user_id。
+const selection = useBatchSelection(() => users.value, { getId: (row) => row.user_id })
+// Naive 表格要的是数组，这里做一层桥接，保证桌面表格与批量栏状态一致
+const checkedRowKeys = computed({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
 })
 
 const typeOptions = [
@@ -146,6 +186,7 @@ const getTypeTag = (type) => {
 
 // Table columns
 const columns = [
+  { type: 'selection' },
   { title: 'User ID', key: 'user_id', width: 80, resizable: true, sorter: 'default' },
   { title: '用户名', key: 'username', ellipsis: { tooltip: true }, width: 150, resizable: true },
   { title: '邮箱', key: 'email', ellipsis: { tooltip: true }, width: 220, resizable: true },
@@ -201,6 +242,65 @@ const handleViewUser = (userId) => {
   router.push({ name: 'AdminUsers', query: { userId } })
 }
 
+/**
+ * 批量解封 / 批量封禁：走后端批量接口 batchUserAction（action = enable / disable），
+ * 一次请求完成，不再逐条 loop。确认框写明「将影响 N 项」，结束后汇总实际影响条数。
+ */
+const runBatchUserAction = ({ title, action, rows, content, type = 'warning', positiveText = '确定' }) => {
+  if (!rows.length) return
+  dialog[type]({
+    title,
+    content,
+    positiveText,
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        const res = await batchUserAction({ user_ids: rows.map(r => r.user_id), action })
+        const affected = Number(res?.data?.affected ?? rows.length)
+        const skipped = rows.length - affected
+        if (skipped > 0) message.warning(`成功 ${affected} 项 / 失败 ${skipped} 项（管理员账号不可${action === 'disable' ? '封禁' : '解封'}）`)
+        else message.success(`成功 ${affected} 项`)
+        selection.clear()
+        await loadData()
+      } catch (e) {
+        message.error(e?.response?.data?.message || e.message || `${title}失败`)
+      }
+    }
+  })
+}
+
+const handleBatchEnable = () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  runBatchUserAction({
+    title: '批量解封',
+    action: 'enable',
+    rows,
+    type: 'warning',
+    content: `将影响 ${rows.length} 项：选中用户恢复为正常状态，其未过期订阅同步恢复。`,
+  })
+}
+
+const handleBatchDisable = () => {
+  const all = selection.selectedRows.value
+  if (!all.length) return
+  // 不允许封禁当前登录账号（后端也会跳过管理员，这里先挡一层并明确告知）
+  const rows = all.filter(r => r.user_id !== userStore.userInfo?.id)
+  if (!rows.length) {
+    message.warning('选中的都是当前登录账号，无法封禁')
+    return
+  }
+  if (rows.length < all.length) message.info(`已排除当前登录账号 ${all.length - rows.length} 项`)
+  runBatchUserAction({
+    title: '批量封禁',
+    action: 'disable',
+    rows,
+    type: 'error',
+    positiveText: '封禁',
+    content: `将影响 ${rows.length} 项：选中用户立即无法登录，其订阅同步停用。`,
+  })
+}
+
 onMounted(() => {
   loadData()
 })
@@ -227,6 +327,9 @@ onActivated(() => {
 
 /* 说明：卡片样式（.mobile-card / .card-header / .card-row…）一律交给全局
    mobile-cards.css + admin-mobile.css，页面不再自己覆盖，避免手机端又变回「网页表格」。 */
+
+/* 可选中卡片：左侧给复选框留位（全局样式已做，这里兜底，防止被其他层叠规则盖掉） */
+.mobile-card.is-selectable { padding-left: 44px !important; }
 @media (max-width: 767px) {
   /* 左右留白由全局统一给（mobile-app-ui.css + admin-mobile.css），页面不再自带内边距 */
   .list-pagination { justify-content: center; }

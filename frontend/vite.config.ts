@@ -43,6 +43,14 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:9000',
         changeOrigin: true,
+        // 用手机/局域网 IP 打开开发站时，浏览器带的 Origin 是 http://192.168.x.x:端口，
+        // 后端 CORS 白名单里只有 localhost，会直接 403（登录都过不去）。
+        // 开发代理统一把 Origin 改写成白名单里的 localhost，方便真机预览。
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('origin', 'http://localhost:3000')
+          })
+        },
       },
     },
   },

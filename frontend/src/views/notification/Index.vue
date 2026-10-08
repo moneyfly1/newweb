@@ -21,25 +21,51 @@
 
     <n-spin :show="loading">
       <div v-if="notifications.length === 0" class="mobile-empty">暂无通知</div>
-      <div v-else class="mobile-card-list">
-        <div
-          v-for="n in notifications"
-          :key="n.id"
-          class="mobile-card"
-          :class="{ 'is-unread': !n.is_read }"
-          @click="handleClick(n)"
+      <template v-else>
+        <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机端自动变成固定在底部的操作栏） -->
+        <BatchSelectBar
+          :total="selection.total.value"
+          :selected-count="selection.count.value"
+          :all-selected="selection.allSelected.value"
+          :indeterminate="selection.indeterminate.value"
+          label="条通知"
+          @toggle-all="selection.toggleAll"
+          @clear="selection.clear"
         >
-          <div class="card-header">
-            <span class="card-title">{{ n.title }}</span>
-            <n-tag v-if="!n.is_read" size="small" type="error" :bordered="false">未读</n-tag>
-          </div>
-          <p class="notif-content">{{ n.content }}</p>
-          <div class="notif-foot">
-            <span class="notif-time">{{ formatRelativeTime(n.created_at, '') }}</span>
-            <n-button size="tiny" quaternary type="error" @click.stop="handleDelete(n.id)">删除</n-button>
+          <n-button size="small" :disabled="!unreadSelectedCount" @click="handleBatchMarkRead">
+            批量已读
+          </n-button>
+          <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDelete">
+            批量删除
+          </n-button>
+        </BatchSelectBar>
+
+        <div class="mobile-card-list">
+          <div
+            v-for="n in notifications"
+            :key="n.id"
+            class="mobile-card is-selectable"
+            :class="{ 'is-unread': !n.is_read, 'is-selected': selection.isSelected(n) }"
+            @click="selection.toggle(n)"
+          >
+            <div class="card-check" @click.stop>
+              <n-checkbox :checked="selection.isSelected(n)" @update:checked="() => selection.toggle(n)" />
+            </div>
+            <div class="card-header">
+              <span class="card-title">{{ n.title }}</span>
+              <n-tag v-if="!n.is_read" size="small" type="error" :bordered="false">未读</n-tag>
+            </div>
+            <p class="notif-content">{{ n.content }}</p>
+            <div class="notif-foot" @click.stop>
+              <span class="notif-time">{{ formatRelativeTime(n.created_at, '') }}</span>
+              <div class="notif-foot__actions">
+                <n-button v-if="!n.is_read" size="tiny" quaternary type="primary" @click="handleClick(n)">标记已读</n-button>
+                <n-button size="tiny" quaternary type="error" @click="handleDelete(n.id)">删除</n-button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </template>
 
       <!-- 分页 -->
       <n-pagination
@@ -58,20 +84,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useMessage } from 'naive-ui'
+import { ref, onMounted, computed } from 'vue'
+import { useMessage, useDialog } from 'naive-ui'
 import { listNotifications, getUnreadCount, markNotificationRead, markAllRead, deleteNotification } from '@/api/common'
 import { useTable } from '@/composables/useTable'
 import { usePullRefresh } from '@/composables/usePullRefresh'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import { formatRelativeTime } from '@/utils/format'
 
 const message = useMessage()
+const dialog = useDialog()
 const filter = ref('all')
 const unreadCount = ref(0)
 
 const { loading, tableData: notifications, pagination, loadData, reload } = useTable(listNotifications, {
   getParams: () => ({ is_read: filter.value === 'unread' ? 'false' : undefined }),
 })
+
+// 全选 / 多选：唯一的选择状态（公共组件 useBatchSelection + BatchSelectBar）
+const selection = useBatchSelection<any>(() => notifications.value)
+// 已选里还能标记已读的数量（都是已读时按钮置灰，避免点了没反应）
+const unreadSelectedCount = computed(() => selection.selectedRows.value.filter(n => !n.is_read).length)
 const { distance: pullDistance, refreshing: pullRefreshing, onTouchStart: pullTouchStart, onTouchMove: pullTouchMove, onTouchEnd: pullTouchEnd } =
   usePullRefresh(async () => { await loadData(); await fetchUnread() })
 
@@ -118,6 +152,58 @@ const handleDelete = async (id: number) => {
   } catch (e: any) {
     message.error(e.message || '删除失败')
   }
+}
+
+// ===== 批量操作 =====
+// 后端没有批量接口：按契约 §2.1 第 2 条逐条调单条接口，
+// 用 Promise.allSettled 保证一条失败不影响其余，完成后汇总「成功 X / 失败 Y」。
+const handleBatchMarkRead = () => {
+  const rows = selection.selectedRows.value.filter(n => !n.is_read)
+  if (!rows.length) {
+    message.warning('所选通知都已是已读')
+    return
+  }
+  dialog.warning({
+    title: '批量标记已读',
+    content: `将影响 ${rows.length} 条未读通知。`,
+    positiveText: '标记已读',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const results = await Promise.allSettled(rows.map(n => markNotificationRead(n.id)))
+      const okIds = rows.filter((_, i) => results[i].status === 'fulfilled').map(n => n.id)
+      const fail = results.length - okIds.length
+      if (okIds.length > 0) {
+        notifications.value.forEach(n => { if (okIds.includes(n.id)) n.is_read = true })
+        message.success(`批量标记完成：成功 ${okIds.length} 条`)
+      }
+      if (fail > 0) message.error(`批量标记部分失败：失败 ${fail} 条`)
+      selection.clear()
+      await fetchUnread()
+    },
+  })
+}
+
+const handleBatchDelete = () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  dialog.warning({
+    title: '批量删除通知',
+    content: `将影响 ${rows.length} 条通知，删除后不可恢复。`,
+    positiveText: '确定删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const results = await Promise.allSettled(rows.map(n => deleteNotification(n.id)))
+      const okIds = rows.filter((_, i) => results[i].status === 'fulfilled').map(n => n.id)
+      const fail = results.length - okIds.length
+      if (okIds.length > 0) {
+        notifications.value = notifications.value.filter(n => !okIds.includes(n.id))
+        message.success(`批量删除完成：成功 ${okIds.length} 条`)
+      }
+      if (fail > 0) message.error(`批量删除部分失败：失败 ${fail} 条`)
+      selection.clear()
+      await fetchUnread()
+    },
+  })
 }
 
 onMounted(() => {
@@ -217,12 +303,16 @@ onMounted(() => {
   padding: 6px 12px 8px;
   margin-top: 6px;
 }
+.notif-foot__actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .notif-time { font-size: 12px; color: var(--text-color-secondary, #999); }
 .notif-header.app-sticky-toolbar { padding: 8px 12px; }
 
 @media (max-width: 767px) {
   /* 卡片自身 padding 为 0（全局列表行自带内边距），只给标题行补内边距避免标题贴边 */
   .notification-page :deep(.mobile-card .card-header) { padding: 12px 12px 0; margin-bottom: 8px; }
+  /* 可选中卡片：左侧给复选框让出 44px（页面卡片被全局改成 padding:0 !important，
+     这里必须同权重压过，否则复选框会压在通知标题上） */
+  .notification-page :deep(.mobile-card.is-selectable) { padding-left: 44px !important; }
   /* 吸顶工具栏的默认负边距是给「卡片内边距」留位的，这里列表已贴齐，改成 0 防溢出 */
   .notif-header.app-sticky-toolbar { margin: 0 0 10px; padding: 8px 12px; }
   /* 分页按钮默认 28×28，手指点不准：手机端撑到 40px（父级已 flex-wrap，不会横向撑破） */

@@ -10,6 +10,21 @@
         </n-button>
       </template>
 
+      <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机端自动变成固定在底部的操作栏） -->
+      <BatchSelectBar
+        :total="selection.total.value"
+        :selected-count="selection.count.value"
+        :all-selected="selection.allSelected.value"
+        :indeterminate="selection.indeterminate.value"
+        label="台设备"
+        @toggle-all="selection.toggleAll"
+        @clear="selection.clear"
+      >
+        <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDelete">
+          批量删除
+        </n-button>
+      </BatchSelectBar>
+
       <n-spin :show="loading">
         <n-empty v-if="!loading && devices.length === 0" description="暂无设备记录">
           <template #extra>
@@ -25,10 +40,21 @@
             :bordered="false"
             :single-line="false"
             :pagination="false"
+            :row-key="rowKey"
+            v-model:checked-row-keys="checkedRowKeys"
           />
           <!-- Mobile card list -->
           <div v-else class="mobile-card-list">
-            <div v-for="device in devices" :key="device.id" class="mobile-card">
+            <div
+              v-for="device in devices"
+              :key="device.id"
+              class="mobile-card is-selectable"
+              :class="{ 'is-selected': selection.isSelected(device) }"
+              @click="selection.toggle(device)"
+            >
+              <div class="card-check" @click.stop>
+                <n-checkbox :checked="selection.isSelected(device)" @update:checked="() => selection.toggle(device)" />
+              </div>
               <div class="card-row">
                 <span class="label">设备名称</span>
                 <span class="value">
@@ -54,7 +80,7 @@
                 <span class="label">地区</span>
                 <span class="value">{{ formatLocation(device.region) }}</span>
               </div>
-              <div class="card-row">
+              <div class="card-row" @click.stop>
                 <span class="label">备注</span>
                 <n-input
                   :value="device.remark || ''"
@@ -70,7 +96,7 @@
                 <span class="label">最后访问</span>
                 <span class="value">{{ formatFullDateTime(device.last_access) }}</span>
               </div>
-              <div class="card-actions">
+              <div class="card-actions" @click.stop>
                 <n-button size="small" type="error" @click="handleDelete(device.id)">删除</n-button>
               </div>
             </div>
@@ -104,13 +130,16 @@
 </template>
 
 <script setup lang="tsx">
-import { ref, h, onMounted } from 'vue'
-import { NButton, NTime, NInput, NTag, useMessage } from 'naive-ui'
+import { ref, h, onMounted, computed } from 'vue'
+import { NButton, NTime, NInput, NTag, useMessage, useDialog } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import { getSubscriptionDevices, deleteDevice, updateDeviceRemark } from '@/api/subscription'
 import { useAppStore } from '@/stores/app'
 import { formatLocation } from '@/utils/i18n'
 import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import { usePageLoading } from '@/composables/usePageLoading'
 
 interface Device {
@@ -137,6 +166,7 @@ interface Device {
 
 const appStore = useAppStore()
 const message = useMessage()
+const dialog = useDialog()
 const { loading, beginLoad, endLoad } = usePageLoading()
 const devices = ref<Device[]>([])
 const showDeleteModal = ref(false)
@@ -145,7 +175,17 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const totalDevices = ref(0)
 
-const columns = [
+// 全选 / 多选：唯一的选择状态，桌面表格与手机卡片共用（公共组件 useBatchSelection + BatchSelectBar）
+const selection = useBatchSelection<Device>(() => devices.value)
+const rowKey = (row: Device) => row.id
+// 桌面表格仍需数组形式的勾选键，用 computed 桥接，保证与手机端卡片状态一致
+const checkedRowKeys = computed<number[]>({
+  get: () => [...selection.selectedKeys.value] as number[],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
+
+const columns: DataTableColumns<Device> = [
+  { type: 'selection' },
   {
     title: '设备名称',
     key: 'device_name',
@@ -307,6 +347,28 @@ const handleConfirmDelete = async () => {
   }
 }
 
+// 后端没有批量解绑接口：按《手机端改造契约》§2.1 第 2 条逐条调单条删除接口，
+// 用 Promise.allSettled 保证一条失败不影响其余，最后汇总「成功 X / 失败 Y」。
+const handleBatchDelete = () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  dialog.warning({
+    title: '批量删除设备',
+    content: `将影响 ${rows.length} 台设备，删除后这些设备将无法继续使用订阅。此操作不可恢复。`,
+    positiveText: '确定删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const results = await Promise.allSettled(rows.map(d => deleteDevice(d.id)))
+      const ok = results.filter(r => r.status === 'fulfilled').length
+      const fail = results.length - ok
+      if (ok > 0) message.success(`批量删除完成：成功 ${ok} 台`)
+      if (fail > 0) message.error(`批量删除部分失败：失败 ${fail} 台`)
+      selection.clear()
+      await fetchDevices()
+    },
+  })
+}
+
 const saveRemark = async (row: Device) => {
   const newVal = row.remark || ''
   // 未修改则不发请求
@@ -334,6 +396,9 @@ onMounted(() => {
   /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白）；
      卡片 16px 圆角由全局统一提供，页面不再自己写 */
   .device-page { padding: 0; max-width: none; }
+  /* 可选中卡片：左侧给复选框让出 44px（本页卡片自带 padding，必须 !important 压过它，
+     否则复选框会压在「设备名称」上） */
+  .device-page :deep(.mobile-card.is-selectable) { padding-left: 44px !important; }
 }
 
 .mobile-card-list { display: flex; flex-direction: column; gap: 10px; }

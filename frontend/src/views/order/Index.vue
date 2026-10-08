@@ -39,6 +39,22 @@
 
           <!-- ===== 订单列表 ===== -->
           <n-tab-pane name="orders" tab="全部订单">
+            <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机端自动变成固定在底部的操作栏）。
+                 只有「待支付」订单能取消，所以选择范围按 isSelectable 收敛为可取消的行。 -->
+            <BatchSelectBar
+              :total="selection.total.value"
+              :selected-count="selection.count.value"
+              :all-selected="selection.allSelected.value"
+              :indeterminate="selection.indeterminate.value"
+              label="条可取消订单"
+              @toggle-all="selection.toggleAll"
+              @clear="selection.clear"
+            >
+              <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchCancelOrder">
+                批量取消
+              </n-button>
+            </BatchSelectBar>
+
             <!-- 桌面：筛选条留在标签页里（桌面没有吸顶需求，也不该出现在「充值记录」标签下） -->
             <div v-if="!appStore.isMobile" class="order-filters">
               <n-space :size="8" style="margin-bottom: 16px;">
@@ -61,11 +77,26 @@
               :bordered="false"
               :single-line="false"
               :scroll-x="900"
+              :row-key="rowKey"
+              v-model:checked-row-keys="checkedOrderKeys"
             />
 
             <div v-else class="mobile-card-list">
               <div v-if="orders.length === 0 && !ordersLoading" class="mobile-empty">暂无订单</div>
-              <div v-for="order in orders" :key="order.id" class="mobile-card">
+              <div
+                v-for="order in orders"
+                :key="order.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selection.isSelected(order) }"
+                @click="selection.toggle(order)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox
+                    :checked="selection.isSelected(order)"
+                    :disabled="!canCancelOrder(order)"
+                    @update:checked="() => selection.toggle(order)"
+                  />
+                </div>
                 <div class="card-row">
                   <span class="label">订单号</span>
                   <span class="value mono">{{ order.order_no }}</span>
@@ -88,7 +119,7 @@
                   <span class="label">时间</span>
                   <span class="value">{{ formatDateTime(order.created_at) }}</span>
                 </div>
-                <div class="card-actions">
+                <div class="card-actions" @click.stop>
                   <n-button size="small" quaternary type="info" @click="detailOrder = order; showDetailDrawer = true">详情</n-button>
                   <n-button v-if="order.status === 'pending'" size="small" type="primary" @click="openOrderPay(order)">继续支付</n-button>
                   <n-button v-if="order.status === 'pending'" size="small" @click="handleCancelOrder(order)">取消</n-button>
@@ -110,6 +141,21 @@
 
           <!-- ===== 充值记录 ===== -->
           <n-tab-pane name="recharge" tab="充值记录">
+            <!-- 全选 / 批量取消：同样只对「待支付」的充值记录生效 -->
+            <BatchSelectBar
+              :total="rechargeSelection.total.value"
+              :selected-count="rechargeSelection.count.value"
+              :all-selected="rechargeSelection.allSelected.value"
+              :indeterminate="rechargeSelection.indeterminate.value"
+              label="条可取消充值"
+              @toggle-all="rechargeSelection.toggleAll"
+              @clear="rechargeSelection.clear"
+            >
+              <n-button size="small" type="error" :disabled="!rechargeSelection.count.value" @click="handleBatchCancelRecharge">
+                批量取消
+              </n-button>
+            </BatchSelectBar>
+
             <n-data-table
               v-if="!appStore.isMobile"
               :columns="rechargeColumns"
@@ -119,11 +165,26 @@
               :bordered="false"
               :single-line="false"
               :scroll-x="700"
+              :row-key="rowKey"
+              v-model:checked-row-keys="checkedRechargeKeys"
             />
 
             <div v-else class="mobile-card-list">
               <div v-if="rechargeRecords.length === 0 && !rechargeLoading" class="mobile-empty">暂无充值记录</div>
-              <div v-for="record in rechargeRecords" :key="record.id" class="mobile-card">
+              <div
+                v-for="record in rechargeRecords"
+                :key="record.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': rechargeSelection.isSelected(record) }"
+                @click="rechargeSelection.toggle(record)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox
+                    :checked="rechargeSelection.isSelected(record)"
+                    :disabled="!canCancelRecharge(record)"
+                    @update:checked="() => rechargeSelection.toggle(record)"
+                  />
+                </div>
                 <div class="card-row">
                   <span class="label">订单号</span>
                   <span class="value mono">{{ record.order_no }}</span>
@@ -142,7 +203,7 @@
                   <span class="label">时间</span>
                   <span class="value">{{ formatDateTime(record.created_at) }}</span>
                 </div>
-                <div class="card-actions" v-if="record.status === 'pending'">
+                <div class="card-actions" v-if="record.status === 'pending'" @click.stop>
                   <n-button size="small" type="primary" @click="openRechargePay(record)">继续支付</n-button>
                   <n-button size="small" @click="handleCancelRecharge(record)">取消</n-button>
                 </div>
@@ -437,7 +498,7 @@
 </template>
 
 <script setup lang="tsx">
-import { ref, onMounted, onActivated, h, nextTick, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onActivated, h, nextTick, onUnmounted, watch, computed } from 'vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useRouter } from 'vue-router'
 import { useMessage, useDialog, NButton, NSpace, NTag } from 'naive-ui'
@@ -452,6 +513,8 @@ import { getErrorMessage, silentCatch } from '@/utils/error'
 import { formatDateTime } from '@/utils/date'
 import { formatAmount, formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -554,6 +617,26 @@ const statusFilters = [
   { label: '已退款', value: 'refunded' },
 ]
 
+// ===== 全选 / 多选（公共组件 useBatchSelection + BatchSelectBar）=====
+// 只有「待支付」的订单/充值才能取消：不能取消的行既不进全选范围，卡片上的
+// 复选框也置灰，避免用户勾了一堆却点不动批量取消（假按钮）。
+const canCancelOrder = (row: any) => row?.status === 'pending'
+const canCancelRecharge = (row: any) => row?.status === 'pending'
+
+const selection = useBatchSelection<any>(() => orders.value, { isSelectable: canCancelOrder })
+const rechargeSelection = useBatchSelection<any>(() => rechargeRecords.value, { isSelectable: canCancelRecharge })
+
+const rowKey = (row: any) => row.id
+// 桌面表格仍需数组形式的勾选键，用 computed 桥接，保证与手机端卡片状态一致
+const checkedOrderKeys = computed<number[]>({
+  get: () => [...selection.selectedKeys.value] as number[],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
+const checkedRechargeKeys = computed<number[]>({
+  get: () => [...rechargeSelection.selectedKeys.value] as number[],
+  set: (keys) => { rechargeSelection.selectedKeys.value = new Set(keys) },
+})
+
 const getStatusType = (s: string) => {
   const m: Record<string, any> = { pending: 'warning', paid: 'success', cancelled: 'default', expired: 'error', refunded: 'info' }
   return m[s] || 'default'
@@ -578,6 +661,7 @@ const rechargePagination = ref({
 })
 
 const orderColumns: DataTableColumns<any> = [
+  { type: 'selection', disabled: (row) => !canCancelOrder(row) },
   { title: '订单号', key: 'order_no', width: 180, resizable: true, ellipsis: { tooltip: true } },
   { title: '套餐名称', key: 'package_name', width: 140, resizable: true },
   { title: '原价', key: 'amount', width: 90, resizable: true, render: (r) => formatCurrency(r.amount) },
@@ -605,6 +689,7 @@ const orderColumns: DataTableColumns<any> = [
 ]
 
 const rechargeColumns: DataTableColumns<any> = [
+  { type: 'selection', disabled: (row) => !canCancelRecharge(row) },
   { title: '订单号', key: 'order_no', width: 180, resizable: true, ellipsis: { tooltip: true } },
   { title: '金额', key: 'amount', width: 100, resizable: true, render: (r) => h('span', { style: 'color:var(--success-color);font-weight:600' }, formatCurrency(r.amount)) },
   { title: '状态', key: 'status', width: 100, resizable: true, render: (r) => h(NTag, { type: getStatusType(r.status), size: 'small' }, { default: () => getStatusText(r.status) }) },
@@ -891,6 +976,47 @@ const handleCancelRecharge = (record: any) => {
   })
 }
 
+// ===== 批量取消 =====
+// 后端没有用户端批量取消接口：按契约 §2.1 第 2 条逐条调单条接口，
+// Promise.allSettled 保证一条失败不影响其余，完成后汇总「成功 X / 失败 Y」。
+const handleBatchCancelOrder = () => {
+  const rows = selection.selectedRows.value.filter(canCancelOrder)
+  if (!rows.length) return
+  dialog.warning({
+    title: '批量取消订单',
+    content: `将影响 ${rows.length} 条待支付订单，取消后需重新下单。`,
+    positiveText: '确定取消', negativeText: '再想想',
+    onPositiveClick: async () => {
+      const results = await Promise.allSettled(rows.map(o => cancelOrder(o.order_no)))
+      const ok = results.filter(r => r.status === 'fulfilled').length
+      const fail = results.length - ok
+      if (ok > 0) message.success(`批量取消完成：成功 ${ok} 条`)
+      if (fail > 0) message.error(`批量取消部分失败：失败 ${fail} 条`)
+      selection.clear()
+      loadOrders()
+    },
+  })
+}
+
+const handleBatchCancelRecharge = () => {
+  const rows = rechargeSelection.selectedRows.value.filter(canCancelRecharge)
+  if (!rows.length) return
+  dialog.warning({
+    title: '批量取消充值',
+    content: `将影响 ${rows.length} 条待支付充值记录。`,
+    positiveText: '确定取消', negativeText: '再想想',
+    onPositiveClick: async () => {
+      const results = await Promise.allSettled(rows.map(r => cancelRecharge(r.id)))
+      const ok = results.filter(r => r.status === 'fulfilled').length
+      const fail = results.length - ok
+      if (ok > 0) message.success(`批量取消完成：成功 ${ok} 条`)
+      if (fail > 0) message.error(`批量取消部分失败：失败 ${fail} 条`)
+      rechargeSelection.clear()
+      loadRechargeRecords()
+    },
+  })
+}
+
 onUnmounted(() => { stopPolling() })
 // 下拉刷新（App 原生感）
 const { distance: pullDistance, refreshing: pullRefreshing, onTouchStart: pullTouchStart, onTouchMove: pullTouchMove, onTouchEnd: pullTouchEnd } =
@@ -1004,6 +1130,8 @@ onActivated(() => { loadOrders(); loadPaymentMethods() })
   .pm-card { padding: 10px 12px; border-radius: 10px; }
   .pm-card-icon { width: 36px; height: 36px; font-size: 16px; border-radius: 9px; }
   .pm-card-desc { white-space: normal; line-height: 1.3; }
+  /* 可选中卡片：左侧给复选框让出 44px（页面/全局的卡片 padding 都用 !important，这里必须同权重压过） */
+  .order-container :deep(.mobile-card.is-selectable) { padding-left: 44px !important; }
 }
 
 @media (max-width: 400px) {

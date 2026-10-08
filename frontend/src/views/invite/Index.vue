@@ -82,9 +82,44 @@
           </n-empty>
 
           <template v-else>
-            <n-data-table v-if="!appStore.isMobile" :columns="columns" :data="inviteCodes" :bordered="false" :single-line="false" />
+            <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机端自动变成固定在底部的操作栏） -->
+            <BatchSelectBar
+              :total="selection.total.value"
+              :selected-count="selection.count.value"
+              :all-selected="selection.allSelected.value"
+              :indeterminate="selection.indeterminate.value"
+              label="个邀请码"
+              @toggle-all="selection.toggleAll"
+              @clear="selection.clear"
+            >
+              <n-button size="small" :disabled="!selection.count.value" @click="handleBatchCopyLinks">
+                批量复制链接
+              </n-button>
+              <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDelete">
+                批量删除
+              </n-button>
+            </BatchSelectBar>
+
+            <n-data-table
+              v-if="!appStore.isMobile"
+              :columns="columns"
+              :data="inviteCodes"
+              :bordered="false"
+              :single-line="false"
+              :row-key="rowKey"
+              v-model:checked-row-keys="checkedRowKeys"
+            />
             <div v-else class="mobile-card-list">
-              <div v-for="code in inviteCodes" :key="code.id" class="mobile-card">
+              <div
+                v-for="code in inviteCodes"
+                :key="code.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selection.isSelected(code) }"
+                @click="selection.toggle(code)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selection.isSelected(code)" @update:checked="() => selection.toggle(code)" />
+                </div>
                 <div class="card-row">
                   <span class="label">邀请码</span>
                   <span class="value" style="font-family: monospace; font-weight: 600;">{{ code.code }}</span>
@@ -105,7 +140,7 @@
                     </n-tag>
                   </span>
                 </div>
-                <div class="card-actions">
+                <div class="card-actions" @click.stop>
                   <n-button size="small" type="primary" @click="copyToClipboard(getInviteLink(code.code))">复制链接</n-button>
                   <n-button size="small" @click="copyToClipboard(code.code)">复制码</n-button>
                   <n-button size="small" type="error" @click="handleDelete(code)">删除</n-button>
@@ -236,12 +271,15 @@
 <script setup lang="tsx">
 import { ref, h, onMounted, computed } from 'vue'
 import { NButton, NSpace, NTag, NTime, useMessage, useDialog } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import { listInviteCodes, createInviteCode, getInviteStats, deleteInviteCode, getPublicConfig } from '@/api/common'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatAmount, formatCurrency } from '@/utils/amount'
 import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import { usePageLoading } from '@/composables/usePageLoading'
 
 interface InviteCode {
@@ -298,6 +336,15 @@ const stats = ref<Stats>({
   recent_invites: []
 })
 const siteUrl = ref('')
+
+// 全选 / 多选：唯一的选择状态，桌面表格与手机卡片共用（公共组件 useBatchSelection + BatchSelectBar）
+const selection = useBatchSelection<InviteCode>(() => inviteCodes.value)
+const rowKey = (row: InviteCode) => row.id
+// 桌面表格仍需数组形式的勾选键，用 computed 桥接，保证与手机端卡片状态一致
+const checkedRowKeys = computed<number[]>({
+  get: () => [...selection.selectedKeys.value] as number[],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
 
 const formRef = ref()
 const formData = ref({
@@ -359,7 +406,40 @@ const handleDelete = (row: InviteCode) => {
   })
 }
 
-const columns = [
+// 批量复制：把所选邀请码的完整注册链接一行一条拼好，一次复制到位
+const handleBatchCopyLinks = async () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  const text = rows.map(r => getInviteLink(r.code)).join('\n')
+  const ok = await clipboardCopy(text)
+  ok ? message.success(`已复制 ${rows.length} 条邀请链接`) : message.error('复制失败，请手动复制')
+}
+
+// 批量删除：后端没有用户端批量接口，按契约 §2.1 第 2 条逐条调单条删除接口，
+// 用 Promise.allSettled 保证一条失败不影响其余，完成后汇总「成功 X / 失败 Y」。
+const handleBatchDelete = () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  dialog.warning({
+    title: '批量删除邀请码',
+    content: `将影响 ${rows.length} 个邀请码，删除后不可恢复。`,
+    positiveText: '确定删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const results = await Promise.allSettled(rows.map(r => deleteInviteCode(r.id)))
+      const ok = results.filter(r => r.status === 'fulfilled').length
+      const fail = results.length - ok
+      if (ok > 0) message.success(`批量删除完成：成功 ${ok} 个`)
+      if (fail > 0) message.error(`批量删除部分失败：失败 ${fail} 个`)
+      selection.clear()
+      await fetchInviteCodes()
+      await fetchStats()
+    }
+  })
+}
+
+const columns: DataTableColumns<InviteCode> = [
+  { type: 'selection' },
   {
     title: '邀请链接',
     key: 'link',
@@ -734,5 +814,8 @@ onMounted(() => {
   .invite-page { padding: 0; }
   .stat-card :deep(.n-statistic__label) { font-size: 13px; }
   .stat-card :deep(.n-statistic-value__content) { font-size: 20px; }
+  /* 可选中卡片：左侧给复选框让出 44px（本页卡片自带 padding，必须 !important 压过它，
+     否则复选框会压在「邀请码」这一行上） */
+  .invite-page :deep(.mobile-card.is-selectable) { padding-left: 44px !important; }
 }
 </style>

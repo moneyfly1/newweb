@@ -12,6 +12,10 @@
     background: var(--bg-page-color, #f8fafc);
   }
 
+  /* 只清左右：用 padding 简写会把页面自己的纵向节奏（上/下内边距）一起清零，
+     页面就不得不再写 padding: 8px 0 12px !important 抢简写。
+     另外 .ticket-detail-page 是失效的旧类名（真实页面根容器是 .ticket-detail-container），
+     一并补上，避免详情页在手机端少一层留白控制。 */
   .dashboard,
   .subscription-page,
   .order-container,
@@ -19,6 +23,7 @@
   .node-page,
   .ticket-page,
   .ticket-detail-page,
+  .ticket-detail-container,
   .settings-page,
   .device-page,
   .invite-page,
@@ -26,8 +31,11 @@
   .redeem-page,
   .mystery-box-page,
   .history-page,
-  .help-page {
-    padding: var(--user-mobile-gutter) !important;
+  .help-page,
+  .my-coupons-page,
+  .notification-page {
+    padding-left: var(--user-mobile-gutter) !important;
+    padding-right: var(--user-mobile-gutter) !important;
   }
 
   .dashboard > :first-child,

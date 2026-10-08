@@ -566,7 +566,9 @@ onUnmounted(unbindScroll)
 .title {
   font-size: 28px;
   font-weight: 600;
-  margin: 0;
+  /* 桌面端标题不在 n-space 里了（手机端导航条要直接挂在页面根容器下才能吸顶），
+     所以标题到首张卡片的 24px 间距自己给。 */
+  margin: 0 0 24px;
   background: var(--brand-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -844,10 +846,12 @@ onUnmounted(unbindScroll)
 
 @media (max-width: 767px) {
   /* 契约 §1：手机端根容器不再自带左右内边距，只保留纵向留白。
-     （全局 user-mobile.css 用 !important 把 .help-page 的 padding 全清零了，
-     这里用标题外边距补回顶部呼吸感，不动公共文件。） */
+     全局 user-mobile.css 现在只清左右（padding-left/right !important），
+     纵向节奏由页面自己给，所以这里写 12px 上留白不会被压掉。 */
   .help-page { padding: 12px 0 0; }
-  .title { font-size: 22px; margin: 0 0 10px; }
+  /* 全局 user-mobile.css 把 .user-mobile-content .title 的 margin 钉成 0 !important，
+     标题下方留白改由导航条的上外边距给（不去抢那条全局规则）。 */
+  .help-nav-bar { margin-top: 10px; }
 
   /* 从导航条跳过去时，卡片标题不被顶栏（52px）+ 吸顶导航条挡住 */
   .help-page :deep(.n-card) {

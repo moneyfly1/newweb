@@ -16,6 +16,33 @@ import (
 	"gorm.io/gorm"
 )
 
+// stringField 从更新 map 里取字符串字段
+func stringField(updates map[string]interface{}, key string) (string, bool) {
+	v, ok := updates[key]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	return s, ok
+}
+
+// toInt 把 JSON 解出来的数字（float64 / int / json.Number 字符串）统一成 int
+func toInt(v interface{}) (int, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int(n), true
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case string:
+		if parsed, err := strconv.Atoi(strings.TrimSpace(n)); err == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
+}
+
 func AdminListCustomNodes(c *gin.Context) {
 	db := database.GetDB()
 	p := utils.GetPagination(c)
@@ -69,14 +96,34 @@ func AdminCreateCustomNode(c *gin.Context) {
 		utils.BadRequest(c, "参数错误: "+err.Error())
 		return
 	}
+	// 与编辑保持同一套规则：下发以配置链接为准，域名/端口只是派生字段。
+	// 创建时若填了链接 → 按链接反推；若只填了域名/端口 → 把它们写进链接，避免创建完就「不生效」。
+	domain, port, protocol, config := req.Domain, req.Port, req.Protocol, req.Config
+	warning := ""
+	if strings.TrimSpace(config) != "" {
+		if h, p, err := services.NodeLinkHostPort(config); err == nil {
+			domain = h
+			if p > 0 {
+				port = p
+			}
+			if typ := services.DetectNodeTypeFromLink(config); typ != "" {
+				protocol = typ
+			}
+		} else {
+			warning = "配置链接无法解析（" + err.Error() + "），节点可能无法下发，请检查链接格式"
+		}
+	} else if domain != "" && port > 0 {
+		warning = "只填了域名/端口但没有配置链接，用户拿不到这个节点，请在「配置信息」里填入链接"
+	}
+
 	node := models.CustomNode{
 		Name:             req.Name,
 		DisplayName:      req.DisplayName,
-		Domain:           req.Domain,
-		Port:             req.Port,
-		Protocol:         req.Protocol,
+		Domain:           domain,
+		Port:             port,
+		Protocol:         protocol,
 		Status:           req.Status,
-		Config:           req.Config,
+		Config:           config,
 		ExpireTime:       req.ExpireTime,
 		FollowUserExpire: req.FollowUserExpire,
 	}
@@ -86,6 +133,10 @@ func AdminCreateCustomNode(c *gin.Context) {
 	}
 	utils.CreateAuditLog(c, "create_custom_node", "custom_node", node.ID, fmt.Sprintf("创建专线节点: %s", node.Name))
 	cache.ClearAllSubscriptionCache()
+	if warning != "" {
+		utils.Success(c, gin.H{"node": node, "warning": warning})
+		return
+	}
 	utils.Success(c, node)
 }
 
@@ -125,12 +176,59 @@ func AdminUpdateCustomNode(c *gin.Context) {
 		utils.BadRequest(c, "无有效更新字段")
 		return
 	}
+	// 下发完全以「配置链接」为准，domain/port 只是派生字段。
+	// 因此这里要把两者的关系理清，否则会出现「列表改了、用户拿到的还是旧地址」的假生效：
+	//   · 改了配置链接 → 按链接反推 domain/port/协议（列表显示真相）
+	//   · 只改了域名/端口 → 把配置链接里的 host:port 一起改写（下发真正生效）
+	//   · 链接形态认不出来 → 保留 domain/port 的展示更新，但明确告诉管理员下发仍以原链接为准
+	warning := ""
+	newConfig, hasConfig := stringField(updates, "config")
+	oldConfig := node.Config
+	if hasConfig && newConfig != "" && newConfig != oldConfig {
+		if host, port, err := services.NodeLinkHostPort(newConfig); err == nil {
+			updates["domain"] = host
+			if port > 0 {
+				updates["port"] = port
+			}
+			if typ := services.DetectNodeTypeFromLink(newConfig); typ != "" {
+				updates["protocol"] = typ
+			}
+		} else {
+			warning = "配置链接无法解析（" + err.Error() + "），节点可能无法下发，请检查链接格式"
+		}
+	} else if _, hasDomain := updates["domain"]; hasDomain || updates["port"] != nil {
+		targetHost, targetPort := node.Domain, node.Port
+		if v, ok := stringField(updates, "domain"); ok && v != "" {
+			targetHost = v
+		}
+		if v, ok := updates["port"]; ok {
+			if p, ok2 := toInt(v); ok2 && p > 0 {
+				targetPort = p
+			}
+		}
+		cfg := oldConfig
+		if cfg == "" {
+			warning = "该节点还没有配置链接，域名/端口无法同步到下发内容，请在「配置」里填入链接"
+		} else if rewritten, err := services.RewriteNodeLinkHostPort(cfg, targetHost, targetPort); err != nil {
+			warning = "配置链接无法自动改写（" + err.Error() + "），列表会更新，但用户拿到的仍是原链接里的地址，请直接编辑「配置」字段"
+		} else {
+			updates["config"] = rewritten
+			if typ := services.DetectNodeTypeFromLink(rewritten); typ != "" {
+				updates["protocol"] = typ
+			}
+		}
+	}
+
 	if err := db.Model(&node).Updates(updates).Error; err != nil {
 		utils.InternalError(c, "更新专线节点失败")
 		return
 	}
 	utils.CreateAuditLog(c, "update_custom_node", "custom_node", node.ID, fmt.Sprintf("更新专线节点: %s", node.Name))
 	cache.ClearAllSubscriptionCache()
+	if warning != "" {
+		utils.Success(c, gin.H{"node": node, "warning": warning})
+		return
+	}
 	utils.Success(c, node)
 }
 

@@ -153,25 +153,11 @@ onMounted(() => {
   .redeem-page { padding: 8px 0 12px !important; }
   .redeem-history-card { margin-top: 12px; }
 
-  /* 旧层 user-mobile.css 的 `.user-mobile-content .mobile-card/.n-card { !important }`
-     会把契约的 16px 圆角压回 8px，这里用「页面根类名 + :deep()」拉回契约观感。 */
-  .redeem-page :deep(.mobile-card),
-  .redeem-page :deep(.n-card) {
-    border-radius: 16px !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
-  }
-  .redeem-page :deep(.mobile-card .card-actions .n-button) { border-radius: 10px !important; }
-  /* naive 的 .n-spin-container 会被过宽的容器选择器塞进 12px 内边距（卡片每侧少 12px） */
-  .redeem-page :deep(.n-spin-container) { padding: 0 !important; }
-
-  /* 吸顶工具条：全局 .app-sticky-toolbar 带 -12px 负外边距（给有内边距的容器用），
-     本页根容器左右内边距已是 0，这里把负边距收回，避免撑出横向溢出 */
-  .redeem-toolbar { margin-left: 0; margin-right: 0; }
+  /* 卡片圆角 / 阴影 / 卡内按钮圆角 / .n-spin-container 内边距 / 吸顶工具条的负边距
+     都已由全局层修好（实测 16px 圆角 + 轻阴影 + 按钮 10px + 工具条 373px 无溢出），
+     页面不再写补偿规则。 */
 
   /* 卡片头部行：全局 .card-header 只有 flex 布局、没给内边距（手机端卡片 padding 为 0），这里只补 padding，不覆盖全局任何属性 */
   .mobile-card .redeem-card-head { padding: 14px 12px 0; }
-
-  /* 分页在手机上居中并允许换行，避免页码 + 每页条数挤出一行 */
-  .redeem-pagination { margin-top: 14px; justify-content: center; }
 }
 </style>

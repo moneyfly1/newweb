@@ -34,11 +34,14 @@
   .admin-invites-page,
   .admin-email-queue-page,
   .abnormal-users-page {
-    padding: var(--admin-mobile-gutter) !important;
+    /* 只清左右，保留页面自己的纵向节奏（简写会把上下内边距一起清零） */
+    padding-left: var(--admin-mobile-gutter) !important;
+    padding-right: var(--admin-mobile-gutter) !important;
   }
 
   .admin-page-shell {
-    padding: var(--admin-mobile-gutter) !important;
+    padding-left: var(--admin-mobile-gutter) !important;
+    padding-right: var(--admin-mobile-gutter) !important;
   }
 
   .admin-page-shell > .page-header {

@@ -274,21 +274,8 @@ onMounted(() => {
 
 @media (max-width: 767px) {
   /* 手机端根容器：左右内边距必须为 0（左右留白由全局统一给 10px），只保留纵向间距。
-     加 !important 是防旧层 / 后台层用高特异性规则再塞回左右内边距。 */
+     卡片圆角 / 阴影 / .n-spin-container 内边距全部交回全局层（实测奖池卡片已是 373px）。 */
   .mystery-box-page { padding: 8px 0 12px !important; }
-
-  /* naive 的 .n-spin-container 会被过宽的容器选择器（[class$="-container"]）塞进
-     12px 内边距，奖池卡片每侧少 12px（实测 349px，应为 373px）。这里按页面根类名收掉。 */
-  .mystery-box-page :deep(.n-spin-container) { padding: 0 !important; }
-
-  /* 旧层 user-mobile.css 的 `.user-mobile-content .mobile-card/.n-card { !important }`
-     会把契约的 16px 圆角压回 8px，这里用「页面根类名 + :deep()」拉回契约观感。 */
-  .mystery-box-page :deep(.mobile-card),
-  .mystery-box-page :deep(.n-card) {
-    border-radius: 16px !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
-  }
-  .mystery-box-page :deep(.mb-pool-actions .n-button) { border-radius: 10px !important; }
 
   /* 奖池/记录两个 Tab 是页面唯一的「工具栏」，吸顶不跟着内容滚走。
      顶部栏自己也吸顶（--mobile-header-h），工具条贴它下面 ——

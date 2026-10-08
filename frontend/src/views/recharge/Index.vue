@@ -583,35 +583,21 @@ onMounted(() => { loadData() })
 
 @media (max-width: 767px) {
   /* 手机端根容器：左右内边距必须为 0（左右留白由全局统一给 10px），只保留纵向间距。
-     加 !important 是防「旧层 / 后台层」用高特异性规则再塞回左右内边距
-     （admin-mobile.css / user-mobile.css 历史上都这么做，导致内容缩在中间）。 */
+     卡片圆角 / 阴影 / 卡内按钮圆角 / .n-spin-container 内边距全部交回全局层
+     （实测已达契约值：16px 圆角 + 轻阴影 + 按钮 10px，无需页面补偿）。 */
   .recharge-container { padding: 8px 0 12px !important; }
   .title { font-size: 22px; }
   .subtitle { font-size: 13px; }
 
-  /* 旧层 user-mobile.css 用 `.user-mobile-content .mobile-card/.n-card { !important }`
-     把卡片圆角压回 8px、阴影也换掉了，契约要求的「16px 圆角 + 轻阴影」会被吃掉。
-     用「页面根类名 + :deep()」把特异性抬到比旧层更高，拉回契约观感。 */
-  .recharge-container :deep(.mobile-card),
-  .recharge-container :deep(.n-card) {
-    border-radius: 16px !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
-  }
-  .recharge-container :deep(.mobile-card .card-actions .n-button) { border-radius: 10px !important; }
-  /* naive 的 .n-spin-container 会被过宽的容器选择器塞进 12px 内边距
-     （卡片每侧少 12px），页面里有 n-spin 时一并收掉。本页无 n-spin，留作兜底。 */
-  .recharge-container :deep(.n-spin-container) { padding: 0 !important; }
-
   /* 金额 chip 是自定义按钮（div + click），自己保证 ≥40px 手指可点高度 */
   .amount-chip { min-width: 72px; min-height: 40px; padding: 8px 14px; font-size: 14px; }
 
-  /* 手机端「待支付充值」卡片列表：只用页面专属类名补内边距与按钮列数，
-     不改全局 .mobile-card / .card-header / .card-row / .card-actions 的 App 风格 */
+  /* 手机端「待支付充值」卡片列表：只用页面专属类名补内边距，
+     不再覆盖全局 .mobile-card / .card-header / .card-row / .card-actions（两列等宽由
+     全局 .card-actions 的 auto-fit minmax(72px,1fr) 自动得到） */
   .mb-section-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 10px; }
   .mb-section-title { font-size: 15px; font-weight: 600; color: var(--text-color); }
   .mb-amount { font-size: 17px; font-weight: 700; color: var(--success-color); }
   .mobile-card .mb-card-head { padding: 14px 12px 0; }
-  /* 两个按钮 → 两列等宽（全局默认 3 列是给 3 个以上按钮的） */
-  .mobile-card .mb-card-actions { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
 </style>

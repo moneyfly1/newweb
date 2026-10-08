@@ -574,12 +574,6 @@ onActivated(() => {
   margin-right: 0;
 }
 
-/* 可选中卡片左侧给复选框留位：全局 .mobile-card.is-selectable 的 padding-left
-   会被 .admin-page-shell .mobile-card { padding: 0 !important } 盖掉，
-   不补回来的话复选框会压在卡片标题上。 */
-.mobile-card.is-selectable {
-  padding-left: 44px !important;
-}
 
 .pull-indicator {
   position: fixed;

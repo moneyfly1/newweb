@@ -387,8 +387,19 @@ onMounted(() => { fetchNodes() })
 .latency-poor { color: var(--danger-color); font-weight: 600; }
 .latency-none { color: var(--text-color-secondary, #ccc); }
 .mobile-node-list { display: flex; flex-direction: column; gap: 10px; }
-.mobile-node-card { border-radius: 16px; padding: 14px 16px; background: var(--bg-color, #fff); border: 1px solid var(--border-color, #eef0f3); border-left: 4px solid var(--success-color); }
-.mobile-node-card.card-offline { border-left-color: var(--danger-color); opacity: 0.7; }
+/* 节点卡原来左侧有 4px 状态色条（在线绿 / 离线红），和全站其它「半截颜色」
+   一样不协调。改成整卡按状态淡淡铺色 + 同色描边，状态一眼可辨。 */
+.mobile-node-card {
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--success-color, #18a058) 7%, var(--bg-color, #fff));
+  border: 1px solid color-mix(in srgb, var(--success-color, #18a058) 26%, var(--border-color, #eef0f3));
+}
+.mobile-node-card.card-offline {
+  background: color-mix(in srgb, var(--danger-color, #e03050) 7%, var(--bg-color, #fff));
+  border-color: color-mix(in srgb, var(--danger-color, #e03050) 26%, var(--border-color, #eef0f3));
+  opacity: 0.85;
+}
 .mobile-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color, #f5f5f5); }
 .mobile-node-name { display: flex; align-items: center; font-size: 14px; font-weight: 600; color: var(--text-color, #1a1a1a); min-width: 0; }
 .mobile-node-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

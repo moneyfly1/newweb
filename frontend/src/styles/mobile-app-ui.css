@@ -312,6 +312,33 @@ select:-webkit-autofill {
     --mobile-header-h: 52px;
   }
 
+  /* ---------- 选中态：整卡变色 ----------
+     用户反馈「点了列表只在前面看到一个颜色，看不出整条被选中」。原因有两个：
+     ① 卡片自己的白底/页面旧的 nth-child 白底把选中底色盖掉了（这里的 !important
+        与三级选择器就是为了压过它们）；
+     ② 原来选中底色用的是 primary-soft 再稀释，实际只有约 5% 透明度，几乎看不见。
+     现在统一：整卡铺主色淡底（12%）+ 主色描边，一眼能看出选中的是哪一条。 */
+  .mobile-admin-content .mobile-card.is-selected,
+  .user-mobile-content .mobile-card.is-selected,
+  .mobile-admin-content .mobile-card.is-selected:active,
+  .user-mobile-content .mobile-card.is-selected:active {
+    background-color: color-mix(in srgb, var(--primary-color, #4f46e5) 16%, #fff) !important;
+    background-image: none !important;
+    border-color: color-mix(in srgb, var(--primary-color, #4f46e5) 70%, var(--border-color, #e5e7eb)) !important;
+  }
+  .mobile-admin-content .mobile-card.is-selected .card-header,
+  .user-mobile-content .mobile-card.is-selected .card-header,
+  .mobile-admin-content .mobile-card.is-selected .card-row,
+  .user-mobile-content .mobile-card.is-selected .card-row {
+    border-bottom-color: color-mix(in srgb, var(--primary-color, #4f46e5) 20%, transparent) !important;
+  }
+  /* 可选中卡片的左侧要给复选框留位置（后台旧样式把卡片 padding 写成 0 !important，
+     必须三级选择器 + !important 才能压住，否则复选框会压在标题上）。 */
+  .mobile-admin-content .mobile-card.is-selectable,
+  .user-mobile-content .mobile-card.is-selectable {
+    padding-left: 44px !important;
+  }
+
   /* ---------- 卡片不能再裁剪内容 ----------
      unified.css 给 .admin-main-card/.page-card 写了 overflow:hidden 用来裁圆角，
      副作用是卡片内部的吸顶工具条彻底失效（sticky 的参照框成了这张卡片）。

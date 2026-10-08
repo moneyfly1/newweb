@@ -192,6 +192,31 @@ function auditInPage() {
     out.issues.push({ kind: 'top-gap', detail: `首屏内容从 ${Math.round(firstTop)}px 才开始，顶部空白过多` })
   }
 
+  // 5.8) 「半截颜色」：只在元素左侧露出一条色（border-left / inset 左阴影 / 细窄伪元素）
+  //      用户反馈「点列表时列表前面出现半截颜色」「很多按钮左侧有半截不一样的颜色」。
+  //      App 里选中/强调应该是整块变色，所以这类左侧细条一律算问题。
+  const stripes = []
+  for (const el of document.querySelectorAll('body *')) {
+    if (!visible(el)) continue
+    const r = el.getBoundingClientRect()
+    if (r.width < 30 || r.height < 12) continue
+    const s2 = getComputedStyle(el)
+    const blw = parseFloat(s2.borderLeftWidth) || 0
+    const blc = s2.borderLeftColor
+    const transparentLeft = !blc || blc === 'rgba(0, 0, 0, 0)' || blc === 'transparent'
+    if (blw >= 2 && blw <= 8 && !transparentLeft && parseFloat(s2.borderTopWidth) < blw) {
+      stripes.push({ el: describe(el), why: `border-left ${blw}px ${blc}` })
+      continue
+    }
+    if (/inset\s+[2-9]px\s+0(px)?\s+0/.test(s2.boxShadow)) {
+      stripes.push({ el: describe(el), why: `inset 左阴影 ${s2.boxShadow.slice(0, 40)}` })
+    }
+  }
+  out.stats.leftStripes = stripes.length
+  if (stripes.length) {
+    out.issues.push({ kind: 'left-accent-stripe', detail: `${stripes.length} 处左侧「半截颜色」细条（应改成整块变色）`, samples: stripes.slice(0, 6) })
+  }
+
   // 6) 字号过小
   const tiny = []
   for (const el of document.querySelectorAll('body *')) {

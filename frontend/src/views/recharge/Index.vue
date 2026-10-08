@@ -592,12 +592,15 @@ onMounted(() => { loadData() })
   /* 金额 chip 是自定义按钮（div + click），自己保证 ≥40px 手指可点高度 */
   .amount-chip { min-width: 72px; min-height: 40px; padding: 8px 14px; font-size: 14px; }
 
-  /* 手机端「待支付充值」卡片列表：只用页面专属类名补内边距，
-     不再覆盖全局 .mobile-card / .card-header / .card-row / .card-actions（两列等宽由
-     全局 .card-actions 的 auto-fit minmax(72px,1fr) 自动得到） */
+  /* 手机端「待支付充值」卡片列表：只用页面专属类名补内边距与列数，
+     不改全局 .mobile-card / .card-header / .card-row 的 App 风格 */
   .mb-section-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 10px; }
   .mb-section-title { font-size: 15px; font-weight: 600; color: var(--text-color); }
   .mb-amount { font-size: 17px; font-weight: 700; color: var(--success-color); }
   .mobile-card .mb-card-head { padding: 14px 12px 0; }
+  /* 本卡恰好两个按钮。实测全局 .card-actions 给的是固定 3 列（app-mobile.css 带 !important，
+     压过 user-mobile.css 的 auto-fit），两个按钮会各占 110px、右边空出一列；
+     这里只把列数改成两列，其余（padding/间距/按钮样式）仍走全局。 */
+  .mobile-card .mb-card-actions { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
 </style>

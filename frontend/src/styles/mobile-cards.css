@@ -166,8 +166,10 @@
 }
 
 .mobile-card.is-selected {
+  /* 真正生效的值在 mobile-app-ui.css（需要 !important 压过各页面的旧覆盖）：
+     整卡换上主色淡底 + 主色描边，一眼能看出选中了哪一条 */
   border-color: var(--primary-color, #4f46e5);
-  background: color-mix(in srgb, var(--primary-color-soft, rgba(102, 126, 234, 0.08)) 70%, var(--bg-color, #fff));
+  background: color-mix(in srgb, var(--primary-color, #4f46e5) 16%, var(--bg-color, #fff));
 }
 
 /* 空状态 */

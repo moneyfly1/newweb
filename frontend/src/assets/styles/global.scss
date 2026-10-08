@@ -45,10 +45,12 @@ html, body, #app {
 }
 .text-danger { color: var(--danger-color, #dc2626) !important; }
 
-/* Status tags: shape accent ensures meaning isn't conveyed by color alone */
+/* 标签（n-tag）原来在左侧画一条 3px 的 currentColor 色条来「不只靠颜色表达含义」，
+ * 但全站每个标签都带一条半截色条，视觉上像按钮/列表缺了一角，非常不协调。
+ * 标签本身已经带文字（状态文案），不依赖颜色单独传意，这里去掉色条，
+ * 恢复成干净的圆角药丸；需要额外强调时用图标或文字。 */
 .n-tag {
-  border-left: 3px solid currentColor;
-  padding-left: 8px;
+  border-left: none;
 }
 
 body {
@@ -106,9 +108,33 @@ a {
   border-right-color: var(--table-column-divider-color, #c6c8cd) !important;
 }
 
+/* 侧边菜单选中态：原来是「左侧 3px 内阴影」——点菜单只在行首露出一截颜色，
+ * 看不出整行被选中。改成整行铺满主色淡底 + 圆角，像 App 里的选中项。 */
 .n-menu .n-menu-item-content.n-menu-item-content--selected::before,
 .n-menu .n-menu-item-content.n-menu-item-content--child-active::before {
-  box-shadow: inset 3px 0 0 var(--primary-color, #667eea);
+  box-shadow: none;
+}
+
+.n-menu .n-menu-item-content {
+  border-radius: 10px;
+  transition: background-color 0.15s ease;
+}
+
+.n-menu .n-menu-item-content.n-menu-item-content--selected,
+.n-menu .n-menu-item-content.n-menu-item-content--child-active {
+  background-color: var(--primary-color-soft, rgba(102, 126, 234, 0.12));
+}
+
+.n-menu .n-menu-item-content.n-menu-item-content--selected:hover,
+.n-menu .n-menu-item-content.n-menu-item-content--child-active:hover {
+  background-color: var(--primary-color-hover, rgba(102, 126, 234, 0.18));
+}
+
+/* 表格勾选行：同样要「整行变色」，不要只在最前面露一截 */
+.n-data-table {
+  --n-td-color-checked: color-mix(in srgb, var(--primary-color, #4f46e5) 12%, transparent) !important;
+  --n-td-color-checked-modal: color-mix(in srgb, var(--primary-color, #4f46e5) 16%, transparent) !important;
+  --n-td-color-hover: color-mix(in srgb, var(--primary-color, #4f46e5) 6%, transparent) !important;
 }
 
 .n-menu .n-menu-item-content.n-menu-item-content--selected .n-menu-item-content-header,

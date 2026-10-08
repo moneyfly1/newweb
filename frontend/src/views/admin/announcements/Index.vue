@@ -393,9 +393,6 @@ onActivated(() => {
 }
 
 /* 可选中卡片左侧给复选框留位 */
-.mobile-card.is-selectable {
-  padding-left: 44px !important;
-}
 
 .mobile-toolbar { margin-bottom: 12px; }
 .mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }

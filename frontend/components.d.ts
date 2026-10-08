@@ -16,6 +16,7 @@ declare module 'vue' {
     CommonDrawer: typeof import('./src/components/CommonDrawer.vue')['default']
     EmptyState: typeof import('./src/components/EmptyState.vue')['default']
     LoadingScreen: typeof import('./src/components/LoadingScreen.vue')['default']
+    MobileSortSelect: typeof import('./src/components/MobileSortSelect.vue')['default']
     NAlert: typeof import('naive-ui')['NAlert']
     NBadge: typeof import('naive-ui')['NBadge']
     NButton: typeof import('naive-ui')['NButton']

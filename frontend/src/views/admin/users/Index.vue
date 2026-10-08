@@ -40,6 +40,13 @@
         <div v-if="appStore.isMobile" class="mobile-toolbar">
           <div class="mobile-toolbar-title">用户管理</div>
           <div class="mobile-toolbar-controls">
+            <!-- 手机端没有表头可点，这里给一个排序入口（用户反馈「注册时间排序」用不了） -->
+            <MobileSortSelect
+              :sort="sortState.sort"
+              :order="sortState.order"
+              :options="mobileSortOptions"
+              @change="handleMobileSortChange"
+            />
             <div class="mobile-toolbar-row">
               <n-button size="small" @click="fetchUsers">
                 <template #icon><n-icon :component="RefreshOutline" /></template>
@@ -340,6 +347,7 @@ import {
 import { useTable } from '@/composables/useTable'
 import { useBatchSelection } from '@/composables/useBatchSelection'
 import BatchSelectBar from '@/components/BatchSelectBar.vue'
+import MobileSortSelect from '@/components/MobileSortSelect.vue'
 import { listUserLevels } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -365,7 +373,10 @@ const searchQuery = ref('')
 const statusFilter = ref(null)
 
 // 统一表格状态（含搜索/状态筛选）
-const { loading, tableData: users, pagination, loadData, reload, handleSorterChange } = useTable(listUsers, {
+const { loading, tableData: users, pagination, loadData, reload, handleSorterChange, sortState } = useTable(listUsers, {
+  // 默认排序：注册时间倒序（最新注册的用户在最前面）。
+  // 不能依赖后端的 id desc 兜底 —— 导入或特殊渠道创建的用户，id 顺序与注册顺序并不一致。
+  defaultSort: { sort: 'created_at', order: 'desc' },
   getParams: () => ({
     search: searchQuery.value || undefined,
     is_active: statusFilter.value === 'active' ? true : statusFilter.value === 'inactive' ? false : undefined,
@@ -373,6 +384,21 @@ const { loading, tableData: users, pagination, loadData, reload, handleSorterCha
   }),
 })
 const fetchUsers = loadData
+
+// 手机端排序选项（与桌面表头可排序列保持一致）
+const mobileSortOptions = [
+  { label: '注册时间', value: 'created_at' },
+  { label: '最后登录', value: 'last_login' },
+  { label: '余额', value: 'balance' },
+  { label: '总消费', value: 'total_consumption' },
+  { label: 'ID', value: 'id' },
+]
+
+function handleMobileSortChange({ sort, order }) {
+  sortState.value = { sort, order }
+  pagination.page = 1
+  loadData()
+}
 
 // 全选 / 多选：唯一的选择状态，桌面表格与手机卡片共用（公共组件 useBatchSelection + BatchSelectBar）
 const selection = useBatchSelection(() => users.value)

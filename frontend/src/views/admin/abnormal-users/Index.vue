@@ -25,12 +25,11 @@
 
     <n-card :bordered="false" class="page-card admin-main-card">
 
-      <!-- Mobile toolbar -->
-      <div v-if="appStore.isMobile" class="mobile-toolbar">
-        <div class="mobile-toolbar-row">
-          <n-select v-model:value="typeFilter" placeholder="异常类型" clearable size="small" style="flex:1" :options="typeOptions" @update:value="handleSearch" />
-          <n-button size="small" type="info" @click="handleSearch">检测</n-button>
-        </div>
+      <!-- Mobile toolbar：吸顶工具条（筛选 + 检测）。不用全局 .mobile-toolbar-row：
+           它会把行内控件按网格拉成整行宽，两个控件并排就会顶出屏幕。 -->
+      <div v-if="appStore.isMobile" class="app-sticky-toolbar abnormal-toolbar">
+        <n-select class="abnormal-toolbar__select" v-model:value="typeFilter" placeholder="异常类型" clearable size="small" :options="typeOptions" @update:value="handleSearch" />
+        <n-button size="small" type="info" @click="handleSearch">检测</n-button>
       </div>
 
       <n-space vertical :size="16">
@@ -87,12 +86,12 @@
 
         <n-pagination
           v-if="pagination.itemCount > pagination.pageSize"
+          class="list-pagination"
           v-model:page="pagination.page"
           v-model:page-size="pagination.pageSize"
           :item-count="pagination.itemCount"
           :page-sizes="[10, 20, 50]"
           show-size-picker
-          style="margin-top: 16px; justify-content: flex-end"
           @update:page="handlePageChange"
           @update:page-size="handlePageSizeChange"
         />
@@ -217,67 +216,19 @@ onActivated(() => {
   font-weight: 600;
 }
 
-.mobile-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+/* 分页：桌面靠右，手机居中 */
+.list-pagination { margin-top: 16px; justify-content: flex-end; }
 
-.mobile-card {
-  background: var(--bg-color);
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  overflow: hidden;
-}
+/* 手机端工具条：筛选下拉自适应 + 检测按钮 */
+/* 卡片内容区在手机端无左右内边距，工具条不再用全局的 -12px 出血，避免越过卡片边界 */
+.abnormal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: 0; margin-right: 0; }
+.abnormal-toolbar :deep(.abnormal-toolbar__select),
+.abnormal-toolbar :deep(.n-select) { flex: 1 1 120px; min-width: 0; }
 
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.card-title {
-  font-weight: 600;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  margin-right: 8px;
-}
-
-.card-body {
-  padding: 10px 14px;
-}
-
-.card-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-  font-size: 13px;
-}
-
-.card-label {
-  color: var(--text-color-secondary);
-  white-space: nowrap;
-  margin-right: 8px;
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border-color);
-  flex-wrap: wrap;
-}
-
+/* 说明：卡片样式（.mobile-card / .card-header / .card-row…）一律交给全局
+   mobile-cards.css + admin-mobile.css，页面不再自己覆盖，避免手机端又变回「网页表格」。 */
 @media (max-width: 767px) {
-  .abnormal-users-page { padding: 8px; }
+  /* 左右留白由全局统一给（mobile-app-ui.css + admin-mobile.css），页面不再自带内边距 */
+  .list-pagination { justify-content: center; }
 }
-.mobile-toolbar { margin-bottom: 12px; }
-.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
-.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

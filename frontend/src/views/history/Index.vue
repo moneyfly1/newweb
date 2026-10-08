@@ -1,9 +1,9 @@
 <template>
   <div class="history-page">
-    <n-space vertical :size="24">
+    <n-space vertical :size="appStore.isMobile ? 12 : 24">
       <h1 class="title">登录历史</h1>
 
-      <n-grid :x-gap="16" :y-gap="16" cols="1 s:3" responsive="screen">
+      <n-grid :x-gap="12" :y-gap="12" cols="3" responsive="screen">
         <n-gi>
           <div class="stat-card">
             <div class="stat-label">总登录次数</div>
@@ -38,26 +38,28 @@
         <div v-else>
           <n-spin :show="loading">
             <div v-if="!loading && records.length === 0" class="mobile-empty">暂无登录记录</div>
-            <div v-for="(record, idx) in records" :key="idx" class="mobile-card">
-              <div class="card-row">
-                <span class="label">时间</span>
-                <span class="value">{{ formatDateTime(record.login_time) }}</span>
-              </div>
-              <div class="card-row">
-                <span class="label">IP</span>
-                <span class="value" style="font-family: monospace;">{{ record.ip_address }}</span>
-              </div>
-              <div class="card-row">
-                <span class="label">位置</span>
-                <span class="value">{{ formatLocation(record.location) }}</span>
-              </div>
-              <div class="card-row">
-                <span class="label">状态</span>
-                <span class="value">
-                  <n-tag :type="record.login_status === 'success' ? 'success' : 'error'" size="small" :bordered="false">
-                    {{ record.login_status === 'success' ? '成功' : '失败' }}
-                  </n-tag>
-                </span>
+            <div v-else class="mobile-card-list">
+              <div v-for="(record, idx) in records" :key="idx" class="mobile-card">
+                <div class="card-row">
+                  <span class="label">时间</span>
+                  <span class="value">{{ formatDateTime(record.login_time) }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="label">IP</span>
+                  <span class="value mono">{{ record.ip_address }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="label">位置</span>
+                  <span class="value">{{ formatLocation(record.location) }}</span>
+                </div>
+                <div class="card-row">
+                  <span class="label">状态</span>
+                  <span class="value">
+                    <n-tag :type="record.login_status === 'success' ? 'success' : 'error'" size="small" :bordered="false">
+                      {{ record.login_status === 'success' ? '成功' : '失败' }}
+                    </n-tag>
+                  </span>
+                </div>
               </div>
             </div>
           </n-spin>
@@ -66,7 +68,7 @@
             v-model:page="pagination.page"
             :item-count="pagination.itemCount"
             :page-size="pagination.pageSize"
-            style="margin-top: 16px; justify-content: flex-end"
+            style="margin-top: 12px; justify-content: center"
             @update:page="(p: number) => { pagination.page = p; loadHistory() }"
           />
         </div>
@@ -161,12 +163,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 手机端横向留白由全局统一（10px）：页面根容器不再叠加左右 padding */
 .history-page {
-  padding: 24px;
+  padding: 8px 0 12px;
 }
 
 .title {
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 600;
   margin: 0;
   background: var(--brand-gradient);
@@ -176,29 +179,47 @@ onMounted(() => {
 }
 
 .stat-card {
-  padding: 20px 24px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--primary-color-hover), var(--primary-color)10);
-  border: 1px solid var(--primary-color-active);
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--bg-color, #fff);
+  border: 1px solid color-mix(in srgb, var(--border-color, #e2e8f0) 70%, transparent);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04);
 }
 
 .stat-label {
   font-size: 13px;
   color: var(--text-color-secondary);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .stat-value {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
 }
 
 .stat-value-sm {
   font-size: 16px;
+  word-break: break-word;
 }
 
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+
 @media (max-width: 767px) {
-  .history-page { padding: 0 12px; }
-  .stat-card { padding: 14px 16px; }
+  /* [class$="-page"]/[class$="-container"]（admin-mobile.css）会给根容器塞 12px !important，
+     这里按契约清零左右，纵向留一点节奏 */
+  .history-page { padding: 8px 0 12px !important; }
+  /* [class$="-container"] 也命中 naive 的 .n-spin-container，会把卡片挤窄 */
+  .history-page :deep(.n-spin-container) { padding: 0 !important; }
+  /* 旧层 user-mobile.css 用 !important 把卡片压回 8px 圆角，这里拉回契约的 App 风格 */
+  .history-page :deep(.mobile-card),
+  .history-page :deep(.n-card) {
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
+  }
+  .stat-card { padding: 12px 14px; border-radius: 16px !important; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important; }
+  .stat-value { font-size: 22px; }
+  .stat-value-sm { font-size: 14px; }
+  /* 分页按钮默认 28×28，手指点不准：手机端撑到 40px（父级已 flex-wrap，不会横向撑破） */
+  .history-page :deep(.n-pagination .n-pagination-item) { min-width: 40px; height: 40px; }
 }
 </style>

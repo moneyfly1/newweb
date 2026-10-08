@@ -21,22 +21,32 @@
       </div>
     </div>
 
-    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行） -->
-    <search-filter-bar
-      v-model:values="filterValues"
-      :filters="filterConfig"
-      search-placeholder="搜索套餐名称 / 描述"
-      @search="handleSearch"
-    />
+    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行；手机端吸顶） -->
+    <div class="app-sticky-toolbar mobile-sticky-toolbar">
+      <search-filter-bar
+        v-model:values="filterValues"
+        :filters="filterConfig"
+        search-placeholder="搜索套餐名称 / 描述"
+        @search="handleSearch"
+      />
+    </div>
 
     <n-card :bordered="false" class="page-card admin-main-card">
 
-      <!-- Batch operations -->
-      <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-        <span style="color: var(--text-color-secondary)">已选择 {{ checkedRowKeys.length }} 项</span>
-        <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
-        <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
-      </n-space>
+      <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机固定在底部标签栏上方）
+           注意：后端没有套餐批量接口，这里的批量启用/禁用沿用原实现（逐条调用 updatePackage） -->
+      <BatchSelectBar
+        :total="selection.total.value"
+        :selected-count="selection.count.value"
+        :all-selected="selection.allSelected.value"
+        :indeterminate="selection.indeterminate.value"
+        label="个套餐"
+        @toggle-all="selection.toggleAll"
+        @clear="selection.clear"
+      >
+        <n-button size="small" type="success" :disabled="!selection.count.value" @click="handleBatchEnable">批量启用</n-button>
+        <n-button size="small" type="warning" :disabled="!selection.count.value" @click="handleBatchDisable">批量禁用</n-button>
+      </BatchSelectBar>
 
       <n-space vertical :size="16">
         <template v-if="!appStore.isMobile">
@@ -49,18 +59,26 @@
             :bordered="false"
             :single-line="false"
             :row-key="(row) => row.id"
-            :checked-row-keys="checkedRowKeys"
-            @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
+            v-model:checked-row-keys="checkedRowKeys"
           />
         </template>
 
         <template v-else>
           <n-spin :show="loading">
-            <div v-if="packages.length === 0" style="text-align: center; padding: 40px 0; color: var(--text-color-secondary);">
+            <div v-if="packages.length === 0" class="mobile-empty">
               暂无数据
             </div>
             <div v-else class="mobile-card-list">
-              <div v-for="pkg in packages" :key="pkg.id" class="mobile-card">
+              <div
+                v-for="pkg in packages"
+                :key="pkg.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selection.isSelected(pkg) }"
+                @click="selection.toggle(pkg)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selection.isSelected(pkg)" @update:checked="() => selection.toggle(pkg)" />
+                </div>
                 <div class="card-header">
                   <div class="card-title">{{ pkg.name }}</div>
                   <n-tag :type="pkg.is_active ? 'success' : 'default'" size="small">
@@ -70,14 +88,14 @@
                 <div class="card-body">
                   <div class="card-row">
                     <span class="card-label">价格</span>
-                    <span style="color: var(--success-color); font-weight: 600;">{{ formatCurrency(pkg.price) }}</span>
+                    <span class="card-value price-text">{{ formatCurrency(pkg.price) }}</span>
                   </div>
                   <div class="card-row">
                     <span class="card-label">有效期</span>
-                    <span>{{ pkg.duration_days }} 天</span>
+                    <span class="card-value">{{ pkg.duration_days }} 天</span>
                   </div>
                 </div>
-                <div class="card-actions">
+                <div class="card-actions" @click.stop>
                   <n-button size="small" type="primary" @click="handleEdit(pkg)">编辑</n-button>
                   <n-button size="small" type="error" @click="handleDelete(pkg)">删除</n-button>
                 </div>
@@ -188,11 +206,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, h, onActivated, onMounted } from 'vue'
+import { ref, reactive, h, onActivated, onMounted, computed } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NSpin, useMessage, useDialog } from 'naive-ui'
 import { AddOutline } from '@vicons/ionicons5'
 import { listAdminPackages, createPackage, updatePackage, deletePackage } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
@@ -213,10 +233,19 @@ const filterValues = reactive({
 const filterConfig = []
 
 // 统一表格状态（含搜索参数）
-const { loading, tableData: packages, checkedRowKeys, pagination, loadData, reload } = useTable(listAdminPackages, {
+const { loading, tableData: packages, pagination, loadData, reload } = useTable(listAdminPackages, {
   getParams: () => ({ search: searchQuery.value || undefined }),
 })
 const fetchPackages = loadData
+
+// 全选 / 多选：唯一的选择状态，桌面表格与手机卡片共用（公共组件 useBatchSelection + BatchSelectBar）
+const selection = useBatchSelection(() => packages.value)
+
+// 桌面表格仍需数组形式的勾选键，用 computed 桥接，保证与手机端卡片状态一致
+const checkedRowKeys = computed({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
 
 // 下拉刷新（App 原生感）——此前只 import 未解构，导致移动端下拉刷新失效
 const { distance: pullDistance, refreshing: pullRefreshing, onTouchStart: pullTouchStart, onTouchMove: pullTouchMove, onTouchEnd: pullTouchEnd } =
@@ -444,26 +473,26 @@ const handleDelete = (row) => {
   })
 }
 
+// 后端没有套餐批量接口：批量启/禁用沿用的是逐条调用 updatePackage 的既有实现，
+// 只是把入口换成统一的批量选择（selection.selectedRows），不做假接口。
 const handleBatchEnable = async () => {
+  const targets = selection.selectedRows.value
+  if (targets.length === 0) return
   try {
-    await Promise.all(checkedRowKeys.value.map(id => {
-      const pkg = packages.value.find(p => p.id === id)
-      return updatePackage(id, { ...pkg, is_active: true })
-    }))
+    await Promise.all(targets.map((pkg) => updatePackage(pkg.id, { ...pkg, is_active: true })))
     message.success('批量启用成功')
-    checkedRowKeys.value = []
+    selection.clear()
     fetchPackages()
   } catch { message.error('批量启用失败') }
 }
 
 const handleBatchDisable = async () => {
+  const targets = selection.selectedRows.value
+  if (targets.length === 0) return
   try {
-    await Promise.all(checkedRowKeys.value.map(id => {
-      const pkg = packages.value.find(p => p.id === id)
-      return updatePackage(id, { ...pkg, is_active: false })
-    }))
+    await Promise.all(targets.map((pkg) => updatePackage(pkg.id, { ...pkg, is_active: false })))
     message.success('批量禁用成功')
-    checkedRowKeys.value = []
+    selection.clear()
     fetchPackages()
   } catch { message.error('批量禁用失败') }
 }
@@ -514,64 +543,47 @@ onActivated(() => {
   font-weight: 600;
 }
 
-.mobile-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.mobile-card {
-  background: var(--bg-color, #fff);
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  overflow: hidden;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-color, #f0f0f0);
-}
-
+/* 卡片外观、内边距、发丝分隔线、按压反馈、左侧多选框统一由全局 mobile-cards.css 提供，
+   页面只保留内容布局（标题截断、价格配色）。 */
 .card-title {
-  font-weight: 600;
-  font-size: 14px;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
+  font-size: 15px;
   margin-right: 8px;
 }
 
-.card-body {
-  padding: 10px 14px;
+.card-value {
+  min-width: 0;
+  word-break: break-word;
+}
+.price-text {
+  color: var(--success-color);
+  font-weight: 600;
 }
 
-.card-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-  font-size: 13px;
-}
-
-.card-label {
-  color: var(--text-color-secondary, #999);
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border-color, #f0f0f0);
-  flex-wrap: wrap;
-}
-
-@media (max-width: 767px) {
-  .admin-packages-page { padding: 8px; }
-}
 .mobile-toolbar { margin-bottom: 12px; }
 .mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
+
+@media (max-width: 767px) {
+  /* 页面根容器不再自带内边距：全局已给内容区 10px，页面再加就是白边浪费 */
+  .admin-packages-page { padding-left: 0; padding-right: 0; }
+  /* 搜索筛选条吸顶：复用全局 .app-sticky-toolbar，只把它的负外边距清零，
+     否则工具条会比 10px 内容区各宽出 2px，在 393px 屏幕上就是横向溢出。 */
+  .app-sticky-toolbar.mobile-sticky-toolbar {
+    margin: 0 0 10px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .app-sticky-toolbar.mobile-sticky-toolbar :deep(.sf-bar) {
+    margin-bottom: 0;
+  }
+  .mobile-empty {
+    text-align: center;
+    padding: 40px 0;
+    color: var(--text-color-secondary);
+  }
+}
 </style>

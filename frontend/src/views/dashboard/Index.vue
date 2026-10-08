@@ -903,18 +903,19 @@ onUnmounted(() => {
 
 /* Client Downloads */
 .client-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
-.client-card { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: var(--primary-color-soft); color: inherit; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+/* 触控目标 ≥40px（契约 §1）：原来是 38px，手指点不准 */
+.client-card { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid transparent; border-radius: 10px; background: var(--primary-color-soft); color: inherit; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
 .client-card:hover { background: var(--primary-color-soft); border-color: #dfe4ee; }
 .client-card:focus-visible { outline: 2px solid rgba(102,126,234,0.45); outline-offset: 2px; }
 /* 自研客户端（Mclash）优先推荐：高亮边框 + 推荐标签 */
 .client-card-self { border-color: var(--primary-color); background: linear-gradient(135deg, rgba(102,126,234,0.14), rgba(102,126,234,0.04)); }
 .client-card-self:hover { border-color: var(--primary-color); }
-.client-badge-self { font-size: 10px; font-weight: 600; padding: 0 4px; border-radius: 4px; color: #fff; background: var(--primary-color); white-space: nowrap; flex-shrink: 0; }
+.client-badge-self { font-size: 12px; font-weight: 600; padding: 0 5px; border-radius: 4px; color: #fff; background: var(--primary-color); white-space: nowrap; flex-shrink: 0; }
 .client-recommend-tip { margin: 0 0 8px; font-size: 12px; color: var(--text-color-secondary); }
 .client-recommend-tip strong { color: var(--primary-color); }
 .client-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; font-size: 16px; flex-shrink: 0; }
-.client-name { flex: 1; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
-.client-chip { font-size: 10px; font-weight: 600; padding: 0 4px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+.client-name { flex: 1; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+.client-chip { font-size: 12px; font-weight: 600; padding: 0 5px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
 .chip-arm { background: rgba(102,126,234,0.15); color: #667eea; }
 .chip-intel { background: rgba(52,199,89,0.15); color: #34c759; }
 
@@ -924,7 +925,7 @@ onUnmounted(() => {
 .quick-actions-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .quick-action { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 8px; background: var(--primary-color-soft); cursor: pointer; transition: background 0.2s; }
 .quick-action:hover { background: var(--primary-color-soft); }
-.quick-action span { font-size: 11px; color: var(--text-color); }
+.quick-action span { font-size: 13px; color: var(--text-color); }
 
 /* Announcements */
 .announcement-list { display: flex; flex-direction: column; gap: 6px; }
@@ -936,13 +937,17 @@ onUnmounted(() => {
 .order-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 6px; background: var(--primary-color-soft); }
 .order-left { display: flex; flex-direction: column; gap: 2px; }
 .order-name { font-size: 13px; font-weight: 500; }
-.order-time { font-size: 11px; color: var(--text-color-secondary); }
+.order-time { font-size: 12px; color: var(--text-color-secondary); }
 .order-right { display: flex; align-items: center; gap: 8px; }
 .order-amount { font-size: 14px; font-weight: 600; color: var(--success-color); }
 
 /* Mobile */
 @media (max-width: 767px) {
-  .dashboard { padding: 12px; }
+  /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白），
+     原来这里写 padding: 12px 会和布局内边距叠加成白边。上下留白由全局提供。
+     卡片圆角：共享样式 user-mobile.css 用 var(--user-mobile-radius)（当前 8px）定义
+     用户端卡片圆角，页面内覆盖该 token 即可拿到契约要求的 16px，无需改公共文件。 */
+  .dashboard { padding: 0; --user-mobile-radius: 16px; }
   .welcome-card { padding: 18px 16px; margin-bottom: 12px; border-radius: 16px; }
   .welcome-content { display: grid; gap: 14px; }
   .welcome-left { min-width: 0; }
@@ -971,22 +976,21 @@ onUnmounted(() => {
     white-space: nowrap;
   }
   .main-grid { grid-template-columns: 1fr; }
-  .card { border-radius: 14px; }
   .card-header { align-items: center; gap: 8px; padding-bottom: 10px; }
   .client-grid { grid-template-columns: repeat(2, 1fr); }
   .quick-actions-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .quick-action { padding: 12px 4px; border-radius: 12px; }
-  .quick-action span { font-size: 11px; }
+  .quick-action span { font-size: 13px; }
   .sub-days-block { align-items: flex-start; }
   .sub-stats-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .sub-stat { min-width: 0; }
-  .sub-url-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 32px 32px; gap: 6px; align-items: center; }
+  .sub-url-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 40px 40px; gap: 6px; align-items: center; }
   .sub-url-label { min-width: 0; }
   .shadowrocket-qr-row {
     display: block;
   }
   .dash-more-subscriptions .sub-url-row {
-    grid-template-columns: 44px minmax(0, 1fr) 32px;
+    grid-template-columns: 44px minmax(0, 1fr) 40px;
   }
   .shadowrocket-qr-header { flex-direction: column; align-items: stretch; }
   .shadowrocket-qr-canvas { max-width: 180px; }

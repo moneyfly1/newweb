@@ -1320,7 +1320,7 @@ onUnmounted(() => { stopPayPolling() })
 .days-progress { width: 100%; }
 .days-progress-track { height: 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.1); overflow: hidden; }
 .days-progress-fill { height: 100%; border-radius: 999px; background: var(--brand-gradient); transition: width 0.4s ease; }
-.days-progress-meta { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: #666; }
+.days-progress-meta { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; color: #666; }
 .days-expire { font-size: 12px; color: #666; }
 .balance-item { opacity: 0.92; }
 
@@ -1417,7 +1417,9 @@ onUnmounted(() => { stopPayPolling() })
 
 /* Mobile */
 @media (max-width: 767px) {
-  .subscription-page { padding: 12px; }
+  /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白）；
+     卡片圆角走共享 token --user-mobile-radius（8px → 契约的 16px），不改公共文件 */
+  .subscription-page { padding: 0; --user-mobile-radius: 16px; }
   .hero-row-top { flex-direction: column; gap: 10px; align-items: flex-start; }
   .hero-right { align-self: flex-end; }
   .hero-stats { flex-wrap: wrap; gap: 16px; padding: 12px 16px; }
@@ -1429,13 +1431,13 @@ onUnmounted(() => { stopPayPolling() })
   .format-grid { grid-template-columns: repeat(2, 1fr); }
 
   /* Modern Hero Mobile */
-  .modern-hero { padding: 16px; border-radius: 8px; }
+  .modern-hero { padding: 16px; border-radius: 16px; }
   .hero-header { display: grid; gap: 12px; }
   .hero-actions { width: 100%; }
   .hero-actions .n-button { flex: 1 1 auto; }
   .package-title { font-size: 20px; line-height: 1.25; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .stat-item { display: grid; grid-template-columns: 36px minmax(0, 1fr); padding: 12px; border-radius: 8px; }
+  .stat-item { display: grid; grid-template-columns: 36px minmax(0, 1fr); padding: 12px; border-radius: 12px; }
   .stat-icon { width: 36px; height: 36px; }
   .stat-content { min-width: 0; }
   .stat-value { font-size: 16px; line-height: 1.25; word-break: break-word; }
@@ -1445,11 +1447,18 @@ onUnmounted(() => { stopPayPolling() })
   .days-stat .stat-icon { width: 32px; height: 32px; }
   .days-number { font-size: 42px; }
   .days-unit { font-size: 14px; }
-  .url-card, .format-card-container, .device-card { padding: 16px; border-radius: 8px; }
+  /* 契约 §1：卡片内边距 12px、16px 圆角（token 已覆盖 .url-card/.device-card 等卡片类） */
+  .url-card,
+  .format-card-container,
+  .device-card {
+    padding: 12px;
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04);
+  }
   .card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
   .card-header .n-space { justify-content: flex-end; }
   .format-grid { grid-template-columns: repeat(2, 1fr); }
-  .format-item { padding: 12px 10px; border-radius: 8px; }
+  .format-item { padding: 12px 10px; border-radius: 12px; }
   .format-item-icon,
   .format-item-icon img { width: 40px; height: 40px; }
   .format-item-actions { display: grid; grid-template-columns: 1fr 1fr; }
@@ -1457,7 +1466,7 @@ onUnmounted(() => { stopPayPolling() })
   .url-actions { flex-direction: column; align-items: stretch; }
   .url-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; }
   .url-buttons .n-button { width: 100%; }
-  .mobile-device-item { border-radius: 8px; background: var(--bg-page-color, #f8fafc); }
+  .mobile-device-item { border-radius: 12px; background: var(--bg-page-color, #f8fafc); }
   .device-info-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: start; }
   .device-value { text-align: right; word-break: break-word; }
   .drawer-section { gap: 12px !important; }

@@ -21,10 +21,42 @@
         </n-alert>
 
         <n-spin :show="loadingPools">
-          <div v-if="pools.length === 0 && !loadingPools" style="text-align:center;padding:40px 0;color:#999">
-            暂无可用奖池
+          <div v-if="pools.length === 0 && !loadingPools" class="mobile-empty">暂无可用奖池</div>
+          <!-- 手机端：奖池走 App 卡片列表（桌面端保持三列网格） -->
+          <div v-else-if="appStore.isMobile" class="mobile-card-list">
+            <div v-for="pool in pools" :key="pool.id" class="mobile-card">
+              <div class="card-header mb-card-head">
+                <span class="card-title">{{ pool.name }}</span>
+                <n-tag type="warning" size="small" :bordered="false">{{ formatAmount(pool.price) }} 元/次</n-tag>
+              </div>
+              <p v-if="pool.description" class="mb-pool-desc">{{ pool.description }}</p>
+              <div v-if="pool.max_opens_per_day || pool.max_opens_total || pool.min_level || pool.min_balance" class="mb-pool-tags">
+                <n-tag v-if="pool.max_opens_per_day" size="small" :bordered="false">每日限{{ pool.max_opens_per_day }}次</n-tag>
+                <n-tag v-if="pool.max_opens_total" size="small" :bordered="false">总限{{ pool.max_opens_total }}次</n-tag>
+                <n-tag v-if="pool.min_level" size="small" :bordered="false">等级≥{{ pool.min_level }}</n-tag>
+                <n-tag v-if="pool.min_balance" size="small" :bordered="false">余额≥{{ pool.min_balance }}</n-tag>
+              </div>
+              <div v-if="pool.prizes && pool.prizes.length" class="mb-prizes">
+                <div class="mb-prizes-label">奖品与概率</div>
+                <div class="mb-prize-list">
+                  <div v-for="prize in pool.prizes" :key="prize.id" class="mb-prize">
+                    <n-tag :type="prizeTagType(prize.type)" size="small" :bordered="false">{{ prize.name }}</n-tag>
+                    <span class="mb-prize-prob">{{ getPrizeProbability(pool, prize) }}</span>
+                    <span class="mb-prize-meta">
+                      {{ prizeTypeLabel(prize.type) }}：{{ prize.value }}{{ prize.type === 'subscription_days' ? ' 天' : ' 元' }}
+                      <template v-if="prize.stock !== null && prize.stock !== undefined"> · 剩余 {{ prize.stock }} 份</template>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div class="mb-pool-actions">
+                <n-button type="primary" block :loading="openingPoolId === pool.id" @click="handleOpen(pool)">
+                  开启盲盒（{{ formatAmount(pool.price) }} 元）
+                </n-button>
+              </div>
+            </div>
           </div>
-          <n-grid :cols="appStore.isMobile ? 1 : 3" :x-gap="16" :y-gap="16" v-else>
+          <n-grid v-else :cols="3" :x-gap="16" :y-gap="16">
             <n-gi v-for="pool in pools" :key="pool.id">
               <n-card hoverable>
                 <template #header>
@@ -71,18 +103,16 @@
           />
         </template>
         <template v-else>
-          <div v-if="historyData.length === 0 && !loadingHistory" style="text-align:center;padding:40px 0;color:#999">暂无记录</div>
+          <div v-if="historyData.length === 0 && !loadingHistory" class="mobile-empty">暂无记录</div>
           <div v-else class="mobile-card-list">
             <div v-for="item in historyData" :key="item.id" class="mobile-card">
-              <div class="card-header">
+              <div class="card-header mb-card-head">
                 <span class="card-title">{{ item.prize_name }}</span>
-                <n-tag :type="prizeTagType(item.prize_type)" size="small">{{ prizeTypeLabel(item.prize_type) }}</n-tag>
+                <n-tag :type="prizeTagType(item.prize_type)" size="small" :bordered="false">{{ prizeTypeLabel(item.prize_type) }}</n-tag>
               </div>
-              <div class="card-body">
-                <div class="card-row"><span class="card-label">奖品价值</span><span>{{ item.prize_value }}</span></div>
-                <div class="card-row"><span class="card-label">消费</span><span>{{ item.cost }} 元</span></div>
-                <div class="card-row"><span class="card-label">时间</span><span>{{ formatDateTime(item.created_at) }}</span></div>
-              </div>
+              <div class="card-row"><span class="card-label">奖品价值</span><span>{{ item.prize_value }}</span></div>
+              <div class="card-row"><span class="card-label">消费</span><span>{{ item.cost }} 元</span></div>
+              <div class="card-row"><span class="card-label">时间</span><span>{{ formatDateTime(item.created_at) }}</span></div>
             </div>
           </div>
         </template>
@@ -99,7 +129,7 @@
             {{ prizeLabel(prizeResult) }}
           </n-tag>
           <div v-if="formatCouponCode(prizeResult)" style="margin-top:16px;padding:12px;background:#f6ffed;border-radius:8px;border:1px solid #b7eb8f">
-            <n-text depth="3" style="font-size:12px;display:block;margin-bottom:4px">优惠券码（下单时使用）</n-text>
+            <n-text depth="3" style="font-size:13px;display:block;margin-bottom:4px">优惠券码（下单时使用）</n-text>
             <n-text strong style="font-size:18px;letter-spacing:2px;font-family:monospace">{{ formatCouponCode(prizeResult) }}</n-text>
           </div>
           <p style="color:#999;margin-top:12px;font-size:13px">消费 {{ prizeResult.cost }} 元</p>
@@ -241,12 +271,40 @@ onMounted(() => {
 .rules-content ul { margin: 4px 0 4px 18px; padding: 0; }
 .rules-content li { font-size: 13px; line-height: 1.6; color: #555; margin: 2px 0; }
 .rules-content b { color: #333; }
-.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.mobile-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
-.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
-.card-title { font-weight: 600; font-size: 14px; }
-.card-body { padding: 10px 14px; }
-.card-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-.card-label { color: #999; }
-@media (max-width: 767px) { .mystery-box-page { padding: 0 12px; } }
+
+@media (max-width: 767px) {
+  /* 手机端根容器不再自带左右内边距（左右留白由全局统一给 10px） */
+  .mystery-box-page { padding: 10px 0 0; }
+
+  /* .n-spin-container 会被全局 [class$="-container"] 规则塞进 12px 内边距，
+     叠在页面根容器上就是「两边留白太多」，手机上收掉 */
+  .mystery-box-page :deep(.n-spin-container) {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* 奖池/记录两个 Tab 是页面唯一的「工具栏」，吸顶不跟着内容滚走 */
+  .mystery-box-page :deep(.n-tabs-nav) {
+    position: sticky;
+    top: 0;
+    z-index: 9;
+    padding: 2px 2px 0;
+    background: color-mix(in srgb, var(--bg-color, #fff) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+  }
+
+  /* 奖池卡片：只用页面专属类名补内边距/排版（只做加法，不覆盖全局属性），
+     不改全局 .mobile-card / .card-header / .card-row 的 App 风格 */
+  .mobile-card .mb-card-head { padding: 14px 12px 0; }
+  .mb-pool-desc { margin: 0 12px 10px; font-size: 13px; line-height: 1.6; color: var(--text-color-secondary); }
+  .mb-pool-tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 6px; }
+  .mb-prizes { padding: 0 12px 4px; }
+  .mb-prizes-label { font-size: 13px; font-weight: 600; color: var(--text-color); margin-bottom: 6px; }
+  .mb-prize-list { display: flex; flex-direction: column; gap: 8px; }
+  .mb-prize { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+  .mb-prize-prob { font-size: 13px; font-weight: 600; color: var(--primary-color, #4f46e5); }
+  .mb-prize-meta { font-size: 12px; line-height: 1.5; color: var(--text-color-secondary); max-width: 100%; overflow-wrap: anywhere; }
+  .mb-pool-actions { padding: 8px 12px 12px; }
+}
 </style>

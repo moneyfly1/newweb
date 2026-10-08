@@ -5,9 +5,12 @@
         <n-button type="primary" @click="handleAddPool">创建奖池</n-button>
       </template>
 
-      <div v-if="appStore.isMobile" class="mobile-toolbar">
-        <div class="mobile-toolbar-title">盲盒管理</div>
-        <n-button size="small" type="primary" @click="handleAddPool">创建奖池</n-button>
+      <!-- Mobile toolbar：吸顶工具条（标题 + 创建奖池） -->
+      <div v-if="appStore.isMobile" class="app-sticky-toolbar pool-toolbar">
+        <div class="pool-toolbar__title">盲盒管理</div>
+        <div class="pool-toolbar__actions">
+          <n-button size="small" type="primary" @click="handleAddPool">创建奖池</n-button>
+        </div>
       </div>
 
       <!-- 统计概览 -->
@@ -18,17 +21,40 @@
         <n-gi><n-statistic label="奖池数量" :value="pools.length" /></n-gi>
       </n-grid>
 
+      <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机固定在底部标签栏上方） -->
+      <BatchSelectBar
+        :total="selection.total.value"
+        :selected-count="selection.count.value"
+        :all-selected="selection.allSelected.value"
+        :indeterminate="selection.indeterminate.value"
+        label="个奖池"
+        @toggle-all="selection.toggleAll"
+        @clear="selection.clear"
+      >
+        <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDeletePools">
+          批量删除
+        </n-button>
+      </BatchSelectBar>
+
       <!-- 奖池列表 -->
-      <n-collapse>
+      <n-collapse class="pool-collapse">
         <n-collapse-item v-for="pool in pools" :key="pool.id" :title="pool.name" :name="pool.id">
           <template #header-extra>
-            <n-space :size="8" @click.stop>
-              <n-tag :type="pool.is_active ? 'success' : 'default'" size="small">{{ pool.is_active ? '启用' : '停用' }}</n-tag>
-              <n-tag size="small">{{ formatAmount(pool.price) }} 元</n-tag>
-              <n-button size="tiny" @click.stop="handleEditPool(pool)">编辑</n-button>
-              <n-button size="tiny" type="error" @click.stop="handleDeletePool(pool.id)">删除</n-button>
-            </n-space>
+            <!-- 整块 @click.stop：点复选框/按钮不要连带展开或收起奖池 -->
+            <div class="pool-extra" @click.stop>
+              <n-checkbox :checked="selection.isSelected(pool)" @update:checked="() => selection.toggle(pool)" />
+              <n-tag v-if="!appStore.isMobile" :type="pool.is_active ? 'success' : 'default'" size="small">{{ pool.is_active ? '启用' : '停用' }}</n-tag>
+              <n-tag v-if="!appStore.isMobile" size="small">{{ formatAmount(pool.price) }} 元</n-tag>
+              <n-button size="tiny" @click="handleEditPool(pool)">编辑</n-button>
+              <n-button size="tiny" type="error" @click="handleDeletePool(pool.id)">删除</n-button>
+            </div>
           </template>
+
+          <!-- 手机端：状态/价格放到正文里（表头放不下标签+按钮，会挤成横向滚动） -->
+          <div v-if="appStore.isMobile" class="pool-brief">
+            <div class="card-row"><span class="card-label">状态</span><span>{{ pool.is_active ? '启用' : '停用' }}</span></div>
+            <div class="card-row"><span class="card-label">开启价格</span><span>{{ formatAmount(pool.price) }} 元</span></div>
+          </div>
 
           <div style="margin-bottom:12px">
             <n-space :size="8">
@@ -43,10 +69,31 @@
             <n-text strong>奖品列表</n-text>
             <n-button size="small" type="primary" @click="handleAddPrize(pool.id)">添加奖品</n-button>
           </n-space>
-          <n-data-table :columns="getPrizeColumns(pool)" :data="pool.prizes || []" :bordered="false" size="small" />
+
+          <!-- 桌面：表格（窄屏时容器内横向滚动，不撑破页面） -->
+          <div v-if="!appStore.isMobile" class="prize-table-wrap">
+            <n-data-table :columns="getPrizeColumns(pool)" :data="pool.prizes || []" :bordered="false" size="small" />
+          </div>
+          <!-- 手机：App 列表行 -->
+          <div v-else-if="(pool.prizes || []).length" class="app-list prize-list">
+            <div v-for="prize in pool.prizes" :key="prize.id" class="app-list-item prize-item">
+              <div class="app-list-item__main">
+                <div class="app-list-item__title">{{ prize.name }}</div>
+                <div class="prize-item__meta">
+                  {{ prizeTypeLabel(prize.type) }} · 数值 {{ prize.value }} · 权重 {{ prize.weight }} ·
+                  概率 {{ getProbability(pool, prize) }} · 库存 {{ prize.stock === null || prize.stock === undefined ? '无限' : prize.stock }}
+                </div>
+              </div>
+              <div class="prize-item__actions" @click.stop>
+                <n-button size="tiny" @click="handleEditPrize(prize)">编辑</n-button>
+                <n-button size="tiny" type="error" @click="handleDeletePrize(prize.id)">删除</n-button>
+              </div>
+            </div>
+          </div>
+          <div v-else class="mobile-empty">暂无奖品</div>
         </n-collapse-item>
       </n-collapse>
-      <div v-if="pools.length === 0 && !loading" style="text-align:center;padding:40px 0;color:#999">暂无奖池</div>
+      <div v-if="pools.length === 0 && !loading" class="mobile-empty">暂无奖池</div>
     </n-card>
 
     <!-- 奖池表单抽屉 -->
@@ -92,6 +139,8 @@ import {
   listAdminMysteryBoxPools, createMysteryBoxPool, updateMysteryBoxPool, deleteMysteryBoxPool,
   addMysteryBoxPrize, updateMysteryBoxPrize, deleteMysteryBoxPrize, getMysteryBoxStats,
 } from '@/api/admin'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
@@ -102,6 +151,9 @@ const loading = ref(false)
 const submitting = ref(false)
 const pools = ref<any[]>([])
 const stats = ref<any>({})
+
+// 全选 / 多选：奖池列表（批量删除按 id 逐个调用 deleteMysteryBoxPool，后端没有批量接口）
+const selection = useBatchSelection(() => pools.value)
 
 // Pool form
 const showPoolDrawer = ref(false)
@@ -247,6 +299,25 @@ const handleDeletePool = (id: number) => {
   })
 }
 
+const handleBatchDeletePools = () => {
+  const ids = selection.selectedRows.value.map(p => p.id)
+  if (!ids.length) return
+  dialog.warning({
+    title: '批量删除奖池',
+    content: `确定要删除选中的 ${ids.length} 个奖池吗？奖池下的所有奖品也会一并删除，此操作不可恢复。`,
+    positiveText: '确定', negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await Promise.all(ids.map(id => deleteMysteryBoxPool(id)))
+        message.success(`已删除 ${ids.length} 个奖池`)
+        selection.clear()
+        loadPools()
+        loadStats()
+      } catch (e: any) { message.error(e.message || '批量删除失败') }
+    }
+  })
+}
+
 const handleAddPrize = (poolId: number) => {
   editingPrize.value = null
   currentPoolId.value = poolId
@@ -301,8 +372,57 @@ onActivated(() => { loadPools(); loadStats() })
 </script>
 
 <style scoped>
-.mystery-box-admin { padding: 20px; }
-@media (max-width: 767px) { .mystery-box-admin { padding: 8px; } }
-.mobile-toolbar { margin-bottom: 12px; }
-.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
+/* 分页/批量栏与列表之间的间距 */
+.pool-collapse { margin-top: 4px; }
+
+/* 奖池标题右侧：复选框 + 标签/按钮，允许换行不溢出 */
+.pool-extra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* 手机端工具条 */
+/* 卡片内容区在手机端无左右内边距，工具条不再用全局的 -12px 出血，避免越过卡片边界 */
+.pool-toolbar { display: flex; flex-direction: column; gap: 8px; margin-left: 0; margin-right: 0; }
+.pool-toolbar__title { font-size: 16px; font-weight: 650; color: var(--text-color, #333); }
+.pool-toolbar__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pool-toolbar__actions .n-button { flex: 1 1 0; min-width: 0; }
+
+/* 桌面奖品表格：窄屏时在容器内横向滚动，不撑破页面 */
+.prize-table-wrap { overflow-x: auto; }
+
+/* 手机端奖池概要 + 奖品行 */
+.pool-brief { margin-bottom: 10px; }
+.pool-brief .card-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 55%, transparent);
+}
+.pool-brief .card-row:last-child { border-bottom: none; }
+.pool-brief .card-label { color: var(--text-color-secondary, #64748b); }
+
+.prize-list { gap: 8px; }
+.prize-item { align-items: flex-start; }
+.prize-item__meta {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-color-secondary, #6b7280);
+  word-break: break-word;
+}
+.prize-item__actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+@media (max-width: 767px) {
+  /* 手机端左右留白与底部批量栏空间由全局统一给，页面根容器不再自带内边距 */
+  .mystery-box-admin { padding: 0; }
+  .prize-item__actions .n-button { flex: 1; }
+  .prize-item { flex-direction: column; }
+  .prize-item__actions { width: 100%; }
+}
 </style>

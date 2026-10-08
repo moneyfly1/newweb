@@ -8,7 +8,8 @@
       </div>
     </transition>
 
-    <div class="notif-header">
+    <!-- 筛选条：手机端由 .app-sticky-toolbar 吸顶（该类只在 ≤767px 生效，桌面无副作用） -->
+    <div class="notif-header app-sticky-toolbar">
       <div class="notif-tabs">
         <div class="notif-tab" :class="{ active: filter === 'all' }" @click="switchFilter('all')">全部</div>
         <div class="notif-tab" :class="{ active: filter === 'unread' }" @click="switchFilter('unread')">
@@ -20,21 +21,23 @@
 
     <n-spin :show="loading">
       <div v-if="notifications.length === 0" class="mobile-empty">暂无通知</div>
-      <div v-else class="notif-list">
+      <div v-else class="mobile-card-list">
         <div
           v-for="n in notifications"
           :key="n.id"
-          class="notif-item"
-          :class="{ unread: !n.is_read }"
+          class="mobile-card"
+          :class="{ 'is-unread': !n.is_read }"
           @click="handleClick(n)"
         >
-          <div class="notif-dot" v-if="!n.is_read" />
-          <div class="notif-main">
-            <div class="notif-title">{{ n.title }}</div>
-            <div class="notif-content">{{ n.content }}</div>
-            <div class="notif-time">{{ formatRelativeTime(n.created_at, '') }}</div>
+          <div class="card-header">
+            <span class="card-title">{{ n.title }}</span>
+            <n-tag v-if="!n.is_read" size="small" type="error" :bordered="false">未读</n-tag>
           </div>
-          <n-button text size="tiny" type="error" @click.stop="handleDelete(n.id)">删除</n-button>
+          <p class="notif-content">{{ n.content }}</p>
+          <div class="notif-foot">
+            <span class="notif-time">{{ formatRelativeTime(n.created_at, '') }}</span>
+            <n-button size="tiny" quaternary type="error" @click.stop="handleDelete(n.id)">删除</n-button>
+          </div>
         </div>
       </div>
 
@@ -46,7 +49,7 @@
         :item-count="pagination.itemCount"
         :page-sizes="[10, 20, 50]"
         show-size-picker
-        style="margin-top: 16px; justify-content: center"
+        style="margin-top: 12px; justify-content: center"
         @update:page="loadData"
         @update:page-size="handlePageSize"
       />
@@ -124,7 +127,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.notification-page { padding: 12px; position: relative; }
+/* 手机端横向留白由全局统一（10px）：页面根容器不再叠加左右 padding */
+.notification-page { padding: 8px 0 12px; position: relative; }
 
 /* 下拉刷新指示器 */
 .pull-indicator {
@@ -149,17 +153,23 @@ onMounted(() => {
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
+/* 筛选条：桌面是普通一行，手机端被全局 .app-sticky-toolbar 变成吸顶工具栏 */
 .notif-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
-.notif-tabs { display: flex; gap: 8px; }
+.notif-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
 .notif-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
   padding: 6px 16px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-color-secondary, #666);
   background: var(--primary-color-soft, rgba(79, 70, 229, 0.06));
   cursor: pointer;
@@ -174,48 +184,60 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   margin-left: 4px;
   border-radius: 999px;
   background: var(--danger-color, #dc2626);
   color: #fff;
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1;
 }
 
-.notif-list { display: flex; flex-direction: column; gap: 10px; }
-.notif-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 14px;
-  background: var(--bg-color, #fff);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  position: relative;
-  transition: transform 0.12s ease;
-}
-
-.notif-item.unread { background: var(--primary-color-soft, rgba(79, 70, 229, 0.04)); }
-.notif-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--danger-color, #dc2626);
-  flex-shrink: 0;
-  margin-top: 6px;
-}
-.notif-main { flex: 1; min-width: 0; }
-.notif-title { font-size: 14px; font-weight: 600; color: var(--text-color); margin-bottom: 4px; }
+/* 通知内容：卡片外观走全局 .mobile-card（16px 圆角/轻阴影/纯色底），
+   这里只补页面自己的文本排版（用页面专属类名，避免覆盖全局卡片样式） */
 .notif-content {
+  margin: 0;
+  padding: 0 12px;
   font-size: 13px;
   color: var(--text-color-secondary, #666);
-  line-height: 1.5;
+  line-height: 1.6;
+  word-break: break-word;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.notif-time { font-size: 11px; color: var(--text-color-secondary, #999); margin-top: 6px; }
+.notif-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px 8px;
+  margin-top: 6px;
+}
+.notif-time { font-size: 12px; color: var(--text-color-secondary, #999); }
+.notif-header.app-sticky-toolbar { padding: 8px 12px; }
+
+@media (max-width: 767px) {
+  /* admin-mobile.css 的 [class$="-container"] 命中了 naive 的 .n-spin-container：
+     它会给卡片再套 12px 内边距把卡片挤窄，这里为零（内容尽量宽） */
+  .notification-page :deep(.n-spin-container) { padding: 0 !important; }
+  /* 旧层 user-mobile.css 用 !important 把卡片压回 8px 圆角，这里拉回契约的 App 风格 */
+  .notification-page :deep(.mobile-card) {
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
+  }
+  /* 卡片自身 padding 为 0（旧层设定），给标题行补内边距，避免标题贴边 */
+  .notification-page :deep(.mobile-card .card-header) { padding: 12px 12px 0; margin-bottom: 8px; }
+  /* 吸顶工具栏的默认负边距是给「卡片内边距」留位的，这里列表已贴齐，改成 0 防溢出 */
+  .notif-header.app-sticky-toolbar { margin: 0 0 10px; padding: 8px 12px; }
+  /* 分页按钮默认 28×28，手指点不准：手机端撑到 40px（父级已 flex-wrap，不会横向撑破） */
+  .notification-page :deep(.n-pagination .n-pagination-item) { min-width: 40px; height: 40px; }
+  .notification-page :deep(.mobile-card.is-unread) {
+    border-color: color-mix(in srgb, var(--primary-color, #4f46e5) 45%, transparent) !important;
+    background: color-mix(in srgb, var(--primary-color-soft, rgba(79, 70, 229, 0.08)) 70%, var(--bg-color, #fff)) !important;
+  }
+}
 </style>

@@ -40,8 +40,8 @@
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="filter-bar">
+    <!-- Filters（手机端吸顶：滚动看节点时筛选不消失） -->
+    <div class="filter-bar app-sticky-toolbar">
       <n-space :wrap="true" :size="10" align="center">
         <n-select v-model:value="filterRegion" :options="regionOptions" placeholder="筛选地区" clearable style="width: 160px;" @update:value="handleFilterChange" />
         <n-select v-model:value="filterProtocol" :options="protocolOptions" placeholder="筛选协议" clearable style="width: 140px;" @update:value="handleFilterChange" />
@@ -387,7 +387,7 @@ onMounted(() => { fetchNodes() })
 .latency-poor { color: var(--danger-color); font-weight: 600; }
 .latency-none { color: var(--text-color-secondary, #ccc); }
 .mobile-node-list { display: flex; flex-direction: column; gap: 10px; }
-.mobile-node-card { border-radius: 10px; padding: 14px 16px; border: 1px solid var(--border-color, #eef0f3); border-left: 4px solid var(--success-color); }
+.mobile-node-card { border-radius: 10px; padding: 14px 16px; background: var(--bg-color, #fff); border: 1px solid var(--border-color, #eef0f3); border-left: 4px solid var(--success-color); }
 .mobile-node-card.card-offline { border-left-color: var(--danger-color); opacity: 0.7; }
 .mobile-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color, #f5f5f5); }
 .mobile-node-name { display: flex; align-items: center; font-size: 14px; font-weight: 600; color: var(--text-color, #1a1a1a); min-width: 0; }
@@ -398,18 +398,30 @@ onMounted(() => { fetchNodes() })
 .mobile-info-label { font-size: 12px; color: var(--text-color-secondary, #999); }
 
 @media (max-width: 767px) {
-  .node-page { padding: 12px; }
+  /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白） */
+  .node-page { padding: 0; }
   .stats-bar { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .stat-card { padding: 14px; border-radius: 14px; }
+  /* 契约 §1：卡片 16px 圆角。共享样式 app-mobile.css 把 .stat-card 定成 14px !important，
+     这里按契约覆盖回 16px（page scoped，不动公共文件） */
+  .stat-card { padding: 14px; border-radius: 16px !important; }
   .stat-value { font-size: 18px; }
   .stat-icon { width: 38px; height: 38px; }
   .filter-bar { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: stretch; }
+  /* 吸顶工具栏：.app-sticky-toolbar（全局）自带 -12px 负边距，是给「页面根容器有
+     12px 内边距」的页面准备的；本页根容器无内边距，负边距会把工具条撑出屏幕，
+     所以在这里把外边距归零（页面 scoped 样式优先，不动公共文件）。 */
+  .filter-bar.app-sticky-toolbar {
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color, #eef0f3);
+    border-radius: 16px;
+  }
   .filter-bar :deep(.n-input),
   .filter-bar :deep(.n-select),
   .filter-bar .n-button { width: 100%; }
   .desktop-table { display: none; }
   .mobile-cards { display: block; }
-  .mobile-node-card { border-radius: 14px; padding: 12px; }
+  .mobile-node-card { border-radius: 16px; padding: 12px; }
   
   .mobile-card-info { grid-template-columns: 1fr; gap: 4px; }
   .mobile-info-item { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: center; }

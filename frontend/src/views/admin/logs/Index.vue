@@ -44,12 +44,12 @@
               </div>
             </div>
             <n-pagination
+              class="list-pagination"
               v-model:page="auditPagination.page"
               v-model:page-size="auditPagination.pageSize"
               :item-count="auditPagination.itemCount"
               :page-sizes="auditPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: flex-end"
               @update:page="(p: number) => { auditPagination.page = p; loadAuditLogs() }"
               @update:page-size="(ps: number) => { auditPagination.pageSize = ps; auditPagination.page = 1; loadAuditLogs() }"
             />
@@ -85,12 +85,12 @@
               </div>
             </div>
             <n-pagination
+              class="list-pagination"
               v-model:page="loginPagination.page"
               v-model:page-size="loginPagination.pageSize"
               :item-count="loginPagination.itemCount"
               :page-sizes="loginPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: flex-end"
               @update:page="(p: number) => { loginPagination.page = p; loadLoginLogs() }"
               @update:page-size="(ps: number) => { loginPagination.pageSize = ps; loginPagination.page = 1; loadLoginLogs() }"
             />
@@ -124,12 +124,12 @@
               </div>
             </div>
             <n-pagination
+              class="list-pagination"
               v-model:page="registrationPagination.page"
               v-model:page-size="registrationPagination.pageSize"
               :item-count="registrationPagination.itemCount"
               :page-sizes="registrationPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: flex-end"
               @update:page="(p: number) => { registrationPagination.page = p; loadRegistrationLogs() }"
               @update:page-size="(ps: number) => { registrationPagination.pageSize = ps; registrationPagination.page = 1; loadRegistrationLogs() }"
             />
@@ -163,12 +163,12 @@
               </div>
             </div>
             <n-pagination
+              class="list-pagination"
               v-model:page="subscriptionPagination.page"
               v-model:page-size="subscriptionPagination.pageSize"
               :item-count="subscriptionPagination.itemCount"
               :page-sizes="subscriptionPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: flex-end"
               @update:page="(p: number) => { subscriptionPagination.page = p; loadSubscriptionLogs() }"
               @update:page-size="(ps: number) => { subscriptionPagination.pageSize = ps; subscriptionPagination.page = 1; loadSubscriptionLogs() }"
             />
@@ -204,12 +204,12 @@
               </div>
             </div>
             <n-pagination
+              class="list-pagination"
               v-model:page="balancePagination.page"
               v-model:page-size="balancePagination.pageSize"
               :item-count="balancePagination.itemCount"
               :page-sizes="balancePagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: flex-end"
               @update:page="(p: number) => { balancePagination.page = p; loadBalanceLogs() }"
               @update:page-size="(ps: number) => { balancePagination.pageSize = ps; balancePagination.page = 1; loadBalanceLogs() }"
             />
@@ -244,12 +244,12 @@
               </div>
             </div>
             <n-pagination
+              class="list-pagination"
               v-model:page="commissionPagination.page"
               v-model:page-size="commissionPagination.pageSize"
               :item-count="commissionPagination.itemCount"
               :page-sizes="commissionPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: flex-end"
               @update:page="(p: number) => { commissionPagination.page = p; loadCommissionLogs() }"
               @update:page-size="(ps: number) => { commissionPagination.pageSize = ps; commissionPagination.page = 1; loadCommissionLogs() }"
             />
@@ -287,12 +287,12 @@
               </div>
             </div>
             <n-pagination
+              class="list-pagination"
               v-model:page="systemPagination.page"
               v-model:page-size="systemPagination.pageSize"
               :item-count="systemPagination.itemCount"
               :page-sizes="systemPagination.pageSizes"
               show-size-picker
-              style="margin-top: 16px; justify-content: flex-end"
               @update:page="(p: number) => { systemPagination.page = p; loadSystemLogs() }"
               @update:page-size="(ps: number) => { systemPagination.pageSize = ps; systemPagination.page = 1; loadSystemLogs() }"
             />
@@ -859,16 +859,13 @@ onMounted(() => {
   padding: 20px;
 }
 
-.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.mobile-card { background: var(--bg-color); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
-.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
-.card-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-body { padding: 10px 14px; }
-.card-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
-.card-label { color: var(--text-color-secondary); }
-.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-wrap: wrap; }
+/* 分页：桌面靠右，手机居中 */
+.list-pagination { margin-top: 16px; justify-content: flex-end; }
 
+/* 日志卡片样式（.mobile-card / .card-header / .card-row…）全部交给全局
+   mobile-cards.css + admin-mobile.css，页面不再覆盖，手机端才是 App 列表样式。 */
 @media (max-width: 767px) {
-  .logs-container { padding: 8px; }
+  /* 左右留白由全局统一给（mobile-app-ui.css + admin-mobile.css），页面不再自带内边距 */
+  .list-pagination { justify-content: center; }
 }
 </style>

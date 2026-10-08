@@ -50,9 +50,10 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { NButton, NCheckbox } from 'naive-ui'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     /** 可被选中的行数 */
     total: number
@@ -74,6 +75,17 @@ const emit = defineEmits<{
   (e: 'toggle-all'): void
   (e: 'clear'): void
 }>()
+
+// 手机端这条栏是 fixed 贴在底部的，会盖住列表最后一条。
+// 挂载时给 body 加个标记，全局样式据此把内容区底部内边距加大。
+function syncBodyFlag() {
+  if (typeof document === 'undefined') return
+  document.body.classList.toggle('has-batch-bar', props.total > 0)
+}
+
+onMounted(syncBodyFlag)
+watch(() => props.total, syncBodyFlag)
+onBeforeUnmount(() => document.body.classList.remove('has-batch-bar'))
 </script>
 
 <style scoped>

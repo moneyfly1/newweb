@@ -16,7 +16,7 @@
         </n-button>
       </template>
 
-      <div v-if="appStore.isMobile" class="mobile-toolbar">
+      <div v-if="appStore.isMobile" class="mobile-toolbar app-sticky-toolbar">
         <div class="mobile-toolbar-title">优惠券管理</div>
         <n-button size="small" type="primary" @click="handleAdd">
           <template #icon><n-icon><AddOutline /></n-icon></template>
@@ -24,13 +24,20 @@
         </n-button>
       </div>
 
-      <!-- Batch operations -->
-      <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-        <span style="color: var(--text-color-secondary)">已选择 {{ checkedRowKeys.length }} 项</span>
-        <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
-        <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
-        <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
-      </n-space>
+      <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方） -->
+      <BatchSelectBar
+        :total="selection.total.value"
+        :selected-count="selection.count.value"
+        :all-selected="selection.allSelected.value"
+        :indeterminate="selection.indeterminate.value"
+        label="张优惠券"
+        @toggle-all="selection.toggleAll"
+        @clear="selection.clear"
+      >
+        <n-button size="small" type="success" :disabled="!selection.count.value" @click="handleBatchEnable">批量启用</n-button>
+        <n-button size="small" type="warning" :disabled="!selection.count.value" @click="handleBatchDisable">批量禁用</n-button>
+        <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDelete">批量删除</n-button>
+      </BatchSelectBar>
 
       <template v-if="!appStore.isMobile">
         <n-data-table
@@ -42,8 +49,7 @@
           :pagination="pagination"
           :bordered="false"
           :row-key="(row) => row.id"
-          :checked-row-keys="checkedRowKeys"
-          @update:checked-row-keys="(keys) => { checkedRowKeys.value = keys }"
+          v-model:checked-row-keys="checkedRowKeys"
           @update:sorter="handleSorterChange"
         />
       </template>
@@ -54,7 +60,16 @@
             暂无数据
           </div>
           <div v-else class="mobile-card-list">
-            <div v-for="coupon in tableData" :key="coupon.id" class="mobile-card">
+            <div
+              v-for="coupon in tableData"
+              :key="coupon.id"
+              class="mobile-card is-selectable"
+              :class="{ 'is-selected': selection.isSelected(coupon) }"
+              @click="selection.toggle(coupon)"
+            >
+              <div class="card-check" @click.stop>
+                <n-checkbox :checked="selection.isSelected(coupon)" @update:checked="() => selection.toggle(coupon)" />
+              </div>
               <div class="card-header">
                 <div class="card-title" style="font-family: monospace; font-weight: bold;">{{ coupon.code }}</div>
                 <n-tag :type="coupon.status === 'active' ? 'success' : coupon.status === 'inactive' ? 'error' : 'default'" size="small">
@@ -79,7 +94,7 @@
                   <span>{{ formatFullDateTime(coupon.valid_until) }}</span>
                 </div>
               </div>
-              <div class="card-actions">
+              <div class="card-actions" @click.stop>
                 <n-button size="small" type="primary" @click="handleEdit(coupon)">编辑</n-button>
                 <n-button size="small" type="error" @click="handleDelete(coupon)">删除</n-button>
                 <n-button size="small" @click="copyToClipboard(coupon.code)">复制代码</n-button>
@@ -188,17 +203,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, h, onActivated, onMounted } from 'vue'
+import { ref, reactive, computed, h, onActivated, onMounted } from 'vue'
 import { NButton, NTag, NSpace, NIcon, NTooltip, NSpin, useMessage, useDialog } from 'naive-ui'
 import { AddOutline, CreateOutline, TrashOutline, CopyOutline } from '@vicons/ionicons5'
 import { listAdminCoupons, createCoupon, updateCoupon, deleteCoupon } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatFullDateTime } from '@/utils/date'
 import { formatCurrency } from '@/utils/amount'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 
 const appStore = useAppStore()
 
@@ -213,9 +230,16 @@ const isEdit = ref(false)
 const editId = ref(null)
 
 // 统一表格状态
-const { loading, tableData, checkedRowKeys, pagination, loadData, handleSorterChange, resetSelection } =
+const { loading, tableData, pagination, loadData, handleSorterChange } =
   useTable(listAdminCoupons)
 const fetchData = loadData
+// 全选 / 多选：全站统一实现（桌面表格与手机卡片共用同一份选择状态）
+const selection = useBatchSelection(() => tableData.value)
+// Naive 表格要的是数组，这里做一层桥接，保证两边状态一致
+const checkedRowKeys = computed({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
 // 下拉刷新（App 原生感）
 const { distance: pullDistance, refreshing: pullRefreshing, onTouchStart: pullTouchStart, onTouchMove: pullTouchMove, onTouchEnd: pullTouchEnd } =
   usePullRefresh(loadData)
@@ -491,40 +515,40 @@ const handleDelete = (row) => {
 }
 
 const handleBatchEnable = async () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
   try {
-    await Promise.all(checkedRowKeys.value.map(id => {
-      const coupon = tableData.value.find(c => c.id === id)
-      return updateCoupon(id, { ...coupon, status: 'active' })
-    }))
+    await Promise.all(rows.map(row => updateCoupon(row.id, { ...row, status: 'active' })))
     message.success('批量启用成功')
-    resetSelection()
+    selection.clear()
     loadData()
   } catch { message.error('批量启用失败') }
 }
 
 const handleBatchDisable = async () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
   try {
-    await Promise.all(checkedRowKeys.value.map(id => {
-      const coupon = tableData.value.find(c => c.id === id)
-      return updateCoupon(id, { ...coupon, status: 'inactive' })
-    }))
+    await Promise.all(rows.map(row => updateCoupon(row.id, { ...row, status: 'inactive' })))
     message.success('批量禁用成功')
-    resetSelection()
+    selection.clear()
     loadData()
   } catch { message.error('批量禁用失败') }
 }
 
 const handleBatchDelete = () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
   dialog.warning({
     title: '批量删除',
-    content: `确定要删除选中的 ${checkedRowKeys.value.length} 个优惠券吗？此操作不可恢复。`,
+    content: `确定要删除选中的 ${rows.length} 个优惠券吗？此操作不可恢复。`,
     positiveText: '确定',
     negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        await Promise.all(checkedRowKeys.value.map(id => deleteCoupon(id)))
+        await Promise.all(rows.map(row => deleteCoupon(row.id)))
         message.success('批量删除成功')
-        resetSelection()
+        selection.clear()
         loadData()
       } catch { message.error('批量删除失败') }
     }
@@ -542,6 +566,20 @@ onActivated(() => {
 </script>
 
 <style scoped>
+/* 手机端吸顶工具栏：全局 .app-sticky-toolbar 用负边距对齐卡片内边距，
+   而带 .mobile-card-list 的卡片内容区左右内边距是 0，负边距会把工具条撑出卡片，
+   这里把左右负边距清零，吸顶条正好铺满卡片宽度。 */
+.mobile-toolbar.app-sticky-toolbar {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* 可选中卡片左侧给复选框留位：全局 .mobile-card.is-selectable 的 padding-left
+   会被 .admin-page-shell .mobile-card { padding: 0 !important } 盖掉，
+   不补回来的话复选框会压在卡片标题上。 */
+.mobile-card.is-selectable {
+  padding-left: 44px !important;
+}
 
 .pull-indicator {
   position: fixed;

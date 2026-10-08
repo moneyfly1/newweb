@@ -141,6 +141,57 @@ function auditInPage() {
     })
   }
 
+  // 5.5) 内容宽度利用率：用户反馈「内容居中、边上很多空白」
+  //      取页面里最宽的主要内容块，与视口宽度比；低于 88% 说明左右白边太多
+  const host = document.querySelector('.mobile-admin-content, .user-mobile-content') || document.body
+  let widest = 0
+  let widestEl = null
+  for (const el of host.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect()
+    if (r.width < 120 || r.height < 30) continue
+    const s2 = getComputedStyle(el)
+    if (s2.position === 'fixed') continue
+    // 只统计「有内容感」的块：卡片、列表、表格容器
+    const cls = (el.getAttribute('class') || '')
+    if (!/card|list|table|panel|section|shell|container/.test(cls)) continue
+    if (r.width > widest) { widest = r.width; widestEl = describe(el) }
+  }
+  out.stats.contentWidth = Math.round(widest)
+  out.stats.widthRatio = +((widest / vw) * 100).toFixed(1)
+  if (widest > 0 && widest / vw < 0.88) {
+    out.issues.push({
+      kind: 'narrow-content',
+      detail: `内容只占屏宽 ${out.stats.widthRatio}%（${Math.round(widest)}/${vw}px），左右白边过多`,
+      samples: [{ el: widestEl }],
+    })
+  }
+
+  // 5.6) 卡片还带渐变底：旧版「网页味」样式（App 卡片应是纯色）
+  const gradientCards = []
+  for (const el of document.querySelectorAll('.mobile-card, .n-card, .app-list-item')) {
+    if (!visible(el)) continue
+    const bg = getComputedStyle(el).backgroundImage
+    if (bg && bg !== 'none' && /gradient/.test(bg)) gradientCards.push({ el: describe(el) })
+  }
+  out.stats.gradientCards = gradientCards.length
+  if (gradientCards.length) {
+    out.issues.push({ kind: 'gradient-card', detail: `${gradientCards.length} 个卡片还在用渐变底（旧网页味样式）`, samples: gradientCards.slice(0, 4) })
+  }
+
+  // 5.7) 顶部空白过大：首屏内容离顶部太远
+  let firstTop = Infinity
+  for (const el of host.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect()
+    const cls = (el.getAttribute('class') || '')
+    if (r.height < 32 || r.width < 120) continue
+    if (!/card|list|table|panel|section|shell|container|header/.test(cls)) continue
+    if (r.top < firstTop) firstTop = r.top
+  }
+  out.stats.firstContentTop = Number.isFinite(firstTop) ? Math.round(firstTop) : null
+  if (Number.isFinite(firstTop) && firstTop > 200) {
+    out.issues.push({ kind: 'top-gap', detail: `首屏内容从 ${Math.round(firstTop)}px 才开始，顶部空白过多` })
+  }
+
   // 6) 字号过小
   const tiny = []
   for (const el of document.querySelectorAll('body *')) {
@@ -224,6 +275,30 @@ for (const route of targets) {
   report.push(result)
   const bad = result.issues.length + (result.consoleErrors.length ? 1 : 0)
   console.log(`${bad ? '✗' : '✓'} ${route.padEnd(28)} ${result.issues.map(i => i.kind).join(', ') || 'ok'}${result.consoleErrors.length ? ' [console]' : ''}`)
+}
+
+// ---- 游客页面（无登录态）：登录/注册/找回密码/404 也要体检 ----
+const GUEST_ROUTES = ['/login', '/register', '/forgot-password', '/admin/login', '/nonexistent-page']
+if (!process.argv.slice(2).length) {
+  const guestCtx = await browser.newContext({ ...devices['Pixel 5'], locale: 'zh-CN' })
+  const guestPage = await guestCtx.newPage()
+  for (const route of GUEST_ROUTES) {
+    const errorsBefore = consoleErrors.length
+    let result
+    try {
+      await guestPage.goto(`${BASE_URL}${route}`, { waitUntil: 'networkidle', timeout: 30000 })
+      await guestPage.waitForTimeout(700)
+      result = await guestPage.evaluate(auditInPage)
+    } catch (e) {
+      result = { issues: [{ kind: 'load-failed', detail: String(e).slice(0, 120) }], stats: {} }
+    }
+    result.route = route
+    result.consoleErrors = consoleErrors.slice(errorsBefore)
+    report.push(result)
+    const bad = result.issues.length + (result.consoleErrors.length ? 1 : 0)
+    console.log(`${bad ? '✗' : '✓'} ${route.padEnd(28)} ${result.issues.map(i => i.kind).join(', ') || 'ok'}${result.consoleErrors.length ? ' [console]' : ''}`)
+  }
+  await guestCtx.close()
 }
 
 writeFileSync(`${OUT_DIR}/report.json`, JSON.stringify(report, null, 2))

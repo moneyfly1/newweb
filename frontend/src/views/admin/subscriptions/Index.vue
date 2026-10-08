@@ -696,7 +696,7 @@ watch(() => route.query.search, (searchVal) => {
 .sub-user-meta { flex: 1; min-width: 0; }
 .sub-user-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .sub-user-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-color, #333); }
-.sub-user-email { font-size: 11px; color: var(--text-color-secondary, #999); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+.sub-user-email { font-size: 12px; color: var(--text-color-secondary, #999); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
 .sub-user-id { font-size: 12px; color: var(--text-color-secondary, #999); margin-top: 2px; }
 .sub-section { padding: 10px 14px; border-bottom: 1px solid var(--border-color, #f5f5f5); }
 .section-expired { background: rgba(224, 48, 80, 0.06); }
@@ -712,9 +712,15 @@ watch(() => route.query.search, (searchVal) => {
 .sub-action-item:active { background: rgba(0,0,0,0.03); }
 .sub-action-item.is-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .sub-action-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-.sub-action-item span { font-size: 11px; color: var(--text-color-secondary, #606266); }
+.sub-action-item span { font-size: 12px; color: var(--text-color-secondary, #606266); }
 @media (max-width: 767px) {
-  .subscriptions-container { padding: 8px; }
+  /* 左右内边距交给全局（10px）；这里再补 8px 会叠成 18px，手机上是白边浪费 */
+  .subscriptions-container { padding: 0; }
+  /* 两个下拉 + 搜索按钮：原来按钮被全局规则设成 width:100%，
+     把两个下拉挤成几个像素、按钮自己还伸出屏幕 6px。这里改成三列网格自适应。 */
+  .mobile-toolbar-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; width: 100%; }
+  .mobile-toolbar-row > .n-button { width: auto !important; min-width: 72px; }
+  .mobile-toolbar-row > .n-select { min-width: 0; }
   /* 超小屏幕按钮网格适配 */
   .sub-btn-row { grid-template-columns: repeat(3, 1fr); }
   .sub-btn-row-5 { grid-template-columns: repeat(3, 1fr); }

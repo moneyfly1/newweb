@@ -4,7 +4,7 @@
       <n-space vertical :size="20">
         <!-- Filters -->
         <n-card :bordered="false">
-          <n-space align="center" :wrap="true" class="filters-toolbar">
+          <n-space align="center" :wrap="true" class="filters-toolbar app-sticky-toolbar">
             <div class="filter-period">
               <n-radio-group v-model:value="period" @update:value="loadFinancialReport">
                 <n-radio-button value="day">日</n-radio-button>
@@ -506,7 +506,7 @@ onMounted(() => {
 }
 .revenue-bar { background: var(--success-color); }
 .recharge-bar { background: #2080f0; }
-.bar-text { color: #fff; font-size: 11px; white-space: nowrap; overflow: hidden; }
+.bar-text { color: #fff; font-size: 12px; white-space: nowrap; overflow: hidden; }
 .chart-orders { width: 60px; font-size: 12px; color: var(--text-color-secondary); text-align: right; flex-shrink: 0; }
 .legend { display: flex; align-items: center; font-size: 13px; color: var(--text-color-secondary); }
 .legend-dot { width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; display: inline-block; }
@@ -523,15 +523,17 @@ onMounted(() => {
 .region-rank-sm {
   width: 20px; height: 20px; border-radius: 50%; background: var(--bg-page-color);
   display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 600; color: var(--text-color-secondary); flex-shrink: 0;
+  font-size: 12px; font-weight: 600; color: var(--text-color-secondary); flex-shrink: 0;
 }
 .region-detail { flex: 0 0 180px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-color); }
 .region-bar-wrap { flex: 1; height: 8px; background: var(--bg-page-color); border-radius: 4px; min-width: 40px; }
 .region-bar { height: 8px; border-radius: 4px; display: block; transition: width 0.3s; }
 .region-count-sm { width: 40px; text-align: right; font-weight: 600; color: var(--text-color); flex-shrink: 0; font-size: 13px; }
 @media (max-width: 767px) {
-  .stats-container { padding: 8px; }
+  /* 左右留白由全局统一给（mobile-app-ui.css + admin-mobile.css），页面不再自带内边距 */
   .filters-toolbar { flex-direction: column; align-items: stretch !important; gap: 12px; }
+  /* 卡片内容区本来就有 12px 内边距，工具条不再叠加全局的 -12px 出血，保持左右对称 */
+  .filters-toolbar.app-sticky-toolbar { margin-left: 0; margin-right: 0; }
   .filter-period,
   .filter-range,
   .filter-export { width: 100%; }
@@ -552,9 +554,15 @@ onMounted(() => {
   .method-detail { font-size: 12px; }
   .region-detail { flex: 0 0 120px; font-size: 12px; }
   .region-row-compact { gap: 4px; padding: 4px 0; }
-  .region-rank-sm { width: 16px; height: 16px; font-size: 10px; }
+  .region-rank-sm { width: 20px; height: 20px; font-size: 12px; }
   .mobile-stat-list { display: flex; flex-direction: column; gap: 10px; }
-  .mobile-stat-item { padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-color); }
+  .mobile-stat-item {
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 60%, transparent);
+    border-radius: 16px;
+    background: var(--bg-color);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
   .mobile-stat-main { font-size: 14px; font-weight: 600; color: var(--text-color); }
   .mobile-stat-sub { margin-top: 4px; font-size: 12px; color: var(--text-color-secondary); }
   .mobile-stat-meta { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-color-secondary); }
@@ -565,7 +573,7 @@ onMounted(() => {
 .hourly-grid { display: flex; align-items: flex-end; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
 .hourly-item { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
 .hourly-bar { width: 14px; border-radius: 4px 4px 0 0; background: var(--primary-color, #4f46e5); opacity: 0.75; min-height: 4px; transition: height 0.3s; }
-.hourly-label { font-size: 10px; color: var(--text-color-secondary, #888); }
+.hourly-label { font-size: 12px; color: var(--text-color-secondary, #888); }
 
 .pay-stats-wrap { display: flex; flex-direction: column; gap: 8px; }
 .pay-stats-wrap .method-list { display: flex; flex-direction: column; gap: 10px; }

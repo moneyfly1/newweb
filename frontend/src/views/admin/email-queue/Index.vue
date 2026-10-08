@@ -70,19 +70,28 @@
     <!-- Main Card -->
     <n-card title="邮件队列" :bordered="false" class="page-card">
       <n-space vertical :size="16">
-        <!-- Status Filter Tabs -->
-        <n-tabs v-model:value="statusFilter" type="line" @update:value="handleStatusChange">
-          <n-tab-pane name="all" tab="全部" />
-          <n-tab-pane name="pending" tab="待发送" />
-          <n-tab-pane name="sent" tab="已发送" />
-          <n-tab-pane name="failed" tab="发送失败" />
-        </n-tabs>
+        <!-- Status Filter Tabs（手机端吸顶，滚动时不跟着走） -->
+        <div class="queue-toolbar" :class="{ 'app-sticky-toolbar': appStore.isMobile }">
+          <n-tabs v-model:value="statusFilter" type="line" @update:value="handleStatusChange">
+            <n-tab-pane name="all" tab="全部" />
+            <n-tab-pane name="pending" tab="待发送" />
+            <n-tab-pane name="sent" tab="已发送" />
+            <n-tab-pane name="failed" tab="发送失败" />
+          </n-tabs>
+        </div>
 
-        <!-- Data Table -->
-        <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-          <span style="color: var(--text-color-secondary)">已选择 {{ checkedRowKeys.length }} 项</span>
-          <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
-        </n-space>
+        <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方） -->
+        <BatchSelectBar
+          :total="selection.total.value"
+          :selected-count="selection.count.value"
+          :all-selected="selection.allSelected.value"
+          :indeterminate="selection.indeterminate.value"
+          label="封邮件"
+          @toggle-all="selection.toggleAll"
+          @clear="selection.clear"
+        >
+          <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDelete">批量删除</n-button>
+        </BatchSelectBar>
         <template v-if="!appStore.isMobile">
           <n-data-table
             class="unified-admin-table"
@@ -94,15 +103,23 @@
             :single-line="false"
             :scroll-x="1200"
             :row-key="(row) => row.id"
-            :checked-row-keys="checkedRowKeys"
-            @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
+            v-model:checked-row-keys="checkedRowKeys"
           />
         </template>
 
         <!-- Mobile Cards -->
         <template v-else>
           <div class="mobile-card-list">
-            <div v-for="item in emails" :key="item.id" class="mobile-card">
+            <div
+              v-for="item in emails"
+              :key="item.id"
+              class="mobile-card is-selectable"
+              :class="{ 'is-selected': selection.isSelected(item) }"
+              @click="selection.toggle(item)"
+            >
+              <div class="card-check" @click.stop>
+                <n-checkbox :checked="selection.isSelected(item)" @update:checked="() => selection.toggle(item)" />
+              </div>
               <div class="card-header">
                 <span class="card-title">{{ item.to_email }}</span>
                 <n-tag :type="getStatusType(item.status)" size="small">{{ getStatusText(item.status) }}</n-tag>
@@ -113,7 +130,7 @@
                 <div class="card-row"><span class="card-label">创建时间:</span><span>{{ formatFullDateTime(item.created_at) }}</span></div>
                 <div class="card-row"><span class="card-label">发送时间:</span><span>{{ formatFullDateTime(item.sent_at) }}</span></div>
               </div>
-              <div class="card-actions">
+              <div class="card-actions" @click.stop>
                 <n-button size="small" type="info" quaternary @click="handleDetail(item)">
                   <template #icon><n-icon :component="EyeOutline" /></template>
                   详情
@@ -200,10 +217,12 @@ import {
 } from '@vicons/ionicons5'
 import { listEmailQueue, retryEmail, deleteEmail } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import { useAppStore } from '@/stores/app'
 import { translateEmailType } from '@/utils/i18n'
 import { formatFullDateTime } from '@/utils/date'
 import DOMPurify from 'dompurify'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 
 const appStore = useAppStore()
 
@@ -216,10 +235,17 @@ const showDetail = ref(false)
 const detailItem = ref(null)
 
 // 统一表格状态（含状态筛选）
-const { loading, tableData: emails, checkedRowKeys, pagination, loadData, reload } = useTable(listEmailQueue, {
+const { loading, tableData: emails, pagination, loadData, reload } = useTable(listEmailQueue, {
   getParams: () => ({ status: statusFilter.value === 'all' ? undefined : statusFilter.value }),
 })
 const fetchEmails = loadData
+// 全选 / 多选：全站统一实现（桌面表格与手机卡片共用同一份选择状态）
+const selection = useBatchSelection(() => emails.value)
+// Naive 表格要的是数组，这里做一层桥接，保证两边状态一致
+const checkedRowKeys = computed({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
 
 // 使用 DOMPurify 安全清理 HTML，防止 XSS
 const sanitizeHtml = (html) => {
@@ -437,15 +463,18 @@ const handleDelete = (row) => {
 }
 
 const handleBatchDelete = () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
   dialog.warning({
     title: '批量删除',
-    content: `确定要删除选中的 ${checkedRowKeys.value.length} 封邮件记录吗？`,
+    content: `确定要删除选中的 ${rows.length} 封邮件记录吗？`,
     positiveText: '确定',
+    negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        await Promise.all(checkedRowKeys.value.map(id => deleteEmail(id)))
+        await Promise.all(rows.map(row => deleteEmail(row.id)))
         message.success('批量删除成功')
-        checkedRowKeys.value = []
+        selection.clear()
         fetchEmails()
       } catch { message.error('批量删除失败') }
     }
@@ -551,18 +580,24 @@ onActivated(() => {
   font-weight: 500;
 }
 
-.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.mobile-card { background: var(--bg-color); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
-.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-color); }
-.card-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 8px; }
-.card-body { padding: 10px 14px; }
-.card-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 4px 0; font-size: 13px; }
-.card-row span:last-child { text-align: right; word-break: break-word; max-width: 60%; }
-.card-label { color: var(--text-color-secondary); }
-.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); flex-wrap: wrap; }
+/* 状态筛选吸顶：全局 .app-sticky-toolbar 用负边距对齐卡片内边距，
+   而带 .mobile-card-list 的卡片内容区左右内边距是 0，负边距会把工具条撑出卡片。 */
+.queue-toolbar.app-sticky-toolbar {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* 可选中卡片左侧给复选框留位：全局 .mobile-card.is-selectable 的 padding-left
+   会被 .admin-page-shell .mobile-card { padding: 0 !important } 盖掉，
+   不补回来的话复选框会压在卡片标题上。 */
+.mobile-card.is-selectable {
+  padding-left: 44px !important;
+}
 
 @media (max-width: 767px) {
-  .admin-email-queue-page { padding: 8px; }
+  /* 手机端左右留白由全局布局统一给（10px），页面根容器不再自带左右 padding；
+     卡片样式统一走全局 .mobile-card（App 风格），页面不再覆盖。 */
+  .admin-email-queue-page { padding: 8px 0; }
 }
 
 .email-preview {

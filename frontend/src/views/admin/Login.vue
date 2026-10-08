@@ -46,7 +46,8 @@
       </n-form>
 
       <div class="login-footer">
-        <router-link to="/login">
+        <!-- 文字按钮只有 17px 高，手机上点不准：给足 44px 点击区域 -->
+        <router-link to="/login" class="admin-login-back">
           <n-button text type="primary">
             <template #icon><n-icon :component="ArrowBackOutline" /></template>
             返回用户登录
@@ -131,6 +132,13 @@ async function handleLogin() {
   align-items: center;
   text-align: center;
   margin-bottom: 40px;
+}
+
+.admin-login-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
 }
 
 .admin-logo {

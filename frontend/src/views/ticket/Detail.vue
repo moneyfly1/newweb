@@ -52,15 +52,15 @@
     </n-card>
 
     <n-card :bordered="false" class="chat-card">
-      <div class="chat-container" ref="chatContainer">
+      <div class="td-thread" ref="chatContainer">
         <!-- 工单主内容（用户提问） -->
-        <div class="message-wrapper user" v-if="ticket.content">
-          <div class="message-bubble">
-            <div class="message-header">
-              <span class="message-sender">我</span>
-              <span class="message-time">{{ ticket.created_at }}</span>
+        <div class="td-msg-row user" v-if="ticket.content">
+          <div class="td-msg">
+            <div class="td-msg-head">
+              <span class="td-msg-sender">我</span>
+              <span class="td-msg-time">{{ ticket.created_at }}</span>
             </div>
-            <div class="message-content">{{ ticket.content }}</div>
+            <div class="td-msg-content">{{ ticket.content }}</div>
             <TicketAttachmentList
               v-if="ticketAttachments.length > 0"
               :key="'main-' + ticket.id"
@@ -72,16 +72,16 @@
         <div
           v-for="reply in replies"
           :key="reply.id"
-          :class="['message-wrapper', reply.is_admin ? 'admin' : 'user']"
+          :class="['td-msg-row', reply.is_admin ? 'admin' : 'user']"
         >
-          <div class="message-bubble">
-            <div class="message-header">
-              <span class="message-sender">
+          <div class="td-msg">
+            <div class="td-msg-head">
+              <span class="td-msg-sender">
                 {{ reply.is_admin ? '客服' : '我' }}
               </span>
-              <span class="message-time">{{ reply.created_at }}</span>
+              <span class="td-msg-time">{{ reply.created_at }}</span>
             </div>
-            <div class="message-content">{{ reply.content }}</div>
+            <div class="td-msg-content">{{ reply.content }}</div>
             <TicketAttachmentList
               v-if="attachmentsByReply[reply.id]?.length"
               :attachments="attachmentsByReply[reply.id]"
@@ -99,7 +99,7 @@
       :bordered="false"
       class="reply-card"
     >
-      <div class="reply-input-wrapper">
+      <div class="td-composer">
         <n-input
           v-model:value="replyContent"
           type="textarea"
@@ -111,11 +111,11 @@
         />
         <TicketAttachmentUploader ref="uploaderRef" @change="(ids) => (attachmentIds = ids)" />
         <n-button
+          class="reply-submit"
           type="primary"
           @click="handleReply"
           :loading="replying"
           :disabled="!replyContent.trim() && attachmentIds.length === 0"
-          style="margin-top: 12px; align-self: flex-end"
         >
           <template #icon>
             <n-icon><SendOutline /></n-icon>
@@ -340,7 +340,7 @@ onMounted(() => {
   border-radius: 12px;
 }
 
-.chat-container {
+.td-thread {
   min-height: 400px;
   max-height: 600px;
   overflow-y: auto;
@@ -350,37 +350,37 @@ onMounted(() => {
   gap: 16px;
 }
 
-.message-wrapper {
+.td-msg-row {
   display: flex;
   width: 100%;
 }
 
-.message-wrapper.user {
+.td-msg-row.user {
   justify-content: flex-end;
 }
 
-.message-wrapper.admin {
+.td-msg-row.admin {
   justify-content: flex-start;
 }
 
-.message-bubble {
+.td-msg {
   max-width: 70%;
   padding: 12px 16px;
   border-radius: 12px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.message-wrapper.user .message-bubble {
+.td-msg-row.user .td-msg {
   background: #2080f0;
   color: white;
 }
 
-.message-wrapper.admin .message-bubble {
+.td-msg-row.admin .td-msg {
   background: var(--bg-page-color);
   color: var(--text-color);
 }
 
-.message-header {
+.td-msg-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -388,18 +388,18 @@ onMounted(() => {
   gap: 12px;
 }
 
-.message-sender {
+.td-msg-sender {
   font-size: 12px;
   font-weight: 600;
   opacity: 0.9;
 }
 
-.message-time {
-  font-size: 11px;
+.td-msg-time {
+  font-size: 12px;
   opacity: 0.7;
 }
 
-.message-content {
+.td-msg-content {
   font-size: 14px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -419,15 +419,64 @@ onMounted(() => {
   border-radius: 12px;
 }
 
-.reply-input-wrapper {
+.td-composer {
   display: flex;
   flex-direction: column;
 }
 
 @media (max-width: 767px) {
-  .ticket-detail-container { padding: 0 12px; }
-  .ticket-meta { flex-direction: column; gap: 8px; }
-  .message-bubble { max-width: 85%; }
-  .chat-container { min-height: 300px; max-height: 50vh; }
+  /* 根容器不再自带左右内边距（全局已统一 10px） */
+  .ticket-detail-container { padding-left: 0; padding-right: 0; padding-top: 0; }
+
+  .info-card { margin-bottom: 10px; border-radius: 16px; }
+  .chat-card { margin-bottom: 10px; border-radius: 16px; }
+  .reply-card { border-radius: 16px; }
+
+  /* 顶部：返回 + 标题 + 关闭工单，可换行不挤压 */
+  .ticket-header { flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+  .header-left { flex: 1 1 auto; gap: 6px; min-width: 0; }
+  .header-left h2 { font-size: 17px; line-height: 1.35; word-break: break-word; }
+  .header-right { flex-shrink: 0; }
+  .header-right :deep(.n-button) { min-height: 40px; }
+
+  /* 工单元信息：App 的 label 左灰字 / value 右深字 行 */
+  .ticket-meta { flex-direction: column; gap: 0; }
+  .meta-item {
+    justify-content: space-between; gap: 10px; min-height: 40px; padding: 7px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 55%, transparent);
+  }
+  .meta-item:last-child { border-bottom: none; }
+  .meta-label { flex-shrink: 0; font-size: 13px; }
+  .meta-value { min-width: 0; font-size: 13px; text-align: right; word-break: break-word; }
+
+  /* 消息列表：整宽气泡，聊天/时间线观感 */
+  .td-thread { padding: 0; gap: 10px; min-height: 240px; max-height: 58vh; }
+  .td-msg-row { width: 100%; }
+  .td-msg { width: 100%; max-width: 100%; padding: 12px 14px; border-radius: 14px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+  .td-msg-row.user .td-msg { background: var(--primary-color, #2080f0); color: #fff; }
+  .td-msg-row.admin .td-msg {
+    background: var(--bg-page-color, #f5f6f8); color: var(--text-color);
+    border: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 60%, transparent);
+  }
+  .td-msg-head { margin-bottom: 6px; gap: 8px; }
+  .td-msg-sender { font-size: 12px; }
+  .td-msg-time { font-size: 12px; opacity: 0.8; text-align: right; word-break: break-word; }
+  .td-msg-content { font-size: 14px; line-height: 1.65; word-break: break-word; overflow-wrap: anywhere; }
+
+  /* 附件（共享组件，从页面侧兜住长文件名/大图，避免横向溢出） */
+  .td-msg :deep(.att-file-card) { width: 100%; min-width: 0; max-width: 100%; }
+  .td-msg :deep(.att-file-name) { font-size: 13px; white-space: normal; word-break: break-word; }
+  .td-msg :deep(.att-file-size) { font-size: 12px; }
+  .td-msg :deep(.att-img), .td-msg :deep(.att-video) { max-width: 100%; }
+
+  /* 底部回复区：整宽提交按钮，触控目标 ≥ 40px */
+  .td-composer :deep(.n-input) { min-height: 96px; }
+  .reply-submit { width: 100%; align-self: stretch; margin-top: 12px; min-height: 44px; font-size: 15px; border-radius: 12px; }
+
+  .empty-state { height: 140px; font-size: 14px; }
+}
+
+@media (max-width: 400px) {
+  .td-msg-head { flex-wrap: wrap; }
 }
 </style>

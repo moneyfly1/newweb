@@ -38,38 +38,58 @@
           </n-button>
         </n-space>
 
-        <!-- Mobile toolbar -->
-        <div v-if="appStore.isMobile" class="mobile-toolbar">
-          <div class="mobile-toolbar-title">邀请码管理</div>
-          <div class="mobile-toolbar-controls">
-            <n-input v-model:value="search" placeholder="搜索邀请码或用户" clearable size="small" @keyup.enter="fetchCodes">
-              <template #prefix><n-icon :component="SearchOutline" /></template>
-            </n-input>
-            <div class="mobile-toolbar-row">
-              <n-button size="small" @click="fetchCodes">搜索</n-button>
-              <n-button size="small" @click="fetchCodes">
-                <template #icon><n-icon :component="RefreshOutline" /></template>
-                刷新
-              </n-button>
-            </div>
+        <!-- Mobile toolbar：吸顶工具条（滚动时搜索框不跟着滚走）。
+             注意不要用全局的 .mobile-toolbar-row：它把行内按钮按网格拉成整行宽，
+             两个按钮加起来就超出屏幕（体检脚本报的 button 宽 373 跑到 764 就是这个原因）。 -->
+        <div v-if="appStore.isMobile" class="app-sticky-toolbar invites-toolbar">
+          <div class="invites-toolbar__title">邀请码管理</div>
+          <n-input v-model:value="search" placeholder="搜索邀请码或用户" clearable size="small" @keyup.enter="fetchCodes">
+            <template #prefix><n-icon :component="SearchOutline" /></template>
+          </n-input>
+          <div class="invites-toolbar__actions">
+            <n-button size="small" @click="fetchCodes">搜索</n-button>
+            <n-button size="small" @click="fetchCodes">
+              <template #icon><n-icon :component="RefreshOutline" /></template>
+              刷新
+            </n-button>
           </div>
         </div>
-<!-- PLACEHOLDER_TABS -->
+
         <!-- Tabs -->
         <n-tabs type="line" animated>
           <n-tab-pane name="codes" tab="邀请码列表">
-            <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-              <span style="color: var(--text-color-secondary)">已选择 {{ checkedRowKeys.length }} 项</span>
-              <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
-            </n-space>
+            <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机固定在底部标签栏上方） -->
+            <BatchSelectBar
+              :total="selection.total.value"
+              :selected-count="selection.count.value"
+              :all-selected="selection.allSelected.value"
+              :indeterminate="selection.indeterminate.value"
+              label="个邀请码"
+              @toggle-all="selection.toggleAll"
+              @clear="selection.clear"
+            >
+              <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDelete">
+                批量删除
+              </n-button>
+            </BatchSelectBar>
+
             <template v-if="!appStore.isMobile">
-              <n-data-table class="unified-admin-table" :columns="codeColumns" :data="codes" :loading="loadingCodes" :pagination="false" :bordered="false" :single-line="false" :row-key="(row) => row.id" :checked-row-keys="checkedRowKeys" @update:checked-row-keys="(keys) => { checkedRowKeys = keys }" />
+              <n-data-table class="unified-admin-table" :columns="codeColumns" :data="codes" :loading="loadingCodes" :pagination="false" :bordered="false" :single-line="false" :row-key="(row) => row.id" v-model:checked-row-keys="checkedRowKeys" />
             </template>
             <template v-else>
               <n-spin :show="loadingCodes">
-                <div v-if="codes.length === 0" style="text-align:center;padding:40px;color:#999">暂无数据</div>
+                <div v-if="codes.length === 0" class="mobile-empty">暂无数据</div>
                 <div v-else class="mobile-card-list">
-                  <div v-for="code in codes" :key="code.id" class="mobile-card">
+                  <div
+                    v-for="code in codes"
+                    :key="code.id"
+                    class="mobile-card is-selectable"
+                    :class="{ 'is-selected': selection.isSelected(code) }"
+                    @click="selection.toggle(code)"
+                  >
+                    <div class="card-check" @click.stop>
+                      <n-checkbox :checked="selection.isSelected(code)" @update:checked="() => selection.toggle(code)" />
+                    </div>
                     <div class="card-header">
                       <span class="card-title" style="font-family:monospace">{{ code.code }}</span>
                       <n-tag :type="statusType(code.status)" size="small">{{ statusText(code.status) }}</n-tag>
@@ -80,7 +100,7 @@
                       <div class="card-row"><span class="card-label">邀请人奖励</span><span>{{ formatCurrency(code.inviter_reward) }}</span></div>
                       <div class="card-row"><span class="card-label">受邀人奖励</span><span>{{ formatCurrency(code.invitee_reward) }}</span></div>
                     </div>
-                    <div class="card-actions">
+                    <div class="card-actions" @click.stop>
                       <n-button size="small" @click="handleToggle(code)">{{ code.is_active ? '禁用' : '启用' }}</n-button>
                       <n-button size="small" type="error" @click="handleDelete(code)">删除</n-button>
                     </div>
@@ -88,7 +108,7 @@
                 </div>
               </n-spin>
             </template>
-            <n-pagination v-model:page="codePage" :page-count="codeTotalPages" style="margin-top: 16px; justify-content: flex-end" @update:page="fetchCodes" />
+            <n-pagination class="list-pagination" v-model:page="codePage" :page-count="codeTotalPages" @update:page="fetchCodes" />
           </n-tab-pane>
 
           <n-tab-pane name="relations" tab="邀请记录">
@@ -97,7 +117,7 @@
             </template>
             <template v-else>
               <n-spin :show="loadingRels">
-                <div v-if="relations.length === 0" style="text-align:center;padding:40px;color:#999">暂无数据</div>
+                <div v-if="relations.length === 0" class="mobile-empty">暂无数据</div>
                 <div v-else class="mobile-card-list">
                   <div v-for="rel in relations" :key="rel.id" class="mobile-card">
                     <div class="card-body">
@@ -112,7 +132,7 @@
                 </div>
               </n-spin>
             </template>
-            <n-pagination v-model:page="relPage" :page-count="relTotalPages" style="margin-top: 16px; justify-content: flex-end" @update:page="fetchRelations" />
+            <n-pagination class="list-pagination" v-model:page="relPage" :page-count="relTotalPages" @update:page="fetchRelations" />
           </n-tab-pane>
         </n-tabs>
       </n-space>
@@ -121,11 +141,13 @@
 </template>
 
 <script setup>
-import { ref, h, onActivated, onMounted } from 'vue'
+import { ref, computed, h, onActivated, onMounted } from 'vue'
 import { NButton, NTag, NIcon, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, RefreshOutline } from '@vicons/ionicons5'
 import { listAdminInviteCodes, getAdminInviteStats, listAdminInviteRelations, deleteAdminInviteCode, toggleAdminInviteCode } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import { formatCurrency } from '@/utils/amount'
 import { formatFullDateTime } from '@/utils/date'
 
@@ -144,7 +166,14 @@ const relPage = ref(1)
 const codeTotalPages = ref(0)
 const relTotalPages = ref(0)
 const pageSize = 20
-const checkedRowKeys = ref([])
+
+// 全选 / 多选：全站统一实现（桌面表格与手机卡片共用同一份选择状态）
+const selection = useBatchSelection(() => codes.value)
+// Naive 的表格要的是数组，这里做一层桥接，保证两边状态一致
+const checkedRowKeys = computed({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) }
+})
 
 const statusType = (s) => ({ active: 'success', expired: 'warning', exhausted: 'default', disabled: 'error' }[s] || 'default')
 const statusText = (s) => ({ active: '有效', expired: '已过期', exhausted: '已用完', disabled: '已禁用' }[s] || s)
@@ -205,15 +234,19 @@ const handleDelete = (code) => {
 }
 
 const handleBatchDelete = () => {
+  // 后端没有批量删除接口，这里按 id 逐个调用（与单条删除同一接口）
+  const ids = selection.selectedRows.value.map(r => r.id)
+  if (!ids.length) return
   dialog.warning({
     title: '批量删除',
-    content: `确定要删除选中的 ${checkedRowKeys.value.length} 个邀请码吗？`,
+    content: `确定要删除选中的 ${ids.length} 个邀请码吗？此操作不可恢复。`,
     positiveText: '确定',
+    negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        await Promise.all(checkedRowKeys.value.map(id => deleteAdminInviteCode(id)))
+        await Promise.all(ids.map(id => deleteAdminInviteCode(id)))
         message.success('批量删除成功')
-        checkedRowKeys.value = []
+        selection.clear()
         fetchCodes()
         fetchStats()
       } catch { message.error('批量删除失败') }
@@ -262,22 +295,31 @@ onActivated(() => { fetchStats(); fetchCodes(); fetchRelations() })
 .stat-item { display: flex; flex-direction: column; align-items: center; min-width: 80px; }
 .stat-val { font-size: 22px; font-weight: 700; color: var(--text-color, #333); }
 .stat-lbl { font-size: 12px; color: var(--text-color-secondary, #999); margin-top: 2px; }
-.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.mobile-card { background: var(--bg-color, #fff); border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
-.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-color, #f0f0f0); }
-.card-title { font-weight: 600; font-size: 14px; color: var(--text-color, #333); }
-.card-body { padding: 10px 14px; }
-.card-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-.card-row > span:last-child { color: var(--text-color, #333); }
-.card-label { color: var(--text-color-secondary, #999); flex-shrink: 0; }
-.card-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color, #f0f0f0); }
+
+/* 分页：桌面靠右，手机居中（App 里分页居中更自然） */
+.list-pagination { margin-top: 16px; justify-content: flex-end; }
+
+/* 手机端工具条：标题 + 搜索框各占一行，按钮自带一行并允许换行（不会横向溢出） */
+/* 卡片内容区在手机端无左右内边距，工具条不再用全局的 -12px 出血，避免越过卡片边界 */
+.invites-toolbar { display: flex; flex-direction: column; gap: 8px; margin-left: 0; margin-right: 0; }
+.invites-toolbar__title { font-size: 16px; font-weight: 650; color: var(--text-color, #333); }
+.invites-toolbar__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.invites-toolbar__actions .n-button { flex: 1 1 0; min-width: 0; }
+.invites-toolbar :deep(.n-input) { width: 100%; min-width: 0; }
+
 @media (max-width: 767px) {
-  .admin-invites-page { padding: 8px; }
-  .stats-row { gap: 12px; justify-content: space-around; }
+  /* 手机端左右留白与底部批量栏空间都由全局统一给（见 mobile-app-ui.css /
+     admin-mobile.css），页面不再自己加内边距 */
+  .stats-row { gap: 12px; justify-content: space-around; padding: 4px 0; }
   .stat-val { font-size: 18px; }
+  .stat-item { min-width: 60px; }
+  .list-pagination { justify-content: center; }
+  /* 全局 .admin-page-shell .mobile-card 用了 padding:0 !important，
+     这里补回左侧复选框的位置，并让选中态可见 */
+  .admin-invites-page :deep(.mobile-card.is-selectable) { padding-left: 44px !important; }
+  .admin-invites-page :deep(.mobile-card.is-selected) {
+    border-color: var(--primary-color, #4f46e5) !important;
+    background: color-mix(in srgb, var(--primary-color-soft, rgba(102, 126, 234, 0.08)) 70%, var(--bg-color, #fff)) !important;
+  }
 }
-.mobile-toolbar { margin-bottom: 12px; }
-.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
-.mobile-toolbar-controls { display: flex; flex-direction: column; gap: 8px; }
-.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

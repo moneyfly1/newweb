@@ -3,7 +3,7 @@
     <n-tabs type="line" animated>
       <n-tab-pane name="profile" tab="个人资料">
         <n-card :bordered="false">
-          <n-form ref="profileFormRef" :model="profileForm" label-placement="left" label-width="100">
+          <n-form ref="profileFormRef" :model="profileForm" :label-placement="formLabelPlacement" :label-width="formLabelWidth">
             <n-form-item label="用户名">
               <n-input v-model:value="profileForm.username" placeholder="用户名" />
             </n-form-item>
@@ -33,7 +33,7 @@
 
       <n-tab-pane name="password" tab="修改密码">
         <n-card :bordered="false">
-          <n-form ref="pwFormRef" :model="pwForm" :rules="pwRules" label-placement="left" label-width="100">
+          <n-form ref="pwFormRef" :model="pwForm" :rules="pwRules" :label-placement="formLabelPlacement" :label-width="formLabelWidth">
             <n-form-item label="当前密码" path="old_password">
               <n-input v-model:value="pwForm.old_password" type="password" show-password-on="click" />
             </n-form-item>
@@ -53,7 +53,7 @@
       </n-tab-pane>
       <n-tab-pane name="notification" tab="通知设置">
         <n-card :bordered="false">
-          <n-form label-placement="left" label-width="140">
+          <n-form :label-placement="formLabelPlacement" :label-width="formLabelWidth">
             <n-form-item label="邮件通知总开关">
               <n-switch v-model:value="notifForm.email_notifications" @update:value="saveNotif" />
               <n-text depth="3" style="margin-left: 12px; font-size: 12px">关闭后不接收任何邮件（验证码除外）</n-text>
@@ -92,7 +92,7 @@
 
       <n-tab-pane name="privacy" tab="隐私设置">
         <n-card :bordered="false">
-          <n-form label-placement="left" label-width="140">
+          <n-form :label-placement="formLabelPlacement" :label-width="formLabelWidth">
             <n-form-item label="数据共享">
               <n-switch v-model:value="privacyForm.data_sharing" @update:value="savePrivacy" />
             </n-form-item>
@@ -227,6 +227,9 @@ const unbindingTelegram = ref(false)
 const telegramBindWidgetRef = ref<HTMLElement | null>(null)
 const telegramBound = computed(() => !!(userStore.userInfo as any)?.telegram_id)
 const themeOptions = appStore.availableThemes.map((t: any) => ({ label: t.label, value: t.value }))
+// 手机端表单标签置顶：左侧 100/140px 标签在 393px 屏上会把输入框挤成窄条（桌面端保持左右布局）
+const formLabelPlacement = computed<'left' | 'top'>(() => (appStore.isMobile ? 'top' : 'left'))
+const formLabelWidth = computed(() => (appStore.isMobile ? undefined : 100))
 const langOptions = [{ label: '简体中文', value: 'zh-CN' }, { label: 'English', value: 'en' }]
 const tzOptions = [
   { label: 'Asia/Shanghai (UTC+8)', value: 'Asia/Shanghai' },
@@ -366,7 +369,21 @@ onMounted(async () => {
 .telegram-status { padding: 8px 0; }
 .telegram-widget-container { min-height: 40px; }
 @media (max-width: 767px) {
-  .settings-page { padding: 0 12px; }
-  .n-card { border-radius: 14px; }
+  /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白）；
+     卡片圆角走共享 token --user-mobile-radius（8px → 契约的 16px），不改公共文件 */
+  .settings-page { padding: 0; --user-mobile-radius: 16px; }
+  /* 契约 §1：工具栏吸顶 —— 切 Tab 后向上滚动时 Tab 栏不跟着滚走 */
+  .settings-page :deep(.n-tabs-nav) {
+    position: sticky;
+    top: 0;
+    z-index: 9;
+    padding: 6px 0;
+    background: color-mix(in srgb, var(--bg-page-color, #f8fafc) 92%, transparent);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+  }
+  /* 标签置顶后：开关后面的说明文字另起一行，避免挤在开关右侧 */
+  .settings-page :deep(.n-form-item-blank) { flex-wrap: wrap; row-gap: 4px; }
+  .settings-page :deep(.n-form-item-blank .n-text) { margin-left: 0 !important; }
 }
 </style>

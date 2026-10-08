@@ -56,7 +56,7 @@
       <n-button quaternary circle size="small" @click="showDrawer = true" aria-label="打开导航菜单">
         <template #icon><n-icon :size="22"><menu-outline /></n-icon></template>
       </n-button>
-      <span class="mobile-title">管理后台</span>
+      <span class="mobile-title">{{ currentPageTitle }}</span>
       <n-dropdown trigger="click" :options="mobileMenuOptions" @select="handleMobileUserMenu">
         <n-button quaternary circle size="small" aria-label="更多操作">
           <template #icon><n-icon :size="20"><ellipsis-vertical /></n-icon></template>
@@ -249,6 +249,33 @@ const menuOptions = [
 ]
 
 const activeKey = computed(() => route.name as string)
+
+// 手机端顶部栏标题：显示当前页面名字（App 顶部显示的就是「你在哪」）。
+// 菜单项的 label 是渲染函数（带预加载交互），不能直接当文字用，所以这里单独维护一份映射。
+const pageTitles: Record<string, string> = {
+  AdminDashboard: '仪表盘',
+  AdminUsers: '用户列表',
+  AdminAbnormalUsers: '异常用户',
+  AdminSubscriptions: '订阅管理',
+  AdminNodes: '节点管理',
+  AdminCustomNodes: '专线节点',
+  AdminConfigUpdate: '节点更新',
+  AdminOrders: '订单列表',
+  AdminPackages: '套餐管理',
+  AdminSettings: '系统设置',
+  AdminAnnouncements: '公告管理',
+  AdminCoupons: '优惠券',
+  AdminInvites: '邀请码管理',
+  AdminRedeem: '卡密管理',
+  AdminMysteryBox: '盲盒管理',
+  AdminLevels: '用户等级',
+  AdminStats: '数据统计',
+  AdminLogs: '系统日志',
+  AdminEmailQueue: '邮件队列',
+  AdminTickets: '工单管理',
+}
+
+const currentPageTitle = computed(() => pageTitles[String(route.name || '')] || '管理后台')
 const allExpandedKeys = menuOptions.map(group => group.key)
 const expandedKeys = ref<string[]>([...allExpandedKeys])
 

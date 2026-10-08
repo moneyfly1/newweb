@@ -23,16 +23,19 @@
       </div>
     </div>
 
-    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行） -->
-    <search-filter-bar
-      v-model:values="filterValues"
-      :filters="filterConfig"
-      search-placeholder="搜索名称 / 地区 / 协议 / 域名"
-      @search="handleFilterSearch"
-    />
+    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行）；
+         手机端不重复渲染：下面那条吸顶工具条已经有搜索 + 筛选，两个搜索框只会让人不知道该用哪个 -->
+    <div v-if="!appStore.isMobile" class="desktop-filter-bar">
+      <search-filter-bar
+        v-model:values="filterValues"
+        :filters="filterConfig"
+        search-placeholder="搜索名称 / 地区 / 协议 / 域名"
+        @search="handleFilterSearch"
+      />
+    </div>
 
-    <!-- Mobile Toolbar -->
-    <div v-if="appStore.isMobile" class="mobile-toolbar">
+    <!-- Mobile Toolbar（吸顶：滚动列表时搜索/筛选不消失） -->
+    <div v-if="appStore.isMobile" class="app-sticky-toolbar mobile-sticky-toolbar mobile-toolbar">
       <div class="mobile-toolbar-title">节点管理</div>
       <div class="mobile-toolbar-controls">
         <div class="mobile-toolbar-search">
@@ -76,18 +79,22 @@
       </div>
     </div>
 
-    <transition name="fade">
-      <div v-if="checkedRowKeys.length > 0" class="batch-bar">
-        <div class="batch-info">已选择 {{ checkedRowKeys.length }} 个节点</div>
-        <n-space>
-          <n-button size="small" type="success" secondary @click="handleBatchAction('enable')">批量启用</n-button>
-          <n-button size="small" type="warning" secondary @click="handleBatchAction('disable')">批量禁用</n-button>
-          <n-button size="small" type="info" secondary @click="handleBatchTest">批量测速</n-button>
-          <n-button size="small" type="info" secondary @click="handleBatchAction('online')">批量上线</n-button>
-          <n-button size="small" type="error" ghost @click="handleBatchDelete">批量删除</n-button>
-        </n-space>
-      </div>
-    </transition>
+    <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机固定在底部标签栏上方） -->
+    <BatchSelectBar
+      :total="selection.total.value"
+      :selected-count="selection.count.value"
+      :all-selected="selection.allSelected.value"
+      :indeterminate="selection.indeterminate.value"
+      label="个节点"
+      @toggle-all="selection.toggleAll"
+      @clear="selection.clear"
+    >
+      <n-button size="small" type="success" secondary :disabled="!selection.count.value" @click="handleBatchAction('enable')">批量启用</n-button>
+      <n-button size="small" type="warning" secondary :disabled="!selection.count.value" @click="handleBatchAction('disable')">批量禁用</n-button>
+      <n-button size="small" type="info" secondary :disabled="!selection.count.value" @click="handleBatchTest">批量测速</n-button>
+      <n-button size="small" type="info" secondary :disabled="!selection.count.value" @click="handleBatchAction('online')">批量上线</n-button>
+      <n-button size="small" type="error" ghost :disabled="!selection.count.value" @click="handleBatchDelete">批量删除</n-button>
+    </BatchSelectBar>
 
     <n-card :bordered="false" class="main-card">
       <!-- Desktop Table -->
@@ -101,9 +108,9 @@
           :bordered="false"
           :single-line="false"
           :row-key="(row: any) => row.id"
+          v-model:checked-row-keys="checkedRowKeys"
           :scroll-x="1200"
           class="unified-admin-table"
-          @update:checked-row-keys="handleCheck"
           @update:sorter="handleSorterChange"
         />
       </template>
@@ -115,7 +122,16 @@
         </div>
         <div v-else-if="tableData.length === 0" class="empty-state">暂无数据</div>
         <div v-else class="mobile-card-list">
-          <div v-for="row in tableData" :key="row.id" class="mobile-card">
+          <div
+            v-for="row in tableData"
+            :key="row.id"
+            class="mobile-card is-selectable"
+            :class="{ 'is-selected': selection.isSelected(row) }"
+            @click="selection.toggle(row)"
+          >
+            <div class="card-check" @click.stop>
+              <n-checkbox :checked="selection.isSelected(row)" @update:checked="() => selection.toggle(row)" />
+            </div>
             <div class="card-header">
               <div class="card-title-row">
                 <n-icon :component="ShieldCheckmarkOutline" class="node-icon" :style="{ color: row.is_active ? 'var(--success-color)' : 'var(--danger-color)' }" />
@@ -148,7 +164,7 @@
                 <span class="card-desc">{{ row.description }}</span>
               </div>
             </div>
-            <div class="card-actions">
+            <div class="card-actions card-actions-grid" @click.stop>
               <n-button size="small" quaternary @click="handleTest(row)">
                 <template #icon><n-icon :component="SpeedometerOutline" /></template>
                 测试
@@ -227,6 +243,8 @@ import {
 } from '@vicons/ionicons5'
 import { listAdminNodes, updateNode, deleteNode, importNodes, batchNodeAction, testNode, getConfigUpdateConfig } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import { useAppStore } from '@/stores/app'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import SearchFilterBar from '@/components/SearchFilterBar.vue'
@@ -245,7 +263,7 @@ const editId = ref<number | null>(null)
 const subscriptionUrl = ref('')
 
 // 统一表格状态（含筛选参数 + 默认按 order_index 升序）
-const { loading, tableData, checkedRowKeys, pagination, loadData, handleSorterChange, reload } =
+const { loading, tableData, pagination, loadData, handleSorterChange, reload } =
   useTable(listAdminNodes, {
     defaultSort: { sort: 'order_index', order: 'asc' },
     getParams: () => ({
@@ -257,6 +275,15 @@ const { loading, tableData, checkedRowKeys, pagination, loadData, handleSorterCh
     }),
   })
 const fetchData = loadData
+
+// 全选 / 多选：唯一的选择状态，桌面表格与手机卡片共用（公共组件 useBatchSelection + BatchSelectBar）
+const selection = useBatchSelection<any>(() => tableData.value)
+
+// 桌面表格仍需数组形式的勾选键，用 computed 桥接，保证与手机端卡片状态一致
+const checkedRowKeys = computed<Array<string | number>>({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
 const nodeLinks = ref('')
 const searchQuery = ref('')
 const filterSource = ref<string | null>(null)
@@ -425,8 +452,6 @@ const handleSearch = () => {
   reload()
 }
 
-const handleCheck = (keys: number[]) => { checkedRowKeys.value = keys }
-
 const handleToggleActive = async (row: any, v: boolean) => {
   try {
     await updateNode(row.id, { is_active: v })
@@ -450,10 +475,10 @@ const handleTest = async (row: any) => {
 }
 
 const handleBatchTest = async () => {
-  if (checkedRowKeys.value.length === 0) return
+  const targets = selection.selectedRows.value
+  if (targets.length === 0) return
   loading.value = true
   try {
-    const targets = tableData.value.filter((row: any) => checkedRowKeys.value.includes(row.id))
     await Promise.all(targets.map((row: any) => handleTest(row)))
     message.success(`已完成 ${targets.length} 个节点测速`)
   } finally {
@@ -462,18 +487,22 @@ const handleBatchTest = async () => {
 }
 
 const handleBatchAction = async (action: string) => {
+  const ids = selection.selectedRows.value.map((row: any) => row.id)
+  if (ids.length === 0) return
   try {
-    const res = await batchNodeAction({ ids: checkedRowKeys.value, action })
+    const res = await batchNodeAction({ ids, action })
     message.success(`批量处理完成, 影响 ${res.data.affected} 个节点`)
-    checkedRowKeys.value = []
+    selection.clear()
     fetchData()
   } catch (e: any) { message.error(e?.message || '批量操作失败') }
 }
 
 const handleBatchDelete = () => {
+  const count = selection.count.value
+  if (count === 0) return
   dialog.error({
     title: '危险操作',
-    content: `确认彻底删除这 ${checkedRowKeys.value.length} 个节点吗？`,
+    content: `确认彻底删除这 ${count} 个节点吗？`,
     positiveText: '确认删除',
     onPositiveClick: () => handleBatchAction('delete')
   })
@@ -601,15 +630,9 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
-.batch-bar {
-  position: sticky; top: 0; z-index: 10;
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 20px; margin-bottom: 16px;
-  background: var(--primary-color-soft, rgba(79, 70, 229, 0.08));
-  color: var(--text-color, #1f2937); border: 1px solid var(--primary-color, #4f46e5)33;
-  border-radius: 12px;
-}
 .batch-info { font-weight: 600; color: var(--text-color, #1f2937); }
+/* 桌面端筛选条容器（手机端用吸顶工具条，不重复渲染） */
+.desktop-filter-bar { width: 100%; }
 
 .cell-block { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
 .cell-inline { display: flex; align-items: center; gap: 6px; justify-content: flex-start; text-align: left; }
@@ -623,24 +646,22 @@ onBeforeUnmount(() => {
 .latency-offline { color: var(--danger-color); gap: 4px; opacity: 0.65; }
 
 @media (max-width: 767px) {
-  .admin-page-shell { padding: 12px; }
+  /* 页面根容器不再自带左右内边距：全局已给内容区 10px，页面再加就是白边浪费 */
+  .admin-page-shell { padding-left: 0; padding-right: 0; }
   .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
   .header-right { width: 100%; }
   .header-right .n-space { flex-wrap: wrap; }
-  .batch-bar { flex-direction: column; gap: 12px; }
 
-  /* Mobile Toolbar */
-  .mobile-toolbar {
-    background: var(--n-card-color);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  /* Mobile Toolbar：吸顶（复用全局 .app-sticky-toolbar 的毛玻璃 + 吸顶，
+     去掉它的负外边距，否则会比 10px 内容区各宽出 2px 造成横向溢出） */
+  .app-sticky-toolbar.mobile-sticky-toolbar {
+    margin: 0 0 10px;
+    padding: 8px 0;
   }
   .mobile-toolbar-title {
     font-size: 16px;
     font-weight: 600;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     color: var(--n-title-text-color);
   }
   .mobile-toolbar-controls {
@@ -655,25 +676,8 @@ onBeforeUnmount(() => {
   }
   .mobile-toolbar-row .n-button { flex: 1; min-width: 0; }
 
-  /* Mobile Card List */
-  .mobile-card-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .mobile-card {
-    background: var(--n-card-color);
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    border: 1px solid rgba(0,0,0,0.05);
-  }
-  .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-  }
+  /* Mobile Card List：卡片外观/内边距/发丝分隔线/按压反馈/左侧多选框
+     全部由全局 mobile-cards.css 提供，这里只写节点卡片自己的内容布局 */
   .card-title-row {
     display: flex;
     align-items: center;
@@ -691,18 +695,12 @@ onBeforeUnmount(() => {
   .card-body {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-bottom: 12px;
   }
   .card-row {
-    display: flex;
-    justify-content: space-between;
     align-items: center;
-    font-size: 13px;
+    gap: 12px;
   }
   .card-label {
-    color: var(--text-color-secondary);
-    font-size: 12px;
     min-width: 50px;
   }
   .card-desc {
@@ -712,14 +710,21 @@ onBeforeUnmount(() => {
     white-space: nowrap;
     max-width: 200px;
   }
-  .card-actions {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    border-top: 1px solid rgba(0,0,0,0.06);
-    padding-top: 12px;
+  /* 操作按钮多（6 个），排成两行三列，避免挤成点不准的窄条 */
+  .mobile-card .card-actions.card-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
-  .card-actions .n-button { flex: 1; }
+  .mobile-card .card-actions.card-actions-grid :deep(.n-button) {
+    width: 100%;
+    min-width: 0;
+  }
+  .mobile-card .card-actions.card-actions-grid :deep(.n-button .n-button__content) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .loading-center {
     display: flex;

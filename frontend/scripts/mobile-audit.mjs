@@ -27,6 +27,12 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const USER = process.env.AUDIT_USER || 'admin@example.com'
 const PASS = process.env.AUDIT_PASS || 'LocalTest123'
 const OUT_DIR = process.env.AUDIT_OUT || '/tmp/mobile-audit'
+// 可选：AUDIT_WIDTH=360 用更窄的机型跑（360/320 是常见的安卓窄屏，
+// 窄屏最容易暴露「栅格子项把轨道撑宽」这类整页错乱）
+const NARROW_WIDTH = parseInt(process.env.AUDIT_WIDTH || '0', 10)
+const DEVICE_CONF = NARROW_WIDTH
+  ? { viewport: { width: NARROW_WIDTH, height: 740 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+  : devices['Pixel 5']
 
 // 用户端 + 后台全部页面（深链接类页面用列表页代替）
 const ROUTES = [
@@ -106,6 +112,36 @@ function auditInPage() {
   out.stats.wideTables = wideTables.length
   if (wideTables.length) {
     out.issues.push({ kind: 'desktop-table-on-mobile', detail: `手机宽度下仍有 ${wideTables.length} 个桌面表格` })
+  }
+
+  // 3.5) 可点元素被切在屏幕外：即使它在可横向滚动的条里，「半截按钮」也是缺陷
+  //      （用户反馈过「底部批量按钮溢出错乱」，这类就是从这里发现的）
+  const cutButtons = []
+  for (const el of document.querySelectorAll('button, .n-button, a, [role="button"], .mobile-tab')) {
+    if (!visible(el)) continue
+    const r = el.getBoundingClientRect()
+    if (r.width < 20 || r.height < 20) continue
+    if (r.right <= vw + 1 && r.left >= -1) continue
+    // 有意设计的横向滚动条（统计卡轮播、chip 导航、tab 条）：元素能被滑到，不算缺陷。
+    // 只有「被切且滑不到」的才算问题（底部操作栏按钮挤爆就是这种）。
+    let scroller = el.parentElement
+    let reachable = false
+    while (scroller && scroller !== document.body) {
+      const cs2 = getComputedStyle(scroller)
+      if (['auto', 'scroll'].includes(cs2.overflowX) && scroller.scrollWidth > scroller.clientWidth + 4) {
+        const cr = scroller.getBoundingClientRect()
+        const hidden = scroller.scrollWidth - scroller.clientWidth
+        reachable = (r.right - cr.right) <= hidden + 2 || (cr.left - r.left) <= hidden + 2
+        break
+      }
+      scroller = scroller.parentElement
+    }
+    if (reachable) continue
+    cutButtons.push({ el: describe(el), left: Math.round(r.left), right: Math.round(r.right) })
+  }
+  out.stats.cutButtons = cutButtons.length
+  if (cutButtons.length) {
+    out.issues.push({ kind: 'cut-interactive', detail: `${cutButtons.length} 个可点元素被切在屏幕外`, samples: cutButtons.slice(0, 6) })
   }
 
   // 4) 触控目标过小
@@ -271,7 +307,7 @@ function inputFocusOutlineProbe() {
 const browser = await chromium.launch()
 const STATE_FILE = process.env.AUDIT_STATE || '/tmp/mobile-audit-state.json'
 const context = await browser.newContext({
-  ...devices['Pixel 5'],
+  ...DEVICE_CONF,
   locale: 'zh-CN',
   ...(existsSync(STATE_FILE) ? { storageState: STATE_FILE } : {}),
 })
@@ -351,7 +387,7 @@ for (const route of targets) {
 // ---- 游客页面（无登录态）：登录/注册/找回密码/404 也要体检 ----
 const GUEST_ROUTES = ['/login', '/register', '/forgot-password', '/admin/login', '/nonexistent-page']
 if (!process.argv.slice(2).length) {
-  const guestCtx = await browser.newContext({ ...devices['Pixel 5'], locale: 'zh-CN' })
+  const guestCtx = await browser.newContext({ ...DEVICE_CONF, locale: 'zh-CN' })
   const guestPage = await guestCtx.newPage()
   for (const route of GUEST_ROUTES) {
     const errorsBefore = consoleErrors.length

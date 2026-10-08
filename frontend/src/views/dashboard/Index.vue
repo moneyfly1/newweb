@@ -975,12 +975,21 @@ onUnmounted(() => {
   .welcome-stat .n-button {
     white-space: nowrap;
   }
-  .main-grid { grid-template-columns: 1fr; }
-  .card-header { align-items: center; gap: 8px; padding-bottom: 10px; }
-  .client-grid { grid-template-columns: repeat(2, 1fr); }
+  /* 用 minmax(0, 1fr) + min-width:0：栅格/弹性子项默认 min-width:auto，
+     内容的最小宽度会把轨道撑宽（360px 窄屏实测整页被撑出 106px 横向溢出），
+     这是「手机端页面错乱」最常见的根因。 */
+  .main-grid { grid-template-columns: minmax(0, 1fr); }
+  .left-col, .right-col { min-width: 0; }
+  .main-grid > * > .card { min-width: 0; }
+  .card-header { align-items: center; gap: 8px; padding-bottom: 10px; min-width: 0; }
+  .card-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .client-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quick-actions-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .welcome-stat { flex: 0 0 78%; min-width: 0; }
+  .announcement-title, .qs-name, .client-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   /* 客户端下载磁贴：契约 §1 卡片 16px 圆角 + 触控目标 ≥40px（内容区 44px 高见 .client-card） */
   .client-card { border-radius: 16px; }
-  .quick-actions-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .quick-actions-grid { gap: 8px; }
   .quick-action { padding: 12px 4px; border-radius: 12px; }
   .quick-action span { font-size: 13px; }
   .sub-days-block { align-items: flex-start; }

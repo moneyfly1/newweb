@@ -184,7 +184,7 @@
       @cancel="showCreateModal = false"
       :loading="creating"
     >
-      <n-form ref="formRef" :model="formData" :rules="rules" label-placement="left" label-width="120">
+      <n-form ref="formRef" :model="formData" :rules="rules" :label-placement="formLabelPlacement" :label-width="formLabelWidth">
         <n-form-item label="最大使用次数" path="max_uses">
           <n-input-number
             v-model:value="formData.max_uses"
@@ -313,6 +313,10 @@ const rules = {
   inviter_reward: { required: true, type: 'number', message: '请输入邀请人奖励', trigger: 'blur' },
   invitee_reward: { required: true, type: 'number', message: '请输入受邀人奖励', trigger: 'blur' }
 }
+
+// 手机端表单标签置顶：左侧 120px 标签在 393px 屏上会把输入框挤成窄条（桌面端保持左右布局）
+const formLabelPlacement = computed<'left' | 'top'>(() => (appStore.isMobile ? 'top' : 'left'))
+const formLabelWidth = computed(() => (appStore.isMobile ? undefined : 120))
 
 // 计算奖励信息
 const rewardInfo = computed(() => {
@@ -656,20 +660,22 @@ onMounted(() => {
   color: white;
 }
 
+/* 契约 §1：App 卡片用纯色底，不要渐变（旧版的 135deg 渐变看着像网页）。
+   这里保留四色区分，但都改成纯色。 */
 .stat-card-1 {
-  background: var(--brand-gradient);
+  background: var(--primary-color, #4f46e5);
 }
 
 .stat-card-2 {
-  background: linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%);
+  background: #2193b0;
 }
 
 .stat-card-3 {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: #e0576c;
 }
 
 .stat-card-4 {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  background: #e08a1e;
 }
 
 .stat-card :deep(.n-statistic__label) {
@@ -688,8 +694,9 @@ onMounted(() => {
 
 .mobile-card {
   border: 1px solid var(--border-color, #eef0f3);
-  border-radius: 10px;
+  border-radius: 16px;
   padding: 14px 16px;
+  background: var(--bg-color, #fff);
 }
 
 .card-row {
@@ -722,8 +729,10 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  .invite-page { padding: 0 12px; }
-  .stat-card :deep(.n-statistic__label) { font-size: 12px; }
+  /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白）；
+     卡片圆角走共享 token --user-mobile-radius（8px → 契约的 16px），不改公共文件 */
+  .invite-page { padding: 0; --user-mobile-radius: 16px; }
+  .stat-card :deep(.n-statistic__label) { font-size: 13px; }
   .stat-card :deep(.n-statistic-value__content) { font-size: 20px; }
 }
 </style>

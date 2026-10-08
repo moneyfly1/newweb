@@ -1,8 +1,10 @@
 /* User-facing mobile layout and card normalization */
 @media (max-width: 767px) {
   :root {
-    --user-mobile-gutter: 12px;
-    --user-mobile-radius: 8px;
+    /* 页面左右留白统一由 mobile-app-ui.css 给（10px），这里置 0 避免叠加 */
+    --user-mobile-gutter: 0px;
+    /* App 风格卡片圆角 */
+    --user-mobile-radius: 16px;
     --user-mobile-control-height: 40px;
   }
 
@@ -166,7 +168,7 @@
     width: 100%;
     min-width: 0;
     min-height: 40px;
-    border-radius: 6px !important;
+    border-radius: 10px !important;
     box-shadow: none !important;
   }
 

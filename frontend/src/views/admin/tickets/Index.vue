@@ -23,7 +23,7 @@
         </n-space>
 
         <!-- Mobile toolbar -->
-        <div v-if="appStore.isMobile" class="mobile-toolbar">
+        <div v-if="appStore.isMobile" class="mobile-toolbar app-sticky-toolbar">
           <div class="mobile-toolbar-title">工单管理</div>
           <div class="mobile-toolbar-row">
             <n-select v-model:value="filters.status" placeholder="状态" clearable size="small" style="flex:1" :options="statusOptions" @update:value="handleSearch" />
@@ -31,10 +31,18 @@
           </div>
         </div>
 
-        <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-          <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
-          <n-button size="small" type="success" @click="handleBatchClose">批量关闭</n-button>
-        </n-space>
+        <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方） -->
+        <BatchSelectBar
+          :total="selection.total.value"
+          :selected-count="selection.count.value"
+          :all-selected="selection.allSelected.value"
+          :indeterminate="selection.indeterminate.value"
+          label="个工单"
+          @toggle-all="selection.toggleAll"
+          @clear="selection.clear"
+        >
+          <n-button size="small" type="success" :disabled="!selection.count.value" @click="handleBatchClose">批量关闭</n-button>
+        </BatchSelectBar>
         <template v-if="!appStore.isMobile">
           <n-data-table
             remote
@@ -44,8 +52,7 @@
             :pagination="pagination"
             :bordered="false"
             :row-key="(row: any) => row.id"
-            :checked-row-keys="checkedRowKeys"
-            @update:checked-row-keys="(keys: any) => { checkedRowKeys = keys }"
+            v-model:checked-row-keys="checkedRowKeys"
             @update:page="(p: number) => { pagination.page = p; loadTickets() }"
             @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; loadTickets() }"
             @update:sorter="handleSorterChange"
@@ -58,7 +65,16 @@
               暂无数据
             </div>
             <div v-else class="mobile-card-list">
-              <div v-for="ticket in tickets" :key="ticket.id" class="mobile-card">
+              <div
+                v-for="ticket in tickets"
+                :key="ticket.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selection.isSelected(ticket) }"
+                @click="selection.toggle(ticket)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selection.isSelected(ticket)" @update:checked="() => selection.toggle(ticket)" />
+                </div>
                 <div class="card-header">
                   <div class="card-title">{{ ticket.title }}</div>
                   <n-tag :type="getStatusTagType(ticket.status)" size="small">
@@ -81,7 +97,7 @@
                     <span>{{ formatFullDateTime(ticket.created_at) }}</span>
                   </div>
                 </div>
-                <div class="card-actions">
+                <div class="card-actions" @click.stop>
                   <n-button size="small" type="primary" @click="handleViewDetail(ticket.id)">查看详情</n-button>
                 </div>
               </div>
@@ -208,8 +224,10 @@ import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, NSpin, NSelect, useMessage, useDialog } from 'naive-ui'
 import { listAdminTickets, getAdminTicket, updateTicket, replyAdminTicket } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import TicketAttachmentList from '@/components/TicketAttachmentList.vue'
 import TicketAttachmentUploader from '@/components/TicketAttachmentUploader.vue'
 
@@ -222,7 +240,13 @@ const { loading, beginLoad, endLoad } = usePageLoading()
 const detailLoading = ref(false)
 const replyLoading = ref(false)
 const tickets = ref<any[]>([])
-const checkedRowKeys = ref<any[]>([])
+// 全选 / 多选：全站统一实现（桌面表格与手机卡片共用同一份选择状态）
+const selection = useBatchSelection(() => tickets.value)
+// Naive 表格要的是数组，这里做一层桥接，保证两边状态一致
+const checkedRowKeys = computed({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
 const currentTicket = ref<any>(null)
 const showDetailDrawer = ref(false)
 const replyContent = ref('')
@@ -514,13 +538,12 @@ const handleQuickStatusUpdate = (row: any) => {
 }
 
 const handleBatchClose = async () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
   try {
-    await Promise.all(checkedRowKeys.value.map(id => {
-      const ticket = tickets.value.find(t => t.id === id)
-      return updateTicket(id, { ...ticket, status: 'closed' })
-    }))
+    await Promise.all(rows.map(row => updateTicket(row.id, { ...row, status: 'closed' })))
     message.success('批量关闭成功')
-    checkedRowKeys.value = []
+    selection.clear()
     loadTickets()
   } catch { message.error('批量关闭失败') }
 }
@@ -586,67 +609,27 @@ onActivated(() => {
   word-break: break-word;
 }
 
-.mobile-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.mobile-card {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  overflow: hidden;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.card-title {
-  font-weight: 600;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  margin-right: 8px;
-}
-
-.card-body {
-  padding: 10px 14px;
-}
-
-.card-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-  font-size: 13px;
-}
-
-.card-label {
-  color: #999;
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid #f0f0f0;
-  flex-wrap: wrap;
-}
-
 @media (max-width: 767px) {
-  .tickets-container { padding: 8px; }
+  /* 手机端左右留白由全局布局统一给（10px），页面根容器不再自带左右 padding；
+     卡片样式统一走全局 .mobile-card（App 风格），页面不再覆盖。 */
+  .tickets-container { padding: 8px 0; }
   /* 工单聊天界面移动端高度优化 */
   .chat-container { max-height: 50vh; }
 }
+
+/* 吸顶工具栏：全局 .app-sticky-toolbar 用负边距对齐卡片内边距，
+   而带 .mobile-card-list 的卡片内容区左右内边距是 0，负边距会把工具条撑出卡片。 */
+.mobile-toolbar.app-sticky-toolbar {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* 可选中卡片左侧给复选框留位 */
+.mobile-card.is-selectable {
+  padding-left: 44px !important;
+}
+
 .mobile-toolbar { margin-bottom: 12px; }
 .mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
-.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
+.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 </style>

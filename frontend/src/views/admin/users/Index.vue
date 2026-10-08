@@ -23,13 +23,15 @@
       </div>
     </div>
 
-    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行） -->
-    <search-filter-bar
-      v-model:values="filterValues"
-      :filters="filterConfig"
-      search-placeholder="搜索邮箱 / 用户名 / 订阅地址"
-      @search="handleSearch"
-    />
+    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行；手机端吸顶） -->
+    <div class="app-sticky-toolbar mobile-sticky-toolbar">
+      <search-filter-bar
+        v-model:values="filterValues"
+        :filters="filterConfig"
+        search-placeholder="搜索邮箱 / 用户名 / 订阅地址"
+        @search="handleSearch"
+      />
+    </div>
 
     <n-card :bordered="false" class="page-card admin-main-card">
       <n-space vertical :size="16">
@@ -66,19 +68,26 @@
           </div>
         </div>
 
-        <!-- Batch operations -->
-        <n-space v-if="checkedRowKeys.length > 0" align="center" class="batch-operations">
-          <span class="batch-selected-text">已选择 {{ checkedRowKeys.length }} 项</span>
-          <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
-          <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
+        <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机固定在底部标签栏上方） -->
+        <BatchSelectBar
+          :total="selection.total.value"
+          :selected-count="selection.count.value"
+          :all-selected="selection.allSelected.value"
+          :indeterminate="selection.indeterminate.value"
+          label="个用户"
+          @toggle-all="selection.toggleAll"
+          @clear="selection.clear"
+        >
+          <n-button size="small" type="success" :disabled="!selection.count.value" @click="handleBatchEnable">批量启用</n-button>
+          <n-button size="small" type="warning" :disabled="!selection.count.value" @click="handleBatchDisable">批量禁用</n-button>
           <n-popconfirm @positive-click="doBatchDelete">
             <template #trigger>
-              <n-button size="small" type="error">批量删除</n-button>
+              <n-button size="small" type="error" :disabled="!selection.count.value">批量删除</n-button>
             </template>
-            确定要删除选中的 {{ checkedRowKeys.length }} 个用户吗？此操作不可恢复！
+            确定要删除选中的 {{ selection.count.value }} 个用户吗？此操作不可恢复！
           </n-popconfirm>
-          <n-button size="small" @click="openSetLevelModal">设置等级</n-button>
-        </n-space>
+          <n-button size="small" :disabled="!selection.count.value" @click="openSetLevelModal">设置等级</n-button>
+        </BatchSelectBar>
 
         <!-- Data table (Desktop) -->
         <template v-if="!appStore.isMobile">
@@ -91,9 +100,8 @@
             :bordered="false"
             :single-line="false"
             :row-key="(row) => row.id"
-            :checked-row-keys="checkedRowKeys"
+            v-model:checked-row-keys="checkedRowKeys"
             :row-props="getRowProps"
-            @update:checked-row-keys="handleCheck"
             @update:sorter="handleSorterChange"
           />
         </template>
@@ -107,9 +115,18 @@
             暂无数据
           </div>
           <div v-else class="mobile-card-list">
-            <div v-for="row in users" :key="row.id" class="mobile-card">
+            <div
+              v-for="row in users"
+              :key="row.id"
+              class="mobile-card is-selectable"
+              :class="{ 'is-selected': selection.isSelected(row) }"
+              @click="selection.toggle(row)"
+            >
+              <div class="card-check" @click.stop>
+                <n-checkbox :checked="selection.isSelected(row)" @update:checked="() => selection.toggle(row)" />
+              </div>
               <div class="card-header">
-                <div class="card-title email-link" title="点击查看该用户详情" @click="handleViewDetail(row)">{{ row.username }}</div>
+                <div class="card-title email-link" title="点击查看该用户详情" @click.stop="handleViewDetail(row)">{{ row.username }}</div>
                 <n-space :size="4">
                   <n-tag :type="row.is_active ? 'success' : 'error'" size="small">
                     {{ row.is_active ? '激活' : '禁用' }}
@@ -127,7 +144,7 @@
               <div class="card-body">
                 <div class="card-row">
                   <span class="card-label">邮箱</span>
-                  <span class="card-value email-link" title="点击查看该用户详情" @click="handleViewDetail(row)">{{ row.email }}</span>
+                  <span class="card-value email-link" title="点击查看该用户详情" @click.stop="handleViewDetail(row)">{{ row.email }}</span>
                 </div>
                 <div class="card-row">
                   <span class="card-label">余额</span>
@@ -156,7 +173,7 @@
               </div>
               <!-- 与电脑端操作列一一对应：编辑 / 禁用(启用) / 重置 / 代登 / 解封 / 删除，
                    3 列网格排成两行三列（详情入口是上面的用户名和邮箱） -->
-              <div class="card-actions card-actions-grid">
+              <div class="card-actions card-actions-grid" @click.stop>
                 <n-button size="small" type="primary" @click="handleEdit(row)">编辑</n-button>
                 <n-button size="small" :type="row.is_active ? 'warning' : 'success'" @click="handleToggleActive(row)">
                   {{ row.is_active ? '禁用' : '启用' }}
@@ -321,6 +338,8 @@ import {
   updateUserLineType, unlockLoginLimit
 } from '@/api/admin'
 import { useTable } from '@/composables/useTable'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import { listUserLevels } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -346,7 +365,7 @@ const searchQuery = ref('')
 const statusFilter = ref(null)
 
 // 统一表格状态（含搜索/状态筛选）
-const { loading, tableData: users, checkedRowKeys, pagination, loadData, reload, handleSorterChange } = useTable(listUsers, {
+const { loading, tableData: users, pagination, loadData, reload, handleSorterChange } = useTable(listUsers, {
   getParams: () => ({
     search: searchQuery.value || undefined,
     is_active: statusFilter.value === 'active' ? true : statusFilter.value === 'inactive' ? false : undefined,
@@ -354,6 +373,15 @@ const { loading, tableData: users, checkedRowKeys, pagination, loadData, reload,
   }),
 })
 const fetchUsers = loadData
+
+// 全选 / 多选：唯一的选择状态，桌面表格与手机卡片共用（公共组件 useBatchSelection + BatchSelectBar）
+const selection = useBatchSelection(() => users.value)
+
+// 桌面表格仍需数组形式的勾选键，用 computed 桥接，保证与手机端卡片状态一致
+const checkedRowKeys = computed({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
 
 // Import/Export
 const importFileInput = ref(null)
@@ -556,7 +584,6 @@ const handleSearch = () => {
 }
 const handlePageChange = (page) => { pagination.page = page; fetchUsers() }
 const handlePageSizeChange = (size) => { pagination.pageSize = size; pagination.page = 1; fetchUsers() }
-const handleCheck = (keys) => { checkedRowKeys.value = keys }
 
 const handleLineTypeChange = async (row, lineType) => {
   if (getEffectiveLineType(row) === lineType) return
@@ -773,16 +800,18 @@ const handleResetPassword = async () => {
 
 // Batch operations
 const handleBatchEnable = () => {
+  const ids = selection.selectedRows.value.map((r) => r.id)
+  if (ids.length === 0) return
   dialog.warning({
     title: '批量启用',
-    content: `确定要启用选中的 ${checkedRowKeys.value.length} 个用户吗？`,
+    content: `确定要启用选中的 ${ids.length} 个用户吗？`,
     positiveText: '确定',
     negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        const res = await batchUserAction({ user_ids: checkedRowKeys.value, action: 'enable' })
+        const res = await batchUserAction({ user_ids: ids, action: 'enable' })
         message.success(`已启用 ${res.data.affected} 个用户`)
-        checkedRowKeys.value = []
+        selection.clear()
         fetchUsers()
       } catch (error) {
         message.error('批量启用失败：' + (error.message || '未知错误'))
@@ -792,16 +821,18 @@ const handleBatchEnable = () => {
 }
 
 const handleBatchDisable = () => {
+  const ids = selection.selectedRows.value.map((r) => r.id)
+  if (ids.length === 0) return
   dialog.warning({
     title: '批量禁用',
-    content: `确定要禁用选中的 ${checkedRowKeys.value.length} 个用户吗？`,
+    content: `确定要禁用选中的 ${ids.length} 个用户吗？`,
     positiveText: '确定',
     negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        const res = await batchUserAction({ user_ids: checkedRowKeys.value, action: 'disable' })
+        const res = await batchUserAction({ user_ids: ids, action: 'disable' })
         message.success(`已禁用 ${res.data.affected} 个用户`)
-        checkedRowKeys.value = []
+        selection.clear()
         fetchUsers()
       } catch (error) {
         message.error('批量禁用失败：' + (error.message || '未知错误'))
@@ -811,10 +842,12 @@ const handleBatchDisable = () => {
 }
 
 const doBatchDelete = async () => {
+  const ids = selection.selectedRows.value.map((r) => r.id)
+  if (ids.length === 0) return
   try {
-    const res = await batchUserAction({ user_ids: checkedRowKeys.value, action: 'delete' })
+    const res = await batchUserAction({ user_ids: ids, action: 'delete' })
     message.success(`已删除 ${res.data.affected} 个用户`)
-    checkedRowKeys.value = []
+    selection.clear()
     fetchUsers()
   } catch (error) {
     message.error('批量删除失败：' + (error.message || '未知错误'))
@@ -840,15 +873,17 @@ const handleBatchSetLevel = async () => {
     message.warning('请选择等级')
     return
   }
+  const ids = selection.selectedRows.value.map((r) => r.id)
+  if (ids.length === 0) return
   try {
     const res = await batchUserAction({
-      user_ids: checkedRowKeys.value,
+      user_ids: ids,
       action: 'set_level',
       data: { level_id: selectedLevelId.value }
     })
     message.success(`已设置 ${res.data.affected} 个用户的等级`)
     showSetLevelModal.value = false
-    checkedRowKeys.value = []
+    selection.clear()
     fetchUsers()
   } catch (error) {
     message.error('设置等级失败：' + (error.message || '未知错误'))
@@ -961,74 +996,50 @@ onActivated(() => {
   white-space: nowrap;
 }
 
-/* Mobile card styles */
-.mobile-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* ===== 手机端「像 App」骨架 =====
+   卡片外观、内边距、发丝分隔线、按压反馈、卡片左侧多选框都由全局
+   mobile-cards.css 提供（.mobile-card / .card-header / .card-row / .card-check …），
+   页面只保留列表与内容的布局差异，不再覆盖内边距与圆角。 */
+
+/* 搜索筛选条吸顶：复用全局 .app-sticky-toolbar，只把它的负外边距清零，
+   否则工具条会比 10px 内容区各宽出 2px，在 393px 屏幕上就是横向溢出。 */
+@media (max-width: 767px) {
+  .app-sticky-toolbar.mobile-sticky-toolbar {
+    margin: 0 0 10px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .app-sticky-toolbar.mobile-sticky-toolbar :deep(.sf-bar) {
+    margin-bottom: 0;
+  }
 }
 
-.mobile-card {
-  background: var(--bg-color, #fff);
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-color, #f0f0f0);
-}
-
+/* 卡片标题即详情入口，长用户名要能截断 */
 .card-title {
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--text-color, #333);
-}
-
-.card-body {
-  padding: 10px 14px;
-}
-
-.card-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 0;
-  font-size: 13px;
-  gap: 8px;
-}
-
-.card-row > span:last-child {
-  word-break: break-all;
-  text-align: right;
+  flex: 1;
   min-width: 0;
-  color: var(--text-color, #333);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
 }
 
-.card-label {
-  color: var(--text-color-secondary, #999);
-  flex-shrink: 0;
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border-color, #f0f0f0);
-  flex-wrap: wrap;
+/* 卡片内的长邮箱/长文本换行，不撑出卡片 */
+.card-value {
+  min-width: 0;
+  word-break: break-all;
 }
 
 /* 移动端卡片操作区：与电脑端操作列一样，6 个按钮排成两行三列 */
-.card-actions-grid {
+.mobile-card .card-actions.card-actions-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  flex-wrap: wrap;
 }
-.card-actions-grid :deep(.n-button) {
+.mobile-card .card-actions.card-actions-grid :deep(.n-button) {
   width: 100%;
+  min-width: 0;
 }
 .line-type-trigger {
   display: inline-flex;

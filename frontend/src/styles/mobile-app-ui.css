@@ -363,9 +363,13 @@ select:-webkit-autofill {
     /* 未选中时操作区禁用但仍占位，避免布局跳动 */
     opacity: 0.5;
   }
-  /* 底部栏存在时，内容区多留一点空间，最后一个卡片不会被挡住 */
-  .has-batch-bar .mobile-admin-content,
-  .has-batch-bar .user-mobile-content {
-    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px));
+  /* 底部栏存在时，内容区多留空间，最后一个卡片不会被挡住
+     （批量栏 56px + 标签栏 56px + 安全区；标记由 BatchSelectBar 组件挂到 body 上） */
+  body.has-batch-bar .mobile-admin-content,
+  body.has-batch-bar .user-mobile-content {
+    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body.has-batch-bar .n-scrollbar-content {
+    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }

@@ -11,7 +11,7 @@
         <span v-else>{{ pullDistance >= 55 ? '释放刷新' : '下拉刷新' }}</span>
       </div>
     </transition>
-    <n-space vertical :size="24">
+    <n-space vertical :size="appStore.isMobile ? 12 : 24">
       <div class="header">
         <h1 class="title">我的订单</h1>
         <n-button type="primary" @click="router.push('/shop')">购买套餐</n-button>
@@ -22,15 +22,18 @@
 
           <!-- ===== 订单列表 ===== -->
           <n-tab-pane name="orders" tab="全部订单">
-            <n-space :size="8" style="margin-bottom: 16px;">
-              <n-button
-                v-for="sf in statusFilters" :key="sf.value"
-                :type="orderStatusFilter === sf.value ? 'primary' : 'default'"
-                size="small"
-                :ghost="orderStatusFilter === sf.value"
-                @click="orderStatusFilter = sf.value; orderPagination.page = 1; loadOrders()"
-              >{{ sf.label }}</n-button>
-            </n-space>
+            <!-- 手机端：状态筛选吸顶，滚动列表时不跟着滚走 -->
+            <div class="order-filters" :class="{ 'app-sticky-toolbar': appStore.isMobile }">
+              <n-space :size="8" :style="appStore.isMobile ? '' : 'margin-bottom: 16px;'">
+                <n-button
+                  v-for="sf in statusFilters" :key="sf.value"
+                  :type="orderStatusFilter === sf.value ? 'primary' : 'default'"
+                  size="small"
+                  :ghost="orderStatusFilter === sf.value"
+                  @click="orderStatusFilter = sf.value; orderPagination.page = 1; loadOrders()"
+                >{{ sf.label }}</n-button>
+              </n-space>
+            </div>
 
             <n-data-table
               v-if="!appStore.isMobile"
@@ -82,7 +85,7 @@
               :item-count="orderPagination.itemCount"
               :page-sizes="orderPagination.pageSizes"
               :show-size-picker="orderPagination.showSizePicker"
-              style="margin-top: 16px; justify-content: flex-end"
+              :style="appStore.isMobile ? 'margin-top: 12px; justify-content: center;' : 'margin-top: 16px; justify-content: flex-end;'"
               @update:page="(p: number) => { orderPagination.page = p; loadOrders() }"
               @update:page-size="(ps: number) => { orderPagination.pageSize = ps; orderPagination.page = 1; loadOrders() }"
             />
@@ -135,7 +138,7 @@
               :item-count="rechargePagination.itemCount"
               :page-sizes="rechargePagination.pageSizes"
               :show-size-picker="rechargePagination.showSizePicker"
-              style="margin-top: 16px; justify-content: flex-end"
+              :style="appStore.isMobile ? 'margin-top: 12px; justify-content: center;' : 'margin-top: 16px; justify-content: flex-end;'"
               @update:page="(p: number) => { rechargePagination.page = p; loadRechargeRecords() }"
               @update:page-size="(ps: number) => { rechargePagination.pageSize = ps; rechargePagination.page = 1; loadRechargeRecords() }"
             />
@@ -956,29 +959,31 @@ onActivated(() => { loadOrders(); loadPaymentMethods() })
   background: var(--pm-brand); border-color: var(--pm-brand); color: #fff;
 }
 
-/* Mobile cards */
-.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.mobile-empty { text-align: center; color: var(--text-color-secondary); padding: 32px 0; }
-.mobile-card {
-  background: #fafafa; border: 1px solid var(--border-color); border-radius: 10px;
-  padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
-}
-.card-row { display: flex; justify-content: space-between; align-items: center; }
-.label { font-size: 13px; color: var(--text-color-secondary); flex-shrink: 0; }
-.value { font-size: 13px; color: var(--text-color); text-align: right; }
+/* Mobile cards：卡片外观统一由全局 mobile-cards.css 提供（16px 圆角/轻阴影/纯色底），
+   页面只在手机端做契约要求的补偿（见下方 @media）。 */
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
 .value.amount { color: var(--success-color); font-weight: 600; }
-.value.mono { font-family: monospace; font-size: 12px; }
-.card-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; border-top: 1px solid var(--border-color); margin-top: 4px; }
 
 @media (max-width: 767px) {
-  .order-container { padding: 12px; }
+  /* 手机端横向留白由全局统一（10px），页面根容器再叠加就变成白边浪费。
+     admin-mobile.css 用 [class$="-container"] 塞了 12px !important，这里按契约清零。 */
+  .order-container { padding: 8px 0 12px !important; }
   .header { margin-bottom: 4px; }
-  .title { font-size: 22px; }
-  .main-card { border-radius: 14px; }
-  .card-row { display: grid; grid-template-columns: minmax(72px, 34%) minmax(0, 1fr); gap: 12px; align-items: start; }
-  .value { min-width: 0; word-break: break-word; }
-  .card-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); justify-content: stretch; }
-  .card-actions .n-button { width: 100%; }
+  .title { font-size: 20px; }
+  /* 吸顶筛选条：全局 .app-sticky-toolbar 用的是 -12px 负边距（给卡片内边距留位置），
+     这里列表已贴齐卡片，改成 0 边距避免被撑出横向溢出 */
+  .order-filters.app-sticky-toolbar { margin: 0 0 10px; padding: 8px 12px; }
+  /* 旧层 user-mobile.css 用 !important 把卡片压回 8px 圆角，这里拉回契约的 App 风格 */
+  .order-container :deep(.mobile-card),
+  .order-container :deep(.n-card) {
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
+  }
+  .order-container :deep(.mobile-card .card-actions .n-button) { border-radius: 10px !important; }
+  /* [class$="-container"] 也会命中 naive 的 .n-spin-container，把卡片挤窄 */
+  .order-container :deep(.n-spin-container) { padding: 0 !important; }
+  /* 分页按钮默认 28×28，手指点不准：手机端撑到 40px（父级已 flex-wrap，不会横向撑破） */
+  .order-container :deep(.n-pagination .n-pagination-item) { min-width: 40px; height: 40px; }
   .pm-card { padding: 10px 12px; border-radius: 10px; }
   .pm-card-icon { width: 36px; height: 36px; font-size: 16px; border-radius: 9px; }
   .pm-card-desc { white-space: normal; line-height: 1.3; }

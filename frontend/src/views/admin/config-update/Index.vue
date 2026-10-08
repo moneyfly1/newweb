@@ -493,8 +493,9 @@ onUnmounted(() => {
 }
 
 @media (max-width: 767px) {
-  .config-update-container { padding: 8px; }
-  .log-viewer { font-size: 12px; padding: 12px; max-height: 300px; }
+  /* 左右留白由全局统一给（mobile-app-ui.css + admin-mobile.css），页面不再自带内边距 */
+  /* 日志正文不小于 13px（原来手机端 12px，偏小） */
+  .log-viewer { font-size: 13px; padding: 12px; max-height: 300px; line-height: 1.7; }
 
   .url-item {
     padding: 6px;
@@ -515,8 +516,4 @@ onUnmounted(() => {
     gap: 6px;
   }
 }
-
-.mobile-toolbar { margin-bottom: 12px; }
-.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
-.mobile-toolbar-row { display: flex; gap: 8px; align-items: center; }
 </style>

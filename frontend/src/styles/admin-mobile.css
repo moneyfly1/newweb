@@ -1,8 +1,10 @@
 /* Global mobile responsive styles */
 @media (max-width: 767px) {
   :root {
-    --admin-mobile-gutter: 12px;
-    --admin-mobile-radius: 8px;
+    /* 页面左右留白统一由 mobile-app-ui.css 给（10px），这里置 0 避免叠加成 24px 白边 */
+    --admin-mobile-gutter: 0px;
+    /* App 风格卡片圆角 */
+    --admin-mobile-radius: 16px;
     --admin-mobile-control-height: 40px;
   }
 
@@ -10,11 +12,28 @@
     background: var(--bg-page-color, #f8fafc);
   }
 
-  /* Admin container padding */
+  /* Admin container padding。
+     注意：原来这里用了 [class$="-container"] / [class$="-page"] 两个属性选择器，
+     它们会把 naive-ui 自己的 .n-spin-container 也一起命中，于是每个列表外面又套一层
+     12px 内边距 —— 用户反馈的「内容居中、边上空白多」就是这么来的。
+     现在只保留明确列出的后台页面容器。 */
   .subscriptions-container,
   .admin-packages-page,
-  [class$="-container"],
-  [class$="-page"] {
+  .coupons-container,
+  .custom-nodes-container,
+  .levels-container,
+  .logs-container,
+  .nodes-container,
+  .redeem-container,
+  .stats-container,
+  .tickets-container,
+  .announcements-container,
+  .config-update-container,
+  .admin-users-page,
+  .admin-orders-page,
+  .admin-invites-page,
+  .admin-email-queue-page,
+  .abnormal-users-page {
     padding: var(--admin-mobile-gutter) !important;
   }
 

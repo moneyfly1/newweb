@@ -1,6 +1,14 @@
 <template>
   <div class="redeem-page">
-    <n-card title="卡密兑换">
+    <!-- 手机端：兑换码输入做成吸顶工具条（App 顶栏常驻，不跟着列表滚走） -->
+    <div v-if="appStore.isMobile" class="app-sticky-toolbar redeem-toolbar">
+      <n-input-group>
+        <n-input v-model:value="code" placeholder="请输入兑换码" clearable size="large" />
+        <n-button type="primary" size="large" :loading="submitting" @click="handleRedeem" :disabled="!code.trim()">兑换</n-button>
+      </n-input-group>
+      <n-alert v-if="result" :type="result.type" :title="result.title" class="redeem-result">{{ result.message }}</n-alert>
+    </div>
+    <n-card v-else title="卡密兑换">
       <n-space vertical :size="16">
         <n-input-group>
           <n-input v-model:value="code" placeholder="请输入兑换码" clearable size="large" />
@@ -9,23 +17,21 @@
         <n-alert v-if="result" :type="result.type" :title="result.title">{{ result.message }}</n-alert>
       </n-space>
     </n-card>
-    <n-card title="兑换记录" style="margin-top:16px">
+    <n-card title="兑换记录" class="redeem-history-card">
       <template v-if="!appStore.isMobile">
         <n-data-table :columns="columns" :data="history" :loading="loadingHistory" :bordered="false" />
       </template>
       <template v-else>
-        <div v-if="loadingHistory" style="text-align:center;padding:40px"><n-spin size="medium" /></div>
-        <div v-else-if="history.length === 0" style="text-align:center;padding:40px;color:#999">暂无兑换记录</div>
+        <div v-if="loadingHistory" class="redeem-state"><n-spin size="medium" /></div>
+        <div v-else-if="history.length === 0" class="mobile-empty">暂无兑换记录</div>
         <div v-else class="mobile-card-list">
           <div v-for="item in history" :key="item.id" class="mobile-card">
-            <div class="card-header">
+            <div class="card-header redeem-card-head">
               <span class="card-title">{{ item.code }}</span>
-              <n-tag :type="item.type === 'balance' ? 'success' : 'info'" size="small">{{ item.type === 'balance' ? '余额' : '套餐' }}</n-tag>
+              <n-tag :type="item.type === 'balance' ? 'success' : 'info'" size="small" :bordered="false">{{ item.type === 'balance' ? '余额' : '套餐' }}</n-tag>
             </div>
-            <div class="card-body">
-              <div class="card-row"><span class="card-label">兑换值</span><span>{{ item.value }}</span></div>
-              <div class="card-row"><span class="card-label">时间</span><span>{{ formatDateTime(item.created_at) }}</span></div>
-            </div>
+            <div class="card-row"><span class="card-label">兑换值</span><span>{{ item.value }}</span></div>
+            <div class="card-row"><span class="card-label">时间</span><span>{{ formatDateTime(item.created_at) }}</span></div>
           </div>
         </div>
       </template>
@@ -36,7 +42,7 @@
         :item-count="totalHistory"
         :page-sizes="[10, 20, 50]"
         show-size-picker
-        style="margin-top: 16px; justify-content: flex-end"
+        class="redeem-pagination"
         @update:page="handlePageChange"
         @update:page-size="handlePageSizeChange"
       />
@@ -136,12 +142,24 @@ onMounted(() => {
 
 <style scoped>
 .redeem-page { padding: 24px; }
-.mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.mobile-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
-.card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
-.card-title { font-weight: 600; font-size: 14px; }
-.card-body { padding: 10px 14px; }
-.card-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-.card-label { color: #999; }
-@media (max-width: 767px) { .redeem-page { padding: 0 12px; } }
+.redeem-history-card { margin-top: 16px; }
+.redeem-result { margin-top: 10px; }
+.redeem-state { text-align: center; padding: 32px 0; }
+.redeem-pagination { margin-top: 16px; justify-content: flex-end; flex-wrap: wrap; row-gap: 8px; }
+
+@media (max-width: 767px) {
+  /* 手机端根容器不再自带左右内边距（左右留白由全局统一给 10px） */
+  .redeem-page { padding: 10px 0 0; }
+  .redeem-history-card { margin-top: 12px; }
+
+  /* 吸顶工具条：全局 .app-sticky-toolbar 带 -12px 负外边距（给有内边距的容器用），
+     本页根容器左右内边距已是 0，这里把负边距收回，避免撑出横向溢出 */
+  .redeem-toolbar { margin-left: 0; margin-right: 0; }
+
+  /* 卡片头部行：全局 .card-header 只有 flex 布局、没给内边距（手机端卡片 padding 为 0），这里只补 padding，不覆盖全局任何属性 */
+  .mobile-card .redeem-card-head { padding: 14px 12px 0; }
+
+  /* 分页在手机上居中并允许换行，避免页码 + 每页条数挤出一行 */
+  .redeem-pagination { margin-top: 14px; justify-content: center; }
+}
 </style>

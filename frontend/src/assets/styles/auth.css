@@ -28,10 +28,23 @@
   font-size: 14px;
 }
 
-/* 行内可点击链接 */
+/* 行内可点击链接。
+   文字本身只有 17px 高，手机上点不准，所以给足 44px 的点击区域（视觉上仍是文字）。 */
 .auth-link {
   color: var(--primary-color, #667eea);
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+}
+
+@media (min-width: 768px) {
+  /* 桌面端保持紧凑（鼠标不需要那么大的点击区） */
+  .auth-link {
+    min-height: 0;
+    padding: 0;
+  }
 }
 
 /* 登录页「记住我 / 忘记密码」行 */

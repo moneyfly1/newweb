@@ -1,15 +1,16 @@
 <template>
   <div class="shop-container">
-    <n-space vertical :size="24">
-      <div class="header">
-        <h1 class="title">套餐商城</h1>
-        <p class="subtitle">选择适合您的订阅套餐</p>
-        <div v-if="userBalance !== null" class="balance-info">
-          <span>账户余额：</span>
-          <span class="balance-amount">{{ formatCurrency(userBalance) }}</span>
-        </div>
+    <!-- 手机端吸顶工具条：标题 + 余额常驻，不随套餐列表滚走（手机端为 fixed，桌面端是普通标题块） -->
+    <div class="header app-sticky-toolbar" :class="{ 'is-pinned': headerPinned }">
+      <h1 class="title">套餐商城</h1>
+      <p class="subtitle">选择适合您的订阅套餐</p>
+      <div v-if="userBalance !== null" class="balance-info">
+        <span>账户余额：</span>
+        <span class="balance-amount">{{ formatCurrency(userBalance) }}</span>
       </div>
+    </div>
 
+    <n-space vertical :size="24">
       <n-spin :show="loading">
         <div class="packages-grid">
           <div v-for="pkg in packages" :key="pkg.id">
@@ -20,15 +21,15 @@
             >
               <div v-if="pkg.is_featured" class="badge">推荐</div>
 
-              <div class="card-header">
-                <h3 class="package-name">{{ pkg.name }}</h3>
-                <div class="price-section">
+              <div class="pkg-head">
+                <h3 class="pkg-name">{{ pkg.name }}</h3>
+                <div class="pkg-price">
                   <span class="currency">¥</span>
                   <span class="price">{{ formatAmount(pkg.price) }}</span>
                 </div>
               </div>
 
-              <div class="card-body">
+              <div class="pkg-body">
                 <n-space vertical :size="12">
                   <div class="feature-item">
                     <n-icon :component="TimeOutline" :size="18" />
@@ -48,7 +49,7 @@
                 </n-space>
               </div>
 
-              <div class="card-footer">
+              <div class="pkg-foot">
                 <n-button type="primary" size="large" block strong>立即购买</n-button>
               </div>
             </div>
@@ -57,11 +58,11 @@
           <!-- Custom Package as a grid item -->
           <div v-if="customEnabled" class="custom-package-card-wrap">
             <div class="package-card custom-card">
-              <div class="card-header">
-                <h3 class="package-name custom-name">自定义套餐</h3>
+              <div class="pkg-head pkg-head--custom">
+                <h3 class="pkg-name custom-name">自定义套餐</h3>
                 <p class="custom-card-desc">自由选择设备数量和时长</p>
               </div>
-              <div class="card-body">
+              <div class="pkg-body">
                 <div class="custom-inline-form">
                   <div class="custom-inline-row">
                     <span class="custom-inline-label">设备</span>
@@ -80,7 +81,7 @@
                   <span class="price">{{ formatAmount(customFinalPrice) }}</span>
                 </div>
               </div>
-              <div class="card-footer">
+              <div class="pkg-foot">
                 <n-button type="primary" size="large" block strong :loading="customOrdering" @click.stop="handleCustomBuy">
                   立即购买
                 </n-button>
@@ -109,6 +110,7 @@
       v-model:show="showPaymentModal"
       title="确认购买"
       :width="520"
+      :placement="drawerPlacement"
       show-footer
       :loading="paying"
       @confirm="handlePay"
@@ -211,6 +213,7 @@
       v-model:show="showQrModal"
       title="扫码支付"
       :width="400"
+      :placement="drawerPlacement"
       :mask-closable="false"
       show-footer
       :show-confirm="false"
@@ -239,6 +242,7 @@
       v-model:show="showCryptoModal"
       title="加密货币支付"
       :width="480"
+      :placement="drawerPlacement"
       :mask-closable="false"
       show-footer
       confirm-text="我已转账"
@@ -273,6 +277,7 @@
       v-model:show="showCodepayModal"
       title="码支付"
       :width="500"
+      :placement="drawerPlacement"
       :mask-closable="false"
       show-footer
       :show-confirm="false"
@@ -313,9 +318,21 @@ import { isQrCodeUrl, isCodepayPayType, isCodepayPageUrl } from '@/utils/payment
 import { formatAmount, formatCurrency } from '@/utils/amount'
 import { getErrorMessage, silentCatch } from '@/utils/error'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
 const message = useMessage()
+const appStore = useAppStore()
+// 手机端支付/确认类抽屉统一从底部弹出（App 的底部操作面板）
+const drawerPlacement = computed(() => (appStore.isMobile ? 'bottom' : 'right'))
+
+// 手机端吸顶工具条：本布局的滚动发生在 document 上，而 .n-layout-content / .n-scrollbar /
+// .n-scrollbar-container 都是「永不滚动的 overflow 容器」，position: sticky 在这条滚动链里
+// 不会生效（全局 .app-sticky-toolbar 因此等于没有吸顶）。所以用滚动监听切换成 fixed：
+// 顶栏（移动端 52px）滚出屏幕的瞬间钉住，位移与流内位置完全一致，不会跳。
+const MOBILE_TOPBAR_H = 52
+const headerPinned = ref(false)
+const onPageScroll = () => { headerPinned.value = window.scrollY > MOBILE_TOPBAR_H }
 
 const loading = ref(false)
 const packages = ref<any[]>([])
@@ -699,11 +716,13 @@ const handleCryptoTransferred = () => {
   router.push('/orders')
 }
 
-onUnmounted(() => { stopPolling() })
+onUnmounted(() => { stopPolling(); window.removeEventListener('scroll', onPageScroll) })
 
 onMounted(() => {
   loadPackages()
   fetchUserBalance()
+  window.addEventListener('scroll', onPageScroll, { passive: true })
+  onPageScroll()
 })
 </script>
 
@@ -743,12 +762,12 @@ onMounted(() => {
   background: var(--brand-gradient);
   color: #fff; padding: 4px 16px; border-radius: 12px; font-size: 14px; font-weight: 600;
 }
-.card-header { text-align: center; margin-bottom: 24px; }
-.package-name { font-size: 24px; font-weight: 600; margin: 0 0 16px 0; color: var(--text-color, #333); }
-.price-section { display: flex; align-items: baseline; justify-content: center; }
+.pkg-head { text-align: center; margin-bottom: 24px; }
+.pkg-name { font-size: 24px; font-weight: 600; margin: 0 0 16px 0; color: var(--text-color, #333); }
+.pkg-price { display: flex; align-items: baseline; justify-content: center; }
 .currency { font-size: 24px; color: var(--primary-color); font-weight: 600; }
 .price { font-size: 48px; font-weight: 700; color: var(--primary-color); margin-left: 4px; }
-.card-body { flex: 1; margin-bottom: 24px; }
+.pkg-body { flex: 1; margin-bottom: 24px; }
 .feature-item { display: flex; align-items: center; gap: 8px; color: var(--text-color-secondary, #666); font-size: 15px; }
 .feature-item .n-icon { color: var(--primary-color); }
 .feature-extra .n-icon { color: var(--success-color); }
@@ -757,7 +776,7 @@ onMounted(() => {
   margin-top: 8px; padding: 12px; background: rgba(0,0,0,0.03);
   border-radius: 8px; color: var(--text-color-secondary, #666); font-size: 14px; line-height: 1.6;
 }
-.card-footer { margin-top: auto; }
+.pkg-foot { margin-top: auto; }
 
 /* Custom package card */
 .custom-card { border-style: dashed; cursor: default; }
@@ -831,32 +850,107 @@ onMounted(() => {
 .trust-text { font-size: 13px; line-height: 1.7; color: var(--text-color-secondary, #666); }
 .trust-links { margin-top: 8px; }
 
-/* Mobile Responsive */
+/* Mobile Responsive：按 App 商品卡重排（整宽单列 / 16px 圆角 / 轻阴影 / 价格与整宽按钮同边对齐） */
 @media (max-width: 767px) {
-  .shop-container { padding: 12px; }
-  .title { font-size: 24px; }
-  .subtitle { font-size: 14px; }
-  .packages-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .package-card { min-height: 100%; padding: 16px 14px; border-radius: 16px; }
-  
-  .package-card:hover { transform: none; }
-  .card-header { margin-bottom: 14px; }
-  .package-name { font-size: 16px; line-height: 1.3; margin-bottom: 8px; word-break: break-word; }
-  .price { font-size: 28px; }
-  .currency { font-size: 16px; }
-  .card-body { margin-bottom: 14px; }
-  .feature-item { align-items: flex-start; font-size: 13px; line-height: 1.45; gap: 4px; }
-  .feature-item .n-icon { margin-top: 1px; flex-shrink: 0; }
-  .badge { top: -10px; right: 12px; font-size: 11px; padding: 2px 10px; }
-  .description { padding: 8px; font-size: 12px; }
+  /* 页面根容器不再自带左右内边距（全局已统一 10px） */
+  .shop-container { padding-left: 0; padding-right: 0; padding-top: 0; }
+  /* n-spin 容器被全局 [class$="-container"] 规则塞了 12px 内边距，会把卡片白缩窄 24px */
+  .shop-container :deep(.n-spin-container) { padding-left: 0 !important; padding-right: 0 !important; }
+
+  /* 吸顶工具条：顶部一行「标题 + 余额」，顶栏滚出屏幕后钉在顶部（.is-pinned 由滚动监听切换）。
+     本布局的滚动链（.n-layout-content / .n-scrollbar / .n-scrollbar-container 全是
+     overflow: hidden/scroll 但自身不滚动）会让 position: sticky 失效——页面滚动发生在 document 上，
+     粘性元素被限制在那个永不滚动的容器里，所以这里用 fixed + 等高占位实现真正的吸顶。*/
+  .header.app-sticky-toolbar {
+    position: static;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    height: 44px;
+    margin: 0 0 12px;
+  }
+  .header.app-sticky-toolbar.is-pinned {
+    position: fixed;
+    top: 0;
+    left: 10px;
+    right: 10px;
+    z-index: 9;
+    margin: 0;
+    background: color-mix(in srgb, var(--bg-color, #fff) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 60%, transparent);
+  }
+  /* 钉住时工具条脱流，用等高外边距顶住内容：两种状态总高度一致，滚动中不跳 */
+  .header.app-sticky-toolbar.is-pinned + .n-space { margin-top: 56px; }
+  .title { font-size: 17px; line-height: 1.3; margin: 0; min-width: 0; text-align: left; }
+  .subtitle { display: none; }
+  .balance-info { flex-shrink: 0; margin: 0; font-size: 13px; text-align: right; white-space: nowrap; }
+  .balance-amount { font-size: 14px; }
+
+  /* 套餐卡：整宽单列 */
+  .packages-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .package-card {
+    min-height: 0; padding: 14px; border-radius: 16px; border-width: 1px;
+    background: var(--bg-color, #fff);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.03);
+  }
+  .package-card:hover {
+    transform: none; border-color: var(--border-color, #e8e8e8);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.03);
+  }
+  .package-card:active { transform: scale(0.99); }
+  .package-card.featured {
+    border-width: 1px; border-color: var(--primary-color); background: var(--bg-color, #fff);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-color) 40%, transparent), 0 6px 16px rgba(15, 23, 42, 0.04);
+  }
+  /* 推荐标：卡片内的静态小标签，不再绝对定位压出卡片外 */
+  .badge {
+    position: static; align-self: flex-start; display: inline-flex; align-items: center;
+    margin-bottom: 8px; padding: 2px 10px; border-radius: 999px; font-size: 12px; line-height: 1.7;
+  }
+
+  /* 名称在左、价格在右（价格右边缘与下方整宽按钮对齐） */
+  .pkg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; text-align: left; margin-bottom: 10px; }
+  .pkg-head--custom { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .pkg-name { font-size: 16px; line-height: 1.35; margin: 0; min-width: 0; word-break: break-word; }
+  .pkg-price { justify-content: flex-end; flex-shrink: 0; }
+  .price { font-size: 26px; }
+  .currency { font-size: 15px; }
+  .custom-inline-price { justify-content: flex-start; margin-top: 10px; }
+  .pkg-body { margin-bottom: 12px; }
+  .feature-item { align-items: flex-start; font-size: 13px; line-height: 1.5; gap: 6px; }
+  .feature-item .n-icon { margin-top: 2px; flex-shrink: 0; }
+  .description { padding: 10px; font-size: 13px; line-height: 1.6; }
+  .pkg-foot { margin-top: auto; }
+  /* 主操作：整宽 44px 高（不小于 40px 触控目标） */
+  .pkg-foot :deep(.n-button) { width: 100%; min-height: 44px; max-height: none; font-size: 15px; border-radius: 12px; }
+
+  .custom-card-desc { font-size: 13px; line-height: 1.5; }
   .custom-inline-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); }
+  .custom-inline-label { font-size: 13px; }
+
+  /* 购买抽屉 */
   .purchase-drawer-content { gap: 12px !important; }
+  .purchase-drawer-content :deep(.n-descriptions-table) { width: 100%; }
+  .purchase-drawer-content :deep(.n-descriptions-table-content) { word-break: break-word; font-size: 13px; }
   .coupon-group { flex-direction: column; }
-  .coupon-verify-btn { width: 100%; }
-  .purchase-drawer-content :deep(.n-descriptions) { font-size: 13px; }
-  .pm-card { padding: 10px 12px; border-radius: 10px; }
+  .coupon-verify-btn { width: 100%; min-height: 40px; }
+  .payment-method { padding: 0; }
+  .pm-label { font-size: 14px; }
+
+  /* 支付方式：两列等宽网格，min-width: 0 防溢出（窄屏由下方 400px 断点转单列） */
+  .pm-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .pm-card { padding: 10px 12px; border-radius: 12px; min-height: 56px; }
   .pm-card-icon { width: 36px; height: 36px; font-size: 16px; border-radius: 9px; }
-  .pm-card-desc { white-space: normal; line-height: 1.3; }
+  .pm-card-name { font-size: 14px; }
+  .pm-card-desc { white-space: normal; line-height: 1.3; font-size: 12px; }
+
+  /* 购买须知 */
+  .trust-title { font-size: 15px; }
+  .trust-text { font-size: 13px; line-height: 1.7; }
+  .mobile-pay-panel p, .desktop-pay-panel p, .crypto-panel p { font-size: 13px; }
 }
 
 @media (max-width: 400px) {

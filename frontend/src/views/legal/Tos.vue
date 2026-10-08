@@ -5,6 +5,27 @@
       <p class="subtitle">最后更新：2026 年 8 月</p>
     </div>
 
+    <!-- 手机端：目录（点一下跳到对应条款；吸顶不跟着页面滚走） -->
+    <div
+      v-if="appStore.isMobile"
+      ref="tocSlot"
+      class="legal-toc-slot"
+      :style="tocStuck ? { height: tocHeight + 'px' } : undefined"
+    >
+      <div class="app-sticky-toolbar legal-toc-bar" :class="{ 'is-stuck': tocStuck }">
+        <button
+          v-for="s in tocSections"
+          :key="s.id"
+          type="button"
+          class="legal-toc-chip"
+          :class="{ 'is-active': activeSection === s.id }"
+          @click="jumpTo(s.id)"
+        >
+          {{ s.label }}
+        </button>
+      </div>
+    </div>
+
     <n-card :bordered="false" class="legal-card">
       <p class="lead">
         欢迎使用本平台提供的订阅服务。请您在使用本服务前仔细阅读本《服务条款》（以下简称「本条款」）。
@@ -12,7 +33,7 @@
         如您不同意本条款的任何内容，请停止注册或使用本服务。
       </p>
 
-      <section class="legal-section">
+      <section id="sec-service" class="legal-section">
         <h2 class="section-title">一、服务说明</h2>
         <p class="section-para">
           1. 本平台为纯时间制网络加速订阅服务：套餐按「使用时长」与「设备数量」售卖，
@@ -28,7 +49,7 @@
         </p>
       </section>
 
-      <section class="legal-section">
+      <section id="sec-account" class="legal-section">
         <h2 class="section-title">二、账户</h2>
         <p class="section-para">
           1. 您在注册时应提供真实、准确、完整的信息，并妥善保管账户密码。
@@ -44,7 +65,7 @@
         </p>
       </section>
 
-      <section class="legal-section">
+      <section id="sec-pay" class="legal-section">
         <h2 class="section-title">三、支付与退款政策</h2>
         <p class="section-para">
           1. 本平台支持余额支付及多种在线支付方式，具体以购买页面展示为准。
@@ -62,7 +83,7 @@
         </p>
       </section>
 
-      <section class="legal-section">
+      <section id="sec-usage" class="legal-section">
         <h2 class="section-title">四、使用规范</h2>
         <p class="section-para">
           1. 本服务仅限个人合法使用。您承诺不将本服务用于任何违反中华人民共和国法律法规
@@ -78,7 +99,7 @@
         </p>
       </section>
 
-      <section class="legal-section">
+      <section id="sec-disclaimer" class="legal-section">
         <h2 class="section-title">五、免责声明</h2>
         <p class="section-para">
           1. 本服务按「现状」提供。因不可抗力（如自然灾害、网络故障、运营商调整、第三方服务中断等）
@@ -94,7 +115,7 @@
         </p>
       </section>
 
-      <section class="legal-section">
+      <section id="sec-privacy" class="legal-section">
         <h2 class="section-title">六、隐私简述</h2>
         <p class="section-para">
           我们仅收集为您提供服务所必需的信息（如账户信息、订单信息、设备信息等），
@@ -103,7 +124,7 @@
         </p>
       </section>
 
-      <section class="legal-section">
+      <section id="sec-contact" class="legal-section">
         <h2 class="section-title">七、联系方式</h2>
         <p class="section-para">
           如您对本条款有任何疑问，或需要咨询、投诉、退款，可以通过以下方式联系我们：
@@ -119,9 +140,101 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, onActivated, onUnmounted, onDeactivated } from 'vue'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
+
+/* ---------------- 手机端目录（吸顶） ----------------
+   为什么不用纯 CSS：全局 .app-sticky-toolbar 是 position: sticky，但页面内容被
+   .n-scrollbar-container（overflow: scroll）包着，真正滚动的是 window，该容器自身
+   不滚动 —— 实测滚动 600px 后 sticky 元素 top 变成 -588，照样滚走。公共文件不可改，
+   所以这里用等效实现：滚出视口顶部就切 fixed（.is-stuck），未吸顶时留在文档流里，
+   吸顶时给插槽补上等高占位避免内容跳动。 */
+const tocSections = [
+  { id: 'sec-service', label: '服务说明' },
+  { id: 'sec-account', label: '账户' },
+  { id: 'sec-pay', label: '支付与退款' },
+  { id: 'sec-usage', label: '使用规范' },
+  { id: 'sec-disclaimer', label: '免责声明' },
+  { id: 'sec-privacy', label: '隐私简述' },
+  { id: 'sec-contact', label: '联系方式' },
+]
+
+const tocSlot = ref<HTMLElement | null>(null)
+const tocStuck = ref(false)
+const tocHeight = ref(58)
+const activeSection = ref(tocSections[0].id)
+
+function jumpTo(id: string) {
+  activeSection.value = id
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+let scrollBound = false
+let tocRaf = 0
+
+function measureToc() {
+  tocRaf = 0
+  const slot = tocSlot.value
+  if (!slot || !appStore.isMobile) {
+    tocStuck.value = false
+    return
+  }
+  const bar = slot.firstElementChild as HTMLElement | null
+  const h = bar ? Math.round(bar.getBoundingClientRect().height) : 0
+  if (h > 0) tocHeight.value = h
+  tocStuck.value = slot.getBoundingClientRect().top < 0
+  // 当前条款 = 视口上沿往下 72px 处所在的那一节（目录要有选中态才像 App）
+  let current = tocSections[0].id
+  for (const s of tocSections) {
+    const el = document.getElementById(s.id)
+    if (el && el.getBoundingClientRect().top <= 72) current = s.id
+  }
+  // 滚到底时高亮最后一节（末节通常滚不到顶部，否则选中态会停在上一节）
+  if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4) {
+    current = tocSections[tocSections.length - 1].id
+  }
+  activeSection.value = current
+}
+
+function onPageScroll() {
+  if (!tocRaf) tocRaf = requestAnimationFrame(measureToc)
+}
+
+function bindScroll() {
+  if (scrollBound) return
+  scrollBound = true
+  window.addEventListener('scroll', onPageScroll, { passive: true })
+  window.addEventListener('resize', onPageScroll, { passive: true })
+  measureToc()
+}
+
+function unbindScroll() {
+  if (!scrollBound) return
+  scrollBound = false
+  window.removeEventListener('scroll', onPageScroll)
+  window.removeEventListener('resize', onPageScroll)
+  if (tocRaf) {
+    cancelAnimationFrame(tocRaf)
+    tocRaf = 0
+  }
+}
+
+onMounted(bindScroll)
+onActivated(bindScroll)
+onDeactivated(unbindScroll)
+onUnmounted(unbindScroll)
 </script>
 
 <style scoped>
+/* ============================================================
+   服务条款 —— 手机端按 docs/mobile-app-spec.md 第 1 / 3 节改造：
+   · 根容器手机端不再自带左右内边距（全局统一 10px），原来是 8px 叠加成白边
+   · 正文 13px / 行高 1.75，条款按卡片分组，不再是小字密集排版
+   · 目录吸顶（.app-sticky-toolbar），每个条目可点区域 ≥40px
+   ============================================================ */
+
 .legal-page {
   padding: 0;
 }
@@ -146,9 +259,68 @@
   margin: 0;
 }
 
+/* ---------------- 手机端目录条 ---------------- */
+.legal-toc-slot {
+  display: block;
+}
+
+.legal-toc-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  /* 全局 .app-sticky-toolbar 的 -12px 负边距是给「页面根容器自带 12px 内边距」的
+     页面用的；本页根容器手机端无左右内边距，负边距会把目录条撑出屏幕（横向溢出），
+     这里归零；左右留 1px 透明边保证吸顶前后高度一致。 */
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+}
+.legal-toc-bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 吸顶态：sticky 在本布局被 .n-scrollbar-container（overflow: scroll 且不滚动）吃掉，
+   滚出视口顶部后改用 fixed 顶到最上方（未吸顶时留在文档流里，不挡内容）。 */
+.legal-toc-bar.is-stuck {
+  position: fixed;
+  top: 0;
+  left: 10px;
+  right: 10px;
+  z-index: 30;
+  margin: 0;
+  border-color: color-mix(in srgb, var(--border-color, #e5e7eb) 70%, transparent);
+  border-radius: 0 0 16px 16px;
+}
+
+.legal-toc-chip {
+  flex: 0 0 auto;
+  /* 触控目标 ≥40px */
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 70%, transparent);
+  background: var(--bg-color, #fff);
+  color: var(--text-color-secondary, #64748b);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.legal-toc-chip.is-active {
+  background: var(--primary-color, #4f46e5);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
 .legal-card {
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04);
 }
 
 .lead {
@@ -195,14 +367,41 @@
 }
 
 @media (max-width: 767px) {
-  .legal-page {
-    padding: 8px;
-  }
-  .title {
-    font-size: 24px;
-  }
-  .legal-card {
+  /* 契约 §1：手机端根容器不再自带左右内边距，只保留纵向留白 */
+  .legal-page { padding: 8px 0 0; }
+  .title { font-size: 22px; }
+  .subtitle { font-size: 13px; }
+  .legal-header { margin-bottom: 10px; }
+
+  /* 条款分组：每条像一张 App 卡片，长文阅读不再是一整块小字墙 */
+  .legal-section {
+    padding: 12px 14px;
+    margin-bottom: 10px;
     border-radius: 14px;
+    background: var(--bg-page-color, #f8fafc);
+    border: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 60%, transparent);
   }
+  .legal-section:last-child { margin-bottom: 0; }
+
+  .section-title {
+    font-size: 16px;
+    margin: 0 0 8px;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  /* 正文 13px / 行高 1.75；说明文字字号不再掉到 12px 以下 */
+  .lead,
+  .section-para,
+  .section-list li {
+    font-size: 13px;
+    line-height: 1.75;
+  }
+  .section-para { margin: 0 0 6px; }
+  .section-list { padding-left: 18px; }
+  .section-list li { margin: 5px 0; }
+
+  /* 从目录跳过来时，标题不被吸顶的目录条挡住 */
+  .legal-section { scroll-margin-top: 72px; }
 }
 </style>

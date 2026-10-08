@@ -69,11 +69,12 @@
   }
 
   /* ---------- 页面内容 App 化：卡片圆角/间距/按压 ---------- */
-  /* 统一页面横向留白，内容像 App 内容区 */
+  /* 横向留白统一由 mobile-app-ui.css 在滚动内容区给（10px 一处）。
+     这里原来又加了 12px，会与页面根容器的内边距叠成 24px 白边，故置 0。 */
   .user-mobile-content .page-container,
   .mobile-admin-content .admin-page-shell {
-    padding-left: 12px !important;
-    padding-right: 12px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
 
   /* 卡片按压反馈（原生感） */
@@ -81,12 +82,13 @@
     transition: box-shadow 0.2s ease;
   }
 
-  /* 统一移动端卡片圆角（App 风格 14px） */
+  /* 统一移动端卡片圆角（与 mobile-app-ui.css 的 16px 保持一致，
+     原来这里是 14px，和另外两层 8px/16px 混在一起，圆角在各页面不一致） */
   .mobile-card,
   .card,
   .quick-sub-item,
   .stat-card {
-    border-radius: 14px !important;
+    border-radius: 16px !important;
   }
 
   /* 列表项按压反馈 */

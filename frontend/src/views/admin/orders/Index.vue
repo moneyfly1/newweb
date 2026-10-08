@@ -27,13 +27,15 @@
       </div>
     </div>
 
-    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行） -->
-    <search-filter-bar
-      v-model:values="filterValues"
-      :filters="filterConfig"
-      search-placeholder="订单号 / 用户ID / 邮箱"
-      @search="handleSearch"
-    />
+    <!-- 统一搜索筛选工具栏（SearchFilterBar 组件，桌面单行不换行；手机端吸顶） -->
+    <div class="app-sticky-toolbar mobile-sticky-toolbar">
+      <search-filter-bar
+        v-model:values="filterValues"
+        :filters="filterConfig"
+        search-placeholder="订单号 / 用户ID / 邮箱"
+        @search="handleSearch"
+      />
+    </div>
 
     <!-- Stats Summary - Desktop & Mobile -->
     <div class="stats-summary">
@@ -95,14 +97,22 @@
 
     <n-card :bordered="false" class="main-card">
       <n-space vertical :size="16">
-        <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" class="batch-operations">
-          <span class="batch-selected-text">已选择 {{ checkedRowKeys.length }} 项</span>
-          <n-button size="small" type="success" @click="handleBatchMarkPaid">批量标记付款并开通</n-button>
-          <n-button size="small" type="warning" @click="handleBatchCancel">批量取消</n-button>
-          <n-button size="small" type="info" @click="handleBatchComplete">批量完成</n-button>
-          <n-button size="small" type="error" @click="handleBatchRefund">批量退款</n-button>
-          <n-button size="small" tertiary type="error" @click="handleBatchDelete">批量删除</n-button>
-        </n-space>
+        <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方） -->
+        <BatchSelectBar
+          :total="selection.total.value"
+          :selected-count="selection.count.value"
+          :all-selected="selection.allSelected.value"
+          :indeterminate="selection.indeterminate.value"
+          label="条订单"
+          @toggle-all="selection.toggleAll"
+          @clear="selection.clear"
+        >
+          <n-button size="small" type="success" :disabled="!selection.count.value" @click="handleBatchMarkPaid">批量标记付款并开通</n-button>
+          <n-button size="small" type="warning" :disabled="!selection.count.value" @click="handleBatchCancel">批量取消</n-button>
+          <n-button size="small" type="info" :disabled="!selection.count.value" @click="handleBatchComplete">批量完成</n-button>
+          <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchRefund">批量退款</n-button>
+          <n-button size="small" tertiary type="error" :disabled="!selection.count.value" @click="handleBatchDelete">批量删除</n-button>
+        </BatchSelectBar>
 
         <n-data-table
           v-if="!appStore.isMobile"
@@ -114,10 +124,9 @@
           :bordered="false"
           :single-line="false"
           :row-key="getRowKey"
-          :checked-row-keys="checkedRowKeys"
+          v-model:checked-row-keys="checkedRowKeys"
           :scroll-x="1450"
           class="unified-admin-table"
-          @update:checked-row-keys="(keys: Array<string | number>) => { checkedRowKeys = keys as string[] }"
           @update:page="(p: number) => { pagination.page = p; fetchOrders() }"
           @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; fetchOrders() }"
         />
@@ -129,9 +138,13 @@
               <div
                 v-for="order in orders"
                 :key="order.id"
-                class="mobile-card order-mobile-card"
-                @click="handleViewDetail(order)"
+                class="mobile-card is-selectable order-mobile-card"
+                :class="{ 'is-selected': selection.isSelected(order) }"
+                @click="selection.toggle(order)"
               >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selection.isSelected(order)" @update:checked="() => selection.toggle(order)" />
+                </div>
                 <div class="card-header">
                   <div class="card-title-block">
                     <div class="card-title mono">{{ order.order_no }}</div>
@@ -161,7 +174,7 @@
                     <span>{{ formatDateTime(order.created_at) }}</span>
                   </div>
                 </div>
-                <div class="card-actions" @click.stop>
+                <div class="card-actions card-actions-grid" @click.stop>
                   <n-button size="small" quaternary type="info" @click="handleViewDetail(order)">详情</n-button>
                   <n-button v-if="canMarkPaid(order)" size="small" type="success" @click="handleMarkPaid(order)">标记付款</n-button>
                   <n-button v-if="canCancel(order)" size="small" type="error" @click="handleCancel(order)">取消</n-button>
@@ -260,12 +273,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, h, onActivated, onMounted, watch } from 'vue'
+import { ref, reactive, h, onActivated, onMounted, watch, computed } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, NIcon, useMessage, useDialog, type DataTableColumns, type TagProps } from 'naive-ui'
 import { RefreshOutline, TimeOutline, MailOutline, LayersOutline } from '@vicons/ionicons5'
 import { listAdminOrders, refundOrder, cancelOrder, completeOrder, deleteOrder, markOrderPaid, batchOrderAction, getAdminDashboard } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import SearchFilterBar from '@/components/SearchFilterBar.vue'
 import { useRoute } from 'vue-router'
@@ -285,7 +300,6 @@ const orderStats = ref<any>({})
 const searchQuery = ref((route.query.search as string) || '')
 const statusFilter = ref(null)
 const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
-const checkedRowKeys = ref<string[]>([])
 
 const showDetailDrawer = ref(false)
 const currentOrder = ref<any>(null)
@@ -339,6 +353,16 @@ const canCancel = (row: any) => isPackageOrder(row) && ['pending', 'expired'].in
 const canComplete = (row: any) => isPackageOrder(row) && row.status === 'paid'
 const canRefund = (row: any) => isPackageOrder(row) && ['paid', 'completed'].includes(row.status)
 const canDelete = (row: any) => isPackageOrder(row) && ['cancelled', 'refunded'].includes(row.status)
+
+// 全选 / 多选：唯一的选择状态，桌面表格与手机卡片共用（公共组件 useBatchSelection + BatchSelectBar）。
+// 订单用「订单类型:ID」作为行键（套餐订单和充值记录可能是同一个 id），所以选择状态也按该键记录。
+const selection = useBatchSelection<any>(() => orders.value, { getId: getRowKey })
+
+// 桌面表格仍需数组形式的勾选键，用 computed 桥接，保证与手机端卡片状态一致
+const checkedRowKeys = computed<string[]>({
+  get: () => [...selection.selectedKeys.value] as string[],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
 
 const columns: DataTableColumns<any> = [
   { type: 'selection' },
@@ -514,7 +538,7 @@ const handleDelete = (row: any) => {
   })
 }
 
-const getSelectedOrders = () => orders.value.filter(o => checkedRowKeys.value.includes(getRowKey(o)))
+const getSelectedOrders = () => selection.selectedRows.value
 
 const handleBatchMarkPaid = () => {
   const markable = getSelectedOrders().filter(canMarkPaid)
@@ -529,7 +553,7 @@ const handleBatchMarkPaid = () => {
     onPositiveClick: async () => {
       const res = await batchOrderAction({ ids: markable.map(o => o.id), action: 'mark_paid' })
       message.success(`批量开通完成：成功 ${res.data.success} 个，失败 ${res.data.failed} 个`)
-      checkedRowKeys.value = []
+      selection.clear()
       fetchOrders()
     }
   })
@@ -548,7 +572,7 @@ const handleBatchCancel = () => {
     onPositiveClick: async () => {
       const res = await batchOrderAction({ ids: cancellable.map(o => o.id), action: 'cancel' })
       message.success(`批量取消完成：成功 ${res.data.success} 个，失败 ${res.data.failed} 个`)
-      checkedRowKeys.value = []
+      selection.clear()
       fetchOrders()
     }
   })
@@ -567,7 +591,7 @@ const handleBatchComplete = () => {
     onPositiveClick: async () => {
       const res = await batchOrderAction({ ids: completable.map(o => o.id), action: 'complete' })
       message.success(`批量完成：成功 ${res.data.success} 个，失败 ${res.data.failed} 个`)
-      checkedRowKeys.value = []
+      selection.clear()
       fetchOrders()
     }
   })
@@ -591,7 +615,7 @@ const handleBatchRefund = () => {
         }
         if (ok > 0) message.success(`批量退款完成：成功 ${ok} 笔`)
         if (fail > 0) message.error(`批量退款部分失败：${fail} 笔未成功`)
-        checkedRowKeys.value = []
+        selection.clear()
         fetchOrders()
       } catch { message.error('批量退款失败') }
     }
@@ -611,7 +635,7 @@ const handleBatchDelete = () => {
     onPositiveClick: async () => {
       const res = await batchOrderAction({ ids: deletable.map(o => o.id), action: 'delete' })
       message.success(`批量删除完成：成功 ${res.data.success} 个，失败 ${res.data.failed} 个`)
-      checkedRowKeys.value = []
+      selection.clear()
       fetchOrders()
     }
   })
@@ -678,16 +702,25 @@ onActivated(() => {
 
 .mobile-empty { text-align: center; color: #999; padding: 40px 0; }
 .order-mobile-card { cursor: pointer; }
-.card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border-color, #f0f0f0); }
-.card-title-block { min-width: 0; }
+/* 卡片外观、内边距、发丝分隔线、按压反馈、左侧多选框统一由全局 mobile-cards.css 提供，
+   页面只保留内容布局（标题块折行、长订单号换行）。 */
+.card-title-block { min-width: 0; flex: 1; }
 .card-title { font-weight: 600; color: var(--text-color, #333); }
 .card-title.mono { font-family: monospace; font-size: 13px; word-break: break-all; }
 .card-sub { margin-top: 4px; font-size: 12px; color: var(--text-color-secondary, #999); word-break: break-all; }
-.card-body { padding: 10px 14px; }
-.card-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 13px; }
-.card-row > span:last-child { text-align: right; color: var(--text-color, #333); word-break: break-word; }
-.card-label { color: var(--text-color-secondary, #999); flex-shrink: 0; }
 .card-value-strong { font-weight: 500; }
+
+/* 卡片操作区：按钮较多，按最小宽度自动换行成多行，避免挤成一条点不准的窄按钮 */
+.mobile-card .card-actions.card-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mobile-card .card-actions.card-actions-grid :deep(.n-button) {
+  width: 100%;
+  min-width: 0;
+}
 
 .detail-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; padding: 0 4px; gap: 12px; }
 .amount-display .label { font-size: 12px; color: #888; margin-bottom: 4px; }
@@ -695,10 +728,21 @@ onActivated(() => {
 .copyable-row { display: flex; align-items: center; gap: 8px; }
 .wrap-copyable-row { align-items: flex-start; flex-wrap: wrap; }
 .order-no-code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
-.gateway-no { font-size: 11px; color: #666; word-break: break-all; }
+.gateway-no { font-size: 12px; color: #666; word-break: break-all; }
 
 @media (max-width: 767px) {
-  .admin-page-shell { padding: 12px; }
+  /* 页面根容器不再自带左右内边距：全局已给内容区 10px，页面再加就是白边浪费 */
+  .admin-page-shell { padding-left: 0; padding-right: 0; }
+  /* 搜索筛选条吸顶：复用全局 .app-sticky-toolbar，只把它的负外边距清零，
+     否则工具条会比 10px 内容区各宽出 2px，在 393px 屏幕上就是横向溢出。 */
+  .app-sticky-toolbar.mobile-sticky-toolbar {
+    margin: 0 0 10px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .app-sticky-toolbar.mobile-sticky-toolbar :deep(.sf-bar) {
+    margin-bottom: 0;
+  }
   .stats-summary { margin-bottom: 16px; }
   .mini-stat-card { padding: 14px 12px; }
   .mini-stat-card .stat-value { font-size: 18px; }

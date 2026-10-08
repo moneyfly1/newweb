@@ -36,27 +36,29 @@
       <div v-else>
         <n-spin :show="loading">
           <div v-if="!loading && tickets.length === 0" class="mobile-empty">暂无工单</div>
-          <div v-for="ticket in tickets" :key="ticket.id" class="mobile-card">
-            <div class="card-header-row">
-              <span class="card-title">{{ ticket.title }}</span>
-              <n-tag :type="{ pending: 'warning', processing: 'info', resolved: 'success', closed: 'default' }[ticket.status] || 'default'" size="small">
-                {{ { pending: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭' }[ticket.status] || ticket.status }}
-              </n-tag>
-            </div>
-            <div class="card-row">
-              <span class="label">工单编号</span>
-              <span class="value">{{ ticket.ticket_no }}</span>
-            </div>
-            <div class="card-row">
-              <span class="label">类型</span>
-              <span class="value">{{ getTypeText(ticket.type) }}</span>
-            </div>
-            <div class="card-row">
-              <span class="label">创建时间</span>
-              <span class="value">{{ ticket.created_at }}</span>
-            </div>
-            <div class="card-actions">
-              <n-button type="primary" @click="router.push('/tickets/' + ticket.id)">查看详情</n-button>
+          <div v-else class="mobile-card-list">
+            <div v-for="ticket in tickets" :key="ticket.id" class="mobile-card">
+              <div class="card-header-row">
+                <span class="card-title">{{ ticket.title }}</span>
+                <n-tag :type="{ pending: 'warning', processing: 'info', resolved: 'success', closed: 'default' }[ticket.status] || 'default'" size="small">
+                  {{ { pending: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭' }[ticket.status] || ticket.status }}
+                </n-tag>
+              </div>
+              <div class="card-row">
+                <span class="label">工单编号</span>
+                <span class="value">{{ ticket.ticket_no }}</span>
+              </div>
+              <div class="card-row">
+                <span class="label">类型</span>
+                <span class="value">{{ getTypeText(ticket.type) }}</span>
+              </div>
+              <div class="card-row">
+                <span class="label">创建时间</span>
+                <span class="value">{{ ticket.created_at }}</span>
+              </div>
+              <div class="card-actions">
+                <n-button type="primary" @click="router.push('/tickets/' + ticket.id)">查看详情</n-button>
+              </div>
             </div>
           </div>
         </n-spin>
@@ -65,7 +67,7 @@
           v-model:page="pagination.page"
           :item-count="pagination.itemCount"
           :page-size="pagination.pageSize"
-          style="margin-top: 16px; justify-content: flex-end"
+          style="margin-top: 12px; justify-content: center"
           @update:page="(p) => { pagination.page = p; loadTickets() }"
         />
       </div>
@@ -379,6 +381,25 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  .ticket-container { padding: 0 12px; }
+  /* 手机端横向留白由全局统一（10px），页面根容器不能再叠加（admin-mobile.css 的
+     [class$="-container"] 会塞 12px !important，这里按契约清零） */
+  .ticket-container { padding: 8px 0 12px !important; }
+  .header-card { margin-bottom: 10px; }
+  .header h2 { font-size: 20px; }
+  /* [class$="-container"] 也命中 naive 的 .n-spin-container：它会给卡片再套 12px 内边距，
+     卡片被挤窄（用户反馈「内容居中、边上很多空白」），这里清零 */
+  .ticket-container :deep(.n-spin-container) { padding: 0 !important; }
+  /* 旧层 user-mobile.css 用 !important 把卡片压回 8px 圆角，这里拉回契约的 App 风格 */
+  .ticket-container :deep(.mobile-card),
+  .ticket-container :deep(.n-card) {
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
+  }
+  .ticket-container :deep(.mobile-card .card-actions .n-button) { border-radius: 10px !important; }
+  /* 分页按钮默认 28×28，手指点不准：手机端撑到 40px（父级已 flex-wrap，不会横向撑破） */
+  .ticket-container :deep(.n-pagination .n-pagination-item) { min-width: 40px; height: 40px; }
+  /* 卡片自身 padding 为 0（旧层设定），只给标题行补内边距，避免标题贴边 */
+  .ticket-container :deep(.mobile-card .card-header-row),
+  .ticket-container :deep(.mobile-card .card-header) { padding: 12px 12px 0; }
 }
 </style>

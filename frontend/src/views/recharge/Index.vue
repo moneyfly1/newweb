@@ -6,8 +6,32 @@
         <p class="subtitle">当前余额：<span class="balance-val">{{ formatCurrency(balance) }}</span></p>
       </div>
 
-      <!-- 待支付充值提示 -->
-      <n-card v-if="pendingRecords.length > 0" :bordered="false" class="pending-card">
+      <!-- 待支付充值：手机端走 App 卡片列表（每张卡一个待支付订单） -->
+      <section v-if="appStore.isMobile && pendingRecords.length > 0" class="mb-pending">
+        <div class="mb-section-head">
+          <n-icon :component="TimeOutline" size="18" color="var(--warning-color)" />
+          <span class="mb-section-title">待支付充值（{{ pendingRecords.length }}）</span>
+        </div>
+        <div class="mobile-card-list">
+          <div v-for="r in pendingRecords" :key="r.id" class="mobile-card">
+            <div class="card-header mb-card-head">
+              <span class="mb-amount">¥{{ formatAmount(r.amount) }}</span>
+              <n-tag type="warning" size="small" :bordered="false">待支付</n-tag>
+            </div>
+            <div class="card-row">
+              <span class="card-label">下单时间</span>
+              <span>{{ formatDateTime(r.created_at) }}</span>
+            </div>
+            <div class="card-actions mb-card-actions">
+              <n-button size="small" type="primary" @click="openPay(r)">继续支付</n-button>
+              <n-button size="small" @click="handleCancel(r)">取消</n-button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 待支付充值提示（桌面端） -->
+      <n-card v-if="!appStore.isMobile && pendingRecords.length > 0" :bordered="false" class="pending-card">
         <div class="pending-header">
           <n-icon :component="TimeOutline" size="18" color="var(--warning-color)" />
           <span class="pending-title">有 {{ pendingRecords.length }} 条充值待支付</span>
@@ -533,10 +557,10 @@ onMounted(() => { loadData() })
 .subtitle { font-size: 16px; color: var(--text-color-secondary); margin: 0; }
 .balance-val { color: var(--success-color); font-weight: 700; }
 
-/* 待支付提示卡 */
-.pending-card { border-radius: 12px; border: 1.5px solid var(--warning-color); background: var(--bg-color)bf0; }
+/* 待支付提示卡（桌面端） */
+.pending-card { border: 1.5px solid var(--warning-color); }
 .pending-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.pending-title { font-size: 14px; font-weight: 600; color: #b76e00; }
+.pending-title { font-size: 15px; font-weight: 600; color: #b76e00; }
 .pending-list { display: flex; flex-direction: column; gap: 10px; }
 .pending-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--bg-color); border-radius: 12px; border: 1px solid var(--warning-color); }
 
@@ -544,8 +568,7 @@ onMounted(() => { loadData() })
 .pending-amount { font-size: 16px; font-weight: 700; color: var(--success-color); }
 .pending-time { font-size: 12px; color: var(--text-color-secondary); }
 
-.main-card { border-radius: 12px; }
-.section-label { font-size: 14px; font-weight: 500; color: var(--text-color); margin-bottom: 12px; }
+.section-label { font-size: 15px; font-weight: 500; color: var(--text-color); margin-bottom: 12px; }
 
 .amount-chip {
   display: inline-flex; align-items: center; justify-content: center;
@@ -559,10 +582,21 @@ onMounted(() => { loadData() })
 .amount-chip.active { border-color: var(--primary-color); background: var(--primary-color-active); color: var(--primary-color); }
 
 @media (max-width: 767px) {
-  .recharge-container { padding: 0 12px; }
-  .title { font-size: 24px; }
-  .subtitle { font-size: 14px; }
-  .amount-chip { min-width: 60px; padding: 8px 14px; font-size: 14px; }
-  .pending-item { flex-direction: column; align-items: flex-start; gap: 10px; }
+  /* 手机端根容器不再自带左右内边距（左右留白由全局统一给 10px，这里只留纵向间距） */
+  .recharge-container { padding: 12px 0 0; }
+  .title { font-size: 22px; }
+  .subtitle { font-size: 13px; }
+
+  /* 金额 chip 是自定义按钮（div + click），自己保证 ≥40px 手指可点高度 */
+  .amount-chip { min-width: 72px; min-height: 40px; padding: 8px 14px; font-size: 14px; }
+
+  /* 手机端「待支付充值」卡片列表：只用页面专属类名补内边距与按钮列数，
+     不改全局 .mobile-card / .card-header / .card-row / .card-actions 的 App 风格 */
+  .mb-section-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 10px; }
+  .mb-section-title { font-size: 15px; font-weight: 600; color: var(--text-color); }
+  .mb-amount { font-size: 17px; font-weight: 700; color: var(--success-color); }
+  .mobile-card .mb-card-head { padding: 14px 12px 0; }
+  /* 两个按钮 → 两列等宽（全局默认 3 列是给 3 个以上按钮的） */
+  .mobile-card .mb-card-actions { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
 </style>

@@ -7,15 +7,29 @@
         </n-button>
       </template>
 
-      <div v-if="appStore.isMobile" class="mobile-toolbar">
-        <div class="mobile-toolbar-title">兑换码管理</div>
-        <n-button size="small" type="primary" @click="handleGenerate">批量生成</n-button>
+      <!-- Mobile toolbar：吸顶工具条；不用全局 .mobile-toolbar-row（它会把行内按钮按网格拉成整行宽而溢出屏幕） -->
+      <div v-if="appStore.isMobile" class="app-sticky-toolbar redeem-toolbar">
+        <div class="redeem-toolbar__title">兑换码管理</div>
+        <div class="redeem-toolbar__actions">
+          <n-button size="small" type="primary" @click="handleGenerate">批量生成</n-button>
+        </div>
       </div>
 
-      <n-space v-if="checkedRowKeys.length > 0 && !appStore.isMobile" align="center" style="margin-bottom: 12px">
-        <span style="color: #666">已选择 {{ checkedRowKeys.length }} 项</span>
-        <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
-      </n-space>
+      <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机固定在底部标签栏上方） -->
+      <BatchSelectBar
+        :total="selection.total.value"
+        :selected-count="selection.count.value"
+        :all-selected="selection.allSelected.value"
+        :indeterminate="selection.indeterminate.value"
+        label="个兑换码"
+        @toggle-all="selection.toggleAll"
+        @clear="selection.clear"
+      >
+        <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDelete">
+          批量删除
+        </n-button>
+      </BatchSelectBar>
+
       <template v-if="!appStore.isMobile">
         <n-data-table
           class="unified-admin-table"
@@ -26,15 +40,24 @@
           :pagination="pagination"
           :bordered="false"
           :row-key="(row: any) => row.id"
-          :checked-row-keys="checkedRowKeys"
-          @update:checked-row-keys="(keys: any) => { checkedRowKeys = keys }"
+          v-model:checked-row-keys="checkedRowKeys"
           @update:sorter="handleSorterChange"
         />
       </template>
 
       <template v-else>
-        <div class="mobile-card-list">
-          <div v-for="row in codes" :key="row.id" class="mobile-card">
+        <div v-if="codes.length === 0" class="mobile-empty">暂无数据</div>
+        <div v-else class="mobile-card-list">
+          <div
+            v-for="row in codes"
+            :key="row.id"
+            class="mobile-card is-selectable"
+            :class="{ 'is-selected': selection.isSelected(row) }"
+            @click="selection.toggle(row)"
+          >
+            <div class="card-check" @click.stop>
+              <n-checkbox :checked="selection.isSelected(row)" @update:checked="() => selection.toggle(row)" />
+            </div>
             <div class="card-header">
               <span class="card-title">{{ row.code }}</span>
               <n-tag :type="row.type === 'balance' ? 'success' : 'info'" size="small">
@@ -61,7 +84,7 @@
                 <span>{{ formatFullDateTime(row.created_at) }}</span>
               </div>
             </div>
-            <div class="card-actions">
+            <div class="card-actions" @click.stop>
               <n-button size="small" @click="copyCode(row.code)">复制</n-button>
               <n-button size="small" type="error" :disabled="row.used_count > 0" @click="handleDelete(row.id)">删除</n-button>
             </div>
@@ -69,12 +92,12 @@
         </div>
 
         <n-pagination
+          class="list-pagination"
           v-model:page="pagination.page"
           v-model:page-size="pagination.pageSize"
           :item-count="pagination.itemCount"
           :page-sizes="pagination.pageSizes"
           show-size-picker
-          style="margin-top: 16px; justify-content: flex-end"
           @update:page="loadCodes"
           @update:page-size="(ps: number) => { pagination.pageSize = ps; pagination.page = 1; loadCodes() }"
         />
@@ -169,11 +192,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, h, onActivated, onMounted } from 'vue'
+import { ref, reactive, computed, h, onActivated, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, useMessage, useDialog } from 'naive-ui'
 import { listRedeemCodes, createRedeemCodes, deleteRedeemCode } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatFullDateTime } from '@/utils/date'
 import { formatCurrency } from '@/utils/amount'
@@ -186,12 +211,19 @@ const appStore = useAppStore()
 const { loading, beginLoad, endLoad } = usePageLoading()
 const submitting = ref(false)
 const codes = ref<any[]>([])
-const checkedRowKeys = ref<any[]>([])
 const showGenerateDrawer = ref(false)
 const showCodesModal = ref(false)
 const generatedCodes = ref<string[]>([])
 const formRef = ref()
 const sortState = ref({ sort: 'id', order: 'desc' })
+
+// 全选 / 多选：全站统一实现（桌面表格与手机卡片共用同一份选择状态）
+const selection = useBatchSelection(() => codes.value)
+// Naive 的表格要的是数组，这里做一层桥接，保证两边状态一致
+const checkedRowKeys = computed({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) }
+})
 
 const formData = reactive({
   type: 'balance',
@@ -391,21 +423,25 @@ const handleDelete = (id: number) => {
 }
 
 const handleBatchDelete = () => {
+  // 后端没有批量删除接口，按 id 逐个调用（与单条删除同一接口）
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
   // 与单条删除一致：已使用的兑换码不可删除
-  const used = codes.value.filter((c: any) => checkedRowKeys.value.includes(c.id) && c.used_count > 0)
+  const used = rows.filter((c: any) => c.used_count > 0)
   if (used.length > 0) {
     message.warning(`选中中有 ${used.length} 个已使用的兑换码，不可删除`)
     return
   }
   dialog.warning({
     title: '批量删除',
-    content: `确定要删除选中的 ${checkedRowKeys.value.length} 个兑换码吗？`,
+    content: `确定要删除选中的 ${rows.length} 个兑换码吗？此操作不可恢复。`,
     positiveText: '确定',
+    negativeText: '取消',
     onPositiveClick: async () => {
       try {
-        await Promise.all(checkedRowKeys.value.map(id => deleteRedeemCode(id)))
+        await Promise.all(rows.map((r: any) => deleteRedeemCode(r.id)))
         message.success('批量删除成功')
-        checkedRowKeys.value = []
+        selection.clear()
         loadCodes()
       } catch { message.error('批量删除失败') }
     }
@@ -427,70 +463,36 @@ onActivated(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
-  background: #f5f5f5;
-  border-radius: 4px;
-}
-
-.mobile-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.mobile-card {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  overflow: hidden;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.card-title {
-  font-weight: 600;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  margin-right: 8px;
-  font-family: monospace;
-}
-
-.card-body {
-  padding: 10px 14px;
-}
-
-.card-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-  font-size: 13px;
-}
-
-.card-label {
-  color: #999;
-}
-
-.card-actions {
-  display: flex;
   gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid #f0f0f0;
-  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--bg-page-color, #f5f5f5);
+  border-radius: 8px;
 }
+
+.code-item :deep(.n-text) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 分页：桌面靠右，手机居中 */
+.list-pagination { margin-top: 16px; justify-content: flex-end; }
+
+/* 手机端工具条：标题 + 操作按钮各占一行，按钮允许换行（不会横向溢出） */
+/* 卡片内容区在手机端无左右内边距，工具条不再用全局的 -12px 出血，避免越过卡片边界 */
+.redeem-toolbar { display: flex; flex-direction: column; gap: 8px; margin-left: 0; margin-right: 0; }
+.redeem-toolbar__title { font-size: 16px; font-weight: 650; color: var(--text-color, #333); }
+.redeem-toolbar__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.redeem-toolbar__actions .n-button { flex: 1 1 0; min-width: 0; }
 
 @media (max-width: 767px) {
-  .redeem-container { padding: 8px; }
+  /* 左右留白与底部批量栏空间都由全局统一给，页面不再自己加内边距 */
+  .list-pagination { justify-content: center; }
+  /* 全局 .admin-page-shell .mobile-card 用了 padding:0 !important，
+     这里补回左侧复选框的位置，并让选中态可见 */
+  .redeem-container :deep(.mobile-card.is-selectable) { padding-left: 44px !important; }
+  .redeem-container :deep(.mobile-card.is-selected) {
+    border-color: var(--primary-color, #4f46e5) !important;
+    background: color-mix(in srgb, var(--primary-color-soft, rgba(102, 126, 234, 0.08)) 70%, var(--bg-color, #fff)) !important;
+  }
 }
-.mobile-toolbar { margin-bottom: 12px; }
-.mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }
 </style>

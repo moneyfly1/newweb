@@ -302,5 +302,8 @@ onMounted(() => {
   .mb-prize-prob { font-size: 13px; font-weight: 600; color: var(--primary-color, #4f46e5); }
   .mb-prize-meta { font-size: 12px; line-height: 1.5; color: var(--text-color-secondary); max-width: 100%; overflow-wrap: anywhere; }
   .mb-pool-actions { padding: 8px 12px 12px; }
+  /* 单个主 CTA 放全局 .card-actions 的 3 列网格里只会占 1/3 宽，所以用自己的容器；
+     圆角跟卡片内按钮保持一致（naive 默认 8px → 10px） */
+  .mb-pool-actions .n-button { border-radius: 10px; }
 }
 </style>

@@ -190,13 +190,10 @@
     overflow: hidden;
     border: 1px solid var(--border-color, #e2e8f0) !important;
     border-radius: var(--admin-mobile-radius) !important;
-    background: var(--bg-color, #fff) !important;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) !important;
-  }
-
-  .admin-page-shell .mobile-card:nth-child(odd),
-  .admin-page-shell .mobile-card:nth-child(even) {
-    background: var(--bg-color, #fff) !important;
+    /* 这里原来写死了 background + :nth-child(odd/even) 的 !important 白底，
+       是早期为了盖掉卡片渐变用的。现在卡片已是纯色底，这条会盖掉「选中整卡变色」
+       （用户反馈点了列表看不出整条被选中，只剩前面一个复选框有颜色），故删除。 */
   }
 
   .admin-page-shell .mobile-card .card-header {

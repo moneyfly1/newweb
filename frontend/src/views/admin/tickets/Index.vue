@@ -583,12 +583,16 @@ onActivated(() => {
   background: white;
 }
 
+/* 消息气泡原来在左侧画 3px 色条区分管理员/用户，看起来就是「半截颜色」。
+   改成整块淡底 + 同色描边，整条消息一眼可辨。 */
 .chat-message.admin {
-  border-left: 3px solid #18a058;
+  background: color-mix(in srgb, #18a058 8%, #fff);
+  border: 1px solid color-mix(in srgb, #18a058 30%, transparent);
 }
 
 .chat-message.user {
-  border-left: 3px solid #2080f0;
+  background: color-mix(in srgb, #2080f0 8%, #fff);
+  border: 1px solid color-mix(in srgb, #2080f0 30%, transparent);
 }
 
 .message-header {
@@ -625,9 +629,6 @@ onActivated(() => {
 }
 
 /* 可选中卡片左侧给复选框留位 */
-.mobile-card.is-selectable {
-  padding-left: 44px !important;
-}
 
 .mobile-toolbar { margin-bottom: 12px; }
 .mobile-toolbar-title { font-size: 17px; font-weight: 600; margin-bottom: 10px; color: var(--text-color, #333); }

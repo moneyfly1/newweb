@@ -1,7 +1,7 @@
 <template>
   <div class="shop-container">
     <!-- 手机端吸顶工具条：标题 + 余额常驻，不随套餐列表滚走（手机端为 fixed，桌面端是普通标题块） -->
-    <div class="header app-sticky-toolbar" :class="{ 'is-pinned': headerPinned }">
+    <div class="header app-sticky-toolbar">
       <h1 class="title">套餐商城</h1>
       <p class="subtitle">选择适合您的订阅套餐</p>
       <div v-if="userBalance !== null" class="balance-info">
@@ -333,13 +333,11 @@ const drawerPlacement = computed(() => (appStore.isMobile ? 'bottom' : 'right'))
 // CommonDrawer 未声明 height，会透传给内部 n-drawer，桌面端（右侧抽屉）该值被忽略
 const drawerHeight = computed(() => (appStore.isMobile ? '85vh' : undefined))
 
-// 手机端吸顶工具条：本布局的滚动发生在 document 上，而 .n-layout-content / .n-scrollbar /
-// .n-scrollbar-container 都是「永不滚动的 overflow 容器」，position: sticky 在这条滚动链里
-// 不会生效（全局 .app-sticky-toolbar 因此等于没有吸顶）。所以用滚动监听切换成 fixed：
-// 顶栏（移动端 52px）滚出屏幕的瞬间钉住，位移与流内位置完全一致，不会跳。
-const MOBILE_TOPBAR_H = 52
-const headerPinned = ref(false)
-const onPageScroll = () => { headerPinned.value = window.scrollY > MOBILE_TOPBAR_H }
+// 手机端吸顶工具条：直接用全局 .app-sticky-toolbar（position: sticky +
+// top: var(--mobile-header-h)＝52px，天然贴在顶栏下沿、z-index 9 < 顶栏 90）。
+// 原来这里用滚动监听把工具条切成 position: fixed / top: 0 —— 顶栏也开始吸顶之后，
+// 它会被 52px 高的顶栏盖住（实测 elementFromPoint 命中的是 mobile-logo，
+// 即吸顶条既看不见也点不到），已整体移除。
 
 const loading = ref(false)
 const packages = ref<any[]>([])
@@ -723,13 +721,11 @@ const handleCryptoTransferred = () => {
   router.push('/orders')
 }
 
-onUnmounted(() => { stopPolling(); window.removeEventListener('scroll', onPageScroll) })
+onUnmounted(() => { stopPolling() })
 
 onMounted(() => {
   loadPackages()
   fetchUserBalance()
-  window.addEventListener('scroll', onPageScroll, { passive: true })
-  onPageScroll()
 })
 </script>
 
@@ -865,33 +861,20 @@ onMounted(() => {
      所以页面侧不再写 padding/radius 的补偿规则（实测卡片已 373px 宽、圆角 16px）。 */
   .shop-container { padding-left: 0; padding-right: 0; }
 
-  /* 吸顶工具条：顶部一行「标题 + 余额」，顶栏滚出屏幕后钉在顶部（.is-pinned 由滚动监听切换）。
-     本布局的滚动链（.n-layout-content / .n-scrollbar / .n-scrollbar-container 全是
-     overflow: hidden/scroll 但自身不滚动）会让 position: sticky 失效——页面滚动发生在 document 上，
-     粘性元素被限制在那个永不滚动的容器里，所以这里用 fixed + 等高占位实现真正的吸顶。*/
+  /* 吸顶工具条：顶部一行「标题 + 余额」，真实吸顶交给全局 .app-sticky-toolbar
+     （position: sticky + top: var(--mobile-header-h)＝52px，正好贴在顶栏下沿；
+     z-index 9 低于顶栏 90，不会被盖住 —— 所以这里**不要**再写 position/top/z-index）。
+     行程前提：它必须是页面容器的直接子级（sticky 只在父盒内移动），不要再套 wrapper。 */
   .header.app-sticky-toolbar {
-    position: static;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     height: 44px;
-    margin: 0 0 12px;
+    /* 全局默认 margin 是 -12px 负边距（给卡片内边距留位）：这里内容已贴齐 10px，收回 0 防横向溢出 */
+    margin: 0 0 10px;
+    padding: 8px 12px;
   }
-  .header.app-sticky-toolbar.is-pinned {
-    position: fixed;
-    top: 0;
-    left: 10px;
-    right: 10px;
-    z-index: 9;
-    margin: 0;
-    background: color-mix(in srgb, var(--bg-color, #fff) 88%, transparent);
-    backdrop-filter: saturate(180%) blur(14px);
-    -webkit-backdrop-filter: saturate(180%) blur(14px);
-    border-bottom: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 60%, transparent);
-  }
-  /* 钉住时工具条脱流，用等高外边距顶住内容：两种状态总高度一致，滚动中不跳 */
-  .header.app-sticky-toolbar.is-pinned + .n-space { margin-top: 56px; }
   .title { font-size: 17px; line-height: 1.3; margin: 0; min-width: 0; text-align: left; }
   .subtitle { display: none; }
   .balance-info { flex-shrink: 0; margin: 0; font-size: 13px; text-align: right; white-space: nowrap; }

@@ -314,12 +314,6 @@ onActivated(() => { fetchStats(); fetchCodes(); fetchRelations() })
   .stat-val { font-size: 18px; }
   .stat-item { min-width: 60px; }
   .list-pagination { justify-content: center; }
-  /* 全局 .admin-page-shell .mobile-card 用了 padding:0 !important，
-     这里补回左侧复选框的位置，并让选中态可见 */
-  .admin-invites-page :deep(.mobile-card.is-selectable) { padding-left: 44px !important; }
-  .admin-invites-page :deep(.mobile-card.is-selected) {
-    border-color: var(--primary-color, #4f46e5) !important;
-    background: color-mix(in srgb, var(--primary-color-soft, rgba(102, 126, 234, 0.08)) 70%, var(--bg-color, #fff)) !important;
-  }
+  /* 选中态与复选框让位已由公共层 mobile-app-ui.css 统一提供，页面不再各写一套 */
 }
 </style>

@@ -296,6 +296,10 @@
           <n-input-number v-model:value="formData.port" :min="1" :max="65535" style="width: 100%" placeholder="请输入端口号" />
         </n-form-item>
 
+        <n-alert type="info" :bordered="false" style="margin-bottom: 10px">
+          下发给用户的节点以「配置信息」里的链接为准。<b>只改「域名/IP」「端口」也会同步改写链接</b>，
+          两者始终一致；如果链接格式无法自动改写，保存时会明确提示，请直接粘贴新的链接。
+        </n-alert>
         <n-form-item label="配置信息" path="config">
           <n-input
             v-model:value="formData.config"
@@ -937,12 +941,19 @@ const handleSubmit = async () => {
       expire_time: formData.expire_time ? new Date(formData.expire_time).toISOString() : null
     }
 
+    let res
     if (editId.value) {
-      await updateCustomNode(editId.value, data)
+      res = await updateCustomNode(editId.value, data)
       message.success('更新专线节点成功')
     } else {
-      await createCustomNode(data)
+      res = await createCustomNode(data)
       message.success('创建专线节点成功')
+    }
+    // 下发以「配置信息」链接为准：链接无法解析/无法改写时后端会带 warning，
+    // 这时必须明确提示，不能让管理员以为改动已经生效。
+    const warning = res?.data?.warning
+    if (warning) {
+      message.warning(warning, { duration: 9000 })
     }
 
     showEditDrawer.value = false

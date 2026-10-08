@@ -370,8 +370,8 @@ onMounted(async () => {
 .telegram-widget-container { min-height: 40px; }
 @media (max-width: 767px) {
   /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白）；
-     卡片圆角走共享 token --user-mobile-radius（8px → 契约的 16px），不改公共文件 */
-  .settings-page { padding: 0; --user-mobile-radius: 16px; }
+     卡片 16px 圆角由全局统一提供，页面不再自己写 */
+  .settings-page { padding: 0; }
   /* 契约 §1：工具栏吸顶 —— 切 Tab 后向上滚动时 Tab 栏不跟着滚走 */
   .settings-page :deep(.n-tabs-nav) {
     position: sticky;

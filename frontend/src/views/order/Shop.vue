@@ -111,6 +111,7 @@
       title="确认购买"
       :width="520"
       :placement="drawerPlacement"
+      :height="drawerHeight"
       show-footer
       :loading="paying"
       @confirm="handlePay"
@@ -214,6 +215,7 @@
       title="扫码支付"
       :width="400"
       :placement="drawerPlacement"
+      :height="drawerHeight"
       :mask-closable="false"
       show-footer
       :show-confirm="false"
@@ -243,6 +245,7 @@
       title="加密货币支付"
       :width="480"
       :placement="drawerPlacement"
+      :height="drawerHeight"
       :mask-closable="false"
       show-footer
       confirm-text="我已转账"
@@ -278,6 +281,7 @@
       title="码支付"
       :width="500"
       :placement="drawerPlacement"
+      :height="drawerHeight"
       :mask-closable="false"
       show-footer
       :show-confirm="false"
@@ -325,6 +329,9 @@ const message = useMessage()
 const appStore = useAppStore()
 // 手机端支付/确认类抽屉统一从底部弹出（App 的底部操作面板）
 const drawerPlacement = computed(() => (appStore.isMobile ? 'bottom' : 'right'))
+// 手机端底部抽屉用 85vh（naive 对 top/bottom 的默认高度只有 251px，内容要来回滚）；
+// CommonDrawer 未声明 height，会透传给内部 n-drawer，桌面端（右侧抽屉）该值被忽略
+const drawerHeight = computed(() => (appStore.isMobile ? '85vh' : undefined))
 
 // 手机端吸顶工具条：本布局的滚动发生在 document 上，而 .n-layout-content / .n-scrollbar /
 // .n-scrollbar-container 都是「永不滚动的 overflow 容器」，position: sticky 在这条滚动链里
@@ -852,10 +859,11 @@ onMounted(() => {
 
 /* Mobile Responsive：按 App 商品卡重排（整宽单列 / 16px 圆角 / 轻阴影 / 价格与整宽按钮同边对齐） */
 @media (max-width: 767px) {
-  /* 页面根容器不再自带左右内边距（全局已统一 10px） */
-  .shop-container { padding-left: 0; padding-right: 0; padding-top: 0; }
-  /* n-spin 容器被全局 [class$="-container"] 规则塞了 12px 内边距，会把卡片白缩窄 24px */
-  .shop-container :deep(.n-spin-container) { padding-left: 0 !important; padding-right: 0 !important; }
+  /* 页面根容器不再自带任何内边距：左右由全局在滚动内容区统一给 10px，
+     纵向由 user-mobile.css 的 .shop-container { padding: var(--user-mobile-gutter) } 置 0
+     （--user-mobile-gutter: 0px）。卡片 16px 圆角 + 轻阴影、n-spin 容器零内边距同样由全局层保证，
+     所以页面侧不再写 padding/radius 的补偿规则（实测卡片已 373px 宽、圆角 16px）。 */
+  .shop-container { padding-left: 0; padding-right: 0; }
 
   /* 吸顶工具条：顶部一行「标题 + 余额」，顶栏滚出屏幕后钉在顶部（.is-pinned 由滚动监听切换）。
      本布局的滚动链（.n-layout-content / .n-scrollbar / .n-scrollbar-container 全是
@@ -953,8 +961,8 @@ onMounted(() => {
   .mobile-pay-panel p, .desktop-pay-panel p, .crypto-panel p { font-size: 13px; }
 }
 
+/* 更窄的屏幕（≤400px，含 393px 的常见机型）：支付方式转单列，避免文字被压扁 */
 @media (max-width: 400px) {
-  .packages-grid { grid-template-columns: 1fr; }
-  .pm-card-grid { grid-template-columns: 1fr; }
+  .pm-card-grid { grid-template-columns: minmax(0, 1fr); }
 }
 </style>

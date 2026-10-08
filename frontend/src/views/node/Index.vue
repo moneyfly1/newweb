@@ -387,7 +387,7 @@ onMounted(() => { fetchNodes() })
 .latency-poor { color: var(--danger-color); font-weight: 600; }
 .latency-none { color: var(--text-color-secondary, #ccc); }
 .mobile-node-list { display: flex; flex-direction: column; gap: 10px; }
-.mobile-node-card { border-radius: 10px; padding: 14px 16px; background: var(--bg-color, #fff); border: 1px solid var(--border-color, #eef0f3); border-left: 4px solid var(--success-color); }
+.mobile-node-card { border-radius: 16px; padding: 14px 16px; background: var(--bg-color, #fff); border: 1px solid var(--border-color, #eef0f3); border-left: 4px solid var(--success-color); }
 .mobile-node-card.card-offline { border-left-color: var(--danger-color); opacity: 0.7; }
 .mobile-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color, #f5f5f5); }
 .mobile-node-name { display: flex; align-items: center; font-size: 14px; font-weight: 600; color: var(--text-color, #1a1a1a); min-width: 0; }
@@ -401,9 +401,8 @@ onMounted(() => { fetchNodes() })
   /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白） */
   .node-page { padding: 0; }
   .stats-bar { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  /* 契约 §1：卡片 16px 圆角。共享样式 app-mobile.css 把 .stat-card 定成 14px !important，
-     这里按契约覆盖回 16px（page scoped，不动公共文件） */
-  .stat-card { padding: 14px; border-radius: 16px !important; }
+  /* 契约 §1：卡片 16px 圆角由全局统一提供（app-mobile.css 已含 .stat-card）；这里只收紧手机端内边距 */
+  .stat-card { padding: 14px; }
   .stat-value { font-size: 18px; }
   .stat-icon { width: 38px; height: 38px; }
   .filter-bar { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: stretch; }
@@ -421,7 +420,7 @@ onMounted(() => { fetchNodes() })
   .filter-bar .n-button { width: 100%; }
   .desktop-table { display: none; }
   .mobile-cards { display: block; }
-  .mobile-node-card { border-radius: 16px; padding: 12px; }
+  .mobile-node-card { padding: 12px; }
   
   .mobile-card-info { grid-template-columns: 1fr; gap: 4px; }
   .mobile-info-item { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: center; }

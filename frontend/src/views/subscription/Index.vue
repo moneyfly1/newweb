@@ -1308,7 +1308,8 @@ onUnmounted(() => { stopPayPolling() })
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.55) 100%);
+  /* 契约 §1：卡片纯色底（原来是 135deg 白色渐变） */
+  background: rgba(255, 255, 255, 0.82);
   border: 1px solid var(--primary-color);
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.18);
 }
@@ -1392,7 +1393,7 @@ onUnmounted(() => { stopPayPolling() })
 /* Format Item */
 .format-item { padding: 14px 12px; border-radius: 10px; border: 2px solid #e8e8e8; cursor: pointer; transition: all 0.2s; background: white; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .format-item:hover { border-color: #667eea; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.15); }
-.format-item.active { border-color: #667eea; background: linear-gradient(135deg, #667eea08 0%, #764ba208 100%); }
+.format-item.active { border-color: #667eea; background: rgba(102, 126, 234, 0.06); }
 .format-item-icon { display: flex; justify-content: center; align-items: center; width: 48px; height: 48px; }
 .format-item-icon img { width: 48px; height: 48px; object-fit: contain; border-radius: 8px; }
 .format-item-name { font-size: 14px; font-weight: 600; color: #333; text-align: center; }
@@ -1418,8 +1419,8 @@ onUnmounted(() => { stopPayPolling() })
 /* Mobile */
 @media (max-width: 767px) {
   /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白）；
-     卡片圆角走共享 token --user-mobile-radius（8px → 契约的 16px），不改公共文件 */
-  .subscription-page { padding: 0; --user-mobile-radius: 16px; }
+     卡片 16px 圆角由全局统一提供，页面不再自己写 */
+  .subscription-page { padding: 0; }
   .hero-row-top { flex-direction: column; gap: 10px; align-items: flex-start; }
   .hero-right { align-self: flex-end; }
   .hero-stats { flex-wrap: wrap; gap: 16px; padding: 12px 16px; }
@@ -1447,12 +1448,11 @@ onUnmounted(() => { stopPayPolling() })
   .days-stat .stat-icon { width: 32px; height: 32px; }
   .days-number { font-size: 42px; }
   .days-unit { font-size: 14px; }
-  /* 契约 §1：卡片内边距 12px、16px 圆角（token 已覆盖 .url-card/.device-card 等卡片类） */
+  /* 契约 §1：卡片内边距 12px + 轻阴影（16px 圆角由全局 token 提供） */
   .url-card,
   .format-card-container,
   .device-card {
     padding: 12px;
-    border-radius: 16px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04);
   }
   .card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }

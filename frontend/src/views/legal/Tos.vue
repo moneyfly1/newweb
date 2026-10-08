@@ -5,25 +5,20 @@
       <p class="subtitle">最后更新：2026 年 8 月</p>
     </div>
 
-    <!-- 手机端：目录（点一下跳到对应条款；吸顶不跟着页面滚走） -->
-    <div
-      v-if="appStore.isMobile"
-      ref="tocSlot"
-      class="legal-toc-slot"
-      :style="tocStuck ? { height: tocHeight + 'px' } : undefined"
-    >
-      <div class="app-sticky-toolbar legal-toc-bar" :class="{ 'is-stuck': tocStuck }">
-        <button
-          v-for="s in tocSections"
-          :key="s.id"
-          type="button"
-          class="legal-toc-chip"
-          :class="{ 'is-active': activeSection === s.id }"
-          @click="jumpTo(s.id)"
-        >
-          {{ s.label }}
-        </button>
-      </div>
+    <!-- 手机端：目录（点一下跳到对应条款）。
+         吸顶交给全局 .app-sticky-toolbar（贴在吸顶顶栏下沿）；sticky 只能在
+         「直接父盒」里移动，所以直接挂在 .legal-page 下，别再套 wrapper。 -->
+    <div v-if="appStore.isMobile" class="app-sticky-toolbar legal-toc-bar">
+      <button
+        v-for="s in tocSections"
+        :key="s.id"
+        type="button"
+        class="legal-toc-chip"
+        :class="{ 'is-active': activeSection === s.id }"
+        @click="jumpTo(s.id)"
+      >
+        {{ s.label }}
+      </button>
     </div>
 
     <n-card :bordered="false" class="legal-card">
@@ -145,12 +140,9 @@ import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
 
-/* ---------------- 手机端目录（吸顶） ----------------
-   为什么不用纯 CSS：全局 .app-sticky-toolbar 是 position: sticky，但页面内容被
-   .n-scrollbar-container（overflow: scroll）包着，真正滚动的是 window，该容器自身
-   不滚动 —— 实测滚动 600px 后 sticky 元素 top 变成 -588，照样滚走。公共文件不可改，
-   所以这里用等效实现：滚出视口顶部就切 fixed（.is-stuck），未吸顶时留在文档流里，
-   吸顶时给插槽补上等高占位避免内容跳动。 */
+/* ---------------- 手机端目录 ----------------
+   吸顶由全局 .app-sticky-toolbar 负责（position: sticky，top: var(--mobile-header-h)），
+   页面只管两件事：点一下平滑跳到对应条款 + 滚动时高亮当前条款。 */
 const tocSections = [
   { id: 'sec-service', label: '服务说明' },
   { id: 'sec-account', label: '账户' },
@@ -161,9 +153,6 @@ const tocSections = [
   { id: 'sec-contact', label: '联系方式' },
 ]
 
-const tocSlot = ref<HTMLElement | null>(null)
-const tocStuck = ref(false)
-const tocHeight = ref(58)
 const activeSection = ref(tocSections[0].id)
 
 function jumpTo(id: string) {
@@ -172,24 +161,16 @@ function jumpTo(id: string) {
 }
 
 let scrollBound = false
-let tocRaf = 0
+let spyRaf = 0
 
-function measureToc() {
-  tocRaf = 0
-  const slot = tocSlot.value
-  if (!slot || !appStore.isMobile) {
-    tocStuck.value = false
-    return
-  }
-  const bar = slot.firstElementChild as HTMLElement | null
-  const h = bar ? Math.round(bar.getBoundingClientRect().height) : 0
-  if (h > 0) tocHeight.value = h
-  tocStuck.value = slot.getBoundingClientRect().top < 0
-  // 当前条款 = 视口上沿往下 72px 处所在的那一节（目录要有选中态才像 App）
+function updateActiveSection() {
+  spyRaf = 0
+  if (!appStore.isMobile) return
+  // 当前条款 = 吸顶顶栏 + 目录条（52 + 58 ≈ 110px）下方那一屏里最靠上的一节
   let current = tocSections[0].id
   for (const s of tocSections) {
     const el = document.getElementById(s.id)
-    if (el && el.getBoundingClientRect().top <= 72) current = s.id
+    if (el && el.getBoundingClientRect().top <= 130) current = s.id
   }
   // 滚到底时高亮最后一节（末节通常滚不到顶部，否则选中态会停在上一节）
   if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4) {
@@ -199,25 +180,24 @@ function measureToc() {
 }
 
 function onPageScroll() {
-  if (!tocRaf) tocRaf = requestAnimationFrame(measureToc)
+  if (!spyRaf) spyRaf = requestAnimationFrame(updateActiveSection)
 }
 
+// keep-alive 缓存的页面在重新激活时重新绑定滚动监听
 function bindScroll() {
   if (scrollBound) return
   scrollBound = true
   window.addEventListener('scroll', onPageScroll, { passive: true })
-  window.addEventListener('resize', onPageScroll, { passive: true })
-  measureToc()
+  updateActiveSection()
 }
 
 function unbindScroll() {
   if (!scrollBound) return
   scrollBound = false
   window.removeEventListener('scroll', onPageScroll)
-  window.removeEventListener('resize', onPageScroll)
-  if (tocRaf) {
-    cancelAnimationFrame(tocRaf)
-    tocRaf = 0
+  if (spyRaf) {
+    cancelAnimationFrame(spyRaf)
+    spyRaf = 0
   }
 }
 
@@ -259,11 +239,9 @@ onUnmounted(unbindScroll)
   margin: 0;
 }
 
-/* ---------------- 手机端目录条 ---------------- */
-.legal-toc-slot {
-  display: block;
-}
-
+/* ---------------- 手机端目录条 ----------------
+   外观与吸顶（position: sticky + top: var(--mobile-header-h) + 毛玻璃 + 发丝线）
+   全部来自全局 .app-sticky-toolbar，这里只排一行可横滑的 chip。 */
 .legal-toc-bar {
   display: flex;
   align-items: center;
@@ -271,28 +249,9 @@ onUnmounted(unbindScroll)
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  /* 全局 .app-sticky-toolbar 的 -12px 负边距是给「页面根容器自带 12px 内边距」的
-     页面用的；本页根容器手机端无左右内边距，负边距会把目录条撑出屏幕（横向溢出），
-     这里归零；左右留 1px 透明边保证吸顶前后高度一致。 */
-  margin: 0 0 10px;
-  padding: 8px 10px;
-  border: 1px solid transparent;
 }
 .legal-toc-bar::-webkit-scrollbar {
   display: none;
-}
-
-/* 吸顶态：sticky 在本布局被 .n-scrollbar-container（overflow: scroll 且不滚动）吃掉，
-   滚出视口顶部后改用 fixed 顶到最上方（未吸顶时留在文档流里，不挡内容）。 */
-.legal-toc-bar.is-stuck {
-  position: fixed;
-  top: 0;
-  left: 10px;
-  right: 10px;
-  z-index: 30;
-  margin: 0;
-  border-color: color-mix(in srgb, var(--border-color, #e5e7eb) 70%, transparent);
-  border-radius: 0 0 16px 16px;
 }
 
 .legal-toc-chip {
@@ -401,7 +360,7 @@ onUnmounted(unbindScroll)
   .section-list { padding-left: 18px; }
   .section-list li { margin: 5px 0; }
 
-  /* 从目录跳过来时，标题不被吸顶的目录条挡住 */
-  .legal-section { scroll-margin-top: 72px; }
+  /* 从目录跳过来时，标题不被顶栏（52px）+ 吸顶目录条挡住 */
+  .legal-section { scroll-margin-top: calc(var(--mobile-header-h, 52px) + 66px); }
 }
 </style>

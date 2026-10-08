@@ -692,9 +692,9 @@ onMounted(() => {
   gap: 12px;
 }
 
+/* 手机端卡片内边距/圆角（16px）由全局 .mobile-card 接管，这里只兜底边框与底色 */
 .mobile-card {
   border: 1px solid var(--border-color, #eef0f3);
-  border-radius: 16px;
   padding: 14px 16px;
   background: var(--bg-color, #fff);
 }
@@ -730,8 +730,8 @@ onMounted(() => {
 
 @media (max-width: 767px) {
   /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白）；
-     卡片圆角走共享 token --user-mobile-radius（8px → 契约的 16px），不改公共文件 */
-  .invite-page { padding: 0; --user-mobile-radius: 16px; }
+     卡片 16px 圆角由全局统一提供，页面不再自己写 */
+  .invite-page { padding: 0; }
   .stat-card :deep(.n-statistic__label) { font-size: 13px; }
   .stat-card :deep(.n-statistic-value__content) { font-size: 20px; }
 }

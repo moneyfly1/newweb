@@ -332,13 +332,13 @@ onMounted(() => {
 
 @media (max-width: 767px) {
   /* 契约 §1：页面根容器不再自带左右内边距（全局已给 10px 留白）；
-     卡片圆角走共享 token --user-mobile-radius（8px → 契约的 16px），不改公共文件 */
-  .device-page { padding: 0; max-width: none; --user-mobile-radius: 16px; }
+     卡片 16px 圆角由全局统一提供，页面不再自己写 */
+  .device-page { padding: 0; max-width: none; }
 }
 
 .mobile-card-list { display: flex; flex-direction: column; gap: 10px; }
-/* 手机端卡片由全局 .mobile-card 接管内边距与圆角，这里只兜底背景与轻阴影 */
-.mobile-card { background: var(--bg-color, #fff); border-radius: 16px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04); padding: 12px 14px; }
+/* 手机端卡片内边距/圆角由全局 .mobile-card 与 token 接管，这里兜底背景与轻阴影 */
+.mobile-card { background: var(--bg-color, #fff); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04); padding: 12px 14px; }
 .card-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
 .card-row .label { color: var(--text-color-secondary, #999); flex-shrink: 0; }
 .card-row .value { text-align: right; word-break: break-all; color: var(--text-color, #333); }

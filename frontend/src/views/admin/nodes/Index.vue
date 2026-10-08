@@ -645,6 +645,13 @@ onBeforeUnmount(() => {
 .latency-value { color: var(--success-color); font-weight: 600; font-family: monospace; }
 .latency-offline { color: var(--danger-color); gap: 4px; opacity: 0.65; }
 
+/* 可选中卡片左侧给复选框留位：全局 .mobile-card.is-selectable 的 padding-left
+   会被 .admin-page-shell .mobile-card { padding: 0 !important } 盖掉，
+   不补回来的话复选框会压在卡片标题上（与其他后台页面的写法保持一致）。 */
+.mobile-card.is-selectable {
+  padding-left: 44px !important;
+}
+
 @media (max-width: 767px) {
   /* 页面根容器不再自带左右内边距：全局已给内容区 10px，页面再加就是白边浪费 */
   .admin-page-shell { padding-left: 0; padding-right: 0; }

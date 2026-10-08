@@ -90,19 +90,32 @@
     gap: 8px;
   }
 
+  /* 手机端工具行：一行里塞多个控件时按「每列至少 72px」自动换行。
+     原来用 repeat(auto-fit, minmax(0, 1fr)) 且子元素 width:100%，结果是
+     「刷新」按钮被拉成整行宽 373px 却排在 x=391，右边界跑到 764（视口 393）——
+     页面级 flex 覆盖打不过这里的特异度，横向溢出就是这么来的。 */
   .admin-page-shell .mobile-toolbar-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
     align-items: center;
     gap: 8px;
+    width: 100%;
+    min-width: 0;
   }
 
   .admin-page-shell .mobile-toolbar-row > .n-button,
   .admin-page-shell .mobile-toolbar-row > .n-input,
   .admin-page-shell .mobile-toolbar-row > .n-select,
   .admin-page-shell .mobile-toolbar-row > .flex-1 {
-    width: 100%;
+    width: auto;
     min-width: 0;
+    max-width: 100%;
+  }
+
+  /* 单独占一行的控件（搜索框这类）仍铺满 */
+  .admin-page-shell .mobile-toolbar-controls > .n-input,
+  .admin-page-shell .mobile-toolbar-row > .n-input {
+    width: 100%;
   }
 
   .admin-page-shell .mobile-toolbar .n-button,

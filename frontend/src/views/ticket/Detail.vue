@@ -425,8 +425,10 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  /* 根容器不再自带左右内边距（全局已统一 10px） */
-  .ticket-detail-container { padding-left: 0; padding-right: 0; padding-top: 0; }
+  /* 根容器不再自带左右内边距（全局在滚动内容区统一给 10px），只留一点纵向留白。
+     卡片 16px 圆角 + 轻阴影由全局层保证（user-mobile.css 的 --user-mobile-radius 已是 16px），
+     页面侧不再写 !important 补偿，避免和全局层互相打架。 */
+  .ticket-detail-container { padding: 8px 0 12px; }
 
   .info-card { margin-bottom: 10px; border-radius: 16px; }
   .chat-card { margin-bottom: 10px; border-radius: 16px; }

@@ -148,9 +148,21 @@ onMounted(() => {
 .redeem-pagination { margin-top: 16px; justify-content: flex-end; flex-wrap: wrap; row-gap: 8px; }
 
 @media (max-width: 767px) {
-  /* 手机端根容器不再自带左右内边距（左右留白由全局统一给 10px） */
-  .redeem-page { padding: 10px 0 0; }
+  /* 手机端根容器：左右内边距必须为 0（左右留白由全局统一给 10px），只保留纵向间距。
+     加 !important 是防旧层 / 后台层用高特异性规则再塞回左右内边距。 */
+  .redeem-page { padding: 8px 0 12px !important; }
   .redeem-history-card { margin-top: 12px; }
+
+  /* 旧层 user-mobile.css 的 `.user-mobile-content .mobile-card/.n-card { !important }`
+     会把契约的 16px 圆角压回 8px，这里用「页面根类名 + :deep()」拉回契约观感。 */
+  .redeem-page :deep(.mobile-card),
+  .redeem-page :deep(.n-card) {
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
+  }
+  .redeem-page :deep(.mobile-card .card-actions .n-button) { border-radius: 10px !important; }
+  /* naive 的 .n-spin-container 会被过宽的容器选择器塞进 12px 内边距（卡片每侧少 12px） */
+  .redeem-page :deep(.n-spin-container) { padding: 0 !important; }
 
   /* 吸顶工具条：全局 .app-sticky-toolbar 带 -12px 负外边距（给有内边距的容器用），
      本页根容器左右内边距已是 0，这里把负边距收回，避免撑出横向溢出 */

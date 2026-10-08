@@ -221,20 +221,13 @@ onMounted(() => {
 .notif-header.app-sticky-toolbar { padding: 8px 12px; }
 
 @media (max-width: 767px) {
-  /* admin-mobile.css 的 [class$="-container"] 命中了 naive 的 .n-spin-container：
-     它会给卡片再套 12px 内边距把卡片挤窄，这里为零（内容尽量宽） */
-  .notification-page :deep(.n-spin-container) { padding: 0 !important; }
-  /* 旧层 user-mobile.css 用 !important 把卡片压回 8px 圆角，这里拉回契约的 App 风格 */
-  .notification-page :deep(.mobile-card) {
-    border-radius: 16px !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
-  }
-  /* 卡片自身 padding 为 0（旧层设定），给标题行补内边距，避免标题贴边 */
+  /* 卡片自身 padding 为 0（全局列表行自带内边距），只给标题行补内边距避免标题贴边 */
   .notification-page :deep(.mobile-card .card-header) { padding: 12px 12px 0; margin-bottom: 8px; }
   /* 吸顶工具栏的默认负边距是给「卡片内边距」留位的，这里列表已贴齐，改成 0 防溢出 */
   .notif-header.app-sticky-toolbar { margin: 0 0 10px; padding: 8px 12px; }
   /* 分页按钮默认 28×28，手指点不准：手机端撑到 40px（父级已 flex-wrap，不会横向撑破） */
   .notification-page :deep(.n-pagination .n-pagination-item) { min-width: 40px; height: 40px; }
+  /* 未读通知用主色描边 + 淡底，比「一个红点」更容易扫到 */
   .notification-page :deep(.mobile-card.is-unread) {
     border-color: color-mix(in srgb, var(--primary-color, #4f46e5) 45%, transparent) !important;
     background: color-mix(in srgb, var(--primary-color-soft, rgba(79, 70, 229, 0.08)) 70%, var(--bg-color, #fff)) !important;

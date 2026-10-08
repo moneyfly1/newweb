@@ -11,20 +11,37 @@
         <span v-else>{{ pullDistance >= 55 ? '释放刷新' : '下拉刷新' }}</span>
       </div>
     </transition>
-    <n-space vertical :size="appStore.isMobile ? 12 : 24">
-      <div class="header">
-        <h1 class="title">我的订单</h1>
-        <n-button type="primary" @click="router.push('/shop')">购买套餐</n-button>
-      </div>
+    <!-- 标题行 + 手机端筛选条都放在 n-space 外面：
+         n-space 会给每个子项套一层 n-space-item，sticky 元素被限制在那层矮盒子里就吸不住。 -->
+    <div class="header">
+      <h1 class="title">我的订单</h1>
+      <n-button type="primary" @click="router.push('/shop')">购买套餐</n-button>
+    </div>
 
+    <!-- 手机端状态筛选：也必须放在卡片**外面**——n-card / n-tabs-pane-wrapper 都是
+         overflow:hidden 的滚动容器，sticky 元素放在里面只会在卡片内部「假吸顶」，
+         页面一滚就跟着跑掉。放在这里才能真正吸附在顶栏下面。 -->
+    <div v-if="appStore.isMobile" class="order-filters app-sticky-toolbar">
+      <n-space :size="8" :wrap="false">
+        <n-button
+          v-for="sf in statusFilters" :key="sf.value"
+          :type="orderStatusFilter === sf.value ? 'primary' : 'default'"
+          size="small"
+          :ghost="orderStatusFilter === sf.value"
+          @click="orderStatusFilter = sf.value; orderPagination.page = 1; loadOrders()"
+        >{{ sf.label }}</n-button>
+      </n-space>
+    </div>
+
+    <n-space vertical :size="appStore.isMobile ? 12 : 24">
       <n-card :bordered="false" class="main-card">
         <n-tabs v-model:value="activeTab" type="line" animated @update:value="handleTabChange">
 
           <!-- ===== 订单列表 ===== -->
           <n-tab-pane name="orders" tab="全部订单">
-            <!-- 手机端：状态筛选吸顶，滚动列表时不跟着滚走 -->
-            <div class="order-filters" :class="{ 'app-sticky-toolbar': appStore.isMobile }">
-              <n-space :size="8" :style="appStore.isMobile ? '' : 'margin-bottom: 16px;'">
+            <!-- 桌面：筛选条留在标签页里（桌面没有吸顶需求，也不该出现在「充值记录」标签下） -->
+            <div v-if="!appStore.isMobile" class="order-filters">
+              <n-space :size="8" style="margin-bottom: 16px;">
                 <n-button
                   v-for="sf in statusFilters" :key="sf.value"
                   :type="orderStatusFilter === sf.value ? 'primary' : 'default'"
@@ -908,7 +925,7 @@ onActivated(() => { loadOrders(); loadPaymentMethods() })
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 .order-container { padding: 24px; }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
 .title {
   font-size: 28px; font-weight: 600; margin: 0;
   background: var(--brand-gradient);
@@ -965,23 +982,23 @@ onActivated(() => { loadOrders(); loadPaymentMethods() })
 .value.amount { color: var(--success-color); font-weight: 600; }
 
 @media (max-width: 767px) {
-  /* 手机端横向留白由全局统一（10px），页面根容器再叠加就变成白边浪费。
-     admin-mobile.css 用 [class$="-container"] 塞了 12px !important，这里按契约清零。 */
+  /* 手机端左右留白由全局统一给（mobile-app-ui.css 10px），页面根容器不再自带左右 padding，
+     只保留一点纵向节奏（!important 是为了压过全局 --user-mobile-gutter 的 0） */
   .order-container { padding: 8px 0 12px !important; }
   .header { margin-bottom: 4px; }
   .title { font-size: 20px; }
   /* 吸顶筛选条：全局 .app-sticky-toolbar 用的是 -12px 负边距（给卡片内边距留位置），
      这里列表已贴齐卡片，改成 0 边距避免被撑出横向溢出 */
   .order-filters.app-sticky-toolbar { margin: 0 0 10px; padding: 8px 12px; }
-  /* 旧层 user-mobile.css 用 !important 把卡片压回 8px 圆角，这里拉回契约的 App 风格 */
-  .order-container :deep(.mobile-card),
-  .order-container :deep(.n-card) {
-    border-radius: 16px !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
+  /* 状态 chip 单行横向滑动（App 里筛选条的常见做法），吸顶栏只占一行高、不挡住列表 */
+  .order-filters :deep(.n-space) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
-  .order-container :deep(.mobile-card .card-actions .n-button) { border-radius: 10px !important; }
-  /* [class$="-container"] 也会命中 naive 的 .n-spin-container，把卡片挤窄 */
-  .order-container :deep(.n-spin-container) { padding: 0 !important; }
+  .order-filters :deep(.n-space::-webkit-scrollbar) { display: none; }
+  .order-filters :deep(.n-button) { flex-shrink: 0; }
   /* 分页按钮默认 28×28，手指点不准：手机端撑到 40px（父级已 flex-wrap，不会横向撑破） */
   .order-container :deep(.n-pagination .n-pagination-item) { min-width: 40px; height: 40px; }
   .pm-card { padding: 10px 12px; border-radius: 10px; }

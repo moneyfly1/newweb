@@ -277,13 +277,85 @@ select:-webkit-autofill {
     color: color-mix(in srgb, var(--text-color-secondary, #9ca3af) 70%, transparent);
   }
 
+  /* ---------- 让页面用「文档滚动」，而不是 naive 的滚动容器 ----------
+     原因：naive 的 .n-scrollbar-container 是 overflow:scroll 的滚动容器，
+     但它自身不滚（滚动实际发生在文档上）。position:sticky 会以「最近的滚动祖先」
+     为参照，于是吸顶工具条根本不吸附 —— 实测滚动 339px 后工具条跟着内容跑到了 -281。
+     把页面级滚动容器放开后，文档成为唯一滚动者，sticky 正常吸附，
+     顺带也更接近 iOS 的滚动手感（地址栏可收起、有回弹）。
+     注意只放开 .mobile-*-content 直接那一层，抽屉/弹窗内部的滚动区不受影响。 */
+  .mobile-admin-content > .n-scrollbar,
+  .user-mobile-content > .n-scrollbar,
+  .mobile-admin-content > .n-scrollbar > .n-scrollbar-container,
+  .user-mobile-content > .n-scrollbar > .n-scrollbar-container,
+  .mobile-admin-content > .n-scrollbar > .n-scrollbar-container > .n-scrollbar-content,
+  .user-mobile-content > .n-scrollbar > .n-scrollbar-container > .n-scrollbar-content {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* ---------- 打通 sticky 的祖先链 ----------
+     滚动实际发生在文档上，但中间几层 naive 布局容器带 overflow:hidden/auto，
+     它们会成为 sticky 的「参照滚动框」而且自己并不滚动 —— 于是顶栏与吸顶工具条
+     全都吸不住（实测滚 500px 后顶栏跑到 -500）。这里把它们放开。 */
+  .admin-layout-root > .n-layout,
+  .admin-layout-root > .n-layout > .n-layout-scroll-container,
+  .admin-layout-root > .n-layout > .n-layout-scroll-container > .n-layout-content,
+  .user-layout-root > .n-layout,
+  .user-layout-root > .n-layout > .n-layout-scroll-container,
+  .user-layout-root > .n-layout > .n-layout-scroll-container > .n-layout-content {
+    overflow: visible !important;
+  }
+  /* 顶栏高度（吸顶工具条要贴在它下面） */
+  :root {
+    --mobile-header-h: 52px;
+  }
+
+  /* ---------- 卡片不能再裁剪内容 ----------
+     unified.css 给 .admin-main-card/.page-card 写了 overflow:hidden 用来裁圆角，
+     副作用是卡片内部的吸顶工具条彻底失效（sticky 的参照框成了这张卡片）。
+     手机端放开裁剪，同时把卡片头部自己补上圆角，视觉不变。 */
+  .admin-main-card,
+  .main-card,
+  .page-card,
+  .n-card {
+    overflow: visible !important;
+  }
+  .mobile-admin-content .n-card > .n-card-header,
+  .user-mobile-content .n-card > .n-card-header,
+  .mobile-admin-content .mobile-card > .card-header,
+  .user-mobile-content .mobile-card > .card-header {
+    border-top-left-radius: 16px !important;
+    border-top-right-radius: 16px !important;
+  }
+  /* 卡片里的表格/长内容仍然要能横向滚动，不要把页面撑宽 */
+  .mobile-admin-content .n-card > .n-card__content,
+  .user-mobile-content .n-card > .n-card__content {
+    overflow-x: clip;
+  }
+
+  /* 吸顶工具条的「行程」问题：
+     position:sticky 只能在**直接父元素**的盒子里移动，如果工具条被包在一个
+     高度≈自身的短 wrapper 里（实测 /admin/invites 是 145px 的 div 包着 139px 的工具条），
+     它就没有滚动行程，滚起来等于普通元素（实测滚 500px 后跑到 -368）。
+     这类 wrapper 通常是没有任何 class 的纯排版 div，且里面只有工具条一个孩子，
+     把它变成 display:contents（不生成盒子）就能让 sticky 的包含块上升到卡片内容层。
+     只对「无 class 且只有工具条一个子元素」的 div 生效，避免误伤真正承载布局/内边距的容器。 */
+  div:not([class]):has(> .app-sticky-toolbar):not(:has(> *:not(.app-sticky-toolbar))) {
+    display: contents !important;
+  }
+
   /* 吸顶工具条：滚动时筛选/搜索不消失 */
   .app-sticky-toolbar {
     position: sticky;
-    top: 0;
+    /* 顶栏本身吸顶（52px），工具条贴它下面 */
+    top: var(--mobile-header-h, 52px);
     z-index: 9;
-    margin: -4px -12px 10px;
-    padding: 8px 12px;
+    /* 不要用负边距做「出血」：页面根容器已经不再有左右内边距，
+       -12px 会把工具条撑出屏幕（实测就是 element-overflow-x）。 */
+    margin: 0 0 10px;
+    padding: 8px 0;
     background: color-mix(in srgb, var(--bg-color, #fff) 88%, transparent);
     backdrop-filter: saturate(180%) blur(14px);
     -webkit-backdrop-filter: saturate(180%) blur(14px);

@@ -312,6 +312,55 @@ select:-webkit-autofill {
     --mobile-header-h: 52px;
   }
 
+  /* ---------- 卡片内的「标签 / 值」两列，统一左对齐 ----------
+     用户反馈：手机端用户列表「上面标题靠左、下面用户信息靠右，看起来是错乱」。
+     原因是卡片头部（标题、标签）左对齐，而行内的值却是右对齐（还带省略号截断），
+     同一张卡片里出现两套对齐方式，长内容（邮箱、订阅地址）被截得只剩半截。
+     这里统一成 App 里常见的「左灰标签 + 左深值」两列：标签列固定宽度，
+     值列左对齐并允许换行，整卡左边缘对齐、没有右边参差的锯齿。 */
+  body .mobile-admin-content .mobile-card .card-row,
+  body .user-mobile-content .mobile-card .card-row,
+  body .mobile-card .card-row {
+    display: grid !important;
+    grid-template-columns: 88px minmax(0, 1fr) !important;
+    gap: 10px !important;
+    align-items: start !important;
+  }
+  /* 注意：admin-mobile.css / user-mobile.css 里各有同特异度、同样带 !important 的
+     text-align:right，只靠层叠顺序不稳，这里用 body 前缀把特异度提高一档。 */
+  body .mobile-admin-content .mobile-card .card-row .label,
+  body .mobile-admin-content .mobile-card .card-row .card-label,
+  body .mobile-admin-content .mobile-card .card-row > span:first-child,
+  body .user-mobile-content .mobile-card .card-row .label,
+  body .user-mobile-content .mobile-card .card-row .card-label,
+  body .user-mobile-content .mobile-card .card-row > span:first-child,
+  body .mobile-card .card-row .label,
+  body .mobile-card .card-row .card-label,
+  body .mobile-card .card-row > span:first-child {
+    text-align: left !important;
+    white-space: normal !important;
+    min-width: 0 !important;
+  }
+  body .mobile-admin-content .mobile-card .card-row .value,
+  body .mobile-admin-content .mobile-card .card-row .card-value,
+  body .mobile-admin-content .mobile-card .card-row > span:last-child,
+  body .mobile-admin-content .mobile-card .card-row > div:last-child,
+  body .user-mobile-content .mobile-card .card-row .value,
+  body .user-mobile-content .mobile-card .card-row .card-value,
+  body .user-mobile-content .mobile-card .card-row > span:last-child,
+  body .user-mobile-content .mobile-card .card-row > div:last-child,
+  body .mobile-card .card-row .value,
+  body .mobile-card .card-row .card-value,
+  body .mobile-card .card-row > span:last-child,
+  body .mobile-card .card-row > div:last-child {
+    text-align: left !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    min-width: 0 !important;
+  }
+
   /* ---------- 选中态：整卡变色 ----------
      用户反馈「点了列表只在前面看到一个颜色，看不出整条被选中」。原因有两个：
      ① 卡片自己的白底/页面旧的 nth-child 白底把选中底色盖掉了（这里的 !important

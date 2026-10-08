@@ -40,19 +40,30 @@
         </div>
       </div>
 
+      <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方）。
+           手机端「有列表没全选」的问题由这一条栏统一解决。 -->
+      <BatchSelectBar
+        :total="selection.total.value"
+        :selected-count="selection.count.value"
+        :all-selected="selection.allSelected.value"
+        :indeterminate="selection.indeterminate.value"
+        :disabled="loading"
+        label="条订阅"
+        @toggle-all="selection.toggleAll"
+        @clear="selection.clear"
+      >
+        <n-button size="small" :disabled="!selection.count.value" @click="handleBatchClearDevices">清理设备</n-button>
+        <n-button size="small" type="warning" :disabled="!selection.count.value" @click="handleBatchDisable">批量禁用</n-button>
+        <n-button size="small" type="success" :disabled="!selection.count.value" @click="handleBatchEnable">批量启用</n-button>
+        <n-button size="small" type="info" :disabled="!selection.count.value" @click="handleBatchEmail">批量发送</n-button>
+        <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDelete">批量删除</n-button>
+      </BatchSelectBar>
+
       <!-- Desktop Table -->
       <template v-if="!appStore.isMobile">
-        <n-space v-if="checkedRowKeys.length > 0" align="center" class="batch-operations">
-          <span class="batch-selected-text">已选择 {{ checkedRowKeys.length }} 项</span>
-          <n-button size="small" type="success" @click="handleBatchEnable">批量启用</n-button>
-          <n-button size="small" type="warning" @click="handleBatchDisable">批量禁用</n-button>
-          <n-button size="small" type="info" @click="handleBatchEmail">批量发送</n-button>
-          <n-button size="small" type="error" @click="handleBatchDelete">批量删除</n-button>
-        </n-space>
         <n-data-table remote class="unified-admin-table" :columns="columns" :data="tableData" :loading="loading" :pagination="pagination" :bordered="false" :single-line="false" :scroll-x="1730"
           :row-key="(row) => row.id"
-          :checked-row-keys="checkedRowKeys"
-          @update:checked-row-keys="(keys) => { checkedRowKeys = keys }"
+          v-model:checked-row-keys="checkedRowKeys"
           @update:page="(p) => { pagination.page = p; fetchData() }"
           @update:page-size="(ps) => { pagination.pageSize = ps; pagination.page = 1; fetchData() }"
           @update:sorter="handleSorterChange" />
@@ -63,7 +74,17 @@
         <n-spin :show="loading">
           <div v-if="tableData.length === 0 && !loading" class="empty-state">暂无数据</div>
           <div class="mobile-card-list">
-            <div v-for="row in tableData" :key="row.id" class="sub-card">
+            <div
+              v-for="row in tableData"
+              :key="row.id"
+              class="sub-card is-selectable"
+              :class="{ 'is-selected': selection.isSelected(row) }"
+              @click="selection.toggle(row)"
+            >
+              <!-- 左侧复选框：全选由公共组件 BatchSelectBar 提供 -->
+              <div class="card-check" @click.stop>
+                <n-checkbox :checked="selection.isSelected(row)" @update:checked="() => selection.toggle(row)" />
+              </div>
               <div class="sub-card-header">
                 <div class="sub-user-info">
                   <div class="sub-avatar">{{ (row.username || row.user_email || 'U').charAt(0).toUpperCase() }}</div>
@@ -87,7 +108,7 @@
                   <span class="sub-section-label">到期时间</span>
                   <span class="sub-section-value" :style="{ color: getRemainingDaysColor(row.expire_time) }">{{ getRemainingDays(row.expire_time) }}</span>
                 </div>
-                <div class="sub-btn-row sub-btn-row-5">
+                <div class="sub-btn-row sub-btn-row-5" @click.stop>
                   <n-button size="tiny" @click="inlineAddTime(row, 30)">+1月</n-button>
                   <n-button size="tiny" @click="inlineAddTime(row, 90)">+3月</n-button>
                   <n-button size="tiny" @click="inlineAddTime(row, 180)">+半年</n-button>
@@ -95,10 +116,10 @@
                   <n-button size="tiny" @click="inlineAddTime(row, 730)">+2年</n-button>
                 </div>
                 <template v-if="row._editingExpire">
-                  <n-date-picker v-model:value="row._expireTs" type="datetime" size="small" class="full-width date-picker-spacing" clearable @update:value="(v) => { inlineSetExpire(row, v); row._editingExpire = false }" />
+                  <n-date-picker v-model:value="row._expireTs" type="datetime" size="small" class="full-width date-picker-spacing" clearable @click.stop @update:value="(v) => { inlineSetExpire(row, v); row._editingExpire = false }" />
                 </template>
                 <template v-else>
-                  <n-button size="tiny" quaternary block @click="row._editingExpire = true" class="date-picker-spacing">{{ formatDateTime(row.expire_time) }}</n-button>
+                  <n-button size="tiny" quaternary block class="date-picker-spacing" @click.stop="row._editingExpire = true">{{ formatDateTime(row.expire_time) }}</n-button>
                 </template>
               </div>
               <div class="sub-section" :class="{ 'section-overlimit': isOverlimit(row) }">
@@ -106,7 +127,7 @@
                   <span class="sub-section-label">设备限制</span>
                   <span class="sub-section-value">{{ row.current_devices || 0 }} / {{ row.device_limit || 0 }}</span>
                 </div>
-                <div class="sub-btn-row sub-btn-row-6">
+                <div class="sub-btn-row sub-btn-row-6" @click.stop>
                   <n-button size="tiny" type="error" @click="handleClearDevices(row)">清理</n-button>
                   <n-button size="tiny" @click="inlineAddDevice(row, 2)">+2</n-button>
                   <n-button size="tiny" @click="inlineAddDevice(row, 5)">+5</n-button>
@@ -120,6 +141,7 @@
                     v-model:value="row._deviceLimitEdit"
                     :min="0" :max="999" size="small" style="width: 110px"
                     placeholder="输入上限"
+                    @click.stop
                     @blur="() => inlineSetDevice(row, row._deviceLimitEdit)"
                     @keyup.enter="() => inlineSetDevice(row, row._deviceLimitEdit)"
                   />
@@ -131,7 +153,7 @@
                 <div class="sub-section-row">
                   <span class="sub-section-label">备注</span>
                 </div>
-                <n-input v-model:value="row.user_notes" type="text" size="small" placeholder="输入备注..." @blur="saveNotes(row)" @keyup.enter="saveNotes(row)" />
+                <n-input v-model:value="row.user_notes" type="text" size="small" placeholder="输入备注..." @click.stop @blur="saveNotes(row)" @keyup.enter="saveNotes(row)" />
               </div>
               <div class="sub-section">
                 <div class="sub-section-row">
@@ -139,7 +161,7 @@
                   <span class="sub-section-value">通用 {{ row.universal_count || 0 }} · Clash {{ row.clash_count || 0 }}</span>
                 </div>
               </div>
-              <div class="sub-action-grid">
+              <div class="sub-action-grid" @click.stop>
                 <div class="sub-action-item" @click="handleViewDetail(row)">
                   <div class="sub-action-icon" style="background:#f0f0ff;color:#667eea"><n-icon :size="20"><SearchOutline /></n-icon></div>
                   <span>详情</span>
@@ -197,7 +219,7 @@
   </div>
 </template>
 <script setup>
-import { ref, h, onActivated, onMounted, nextTick, watch } from 'vue'
+import { ref, h, computed, onActivated, onMounted, nextTick, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NDatePicker, NInputNumber, NInput, NDropdown, useMessage, useDialog } from 'naive-ui'
 import { SearchOutline, RefreshOutline, PersonOutline, MailOutline, PowerOutline, TrashOutline, CopyOutline, QrCodeOutline } from '@vicons/ionicons5'
@@ -205,6 +227,8 @@ import QRCode from 'qrcode'
 import { useRouter, useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatDateTime } from '@/utils/date'
 import {
@@ -233,7 +257,14 @@ const pagination = ref({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: tr
 const showSingleQRModal = ref(false)
 const singleQRUrl = ref('')
 const userDetailDrawerRef = ref(null)
-const checkedRowKeys = ref([])
+
+// 全选 / 多选：全站统一实现（桌面表格与手机卡片共用同一份选择状态）
+const selection = useBatchSelection(() => tableData.value)
+// Naive 表格要的是数组，这里做一层桥接，保证桌面表格勾选与批量栏状态完全一致
+const checkedRowKeys = computed({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
 
 const statusOptions = [
   { label: '全部', value: null }, { label: '活跃', value: 'active' },
@@ -607,51 +638,117 @@ const handleClearDevices = (row) => {
 }
 
 // Batch operations
-const handleBatchEnable = () => {
-  dialog.warning({ title: '批量启用', content: `确定启用选中的 ${checkedRowKeys.value.length} 个用户？`, positiveText: '确定', negativeText: '取消',
+// 统一入口：确认框写明「将影响 N 项」→ Promise.allSettled 逐条调单条接口
+// → 汇总「成功 X / 失败 Y」→ 清空选择 → 刷新列表
+const runBatch = async ({ title, content, rows, action, type = 'warning', positiveText = '确定', onDone }) => {
+  if (!rows.length) return
+  dialog[type]({
+    title,
+    content,
+    positiveText,
+    negativeText: '取消',
     onPositiveClick: async () => {
-      try {
-        const selected = tableData.value.filter(r => checkedRowKeys.value.includes(r.id))
-        await Promise.all(selected.filter(r => !r.is_active).map(r => toggleUserActive(r.user_id)))
-        message.success('批量启用完成'); checkedRowKeys.value = []; fetchData()
-      } catch { message.error('批量启用失败') }
+      const results = await Promise.allSettled(rows.map(row => action(row)))
+      const ok = results.filter(r => r.status === 'fulfilled').length
+      const fail = results.length - ok
+      if (fail === 0) message.success(`成功 ${ok} 项 / 失败 0 项`)
+      else if (ok === 0) message.error(`成功 0 项 / 失败 ${fail} 项`)
+      else message.warning(`成功 ${ok} 项 / 失败 ${fail} 项`)
+      if (onDone) onDone()
+      selection.clear()
+      fetchData()
     }
+  })
+}
+
+const handleBatchClearDevices = () => {
+  const rows = selection.selectedRows.value
+  runBatch({
+    title: '批量清理设备',
+    content: `将影响 ${rows.length} 项：清除这些订阅下的全部设备记录，用户需重新拉取订阅才能恢复在线设备。`,
+    rows,
+    action: row => clearSubscriptionDevices(row.id),
+  })
+}
+
+const handleBatchEnable = () => {
+  const all = selection.selectedRows.value
+  if (!all.length) return
+  // 接口是「切换」语义（toggle-active），只对当前已禁用的行调用，避免把启用中的用户反而禁用
+  const rows = all.filter(r => !r.is_active)
+  if (!rows.length) {
+    message.warning('选中的订阅都已是启用状态，无需启用')
+    return
+  }
+  if (rows.length < all.length) message.info(`已跳过 ${all.length - rows.length} 项已是启用状态的订阅`)
+  runBatch({
+    title: '批量启用',
+    content: `将影响 ${rows.length} 项：选中用户恢复使用，其未过期的订阅同步恢复。`,
+    rows,
+    action: row => toggleUserActive(row.user_id),
   })
 }
 
 const handleBatchDisable = () => {
-  const selected = tableData.value.filter(r => checkedRowKeys.value.includes(r.id))
-  const toDisable = selected.filter(r => r.is_active && r.user_id !== userStore.userInfo?.id)
-  if (toDisable.length === 0) {
-    message.warning(selected.some(r => r.user_id === userStore.userInfo?.id) ? '不能禁用自己，已跳过' : '没有可禁用的用户')
+  const all = selection.selectedRows.value
+  if (!all.length) return
+  // 不允许禁用当前登录账号（单条操作里已有同样保护）
+  const rows = all.filter(r => r.is_active && r.user_id !== userStore.userInfo?.id)
+  if (!rows.length) {
+    message.warning(all.some(r => r.user_id === userStore.userInfo?.id)
+      ? '选中的都是当前登录账号或已禁用，无法禁用'
+      : '选中的订阅都已是禁用状态，无需禁用')
     return
   }
-  if (selected.some(r => r.user_id === userStore.userInfo?.id)) message.info('已排除当前登录账号')
-  dialog.warning({ title: '批量禁用', content: `确定禁用选中的 ${toDisable.length} 个用户？`, positiveText: '确定', negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await Promise.all(toDisable.map(r => toggleUserActive(r.user_id)))
-        message.success('批量禁用完成'); checkedRowKeys.value = []; fetchData()
-      } catch { message.error('批量禁用失败') }
-    }
+  if (rows.length < all.length) message.info(`已跳过 ${all.length - rows.length} 项（当前登录账号 / 已禁用）`)
+  runBatch({
+    title: '批量禁用',
+    content: `将影响 ${rows.length} 项：选中用户立即无法登录，订阅同步停用。`,
+    rows,
+    action: row => toggleUserActive(row.user_id),
+    type: 'error',
+    positiveText: '禁用',
   })
 }
 
-const handleBatchEmail = async () => {
-  try {
-    await Promise.all(checkedRowKeys.value.map(id => sendSubscriptionEmail(id)))
-    message.success('批量发送完成'); checkedRowKeys.value = []
-  } catch { message.error('批量发送失败') }
+const handleBatchEmail = () => {
+  const rows = selection.selectedRows.value
+  runBatch({
+    title: '批量发送订阅邮件',
+    content: `将影响 ${rows.length} 项：向选中订阅的对应用户发送订阅邮件。`,
+    rows,
+    action: row => sendSubscriptionEmail(row.id),
+    type: 'info',
+    positiveText: '发送',
+  })
 }
 
+// 删除风险最高：确认两次，且每次都写明影响条数
 const handleBatchDelete = () => {
-  dialog.error({ title: '批量删除', content: `确定删除选中的 ${checkedRowKeys.value.length} 个用户及其所有数据？不可恢复！`, positiveText: '删除', negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        const selected = tableData.value.filter(r => checkedRowKeys.value.includes(r.id))
-        await Promise.all(selected.map(r => deleteUserFull(r.user_id)))
-        message.success('批量删除完成'); checkedRowKeys.value = []; fetchData()
-      } catch { message.error('批量删除失败') }
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  dialog.error({
+    title: '批量删除（1/2）',
+    content: `将影响 ${rows.length} 项：永久删除这 ${rows.length} 个用户及其订阅、订单等全部数据，不可恢复。是否继续？`,
+    positiveText: '继续',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      dialog.error({
+        title: '批量删除（2/2）请最后确认',
+        content: `最终确认：将永久删除 ${rows.length} 个用户及其全部数据，删除后无法找回。`,
+        positiveText: `永久删除 ${rows.length} 项`,
+        negativeText: '取消',
+        onPositiveClick: async () => {
+          const results = await Promise.allSettled(rows.map(row => deleteUserFull(row.user_id)))
+          const ok = results.filter(r => r.status === 'fulfilled').length
+          const fail = results.length - ok
+          if (fail === 0) message.success(`成功 ${ok} 项 / 失败 0 项`)
+          else if (ok === 0) message.error(`成功 0 项 / 失败 ${fail} 项`)
+          else message.warning(`成功 ${ok} 项 / 失败 ${fail} 项`)
+          selection.clear()
+          fetchData()
+        }
+      })
     }
   })
 }
@@ -689,7 +786,29 @@ watch(() => route.query.search, (searchVal) => {
 :deep(.user-type-tags) { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 /* Mobile cards */
 .mobile-card-list { display: flex; flex-direction: column; gap: 12px; }
-.sub-card { background: var(--bg-color, #fff); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.sub-card { background: var(--bg-color, #fff); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border: 1px solid transparent; }
+
+/* ---------- 可选中（全选/多选）----------
+   .sub-card 是本页自定义卡片结构，公共 .mobile-card 的选中态样式不适用，
+   这里自己实现：左侧复选框留位 + 选中时整块变色（不是左侧半截色条）。 */
+.sub-card.is-selectable { position: relative; padding-left: 38px; }
+.sub-card .card-check {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.sub-card.is-selectable .sub-card-header { padding-left: 2px; }
+.sub-card.is-selected {
+  background: color-mix(in srgb, var(--primary-color, #4f46e5) 14%, #fff);
+  border-color: color-mix(in srgb, var(--primary-color, #4f46e5) 70%, var(--border-color, #e5e7eb));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color, #4f46e5) 18%, transparent);
+}
 .sub-card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-color, #f0f0f0); }
 .sub-user-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .sub-avatar { width: 36px; height: 36px; border-radius: 50%; background: #667eea; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px; flex-shrink: 0; }

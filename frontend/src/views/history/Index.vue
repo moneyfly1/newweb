@@ -25,6 +25,22 @@
       </n-grid>
 
       <n-card :bordered="false">
+        <!-- 全选 / 批量操作：这是只读列表（没有任何行内操作），按契约 §2.1 第 3 条
+             提供「复制所选」作为批量动作：把所选记录拼成「时间 IP 设备 地点」一行一条。 -->
+        <BatchSelectBar
+          :total="selection.total.value"
+          :selected-count="selection.count.value"
+          :all-selected="selection.allSelected.value"
+          :indeterminate="selection.indeterminate.value"
+          label="条登录记录"
+          @toggle-all="selection.toggleAll"
+          @clear="selection.clear"
+        >
+          <n-button size="small" type="primary" :disabled="!selection.count.value" @click="handleCopySelected">
+            复制所选
+          </n-button>
+        </BatchSelectBar>
+
         <!-- Desktop table -->
         <n-data-table v-if="!appStore.isMobile" remote
           :columns="columns"
@@ -33,13 +49,24 @@
           :pagination="pagination"
           :bordered="false"
           :single-line="false"
+          :row-key="rowKey"
+          v-model:checked-row-keys="checkedRowKeys"
         />
         <!-- Mobile card list -->
         <div v-else>
           <n-spin :show="loading">
             <div v-if="!loading && records.length === 0" class="mobile-empty">暂无登录记录</div>
             <div v-else class="mobile-card-list">
-              <div v-for="(record, idx) in records" :key="idx" class="mobile-card">
+              <div
+                v-for="record in records"
+                :key="record._key"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selection.isSelected(record) }"
+                @click="selection.toggle(record)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selection.isSelected(record)" @update:checked="() => selection.toggle(record)" />
+                </div>
                 <div class="card-row">
                   <span class="label">时间</span>
                   <span class="value">{{ formatDateTime(record.login_time) }}</span>
@@ -79,17 +106,31 @@
 
 <script setup lang="tsx">
 import { ref, reactive, onMounted, h, computed } from 'vue'
-import { NTag, useMessage } from 'naive-ui'
+import { NButton, NTag, useMessage } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import { getLoginHistory } from '@/api/user'
 import { useAppStore } from '@/stores/app'
 import { formatLocation } from '@/utils/i18n'
 import { formatDateTime } from '@/utils/date'
+import { copyToClipboard } from '@/utils/clipboard'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import { usePageLoading } from '@/composables/usePageLoading'
 
 const appStore = useAppStore()
 const message = useMessage()
 const { loading, beginLoad, endLoad } = usePageLoading()
 const records = ref<any[]>([])
+
+// 全选 / 多选：唯一的选择状态，桌面表格与手机卡片共用（公共组件 useBatchSelection + BatchSelectBar）。
+// 登录记录没有后端 id，所以加载时给每条补一个「页码 + 序号」的稳定行键（翻页后旧选择自动失效）。
+const selection = useBatchSelection<any>(() => records.value, { getId: (row: any) => row._key })
+const rowKey = (row: any) => row._key
+// 桌面表格仍需数组形式的勾选键，用 computed 桥接，保证与手机端卡片状态一致
+const checkedRowKeys = computed<string[]>({
+  get: () => [...selection.selectedKeys.value] as string[],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) },
+})
 
 const pagination = reactive({
   page: 1,
@@ -115,7 +156,8 @@ const stats = computed(() => {
   return { total, uniqueIps: ips.size, lastLogin: last }
 })
 
-const columns = [
+const columns: DataTableColumns<any> = [
+  { type: 'selection' },
   {
     title: '登录时间',
     key: 'login_time',
@@ -148,12 +190,29 @@ const loadHistory = async () => {
   beginLoad(records.value.length > 0)
   try {
     const res = await getLoginHistory({ page: pagination.page, page_size: pagination.pageSize })
-    records.value = res.data?.items || []
+    // 补稳定行键：登录记录接口不返回 id，用「页码 + 行内序号」拼一个
+    records.value = (res.data?.items || []).map((r: any, i: number) => ({ ...r, _key: `p${pagination.page}-${i}` }))
     pagination.itemCount = res.data?.total || 0
   } catch (error: any) {
     message.error(error.message || '获取登录历史失败')
   } finally {
     endLoad()
+  }
+}
+
+// 只读列表的批量动作：契约 §2.1 第 3 条——把所选行拼成「时间 IP 设备 地点」，一行一条复制
+const handleCopySelected = async () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  const text = rows
+    .map(r => [formatDateTime(r.login_time), r.ip_address || '-', r.user_agent || '-', formatLocation(r.location)].join(' '))
+    .join('\n')
+  const ok = await copyToClipboard(text)
+  if (ok) {
+    message.success(`已复制 ${rows.length} 条登录记录`)
+    selection.clear()
+  } else {
+    message.error('复制失败，请手动复制')
   }
 }
 
@@ -213,5 +272,8 @@ onMounted(() => {
   .stat-value-sm { font-size: 14px; }
   /* 分页按钮默认 28×28，手指点不准：手机端撑到 40px（父级已 flex-wrap，不会横向撑破） */
   .history-page :deep(.n-pagination .n-pagination-item) { min-width: 40px; height: 40px; }
+  /* 可选中卡片：左侧给复选框让出 44px（全局把用户端卡片 padding 改成 0 !important，
+     这里同权重压过，否则复选框会压在「时间」这一行上） */
+  .history-page :deep(.mobile-card.is-selectable) { padding-left: 44px !important; }
 }
 </style>

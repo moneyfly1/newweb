@@ -6,6 +6,22 @@
         <p class="subtitle">当前余额：<span class="balance-val">{{ formatCurrency(balance) }}</span></p>
       </div>
 
+      <!-- 全选 / 批量操作：公共组件（桌面在列表上方，手机端自动变成固定在底部的操作栏）。
+           只有「待支付」的充值记录能取消，所以选择范围就是待支付列表本身。 -->
+      <BatchSelectBar
+        :total="selection.total.value"
+        :selected-count="selection.count.value"
+        :all-selected="selection.allSelected.value"
+        :indeterminate="selection.indeterminate.value"
+        label="条待支付充值"
+        @toggle-all="selection.toggleAll"
+        @clear="selection.clear"
+      >
+        <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchCancel">
+          批量取消
+        </n-button>
+      </BatchSelectBar>
+
       <!-- 待支付充值：手机端走 App 卡片列表（每张卡一个待支付订单） -->
       <section v-if="appStore.isMobile && pendingRecords.length > 0" class="mb-pending">
         <div class="mb-section-head">
@@ -13,7 +29,16 @@
           <span class="mb-section-title">待支付充值（{{ pendingRecords.length }}）</span>
         </div>
         <div class="mobile-card-list">
-          <div v-for="r in pendingRecords" :key="r.id" class="mobile-card">
+          <div
+            v-for="r in pendingRecords"
+            :key="r.id"
+            class="mobile-card is-selectable"
+            :class="{ 'is-selected': selection.isSelected(r) }"
+            @click="selection.toggle(r)"
+          >
+            <div class="card-check" @click.stop>
+              <n-checkbox :checked="selection.isSelected(r)" @update:checked="() => selection.toggle(r)" />
+            </div>
             <div class="card-header mb-card-head">
               <span class="mb-amount">¥{{ formatAmount(r.amount) }}</span>
               <n-tag type="warning" size="small" :bordered="false">待支付</n-tag>
@@ -22,7 +47,7 @@
               <span class="card-label">下单时间</span>
               <span>{{ formatDateTime(r.created_at) }}</span>
             </div>
-            <div class="card-actions mb-card-actions">
+            <div class="card-actions mb-card-actions" @click.stop>
               <n-button size="small" type="primary" @click="openPay(r)">继续支付</n-button>
               <n-button size="small" @click="handleCancel(r)">取消</n-button>
             </div>
@@ -37,15 +62,29 @@
           <span class="pending-title">有 {{ pendingRecords.length }} 条充值待支付</span>
         </div>
         <div class="pending-list">
-          <div v-for="r in pendingRecords" :key="r.id" class="pending-item">
+          <div
+            v-for="r in pendingRecords"
+            :key="r.id"
+            class="pending-item"
+            :class="{ 'is-selected': selection.isSelected(r) }"
+            @click="selection.toggle(r)"
+          >
+            <n-checkbox
+              class="pending-check"
+              :checked="selection.isSelected(r)"
+              @click.stop
+              @update:checked="() => selection.toggle(r)"
+            />
             <div class="pending-info">
               <span class="pending-amount">¥{{ formatAmount(r.amount) }}</span>
               <span class="pending-time">{{ formatDateTime(r.created_at) }}</span>
             </div>
-            <n-space :size="8">
-              <n-button size="small" type="primary" @click="openPay(r)">继续支付</n-button>
-              <n-button size="small" @click="handleCancel(r)">取消</n-button>
-            </n-space>
+            <div @click.stop>
+              <n-space :size="8">
+                <n-button size="small" type="primary" @click="openPay(r)">继续支付</n-button>
+                <n-button size="small" @click="handleCancel(r)">取消</n-button>
+              </n-space>
+            </div>
           </div>
         </div>
       </n-card>
@@ -270,6 +309,8 @@ import { formatAmount, formatCurrency } from '@/utils/amount'
 import { getErrorMessage } from '@/utils/error'
 import { formatDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 import { usePageLoading } from '@/composables/usePageLoading'
 
 const message = useMessage()
@@ -292,6 +333,11 @@ const showPayDrawer = ref(false)
 const pendingTarget = ref<any>(null)
 const pendingPayMethodId = ref<number | null>(null)
 const payingPending = ref(false)
+
+// 全选 / 多选：唯一的选择状态，桌面待支付列表与手机卡片共用
+//（公共组件 useBatchSelection + BatchSelectBar）。这个列表本身就全是待支付记录，
+// 所以选择范围即整表。
+const selection = useBatchSelection<any>(() => pendingRecords.value)
 
 // QR / 手机
 const showQrModal = ref(false)
@@ -542,6 +588,27 @@ const handleCancel = (record: any) => {
   })
 }
 
+// 批量取消待支付充值：后端没有用户端批量接口，按契约 §2.1 第 2 条逐条调单条接口，
+// 用 Promise.allSettled 保证一条失败不影响其余，完成后汇总「成功 X / 失败 Y」。
+const handleBatchCancel = () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  dialog.warning({
+    title: '批量取消充值',
+    content: `将影响 ${rows.length} 条待支付充值记录，取消后需重新发起充值。`,
+    positiveText: '确定取消', negativeText: '再想想',
+    onPositiveClick: async () => {
+      const results = await Promise.allSettled(rows.map(r => cancelRecharge(r.id)))
+      const ok = results.filter(r => r.status === 'fulfilled').length
+      const fail = results.length - ok
+      if (ok > 0) message.success(`批量取消完成：成功 ${ok} 条`)
+      if (fail > 0) message.error(`批量取消部分失败：失败 ${fail} 条`)
+      selection.clear()
+      await loadData()
+    },
+  })
+}
+
 onUnmounted(() => { stopPolling() })
 onMounted(() => { loadData() })
 </script>
@@ -562,7 +629,13 @@ onMounted(() => { loadData() })
 .pending-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .pending-title { font-size: 15px; font-weight: 600; color: #b76e00; }
 .pending-list { display: flex; flex-direction: column; gap: 10px; }
-.pending-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--bg-color); border-radius: 12px; border: 1px solid var(--warning-color); }
+.pending-item { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 12px 14px; background: var(--bg-color); border-radius: 12px; border: 1px solid var(--warning-color); cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease; }
+/* 桌面端选中态：整块变色（与手机端 .mobile-card.is-selected 的视觉语言一致） */
+.pending-item.is-selected {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--bg-color));
+}
+.pending-check { flex-shrink: 0; }
 
 .pending-info { display: flex; flex-direction: column; gap: 2px; }
 .pending-amount { font-size: 16px; font-weight: 700; color: var(--success-color); }

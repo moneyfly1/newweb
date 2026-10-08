@@ -12,8 +12,21 @@
           确定清空「{{ currentTabText }}」的全部记录吗？此操作不可恢复！
         </n-popconfirm>
       </template>
-      <n-tabs type="line" animated @update:value="handleTabChange">
+      <n-tabs type="line" animated display-directive="show" @update:value="handleTabChange">
         <n-tab-pane name="audit" tab="审计日志">
+          <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方）。
+               只读日志没有行内操作，按契约第 2.1 节第 3 条提供「复制所选」。 -->
+          <BatchSelectBar
+            :total="selections.audit.total.value"
+            :selected-count="selections.audit.count.value"
+            :all-selected="selections.audit.allSelected.value"
+            :indeterminate="selections.audit.indeterminate.value"
+            label="条记录"
+            @toggle-all="selections.audit.toggleAll"
+            @clear="selections.audit.clear"
+          >
+            <n-button size="small" type="primary" :disabled="!selections.audit.count.value" @click="copyTab('audit')">复制所选</n-button>
+          </BatchSelectBar>
           <template v-if="!appStore.isMobile">
             <n-data-table
               remote
@@ -24,12 +37,23 @@
               :bordered="false"
               :scroll-x="1100"
               :single-line="false"
+              :row-key="(row: any) => row.id"
+              v-model:checked-row-keys="auditCheckedKeys"
               @update:sorter="handleAuditSorterChange"
             />
           </template>
           <template v-else>
             <div class="mobile-card-list">
-              <div v-for="item in auditData" :key="item.id" class="mobile-card">
+              <div
+                v-for="item in auditData"
+                :key="item.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selections.audit.isSelected(item) }"
+                @click="selections.audit.toggle(item)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selections.audit.isSelected(item)" @update:checked="() => selections.audit.toggle(item)" />
+                </div>
                 <div class="card-header">
                   <span class="card-title">ID: {{ item.id }}</span>
                 </div>
@@ -57,6 +81,19 @@
         </n-tab-pane>
 
         <n-tab-pane name="login" tab="登录日志">
+          <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方）。
+               只读日志没有行内操作，按契约第 2.1 节第 3 条提供「复制所选」。 -->
+          <BatchSelectBar
+            :total="selections.login.total.value"
+            :selected-count="selections.login.count.value"
+            :all-selected="selections.login.allSelected.value"
+            :indeterminate="selections.login.indeterminate.value"
+            label="条记录"
+            @toggle-all="selections.login.toggleAll"
+            @clear="selections.login.clear"
+          >
+            <n-button size="small" type="primary" :disabled="!selections.login.count.value" @click="copyTab('login')">复制所选</n-button>
+          </BatchSelectBar>
           <template v-if="!appStore.isMobile">
             <n-data-table
               remote
@@ -65,12 +102,23 @@
               :loading="loginLoading"
               :pagination="loginPagination"
               :bordered="false"
+              :row-key="(row: any) => row.id"
+              v-model:checked-row-keys="loginCheckedKeys"
               @update:sorter="handleLoginSorterChange"
             />
           </template>
           <template v-else>
             <div class="mobile-card-list">
-              <div v-for="item in loginData" :key="item.id" class="mobile-card">
+              <div
+                v-for="item in loginData"
+                :key="item.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selections.login.isSelected(item) }"
+                @click="selections.login.toggle(item)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selections.login.isSelected(item)" @update:checked="() => selections.login.toggle(item)" />
+                </div>
                 <div class="card-header">
                   <span class="card-title">ID: {{ item.id }}</span>
                   <n-tag :type="item.login_status === 'success' ? 'success' : 'error'" size="small">{{ translateLoginStatus(item.login_status) }}</n-tag>
@@ -98,6 +146,19 @@
         </n-tab-pane>
 
         <n-tab-pane name="registration" tab="注册日志">
+          <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方）。
+               只读日志没有行内操作，按契约第 2.1 节第 3 条提供「复制所选」。 -->
+          <BatchSelectBar
+            :total="selections.registration.total.value"
+            :selected-count="selections.registration.count.value"
+            :all-selected="selections.registration.allSelected.value"
+            :indeterminate="selections.registration.indeterminate.value"
+            label="条记录"
+            @toggle-all="selections.registration.toggleAll"
+            @clear="selections.registration.clear"
+          >
+            <n-button size="small" type="primary" :disabled="!selections.registration.count.value" @click="copyTab('registration')">复制所选</n-button>
+          </BatchSelectBar>
           <template v-if="!appStore.isMobile">
             <n-data-table
               remote
@@ -106,12 +167,23 @@
               :loading="registrationLoading"
               :pagination="registrationPagination"
               :bordered="false"
+              :row-key="(row: any) => row.id"
+              v-model:checked-row-keys="registrationCheckedKeys"
               @update:sorter="handleRegistrationSorterChange"
             />
           </template>
           <template v-else>
             <div class="mobile-card-list">
-              <div v-for="item in registrationData" :key="item.id" class="mobile-card">
+              <div
+                v-for="item in registrationData"
+                :key="item.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selections.registration.isSelected(item) }"
+                @click="selections.registration.toggle(item)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selections.registration.isSelected(item)" @update:checked="() => selections.registration.toggle(item)" />
+                </div>
                 <div class="card-header">
                   <span class="card-title">ID: {{ item.id }}</span>
                 </div>
@@ -137,6 +209,19 @@
         </n-tab-pane>
 
         <n-tab-pane name="subscription" tab="订阅日志">
+          <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方）。
+               只读日志没有行内操作，按契约第 2.1 节第 3 条提供「复制所选」。 -->
+          <BatchSelectBar
+            :total="selections.subscription.total.value"
+            :selected-count="selections.subscription.count.value"
+            :all-selected="selections.subscription.allSelected.value"
+            :indeterminate="selections.subscription.indeterminate.value"
+            label="条记录"
+            @toggle-all="selections.subscription.toggleAll"
+            @clear="selections.subscription.clear"
+          >
+            <n-button size="small" type="primary" :disabled="!selections.subscription.count.value" @click="copyTab('subscription')">复制所选</n-button>
+          </BatchSelectBar>
           <template v-if="!appStore.isMobile">
             <n-data-table
               remote
@@ -145,12 +230,23 @@
               :loading="subscriptionLoading"
               :pagination="subscriptionPagination"
               :bordered="false"
+              :row-key="(row: any) => row.id"
+              v-model:checked-row-keys="subscriptionCheckedKeys"
               @update:sorter="handleSubscriptionSorterChange"
             />
           </template>
           <template v-else>
             <div class="mobile-card-list">
-              <div v-for="item in subscriptionData" :key="item.id" class="mobile-card">
+              <div
+                v-for="item in subscriptionData"
+                :key="item.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selections.subscription.isSelected(item) }"
+                @click="selections.subscription.toggle(item)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selections.subscription.isSelected(item)" @update:checked="() => selections.subscription.toggle(item)" />
+                </div>
                 <div class="card-header">
                   <span class="card-title">ID: {{ item.id }}</span>
                 </div>
@@ -176,6 +272,19 @@
         </n-tab-pane>
 
         <n-tab-pane name="balance" tab="余额日志">
+          <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方）。
+               只读日志没有行内操作，按契约第 2.1 节第 3 条提供「复制所选」。 -->
+          <BatchSelectBar
+            :total="selections.balance.total.value"
+            :selected-count="selections.balance.count.value"
+            :all-selected="selections.balance.allSelected.value"
+            :indeterminate="selections.balance.indeterminate.value"
+            label="条记录"
+            @toggle-all="selections.balance.toggleAll"
+            @clear="selections.balance.clear"
+          >
+            <n-button size="small" type="primary" :disabled="!selections.balance.count.value" @click="copyTab('balance')">复制所选</n-button>
+          </BatchSelectBar>
           <template v-if="!appStore.isMobile">
             <n-data-table
               remote
@@ -184,12 +293,23 @@
               :loading="balanceLoading"
               :pagination="balancePagination"
               :bordered="false"
+              :row-key="(row: any) => row.id"
+              v-model:checked-row-keys="balanceCheckedKeys"
               @update:sorter="handleBalanceSorterChange"
             />
           </template>
           <template v-else>
             <div class="mobile-card-list">
-              <div v-for="item in balanceData" :key="item.id" class="mobile-card">
+              <div
+                v-for="item in balanceData"
+                :key="item.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selections.balance.isSelected(item) }"
+                @click="selections.balance.toggle(item)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selections.balance.isSelected(item)" @update:checked="() => selections.balance.toggle(item)" />
+                </div>
                 <div class="card-header">
                   <span class="card-title">ID: {{ item.id }}</span>
                 </div>
@@ -217,6 +337,19 @@
         </n-tab-pane>
 
         <n-tab-pane name="commission" tab="佣金日志">
+          <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方）。
+               只读日志没有行内操作，按契约第 2.1 节第 3 条提供「复制所选」。 -->
+          <BatchSelectBar
+            :total="selections.commission.total.value"
+            :selected-count="selections.commission.count.value"
+            :all-selected="selections.commission.allSelected.value"
+            :indeterminate="selections.commission.indeterminate.value"
+            label="条记录"
+            @toggle-all="selections.commission.toggleAll"
+            @clear="selections.commission.clear"
+          >
+            <n-button size="small" type="primary" :disabled="!selections.commission.count.value" @click="copyTab('commission')">复制所选</n-button>
+          </BatchSelectBar>
           <template v-if="!appStore.isMobile">
             <n-data-table
               remote
@@ -225,12 +358,23 @@
               :loading="commissionLoading"
               :pagination="commissionPagination"
               :bordered="false"
+              :row-key="(row: any) => row.id"
+              v-model:checked-row-keys="commissionCheckedKeys"
               @update:sorter="handleCommissionSorterChange"
             />
           </template>
           <template v-else>
             <div class="mobile-card-list">
-              <div v-for="item in commissionData" :key="item.id" class="mobile-card">
+              <div
+                v-for="item in commissionData"
+                :key="item.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selections.commission.isSelected(item) }"
+                @click="selections.commission.toggle(item)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selections.commission.isSelected(item)" @update:checked="() => selections.commission.toggle(item)" />
+                </div>
                 <div class="card-header">
                   <span class="card-title">ID: {{ item.id }}</span>
                 </div>
@@ -257,6 +401,19 @@
         </n-tab-pane>
 
         <n-tab-pane name="system" tab="系统日志">
+          <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方）。
+               只读日志没有行内操作，按契约第 2.1 节第 3 条提供「复制所选」。 -->
+          <BatchSelectBar
+            :total="selections.system.total.value"
+            :selected-count="selections.system.count.value"
+            :all-selected="selections.system.allSelected.value"
+            :indeterminate="selections.system.indeterminate.value"
+            label="条记录"
+            @toggle-all="selections.system.toggleAll"
+            @clear="selections.system.clear"
+          >
+            <n-button size="small" type="primary" :disabled="!selections.system.count.value" @click="copyTab('system')">复制所选</n-button>
+          </BatchSelectBar>
           <n-space style="margin-bottom: 12px">
             <n-select v-model:value="systemLevelFilter" :options="levelOptions" placeholder="级别" clearable style="width: 120px" @update:value="loadSystemLogs" />
             <n-select v-model:value="systemModuleFilter" :options="moduleOptions" placeholder="模块" clearable style="width: 140px" @update:value="loadSystemLogs" />
@@ -269,12 +426,23 @@
               :loading="systemLoading"
               :pagination="systemPagination"
               :bordered="false"
+              :row-key="(row: any) => row.id"
+              v-model:checked-row-keys="systemCheckedKeys"
               @update:sorter="handleSystemSorterChange"
             />
           </template>
           <template v-else>
             <div class="mobile-card-list">
-              <div v-for="item in systemData" :key="item.id" class="mobile-card">
+              <div
+                v-for="item in systemData"
+                :key="item.id"
+                class="mobile-card is-selectable"
+                :class="{ 'is-selected': selections.system.isSelected(item) }"
+                @click="selections.system.toggle(item)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selections.system.isSelected(item)" @update:checked="() => selections.system.toggle(item)" />
+                </div>
                 <div class="card-header">
                   <n-tag :type="item.level === 'error' ? 'error' : item.level === 'warn' ? 'warning' : 'info'" size="small">{{ item.level }}</n-tag>
                   <span style="font-size: 12px; color: var(--text-color-secondary)">{{ item.created_at }}</span>
@@ -310,6 +478,9 @@ import { clearLogs } from '@/api/admin'
 import { NCard, NTabs, NTabPane, NDataTable, NTag, NPagination, NSpace, NSelect, useMessage, type DataTableColumns } from 'naive-ui'
 import { getAuditLogs, getLoginLogs, getRegistrationLogs, getSubscriptionLogs, getBalanceLogs, getCommissionLogs, getSystemLogs } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { useBatchSelection, type BatchSelection } from '@/composables/useBatchSelection'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
+import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { translateLoginStatus, translateBalanceChangeType, translateCommissionType, parseDeviceInfo, formatLocation } from '@/utils/i18n'
 
 const appStore = useAppStore()
@@ -347,6 +518,7 @@ const auditPagination = reactive({
 })
 
 const auditColumns: DataTableColumns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 70, resizable: true, sorter: 'default' },
   { title: '管理员ID', key: 'user_id', width: 90, resizable: true },
   { title: '操作类型', key: 'action_type', width: 170, resizable: true },
@@ -378,6 +550,7 @@ const loginPagination = reactive({
 })
 
 const loginColumns: DataTableColumns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '用户ID', key: 'user_id', width: 100, resizable: true },
   { title: 'IP地址', key: 'ip_address', width: 140, resizable: true },
@@ -429,6 +602,7 @@ const registrationPagination = reactive({
 })
 
 const registrationColumns: DataTableColumns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '用户ID', key: 'user_id', width: 100, resizable: true },
   { title: 'IP地址', key: 'ip_address', width: 140, resizable: true },
@@ -457,6 +631,7 @@ const subscriptionPagination = reactive({
 })
 
 const subscriptionColumns: DataTableColumns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '用户ID', key: 'user_id', width: 100, resizable: true },
   { title: '操作', key: 'action_type', width: 150, resizable: true },
@@ -485,6 +660,7 @@ const balancePagination = reactive({
 })
 
 const balanceColumns: DataTableColumns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '用户ID', key: 'user_id', width: 100, resizable: true },
   {
@@ -521,6 +697,7 @@ const commissionPagination = reactive({
 })
 
 const commissionColumns: DataTableColumns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 80, resizable: true, sorter: 'default' },
   { title: '用户ID', key: 'inviter_id', width: 100, resizable: true },
   { title: '来源用户ID', key: 'invitee_id', width: 120, resizable: true },
@@ -689,6 +866,7 @@ const systemPagination = reactive({
 })
 
 const systemColumns: DataTableColumns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 70, resizable: true, sorter: 'default' },
   {
     title: '级别', key: 'level', width: 80, resizable: true,
@@ -699,6 +877,57 @@ const systemColumns: DataTableColumns = [
   { title: '详情', key: 'detail', width: 200, resizable: true, ellipsis: { tooltip: true } },
   { title: '时间', key: 'created_at', width: 180, resizable: true, sorter: (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() },
 ]
+
+/**
+ * 全选 / 批量操作：7 个 tab 各一份独立选择状态（用公共 useBatchSelection）。
+ * 这些 tab 全是只读日志、行内没有任何操作，按契约第 2.1 节第 3 条：
+ * 提供「复制所选」作为批量动作，不允许空有勾选框却没有动作。
+ */
+const selections: Record<string, BatchSelection<any>> = {
+  audit: useBatchSelection(() => auditData.value),
+  login: useBatchSelection(() => loginData.value),
+  registration: useBatchSelection(() => registrationData.value),
+  subscription: useBatchSelection(() => subscriptionData.value),
+  balance: useBatchSelection(() => balanceData.value),
+  commission: useBatchSelection(() => commissionData.value),
+  system: useBatchSelection(() => systemData.value),
+}
+
+// 桌面表格要的是数组，这里给每个 tab 做一层桥接，保证表头全选与批量栏状态一致。
+// 必须是「顶层 ref」才能被模板自动解包（v-model 需要可写引用），不能挂在对象属性上。
+const makeCheckedBridge = (sel: BatchSelection<any>) => computed<Array<string | number>>({
+  get: () => [...sel.selectedKeys.value],
+  set: (keys) => { sel.selectedKeys.value = new Set(keys) },
+})
+const auditCheckedKeys = makeCheckedBridge(selections.audit)
+const loginCheckedKeys = makeCheckedBridge(selections.login)
+const registrationCheckedKeys = makeCheckedBridge(selections.registration)
+const subscriptionCheckedKeys = makeCheckedBridge(selections.subscription)
+const balanceCheckedKeys = makeCheckedBridge(selections.balance)
+const commissionCheckedKeys = makeCheckedBridge(selections.commission)
+const systemCheckedKeys = makeCheckedBridge(selections.system)
+
+// 每个 tab 一行一条的文本格式（复制所选时用）
+const lineFormatters: Record<string, (row: any) => string> = {
+  audit: (r) => `[${r.id}] 管理员#${r.user_id} ${r.action_type || '-'} ${r.resource_type || '-'}#${r.resource_id ?? '-'} IP:${r.ip_address || '-'} ${r.created_at || '-'} ${r.action_description || ''}`.trim(),
+  login: (r) => `[${r.id}] 用户#${r.user_id} ${translateLoginStatus(r.login_status)} IP:${r.ip_address || '-'} 位置:${formatLocation(r.location) || '-'} 设备:${parseDeviceInfo(r.user_agent) || '-'} ${r.login_time || '-'}`,
+  registration: (r) => `[${r.id}] 用户#${r.user_id} IP:${r.ip_address || '-'} 邀请码:${r.invite_code || '-'} ${r.created_at || '-'}`,
+  subscription: (r) => `[${r.id}] 用户#${r.user_id} ${r.action_type || '-'} ${r.description || ''} ${r.created_at || '-'}`.trim(),
+  balance: (r) => `[${r.id}] 用户#${r.user_id} ${translateBalanceChangeType(r.change_type)} 金额:${r.amount ?? '-'} 余额:${r.balance_after ?? '-'} ${r.description || ''} ${r.created_at || '-'}`.trim(),
+  commission: (r) => `[${r.id}] 邀请人#${r.inviter_id} 被邀请人#${r.invitee_id} 金额:${r.amount ?? '-'} ${translateCommissionType(r.commission_type)} ${r.created_at || '-'}`,
+  system: (r) => `[${r.id}] [${r.level || '-'}] ${r.module || '-'} ${r.message || ''} ${r.detail || ''} ${r.created_at || '-'}`.trim(),
+}
+
+// 只读列表的批量动作：把所选行按一行一条拼成文本复制
+const copyTab = async (key: string) => {
+  const sel = selections[key]
+  const rows = sel?.selectedRows.value || []
+  if (!rows.length) return
+  const text = rows.map(lineFormatters[key]).join('\n')
+  const ok = await clipboardCopy(text)
+  if (ok) message.success(`已复制 ${rows.length} 条记录`)
+  else message.error('复制失败，请手动选择文本')
+}
 
 const loadSystemLogs = async () => {
   systemLoading.value = true
@@ -864,6 +1093,9 @@ onMounted(() => {
 
 /* 日志卡片样式（.mobile-card / .card-header / .card-row…）全部交给全局
    mobile-cards.css + admin-mobile.css，页面不再覆盖，手机端才是 App 列表样式。 */
+
+/* 可选中卡片：左侧给复选框留位（兜底，防止被其他层叠规则盖掉） */
+.mobile-card.is-selectable { padding-left: 44px !important; }
 @media (max-width: 767px) {
   /* 左右留白由全局统一给（mobile-app-ui.css + admin-mobile.css），页面不再自带内边距 */
   .list-pagination { justify-content: center; }

@@ -178,13 +178,21 @@ const showDrawer = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
 
-// 统一表格状态
-const { loading, tableData: levels, pagination, loadData } = useTable(listUserLevels)
+// 统一表格状态。注意：/admin/user-levels 返回的是「裸数组」而不是 { items, total }，
+// useTable 只认 { items, total }，直接传会让列表永远渲染成空（等级列表此前一直是空的，
+// 页面无数据 → 全选/批量删除无从下手）。这里用 fetcher 包一层适配，和 abnormal-users 同一做法。
+const levelsFetcher = async (params: any) => {
+  const res = await listUserLevels(params)
+  const data: any = res?.data
+  const items: any[] = Array.isArray(data) ? data : (data?.items || [])
+  return { data: { items, total: Array.isArray(data) ? items.length : (data?.total || items.length) } }
+}
+const { loading, tableData: levels, pagination, loadData } = useTable(levelsFetcher)
 const loadLevels = loadData
 // 全选 / 多选：全站统一实现（桌面表格与手机卡片共用同一份选择状态）
 const selection = useBatchSelection(() => levels.value)
 // Naive 表格要的是数组，这里做一层桥接，保证两边状态一致
-const checkedRowKeys = computed({
+const checkedRowKeys = computed<Array<string | number>>({
   get: () => [...selection.selectedKeys.value],
   set: (keys) => { selection.selectedKeys.value = new Set(keys) },
 })
@@ -350,16 +358,19 @@ const handleBatchDelete = () => {
   if (!rows.length) return
   dialog.warning({
     title: '批量删除',
-    content: `确定要删除选中的 ${rows.length} 个等级吗？`,
-    positiveText: '确定',
+    content: `将影响 ${rows.length} 项：永久删除选中的 ${rows.length} 个等级，不可恢复。`,
+    positiveText: '删除',
     negativeText: '取消',
     onPositiveClick: async () => {
-      try {
-        await Promise.all(rows.map(row => deleteUserLevel(row.id)))
-        message.success('批量删除成功')
-        selection.clear()
-        loadLevels()
-      } catch { message.error('批量删除失败') }
+      // 后端没有批量接口，按契约用 allSettled 逐条调单条接口，最后汇总成功/失败
+      const results = await Promise.allSettled(rows.map(row => deleteUserLevel(row.id)))
+      const ok = results.filter(r => r.status === 'fulfilled').length
+      const fail = results.length - ok
+      if (fail === 0) message.success(`成功 ${ok} 项 / 失败 0 项`)
+      else if (ok === 0) message.error(`成功 0 项 / 失败 ${fail} 项`)
+      else message.warning(`成功 ${ok} 项 / 失败 ${fail} 项`)
+      selection.clear()
+      loadLevels()
     }
   })
 }

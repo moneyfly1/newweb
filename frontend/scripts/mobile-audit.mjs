@@ -170,6 +170,19 @@ function auditInPage() {
   out.stats.checkboxes = checkboxes.length
   out.stats.hasSelectAll = hasSelectAllWord
   out.stats.hasBatchButton = hasBatchButton
+  // 用户要求：手机端「每个有列表的页面」都必须有全选。
+  // 判定：列表型卡片 ≥3 条，且条目里带可点操作按钮 → 必须有全选入口。
+  const listSelectors = '.mobile-card, .app-list-item, .mobile-node-card, .device-card, .sub-card, .notif-item, .order-item, .ticket-item'
+  const listItems = [...document.querySelectorAll(listSelectors)].filter(visible)
+  const itemsWithActions = listItems.filter(it => [...it.querySelectorAll('button, .n-button')].some(b => visible(b)))
+  out.stats.listItems = listItems.length
+  out.stats.listItemsWithActions = itemsWithActions.length
+  if (itemsWithActions.length >= 3 && !hasSelectAllWord) {
+    out.issues.push({
+      kind: 'missing-select-all',
+      detail: `有 ${itemsWithActions.length} 条带操作的列表项，但页面没有「全选」入口`,
+    })
+  }
   if ((checkboxes.length >= 2 || hasBatchButton) && !hasSelectAllWord) {
     out.issues.push({
       kind: 'missing-select-all',

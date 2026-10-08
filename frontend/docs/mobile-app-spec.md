@@ -96,7 +96,21 @@ const checkedRowKeys = computed({
 要点：
 - 批量操作读 `selection.selectedRows.value`（对象数组）或 `selection.selectedKeys.value`，**不要**再读 `checkedRowKeys`。
 - 操作完成后调用 `selection.clear()`。
-- 后端没有批量接口的页面：确认接口存在后再加批量按钮；没有接口就**不要**加假按钮，在报告里说明。
+
+### 2.1 硬性要求：**每个列表页手机端都必须有「全选」**（用户明确要求）
+
+不允许出现「有列表、有行内操作，但没有全选」的页面。批量动作按下面优先级选：
+
+1. **有后端批量接口** → 直接用（如 `batchUserAction` / `batchOrderAction` / `batchNodeAction`、
+   `/nodes/batch-test`、`/admin/custom-nodes/batch-*`）。
+2. **没有批量接口，但有行内单条操作** → 用 `Promise.allSettled` 逐条调单条接口，
+   操作前弹确认框写明「将影响 N 项」，结束后汇总「成功 X / 失败 Y」。
+   （这是本项目既有做法：invites / redeem / mystery-box 的批量删除就是这么实现的。）
+3. **只读列表（没有任何行内操作）** → 提供「复制所选」作为批量动作
+   （用 `@/utils/clipboard` 的 `copyToClipboard`，把所选行按一行一条拼成文本）。
+   不允许空有勾选框却没有动作。
+
+禁止：只有全选、没有任何动作；或者按钮点了不生效（假按钮）。
 
 ## 3. 页面级常见问题与做法
 

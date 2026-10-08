@@ -109,6 +109,24 @@
       @update:page="handlePageChange"
       @update:page-size="handlePageSizeChange"
     />
+    <!-- 全选 / 批量操作（公共组件：桌面是工具条，手机固定在底部标签栏上方） -->
+    <BatchSelectBar
+      :total="selection.total.value"
+      :selected-count="selection.count.value"
+      :all-selected="selection.allSelected.value"
+      :indeterminate="selection.indeterminate.value"
+      label="个节点"
+      @toggle-all="selection.toggleAll"
+      @clear="selection.clear"
+    >
+      <n-button size="small" type="primary" :disabled="!onlineSelectedCount" :loading="batchTesting" @click="handleBatchTest">
+        批量测速
+      </n-button>
+      <n-button size="small" secondary :disabled="!selection.count.value" @click="handleCopySelected">
+        复制所选
+      </n-button>
+    </BatchSelectBar>
+
     <!-- Mobile Cards -->
     <div class="mobile-cards">
       <n-spin :show="loading">
@@ -121,7 +139,16 @@
               <n-tag size="small" :bordered="false" round>{{ group.nodes.length }}</n-tag>
             </div>
             <div class="mobile-node-list">
-              <div v-for="node in group.nodes" :key="node.id" class="mobile-node-card" :class="{ 'card-offline': node.status !== 'online' }">
+              <div
+                v-for="node in group.nodes"
+                :key="node.id"
+                class="mobile-node-card is-selectable"
+                :class="{ 'card-offline': node.status !== 'online', 'is-selected': selection.isSelected(node) }"
+                @click="selection.toggle(node)"
+              >
+                <div class="card-check" @click.stop>
+                  <n-checkbox :checked="selection.isSelected(node)" @update:checked="() => selection.toggle(node)" />
+                </div>
                 <div class="mobile-card-top">
                   <div class="mobile-node-name">
                     <span class="status-dot" :class="node.status === 'online' ? 'dot-online' : 'dot-offline'"></span>
@@ -131,7 +158,7 @@
                     {{ node.status === 'online' ? '在线' : '离线' }}
                   </span>
                 </div>
-                <div class="mobile-card-info">
+                <div class="mobile-card-info" @click.stop>
                   <div class="mobile-info-item">
                     <span class="mobile-info-label">协议</span>
                     <span class="protocol-tag">{{ node.protocol }}</span>
@@ -159,6 +186,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { NIcon } from 'naive-ui'
 import { listNodes, testNode } from '@/api/node'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import { copyToClipboard } from '@/utils/clipboard'
+import { useDialog } from 'naive-ui'
 import { useMessage } from 'naive-ui'
 import { ServerOutline, CheckmarkCircleOutline, SpeedometerOutline, GlobeOutline } from '@vicons/ionicons5'
 
@@ -266,6 +297,58 @@ const getRegionFlag = (region: string): string => {
   }
   return flagMap[region] || '\u{1F310}'
 }
+// 全选 / 批量：公共实现（手机卡片与桌面共用同一份选择状态）
+const selection = useBatchSelection<Node>(() => filteredNodes.value, {
+  // 离线节点测不了延迟，直接不可选，避免批量测速里混进必然失败的项
+  isSelectable: (node) => node.status === 'online',
+})
+const onlineSelectedCount = computed(() => selection.selectedRows.value.filter(n => n.status === 'online').length)
+const batchTesting = ref(false)
+const dialog = useDialog()
+
+const handleBatchTest = async () => {
+  const targets = selection.selectedRows.value.filter(n => n.status === 'online')
+  if (!targets.length) {
+    message.warning('请先选择在线节点')
+    return
+  }
+  dialog.warning({
+    title: '批量测速',
+    content: `将对选中的 ${targets.length} 个在线节点逐一测速，可能需要几十秒。`,
+    positiveText: '开始测速',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchTesting.value = true
+      let ok = 0
+      let fail = 0
+      try {
+        // 逐个测（后端只有单节点测速接口），串行避免把节点打爆
+        for (const node of targets) {
+          try {
+            await testNode(node.id)
+            ok++
+          } catch {
+            fail++
+          }
+        }
+        message.success(fail ? `批量测速完成：成功 ${ok}，失败 ${fail}` : `批量测速完成：成功 ${ok}`)
+        await fetchNodes()
+        selection.clear()
+      } finally {
+        batchTesting.value = false
+      }
+    },
+  })
+}
+
+const handleCopySelected = async () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  const text = rows.map(n => [n.name, n.region, n.protocol, n.status, n.latency ? n.latency + 'ms' : '-'].join('\t')).join('\n')
+  const ok = await copyToClipboard(text)
+  ok ? message.success(`已复制 ${rows.length} 个节点`) : message.error('复制失败')
+}
+
 const handleTestNode = async (node: Node) => {
   testingNodes.value[node.id] = true
   testResults.value[node.id] = ''

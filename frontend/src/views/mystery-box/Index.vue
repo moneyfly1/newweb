@@ -20,11 +20,38 @@
           </div>
         </n-alert>
 
+        <!-- 全选 / 批量（公共组件：手机固定在底部标签栏上方） -->
+        <BatchSelectBar
+          :total="selection.total.value"
+          :selected-count="selection.count.value"
+          :all-selected="selection.allSelected.value"
+          :indeterminate="selection.indeterminate.value"
+          label="个奖池"
+          @toggle-all="selection.toggleAll"
+          @clear="selection.clear"
+        >
+          <n-button size="small" type="primary" :disabled="!selection.count.value" :loading="batchOpening" @click="handleBatchOpen">
+            批量开启
+          </n-button>
+          <n-button size="small" secondary :disabled="!selection.count.value" @click="handleCopySelectedPools">
+            复制所选
+          </n-button>
+        </BatchSelectBar>
+
         <n-spin :show="loadingPools">
           <div v-if="pools.length === 0 && !loadingPools" class="mobile-empty">暂无可用奖池</div>
           <!-- 手机端：奖池走 App 卡片列表（桌面端保持三列网格） -->
           <div v-else-if="appStore.isMobile" class="mobile-card-list">
-            <div v-for="pool in pools" :key="pool.id" class="mobile-card">
+            <div
+              v-for="pool in pools"
+              :key="pool.id"
+              class="mobile-card is-selectable"
+              :class="{ 'is-selected': selection.isSelected(pool) }"
+              @click="selection.toggle(pool)"
+            >
+              <div class="card-check" @click.stop>
+                <n-checkbox :checked="selection.isSelected(pool)" @update:checked="() => selection.toggle(pool)" />
+              </div>
               <div class="card-header mb-card-head">
                 <span class="card-title">{{ pool.name }}</span>
                 <n-tag type="warning" size="small" :bordered="false">{{ formatAmount(pool.price) }} 元/次</n-tag>
@@ -49,7 +76,7 @@
                   </div>
                 </div>
               </div>
-              <div class="mb-pool-actions">
+              <div class="mb-pool-actions" @click.stop>
                 <n-button type="primary" block :loading="openingPoolId === pool.id" @click="handleOpen(pool)">
                   开启盲盒（{{ formatAmount(pool.price) }} 元）
                 </n-button>
@@ -103,9 +130,31 @@
           />
         </template>
         <template v-else>
+          <BatchSelectBar
+            :total="historySelection.total.value"
+            :selected-count="historySelection.count.value"
+            :all-selected="historySelection.allSelected.value"
+            :indeterminate="historySelection.indeterminate.value"
+            label="条记录"
+            @toggle-all="historySelection.toggleAll"
+            @clear="historySelection.clear"
+          >
+            <n-button size="small" secondary :disabled="!historySelection.count.value" @click="handleCopySelectedHistory">
+              复制所选
+            </n-button>
+          </BatchSelectBar>
           <div v-if="historyData.length === 0 && !loadingHistory" class="mobile-empty">暂无记录</div>
           <div v-else class="mobile-card-list">
-            <div v-for="item in historyData" :key="item.id" class="mobile-card">
+            <div
+              v-for="item in historyData"
+              :key="item.id"
+              class="mobile-card is-selectable"
+              :class="{ 'is-selected': historySelection.isSelected(item) }"
+              @click="historySelection.toggle(item)"
+            >
+              <div class="card-check" @click.stop>
+                <n-checkbox :checked="historySelection.isSelected(item)" @update:checked="() => historySelection.toggle(item)" />
+              </div>
               <div class="card-header mb-card-head">
                 <span class="card-title">{{ item.prize_name }}</span>
                 <n-tag :type="prizeTagType(item.prize_type)" size="small" :bordered="false">{{ prizeTypeLabel(item.prize_type) }}</n-tag>
@@ -147,14 +196,18 @@
 
 <script setup lang="ts">
 import { ref, reactive, h, onMounted } from 'vue'
-import { NTag, useMessage, NTooltip } from 'naive-ui'
+import { NTag, useMessage, NTooltip, useDialog } from 'naive-ui'
 import { useAppStore } from '@/stores/app'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
+import { useBatchSelection } from '@/composables/useBatchSelection'
+import { copyToClipboard } from '@/utils/clipboard'
 import { getMysteryBoxPools, openMysteryBox, getMysteryBoxHistory } from '@/api/common'
 import { formatDateTime } from '@/utils/date'
 import { formatAmount } from '@/utils/amount'
 
 const appStore = useAppStore()
 const message = useMessage()
+const dialog = useDialog()
 
 const activeTab = ref('pools')
 const loadingPools = ref(false)
@@ -236,6 +289,63 @@ const loadHistory = async () => {
   } finally {
     loadingHistory.value = false
   }
+}
+
+// 全选 / 批量：奖池列表与开启记录各一份选择状态（公共实现）
+const selection = useBatchSelection<any>(() => pools.value)
+const historySelection = useBatchSelection<any>(() => historyData.value)
+const batchOpening = ref(false)
+
+// 批量开启会真实扣费，必须先把总价算清楚再让用户确认
+const handleBatchOpen = () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  const total = rows.reduce((sum: number, p: any) => sum + (Number(p.price) || 0), 0)
+  dialog.warning({
+    title: '批量开启盲盒',
+    content: `将开启 ${rows.length} 个盲盒，共扣 ${formatAmount(total)} 元（按各奖池单价计算），奖品随机发放。`,
+    positiveText: '确认开启',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchOpening.value = true
+      let ok = 0
+      let fail = 0
+      const names: string[] = []
+      try {
+        // 后端只有单次开启接口，逐条串行调用，避免并发扣费出现混乱
+        for (const pool of rows) {
+          try {
+            const res: any = await openMysteryBox({ pool_id: pool.id })
+            ok++
+            if (res?.data?.prize_name) names.push(res.data.prize_name)
+          } catch {
+            fail++
+          }
+        }
+        message.success(fail ? `开启完成：成功 ${ok}，失败 ${fail}` : `开启完成：成功 ${ok}`)
+        if (names.length) message.info(`获得：${names.slice(0, 5).join('、')}${names.length > 5 ? '…' : ''}`)
+        selection.clear()
+        loadPools()
+        loadHistory()
+      } finally {
+        batchOpening.value = false
+      }
+    },
+  })
+}
+
+const handleCopySelectedPools = async () => {
+  const rows = selection.selectedRows.value
+  if (!rows.length) return
+  const ok = await copyToClipboard(rows.map((p: any) => `${p.name}\t${formatAmount(p.price)} 元/次`).join('\n'))
+  ok ? message.success(`已复制 ${rows.length} 个奖池`) : message.error('复制失败')
+}
+
+const handleCopySelectedHistory = async () => {
+  const rows = historySelection.selectedRows.value
+  if (!rows.length) return
+  const ok = await copyToClipboard(rows.map((h: any) => `${formatDateTime(h.created_at)}\t${h.prize_name}\t${h.cost} 元`).join('\n'))
+  ok ? message.success(`已复制 ${rows.length} 条记录`) : message.error('复制失败')
 }
 
 const handleOpen = async (pool: any) => {

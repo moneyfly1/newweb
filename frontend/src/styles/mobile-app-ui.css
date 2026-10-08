@@ -428,6 +428,11 @@ select:-webkit-autofill {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* 关键：flex 项默认 min-width:auto，内容比容器宽时不会收缩，
+     按钮会被顶出屏幕（用户反馈「手机端用户列表的按钮溢出、整页错乱」就是这个）。
+     min-width:0 让它可以收缩，超出的部分在栏内横向滚动。 */
+  flex: 0 1 auto;
+  min-width: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -458,6 +463,32 @@ select:-webkit-autofill {
     transform: translateZ(0);
     min-height: 56px;
   }
+  /* 手机端分两行：第一行「全选 + 已选 N + 清空」，第二行整行放批量操作按钮。
+     挤在一行时（4 个操作按钮 + 左侧状态）在 393px 屏上必然溢出。 */
+  .batch-select-bar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .batch-select-bar__actions {
+    flex: 1 1 100%;
+    margin-left: 0;
+    min-width: 0;
+    gap: 4px;
+  }
+  /* 让 5 个批量按钮也能在一行放下：压缩内边距与字号（393px 屏上是 5×68 + 间距 = 356px）。
+     真放不下时栏内横向滚动，绝不撑破页面。 */
+  .batch-select-bar__actions > * {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .batch-select-bar__actions .n-button {
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 13px;
+  }
+  .batch-select-bar__actions .n-button .n-button__content {
+    white-space: nowrap;
+  }
   .batch-select-bar--empty .batch-select-bar__actions {
     /* 未选中时操作区禁用但仍占位，避免布局跳动 */
     opacity: 0.5;
@@ -466,9 +497,9 @@ select:-webkit-autofill {
      （批量栏 56px + 标签栏 56px + 安全区；标记由 BatchSelectBar 组件挂到 body 上） */
   body.has-batch-bar .mobile-admin-content,
   body.has-batch-bar .user-mobile-content {
-    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: calc(158px + env(safe-area-inset-bottom, 0px)) !important;
   }
   body.has-batch-bar .n-scrollbar-content {
-    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: calc(158px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }

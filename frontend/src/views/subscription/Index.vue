@@ -576,7 +576,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated, onUnmounted, nextTick, watch, h } from 'vue'
+import { ref, computed, onMounted, onActivated, onDeactivated, onUnmounted, nextTick, watch, h } from 'vue'
 import { NTag, useMessage } from 'naive-ui'
 import QRCode from 'qrcode'
 import {
@@ -699,6 +699,7 @@ const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
 const showCodepayModal = ref(false)
 const codepayUrl = ref('')
 let payPollTimer: ReturnType<typeof setInterval> | null = null
+const currentPayOrderNo = ref<string | null>(null)
 const finalPayAmount = computed(() => upgradeOrderInfo.value?.final_amount ?? upgradeOrderInfo.value?.amount ?? 0)
 const balanceDeductAmount = computed(() => {
   if (paymentMethod.value === 'balance') return finalPayAmount.value
@@ -1012,7 +1013,22 @@ const buildUpgradeSuccessInfo = () => {
   showUpgradeSuccess.value = true
 }
 
+// keep-alive 缓存：离开页面停掉支付轮询，回来若二维码还开着再续
+let resumePayOrderNo: string | null = null
+onDeactivated(() => {
+  resumePayOrderNo = payPollTimer ? currentPayOrderNo.value : null
+  stopPayPolling()
+})
+onActivated(() => {
+  if (resumePayOrderNo) {
+    const n = resumePayOrderNo
+    resumePayOrderNo = null
+    startPayPolling(n)
+  }
+})
+
 const startPayPolling = (orderNo: string) => {
+  currentPayOrderNo.value = orderNo
   stopPayPolling()
   let pollAttempts = 0
   const maxPollAttempts = 20

@@ -307,7 +307,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, onActivated, onDeactivated, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
 import QRCode from 'qrcode'
@@ -362,6 +362,7 @@ const useBalanceDeduct = ref(false)
 const isMobile = ref(window.innerWidth <= 767)
 const mobilePayUrl = ref('')
 let pollTimer: ReturnType<typeof setInterval> | null = null
+const currentPollOrderNo = ref<string | null>(null)
 let pollAttempts = 0
 const maxPollAttempts = 20
 
@@ -566,7 +567,23 @@ const goToPurchaseSuccess = (orderNo: string) => {
   router.push({ name: 'PaymentReturn', query: { order_no: orderNo, source: 'purchase', redirect: 'dashboard' } })
 }
 
+// keep-alive 缓存：离开页面时停掉支付轮询，回来若还该轮询再接着轮询。
+// 否则用户在别的页面待着，这个页面仍每 3 秒打一次订单状态接口（白耗流量与电量）。
+let resumeOrderNo: string | null = null
+onDeactivated(() => {
+  resumeOrderNo = pollingStatus.value ? currentPollOrderNo.value : null
+  stopPolling()
+})
+onActivated(() => {
+  if (resumeOrderNo) {
+    const n = resumeOrderNo
+    resumeOrderNo = null
+    startPolling(n)
+  }
+})
+
 const startPolling = (orderNo: string) => {
+  currentPollOrderNo.value = orderNo
   stopPolling()
   pollAttempts = 0
   pollingStatus.value = true

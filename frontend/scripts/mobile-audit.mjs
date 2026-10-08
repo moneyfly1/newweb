@@ -177,13 +177,20 @@ function auditInPage() {
   const itemsWithActions = listItems.filter(it => [...it.querySelectorAll('button, .n-button')].some(b => visible(b)))
   out.stats.listItems = listItems.length
   out.stats.listItemsWithActions = itemsWithActions.length
-  if (itemsWithActions.length >= 3 && !hasSelectAllWord) {
+  // 只有「页面上确实有可选条目」时才要求出现全选：
+  // 例如订单页只允许勾选待支付订单，若当前这一页恰好全是已支付/已取消，
+  // 批量栏按组件设计（total=0）不显示，这时不该报问题。
+  const selectableNow = [...document.querySelectorAll('.card-check')]
+    .filter(visible)
+    .filter(el => !el.querySelector('.n-checkbox--disabled')).length
+  if (itemsWithActions.length >= 3 && selectableNow > 0 && !hasSelectAllWord) {
     out.issues.push({
       kind: 'missing-select-all',
-      detail: `有 ${itemsWithActions.length} 条带操作的列表项，但页面没有「全选」入口`,
+      detail: `有 ${itemsWithActions.length} 条带操作的列表项（其中 ${selectableNow} 条可勾选），但页面没有「全选」入口`,
     })
   }
-  if ((checkboxes.length >= 2 || hasBatchButton) && !hasSelectAllWord) {
+  // 同上：页面当前压根没有可勾选的条目（复选框全禁用）时不要求全选
+  if ((checkboxes.length >= 2 || hasBatchButton) && selectableNow > 0 && !hasSelectAllWord) {
     out.issues.push({
       kind: 'missing-select-all',
       detail: `有 ${checkboxes.length} 个复选框${hasBatchButton ? '和批量按钮' : ''}，但页面没有「全选」入口`,

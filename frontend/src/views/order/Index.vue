@@ -498,7 +498,7 @@
 </template>
 
 <script setup lang="tsx">
-import { ref, onMounted, onActivated, h, nextTick, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onActivated, onDeactivated, h, nextTick, onUnmounted, watch, computed } from 'vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useRouter } from 'vue-router'
 import { useMessage, useDialog, NButton, NSpace, NTag } from 'naive-ui'
@@ -561,6 +561,7 @@ const showCryptoDrawer = ref(false)
 const cryptoInfo = ref<any>(null)
 const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
+const currentPollTarget = ref<{ type: 'order'; orderNo: string } | { type: 'recharge' } | null>(null)
 let pollAttempts = 0
 const maxPollAttempts = 20
 // 记录当前轮询的对象，用于支付成功后刷新正确的列表
@@ -748,7 +749,22 @@ const openCodepayWindow = () => {
 
 type PollTarget = { type: 'order'; orderNo: string } | { type: 'recharge' }
 
+// keep-alive 缓存：离开页面时停掉轮询，回来再续（避免在别的页面还在每 3 秒打接口）
+let resumeTarget: PollTarget | null = null
+onDeactivated(() => {
+  resumeTarget = pollingStatus.value ? currentPollTarget.value : null
+  stopPolling()
+})
+onActivated(() => {
+  if (resumeTarget) {
+    const t = resumeTarget
+    resumeTarget = null
+    startPolling(t)
+  }
+})
+
 const startPolling = (target: PollTarget) => {
+  currentPollTarget.value = target
   stopPolling()
   pollAttempts = 0
   pollingStatus.value = true

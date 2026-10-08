@@ -296,7 +296,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, onUnmounted, watch } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, onActivated, onDeactivated, watch } from 'vue'
 import { useMessage, useDialog } from 'naive-ui'
 import { TimeOutline } from '@vicons/ionicons5'
 import QRCode from 'qrcode'
@@ -352,6 +352,7 @@ const showCryptoDrawer = ref(false)
 const cryptoInfo = ref<any>(null)
 const cryptoQrCanvas = ref<HTMLCanvasElement | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
+const currentPollRecordId = ref<number | null>(null)
 let pollAttempts = 0
 const maxPollAttempts = 20
 
@@ -413,7 +414,22 @@ const checkRechargeStatus = async (recordId: number) => {
   return false
 }
 
+// keep-alive 缓存：离开页面停轮询，回来续（避免后台空转打接口）
+let resumeRecordId: number | null = null
+onDeactivated(() => {
+  resumeRecordId = pollingStatus.value ? currentPollRecordId.value : null
+  stopPolling()
+})
+onActivated(() => {
+  if (resumeRecordId) {
+    const id = resumeRecordId
+    resumeRecordId = null
+    startPolling(id)
+  }
+})
+
 const startPolling = (recordId: number) => {
+  currentPollRecordId.value = recordId
   stopPolling()
   pollAttempts = 0
   pollingStatus.value = true

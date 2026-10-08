@@ -233,6 +233,27 @@ function auditInPage() {
   return out
 }
 
+/** 全局顺滑度检查：页面转场、按压反馈、底部安全区、吸顶顶栏是否都在 */
+function smoothnessProbe() {
+  const cssText = []
+  for (const ss of document.styleSheets) {
+    try { for (const r of ss.cssRules) cssText.push(r.cssText) } catch (e) { /* 跨域表忽略 */ }
+  }
+  const all = cssText.join('\n')
+  const out = {
+    pageTransition: /\.page-slide-enter-active/.test(all) && /transition/.test(all),
+    pressFeedback: (() => {
+      // 有 :active 的规则里必须包含 transform/scale 之类的按压反馈
+      const activeRules = cssText.filter(t => /:active/.test(t))
+      const withFeedback = activeRules.filter(t => /transform|scale|opacity|background/.test(t))
+      return withFeedback.length >= 3
+    })(),
+    bottomSafeArea: /safe-area-inset-bottom/.test(all),
+    stickyHeaderCss: /\.mobile-header[^{]*\{[^}]*position:\s*sticky/.test(all) || /position:\s*sticky/.test(all),
+  }
+  return out
+}
+
 /** 聚焦输入框后，原生 focus 描边是否出现（移动端这条描边看起来就是输入框下面的一条线） */
 function inputFocusOutlineProbe() {
   const res = []
@@ -281,6 +302,31 @@ for (const route of targets) {
     await page.goto(`${BASE_URL}${route}`, { waitUntil: 'networkidle', timeout: 30000 })
     await page.waitForTimeout(900)
     result = await page.evaluate(auditInPage)
+    // 顺滑度只在第一个页面检查一次（全局性质）
+    if (targets[0] === route) {
+      const smooth = await page.evaluate(smoothnessProbe)
+      result.stats.smoothness = smooth
+      // 吸顶顶栏：页面能滚时，滚动后顶栏应停在顶部
+      const scrollable = await page.evaluate(() => document.documentElement.scrollHeight > document.documentElement.clientHeight + 50)
+      if (scrollable) {
+        const stickyTop = await page.evaluate(async () => {
+          window.scrollTo(0, 320)
+          await new Promise(r => setTimeout(r, 250))
+          const h = document.querySelector('.mobile-header')
+          const t = h ? Math.round(h.getBoundingClientRect().top) : null
+          window.scrollTo(0, 0)
+          return t
+        })
+        smooth.stickyHeaderActual = stickyTop
+        smooth.stickyHeaderWorks = stickyTop !== null && Math.abs(stickyTop) <= 2
+      }
+      for (const [key, ok] of Object.entries(smooth)) {
+        if (key === 'stickyHeaderActual') continue
+        if (ok === false) {
+          result.issues.push({ kind: 'smoothness-missing', detail: `缺少顺滑度要素: ${key}` })
+        }
+      }
+    }
     // 聚焦第一个可见输入框，检查是否冒出浏览器默认描边
     const firstInput = page.locator('.n-input__input-el:visible, input[type=text]:visible, textarea:visible').first()
     if (await firstInput.count().catch(() => 0)) {

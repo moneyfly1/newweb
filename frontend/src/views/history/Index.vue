@@ -106,7 +106,7 @@
 
 <script setup lang="tsx">
 import { ref, reactive, onMounted, h, computed } from 'vue'
-import { NButton, NTag, useMessage } from 'naive-ui'
+import { NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { getLoginHistory } from '@/api/user'
 import { useAppStore } from '@/stores/app'

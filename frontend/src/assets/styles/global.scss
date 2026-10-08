@@ -4,6 +4,9 @@
 @import '../../styles/user-mobile.css';
 @import '../../styles/admin-mobile.css';
 @import '../../styles/app-mobile.css';
+// 手机端「像 App」的基础层：去浏览器默认痕迹 + 触控尺寸 + 公共骨架
+// 放在 app-mobile.css 之后，允许覆盖它的旧规则
+@import '../../styles/mobile-app-ui.css';
 @import '../../styles/text-selection.css';
 @import './auth.css';
 

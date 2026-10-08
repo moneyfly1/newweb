@@ -1,0 +1,371 @@
+/* ============================================================
+   mobile-app-ui.css —— 手机端「像 App」的基础设计规则
+
+   为什么单独一层：手机端此前是「桌面页面缩一缩」——按钮小、行距挤、
+   浏览器默认痕迹（聚焦描边、自动填充底色）都还在，看起来像网页而不像 App。
+   这里集中放三类**全局**规则，页面不用各自写：
+
+     1. 去掉浏览器默认痕迹（输入框聚焦描边＝用户说的「打字时下面一条线」、
+        自动填充黄底、点击高亮、iOS 聚焦缩放）
+     2. 触控尺寸兜底（按钮/复选框/开关不小于 44×44 的手指可点区域）
+     3. App 通用骨架（卡片圆角与阴影、发丝分隔线、列表行按压反馈、
+        吸顶工具栏、底部安全区、批量选择底栏）
+
+   只作用于 ≤767px 或触摸设备，桌面端样式不受影响。
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   1. 去掉浏览器默认痕迹
+   ------------------------------------------------------------ */
+
+/* 输入框聚焦描边。
+   全局 a11y 规则给 :focus-visible 加了 2px 主色描边，键盘导航没问题，
+   但手机上「点进输入框打字」也会命中 :focus-visible —— 描边紧贴输入框
+   边缘，视觉上就是输入框下面多出一条线。输入框本身有光标和背景变化
+   作为聚焦反馈，所以这里对文字输入类元素一律去掉描边。 */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible,
+.n-input__input-el:focus,
+.n-input__input-el:focus-visible,
+.n-input__textarea-el:focus,
+.n-input__textarea-el:focus-visible,
+.n-base-selection-input:focus,
+.n-base-selection-input:focus-visible,
+.n-input__mirror:focus {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
+/* 自动填充：Chrome/Safari 会盖一层黄底并改字色，暗色主题下尤其突兀。
+   用超长过渡 + inset 阴影把填充色换成卡片色。 */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--text-color, #1f2937) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--bg-color, #fff) inset !important;
+  box-shadow: 0 0 0 1000px var(--bg-color, #fff) inset !important;
+  caret-color: var(--text-color, #1f2937);
+  transition: background-color 100000s ease-in-out 0s;
+}
+
+/* 点击高亮（部分安卓浏览器仍会画一层蓝框） */
+@media (pointer: coarse) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* 安卓/iOS 对 number 类型仍会显示上下箭头，手机上误触率高 */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  /* iOS 聚焦缩放的根因是 font-size < 16px */
+  .n-input__input-el,
+  .n-input__textarea-el,
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* ------------------------------------------------------------
+   2. 触控尺寸兜底（手指点得准）
+   ------------------------------------------------------------ */
+@media (pointer: coarse) {
+  /* Naive 的 small/medium 按钮只有 28/34px 高，手机上偏小 */
+  .n-button {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  /* tiny 按钮原来只有 22px 高，手机上根本点不准 */
+  .n-button--tiny-type {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  /* 复选框本体 18px，靠外层撑到手指可点；纯方框（没文字）也要有 40px 宽 */
+  .n-checkbox {
+    min-height: 40px;
+    min-width: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .n-checkbox-box {
+    width: 20px;
+    height: 20px;
+  }
+  .n-radio {
+    min-height: 40px;
+    min-width: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+  /* 开关本体 32px 是行业尺寸，但要让整块可点区域到 40px */
+  .n-switch {
+    min-height: 40px;
+  }
+  /* 弹窗/抽屉/提示条的关闭按钮只有 18px，扩到 36px 可点区域 */
+  .n-base-close,
+  .n-drawer-header__close,
+  .n-alert__close {
+    min-width: 40px !important;
+    min-height: 40px !important;
+    padding: 9px !important;
+  }
+  /* 表格/列表里的图标按钮：方形可点区域 */
+  .n-button.n-button--circle-type,
+  .n-button.n-button--icon-only {
+    min-width: 40px;
+  }
+  /* 下拉、日期选择等基础控件与输入框同高 */
+  .n-base-selection {
+    min-height: 40px;
+  }
+  .n-input {
+    min-height: 40px;
+  }
+}
+
+/* ------------------------------------------------------------
+   3. App 通用骨架（仅在手机端生效）
+   ------------------------------------------------------------ */
+@media (max-width: 767px) {
+  /* ---------- 手机端横向留白：只用「一处」8px ----------
+     原来是三层叠加：布局内容区 12px + 滚动容器 12px + 页面根容器 12px
+     = 每侧 36px（393px 屏上白白浪费 18% 宽度，页面看起来缩在中间）。
+     现在统一成：外层两处清零，滚动内容给 8px，页面根容器不再自带左右内边距。 */
+  .mobile-admin-content,
+  .user-mobile-content {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    /* 底部安全区 + tabbar（56px）+ 批量栏（56px）的兜底间距 */
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+  .mobile-admin-content .n-scrollbar-container,
+  .user-mobile-content .n-scrollbar-container {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  /* 外层布局滚动容器原来还有 12px 内边距：连它一起清零，
+     否则页面根容器、顶部栏、底部标签栏都被缩进 12px，看起来就是「一圈白边」。 */
+  .mobile-admin-content,
+  .user-mobile-content,
+  .mobile-admin-content .n-scrollbar,
+  .user-mobile-content .n-scrollbar {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  .admin-layout-root .n-layout-scroll-container,
+  .user-layout-root .n-layout-scroll-container,
+  .n-layout-scroll-container:has(> .mobile-admin-content),
+  .n-layout-scroll-container:has(> .user-mobile-content) {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  /* 注意要 !important：布局用 content-style 把 padding 写成了内联样式，
+     普通声明打不过内联样式。 */
+  .mobile-admin-content .n-scrollbar-content,
+  .user-mobile-content .n-scrollbar-content {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  /* 页面根容器（顶层包裹元素）不再自带左右内边距；
+     卡片类元素（.n-card / *-card）保留自己的内边距，否则内容会贴边。 */
+  .mobile-admin-content .n-scrollbar-content > *:not([class*='n-card']):not([class*='-card']),
+  .mobile-admin-content .n-scrollbar-content > * > *:not([class*='n-card']):not([class*='-card']),
+  .user-mobile-content .n-scrollbar-content > *:not([class*='n-card']):not([class*='-card']),
+  .user-mobile-content .n-scrollbar-content > * > *:not([class*='n-card']):not([class*='-card']) {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* 卡片：手机端统一更圆、更平、更轻的阴影（原来靠渐变+重阴影，像网页） */
+  .n-card,
+  .admin-main-card,
+  .mobile-card {
+    border-radius: 16px !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04) !important;
+  }
+  /* 卡片内容内边距：其他样式文件用 .admin-page-shell .n-card > .n-card__content 写了 12px
+     且带 !important，这里选到同等特异度（且本文件最后加载）才能生效。 */
+  .mobile-admin-content .n-card > .n-card__content,
+  .user-mobile-content .n-card > .n-card__content {
+    padding: 10px 12px !important;
+  }
+  /* 卡片里放「卡片列表」时外面再套一层内边距，手机上是白边浪费：
+     直接把内容区左右内边距去掉，让列表贴齐外层卡片。 */
+  .mobile-admin-content .n-card > .n-card__content:has(.mobile-card-list),
+  .mobile-admin-content .n-card > .n-card__content:has(.app-list),
+  .user-mobile-content .n-card > .n-card__content:has(.mobile-card-list),
+  .user-mobile-content .n-card > .n-card__content:has(.app-list) {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* 卡片标题行更像 App 的分组头 */
+  .n-card-header {
+    padding: 14px 14px 6px !important;
+    font-size: 16px;
+  }
+  .n-card-header__main {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+  }
+
+  /* 发丝分隔线（App 里行与行之间只有一条细线） */
+  .n-divider:not(.n-divider--vertical) {
+    margin: 10px 0 !important;
+    border-color: color-mix(in srgb, var(--border-color, #e5e7eb) 70%, transparent) !important;
+  }
+
+  /* 列表行：按压反馈 + 最小高度 */
+  .app-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .app-list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--bg-color, #fff);
+    border: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 60%, transparent);
+    transition: transform 0.12s ease, background-color 0.12s ease;
+  }
+  .app-list-item:active {
+    transform: scale(0.985);
+    background: var(--list-hover-color, rgba(102, 126, 234, 0.1));
+  }
+  .app-list-item__main {
+    flex: 1;
+    min-width: 0;
+  }
+  .app-list-item__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-color, #1f2937);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-list-item__sub {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--text-color-secondary, #6b7280);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* 右侧箭头（App 列表的典型提示） */
+  .app-list-item__chevron {
+    flex-shrink: 0;
+    color: color-mix(in srgb, var(--text-color-secondary, #9ca3af) 70%, transparent);
+  }
+
+  /* 吸顶工具条：滚动时筛选/搜索不消失 */
+  .app-sticky-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 9;
+    margin: -4px -12px 10px;
+    padding: 8px 12px;
+    background: color-mix(in srgb, var(--bg-color, #fff) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 60%, transparent);
+  }
+
+  /* 滚动容器统一惯性滚动，避免「滚到一半跳到外层页面」 */
+  .n-drawer-body-content-wrapper,
+  .n-modal-body-wrapper,
+  .app-scroll-y {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* 表格在手机端：允许横向滚动但不撑破页面 */
+  .n-data-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ------------------------------------------------------------
+   4. 批量选择栏（公共组件 BatchSelectBar 的样式）
+   ------------------------------------------------------------ */
+.batch-select-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--primary-color-soft, rgba(102, 126, 234, 0.08));
+  border: 1px solid color-mix(in srgb, var(--primary-color, #4f46e5) 18%, transparent);
+}
+
+.batch-select-bar__info {
+  font-size: 13px;
+  color: var(--text-color-secondary, #6b7280);
+  white-space: nowrap;
+}
+
+.batch-select-bar__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.batch-select-bar__actions::-webkit-scrollbar {
+  display: none;
+}
+
+/* 手机端：变成固定在底部的操作栏（App 里选中内容后底部浮出的操作条） */
+@media (max-width: 767px) {
+  .batch-select-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    /* 贴在底部标签栏上方 */
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    z-index: 60;
+    margin: 0;
+    border-radius: 0;
+    padding: 8px 12px;
+    background: color-mix(in srgb, var(--bg-color, #fff) 92%, transparent);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    border: none;
+    border-top: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 70%, transparent);
+    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.06);
+    /* 拖动时不触发页面回弹 */
+    transform: translateZ(0);
+    min-height: 56px;
+  }
+  .batch-select-bar--empty .batch-select-bar__actions {
+    /* 未选中时操作区禁用但仍占位，避免布局跳动 */
+    opacity: 0.5;
+  }
+  /* 底部栏存在时，内容区多留一点空间，最后一个卡片不会被挡住 */
+  .has-batch-bar .mobile-admin-content,
+  .has-batch-bar .user-mobile-content {
+    padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px));
+  }
+}

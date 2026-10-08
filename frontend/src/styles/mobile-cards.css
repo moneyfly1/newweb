@@ -1,47 +1,56 @@
-/* 统一移动端卡片样式 - 参考老项目 list-common.scss */
+/* ============================================================
+   mobile-cards.css —— 手机端卡片列表（全站统一）
+   参考老项目 list-common.scss，但按「像 App」的目标重写过：
+
+   旧版每张卡按 :nth-child 铺渐变、label/value 各自加边框+阴影+药丸背景，
+   视觉上像十年前的网页表格。现在改成 App 列表的做法：
+     · 卡片：纯色底、16px 圆角、极轻阴影、按压轻微缩放
+     · 行：label 灰字在左、value 深色在右，中间只有一条发丝分隔线
+     · 操作：等宽按钮一行排开，主操作实心
+     · 选中：左侧复选框 + 卡片描边高亮（配合公共组件 BatchSelectBar 使用）
+   ============================================================ */
 
 /* 移动端卡片列表容器 */
 .mobile-card-list {
   padding: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* 单个卡片 */
 .mobile-card {
   background: var(--bg-color, #ffffff);
-  border-radius: 14px;
-  border: 1px solid var(--border-color, #e0e7ff);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 18px;
-  margin-bottom: 14px;
-  box-sizing: border-box;
-  transition: box-shadow 0.2s ease;
-  position: relative;
-}
-
-.mobile-card:nth-child(odd) {
-  background: linear-gradient(135deg, var(--bg-color, #ffffff) 0%, var(--primary-color-soft, rgba(102, 126, 234, 0.08)) 100%);
-  border-color: var(--border-color, #dbeafe);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-.mobile-card:nth-child(even) {
-  background: linear-gradient(135deg, var(--bg-color, #ffffff) 0%, var(--primary-color-soft, rgba(102, 126, 234, 0.08)) 100%);
-  border-color: var(--border-color, #dbeafe);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-
-.mobile-card:last-child {
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 60%, transparent);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.03);
+  padding: 14px;
   margin-bottom: 0;
+  box-sizing: border-box;
+  transition: transform 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.mobile-card:active {
+  transform: scale(0.99);
 }
 
 /* 卡片头部行（标题+标签） */
+.mobile-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .mobile-card .card-header-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   gap: 8px;
 }
 
@@ -51,92 +60,82 @@
   color: var(--text-color, #1e293b);
   flex: 1;
   line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* 卡片行 - label/value 对 */
+/* 卡片行 - label/value 对（App 里就是「左灰右黑」两列） */
 .mobile-card .card-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 0;
+  padding: 9px 0;
   margin: 0;
-  border-bottom: 1px solid var(--border-color, rgba(224, 231, 255, 0.5));
   gap: 12px;
-  min-height: 52px;
-  position: relative;
-}
-
-.mobile-card .card-row::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, var(--border-color, rgba(224, 231, 255, 0.6)) 50%, transparent 100%);
+  min-height: 38px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 55%, transparent);
 }
 
 .mobile-card .card-row:last-child {
   border-bottom: none;
 }
 
-.mobile-card .card-row:last-child::after {
-  display: none;
-}
-
-/* Label 样式 */
-.mobile-card .card-row .label {
-  font-weight: 600;
+/* Label：灰色小字，不再用药丸背景+边框+阴影 */
+.mobile-card .card-row .label,
+.mobile-card .card-row .card-label,
+.mobile-card .card-label {
   color: var(--text-color-secondary, #64748b);
-  min-width: 90px;
   flex-shrink: 0;
-  font-size: 0.875rem;
+  font-size: 13px;
   line-height: 1.5;
-  padding: 6px 10px;
-  background: var(--primary-color-soft, rgba(102, 126, 234, 0.08));
-  border-radius: 8px;
-  border: 1px solid var(--primary-color-hover, rgba(102, 126, 234, 0.12));
-  text-align: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  text-align: left;
+  min-width: 0;
+  border-radius: 0;
 }
 
-/* Value 样式 */
-.mobile-card .card-row .value {
+/* Value：深色正文，右对齐，不加框 */
+.mobile-card .card-row .value,
+.mobile-card .card-row > span:not(.card-label):not(.label) {
   flex: 1;
   text-align: right;
   word-break: break-word;
-  font-size: 0.9rem;
+  font-size: 14px;
   color: var(--text-color, #1e293b);
   line-height: 1.5;
-  padding: 6px 14px;
-  background: var(--bg-color, rgba(255, 255, 255, 0.8));
-  border-radius: 8px;
-  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.06));
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
   font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border-radius: 0;
+  min-width: 0;
 }
 
-/* 操作按钮区域 */
+/* 操作按钮区域：等宽一行，主操作实心 */
 .mobile-card .card-actions {
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 2px solid var(--border-color, rgba(224, 231, 255, 0.4));
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color, #e5e7eb) 55%, transparent);
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: nowrap;
 }
 
 .mobile-card .card-actions .n-button {
   flex: 1;
-  font-size: 0.85rem;
-  padding: 10px 6px;
-  min-height: 44px;
-  max-height: 44px;
-  border-radius: 8px !important;
+  min-width: 0;
+  font-size: 13px;
+  min-height: 40px;
+  max-height: 40px;
+  border-radius: 10px !important;
   font-weight: 600;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transition: transform 0.12s ease;
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -147,19 +146,39 @@
 
 .mobile-card .card-actions .n-button:active {
   transform: scale(0.96);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- 可选中卡片（配合公共组件 BatchSelectBar + useBatchSelection） ---------- */
+.mobile-card.is-selectable {
+  padding-left: 44px;
+}
+
+.mobile-card .card-check {
+  position: absolute;
+  left: 6px;
+  top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+}
+
+.mobile-card.is-selected {
+  border-color: var(--primary-color, #4f46e5);
+  background: color-mix(in srgb, var(--primary-color-soft, rgba(102, 126, 234, 0.08)) 70%, var(--bg-color, #fff));
 }
 
 /* 空状态 */
 .mobile-empty {
   text-align: center;
-  padding: 4rem 2rem;
+  padding: 3rem 1.5rem;
   color: var(--text-color-secondary, #94a3b8);
-  background: linear-gradient(135deg, var(--bg-color, #ffffff) 0%, var(--primary-color-soft, rgba(102, 126, 234, 0.08)) 100%);
+  background: transparent;
   border-radius: 12px;
-  border: 2px dashed var(--border-color, #cbd5e1);
-  margin: 20px 0;
-  font-size: 1rem;
+  border: 1px dashed color-mix(in srgb, var(--border-color, #cbd5e1) 80%, transparent);
+  margin: 12px 0;
+  font-size: 14px;
   font-weight: 500;
 }
 

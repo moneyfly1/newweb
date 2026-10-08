@@ -20,16 +20,6 @@
             <template #icon><n-icon><SearchOutline /></n-icon></template>
             搜索
           </n-button>
-          <n-dropdown
-            trigger="click"
-            :options="[
-              { label: '批量分配', key: 'assign', icon: () => h(NIcon, null, { default: () => h(PeopleOutline) }), disabled: checkedRowKeys.length === 0 },
-              { label: '批量删除', key: 'delete', icon: () => h(NIcon, null, { default: () => h(TrashOutline) }), disabled: checkedRowKeys.length === 0 }
-            ]"
-            @select="(key) => key === 'assign' ? handleBatchAssign() : handleBatchDelete()"
-          >
-            <n-button secondary :disabled="checkedRowKeys.length === 0">批量操作 ({{ checkedRowKeys.length }})</n-button>
-          </n-dropdown>
           <n-button type="primary" @click="handleCreate">
             <template #icon><n-icon><AddOutline /></n-icon></template>
             新建节点
@@ -158,6 +148,26 @@
         </div>
       </div>
 
+      <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方） -->
+      <BatchSelectBar
+        :total="selection.total.value"
+        :selected-count="selection.count.value"
+        :all-selected="selection.allSelected.value"
+        :indeterminate="selection.indeterminate.value"
+        label="个节点"
+        @toggle-all="selection.toggleAll"
+        @clear="selection.clear"
+      >
+        <n-button size="small" type="info" :disabled="!selection.count.value" @click="handleBatchAssign">
+          <template #icon><n-icon><PeopleOutline /></n-icon></template>
+          批量分配
+        </n-button>
+        <n-button size="small" type="error" :disabled="!selection.count.value" @click="handleBatchDelete">
+          <template #icon><n-icon><TrashOutline /></n-icon></template>
+          批量删除
+        </n-button>
+      </BatchSelectBar>
+
       <template v-if="!appStore.isMobile">
         <n-data-table
           class="unified-admin-table"
@@ -177,7 +187,16 @@
 
       <template v-else>
         <div class="mobile-card-list">
-          <div v-for="row in tableData" :key="row.id" class="mobile-card">
+          <div
+            v-for="row in tableData"
+            :key="row.id"
+            class="mobile-card is-selectable"
+            :class="{ 'is-selected': selection.isSelected(row) }"
+            @click="selection.toggle(row)"
+          >
+            <div class="card-check" @click.stop>
+              <n-checkbox :checked="selection.isSelected(row)" @update:checked="() => selection.toggle(row)" />
+            </div>
             <div class="card-header">
               <span class="card-title">{{ row.display_name }}</span>
               <n-tag :type="protocolColorMap[row.protocol] || 'default'" size="small">
@@ -202,7 +221,7 @@
                 <span>{{ row.expire_time ? formatFullDateTime(row.expire_time) : '-' }}</span>
               </div>
             </div>
-            <div class="card-actions">
+            <div class="card-actions" @click.stop>
               <n-button size="small" type="primary" @click="handleEdit(row)">
                 <template #icon><n-icon><CreateOutline /></n-icon></template>
                 编辑
@@ -457,7 +476,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, h, onActivated, onMounted } from 'vue'
+import { ref, reactive, computed, h, onActivated, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import { NButton, NTag, NSpace, NIcon, NSwitch, NRadioGroup, NRadioButton, useMessage, useDialog } from 'naive-ui'
 import {
@@ -493,6 +512,8 @@ import { useAppStore } from '@/stores/app'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatFullDateTime, formatDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
+import BatchSelectBar from '@/components/BatchSelectBar.vue'
+import { useBatchSelection } from '@/composables/useBatchSelection'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -520,7 +541,13 @@ const importing = ref(false)
 const importType = ref('subscription')
 const importUrl = ref('')
 const importLinks = ref('')
-const checkedRowKeys = ref([])
+// 全选 / 多选：全站统一实现（桌面表格与手机卡片共用同一份选择状态）
+const selection = useBatchSelection(() => tableData.value)
+// Naive 的表格要的是数组，这里做一层桥接，保证两边状态一致
+const checkedRowKeys = computed({
+  get: () => [...selection.selectedKeys.value],
+  set: (keys) => { selection.selectedKeys.value = new Set(keys) }
+})
 const linkData = reactive({ link: '', name: '', protocol: '' })
 const sortState = ref({ sort: 'id', order: 'desc' })
 const searchKeyword = ref('')
@@ -962,9 +989,9 @@ const handleAssign = (row) => {
 }
 
 const handleBatchAssign = () => {
-  if (checkedRowKeys.value.length === 0) return
+  if (!selection.count.value) return
   assignNodeId.value = null
-  assignNodeIds.value = [...checkedRowKeys.value]
+  assignNodeIds.value = selection.selectedRows.value.map(r => r.id)
   assignUserIds.value = []
   assignExpiresAt.value = null
   assignDedicatedOnly.value = false
@@ -1015,7 +1042,7 @@ const handleAssignSubmit = async () => {
     }
 
     showAssignDrawer.value = false
-    checkedRowKeys.value = []
+    selection.clear()
     assignNodeId.value = null
     assignNodeIds.value = []
     assignExpiresAt.value = null
@@ -1063,11 +1090,11 @@ const handleImportSubmit = async () => {
 const importTypeChanged = () => { /* 切换方式时无需清理 */ }
 
 const handleBatchDelete = async () => {
-  if (checkedRowKeys.value.length === 0) return
+  if (!selection.count.value) return
   try {
-    await batchDeleteCustomNodes({ ids: checkedRowKeys.value })
+    await batchDeleteCustomNodes({ ids: selection.selectedRows.value.map(r => r.id) })
     message.success('批量删除成功')
-    checkedRowKeys.value = []
+    selection.clear()
     fetchData()
   } catch (error) {
     message.error(error.message || '批量删除失败')

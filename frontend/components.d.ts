@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AuthLayout: typeof import('./src/components/AuthLayout.vue')['default']
+    BatchSelectBar: typeof import('./src/components/BatchSelectBar.vue')['default']
     CommonDrawer: typeof import('./src/components/CommonDrawer.vue')['default']
     EmptyState: typeof import('./src/components/EmptyState.vue')['default']
     LoadingScreen: typeof import('./src/components/LoadingScreen.vue')['default']

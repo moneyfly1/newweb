@@ -43,7 +43,7 @@ func writeClashProxy(sb *strings.Builder, m map[string]interface{}) {
 		}
 		sb.WriteString(escapeYAML(key))
 		sb.WriteString(": ")
-		writeYAMLInlineValue(sb, val)
+		writeYAMLInlineValueForKey(sb, key, val)
 	}
 
 	// Write remaining keys sorted
@@ -63,7 +63,7 @@ func writeClashProxy(sb *strings.Builder, m map[string]interface{}) {
 		}
 		sb.WriteString(escapeYAML(key))
 		sb.WriteString(": ")
-		writeYAMLInlineValue(sb, m[key])
+		writeYAMLInlineValueForKey(sb, key, m[key])
 	}
 	sb.WriteString("}\n")
 }
@@ -115,9 +115,19 @@ func shouldClashDisableTFO(m map[string]interface{}) bool {
 }
 
 func writeYAMLInlineValue(sb *strings.Builder, val interface{}) {
+	writeYAMLInlineValueForKey(sb, "", val)
+}
+
+// writeYAMLInlineValueForKey 与 writeYAMLInlineValue 相同，但知道当前字段名，
+// 用于把 short-id / public-key / uuid / password 等字段强制按字符串输出。
+func writeYAMLInlineValueForKey(sb *strings.Builder, key string, val interface{}) {
 	switch v := val.(type) {
 	case string:
-		sb.WriteString(escapeYAML(v))
+		if forceQuoteYAMLKey(key) {
+			sb.WriteString(quoteYAMLString(v))
+		} else {
+			sb.WriteString(escapeYAML(v))
+		}
 	case int:
 		sb.WriteString(strconv.Itoa(v))
 	case float64:
@@ -145,7 +155,7 @@ func writeYAMLInlineValue(sb *strings.Builder, val interface{}) {
 			}
 			sb.WriteString(escapeYAML(k))
 			sb.WriteString(": ")
-			writeYAMLInlineValue(sb, v[k])
+			writeYAMLInlineValueForKey(sb, k, v[k])
 		}
 		sb.WriteString("}")
 	case []interface{}:
@@ -154,7 +164,7 @@ func writeYAMLInlineValue(sb *strings.Builder, val interface{}) {
 			if i > 0 {
 				sb.WriteString(", ")
 			}
-			writeYAMLInlineValue(sb, item)
+			writeYAMLInlineValueForKey(sb, key, item)
 		}
 		sb.WriteString("]")
 	case []string:
@@ -163,7 +173,11 @@ func writeYAMLInlineValue(sb *strings.Builder, val interface{}) {
 			if i > 0 {
 				sb.WriteString(", ")
 			}
-			sb.WriteString(escapeYAML(item))
+			if forceQuoteYAMLKey(key) {
+				sb.WriteString(quoteYAMLString(item))
+			} else {
+				sb.WriteString(escapeYAML(item))
+			}
 		}
 		sb.WriteString("]")
 	default:
@@ -171,9 +185,107 @@ func writeYAMLInlineValue(sb *strings.Builder, val interface{}) {
 	}
 }
 
+// yamlPlainIsNonString 判断一个不加引号的纯量会被 YAML 隐式解析成"非字符串"
+// （整数 / 浮点 / 科学计数法 / 布尔 / null / 时间戳）。
+//
+// 线上真实故障：REALITY 的 short-id "450259e7" 是合法十六进制，但 YAML 会把它
+// 当成 450259 x 10^7 的浮点数，客户端把订阅回写成内核配置后变成
+// 4502590000000.0，mihomo 直接 fatal: invalid REALITY short ID。
+// 因此这类值必须加引号输出。
+func yamlPlainIsNonString(s string) bool {
+	switch s {
+	case "":
+		return false
+	case "~", "null", "Null", "NULL":
+		return true
+	case "true", "True", "TRUE", "false", "False", "FALSE":
+		return true
+	case "y", "Y", "yes", "Yes", "YES", "n", "N", "no", "No", "NO",
+		"on", "On", "ON", "off", "Off", "OFF":
+		return true
+	case ".inf", ".Inf", ".INF", "+.inf", "+.Inf", "+.INF",
+		"-.inf", "-.Inf", "-.INF", ".nan", ".NaN", ".NAN":
+		return true
+	}
+	plain := strings.ReplaceAll(s, "_", "")
+	if _, err := strconv.ParseInt(plain, 0, 64); err == nil {
+		return true
+	}
+	if _, err := strconv.ParseUint(plain, 0, 64); err == nil {
+		return true
+	}
+	if _, err := strconv.ParseFloat(plain, 64); err == nil {
+		return true
+	}
+	// YAML 1.1 的日期 / 时间戳（如 2026-10-27）同样会被解析成非字符串
+	if len(s) >= 10 && s[4] == '-' && s[7] == '-' &&
+		isASCIIDigits(s[0:4]) && isASCIIDigits(s[5:7]) && isASCIIDigits(s[8:10]) {
+		return true
+	}
+	return false
+}
+
+func isASCIIDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// quoteYAMLString 始终以双引号输出，并转义反斜杠、双引号与控制字符。
+func quoteYAMLString(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '\\':
+			b.WriteString("\\\\")
+		case '"':
+			b.WriteString("\\\"")
+		case '\n':
+			b.WriteString("\\n")
+		case '\r':
+			b.WriteString("\\r")
+		case '\t':
+			b.WriteString("\\t")
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// forceQuoteYAMLKeys 这些字段一律按字符串（带引号）输出：它们的值是十六进制串
+// 或口令，一旦被 YAML 当数值读走，客户端回写订阅时就会变形。
+var forceQuoteYAMLKeys = map[string]bool{
+	"short-id":      true,
+	"public-key":    true,
+	"private-key":   true,
+	"uuid":          true,
+	"password":      true,
+	"servername":    true,
+	"sni":           true,
+	"psk":           true,
+	"auth-str":      true,
+	"obfs-password": true,
+}
+
+func forceQuoteYAMLKey(key string) bool {
+	return forceQuoteYAMLKeys[strings.ToLower(strings.TrimSpace(key))]
+}
+
 func escapeYAML(s string) string {
 	if s == "" {
 		return "\"\""
+	}
+	if yamlPlainIsNonString(s) {
+		return quoteYAMLString(s)
 	}
 	needsQuotes := false
 	special := ":\"'#@&*?|>!%`[]{}, \n\r\t"
@@ -184,9 +296,7 @@ func escapeYAML(s string) string {
 		}
 	}
 	if needsQuotes {
-		escaped := strings.ReplaceAll(s, "\\", "\\\\")
-		escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
-		return "\"" + escaped + "\""
+		return quoteYAMLString(s)
 	}
 	return s
 }

@@ -194,7 +194,13 @@ func VlessLinkToClashMap(link string, name string) (map[string]interface{}, erro
 			// short-id 为空或非法时省略字段（Clash Meta 空 short-id 合法，
 			// 但 "short-id: ''" 空字符串会报 invalid REALITY short ID）
 			opts := map[string]interface{}{"public-key": q.Get("pbk")}
-			if sid := sanitizeRealityShortID(q.Get("sid")); sid != "" {
+			rawSID := strings.TrimSpace(q.Get("sid"))
+			sid := sanitizeRealityShortID(rawSID)
+			// 非空但非法：不猜、不补零、不截断，直接报错让上层剔除该节点
+			if rawSID != "" && sid == "" {
+				return nil, fmt.Errorf("invalid REALITY short-id %q", rawSID)
+			}
+			if sid != "" {
 				opts["short-id"] = sid
 			}
 			m["reality-opts"] = opts
@@ -984,8 +990,8 @@ func sanitizeRealityShortID(sid string) string {
 	if sid == "" {
 		return ""
 	}
-	// 必须为十六进制字符（大小写均可），且长度不超过 32（16 字节）
-	if len(sid) > 32 {
+	// mihomo 的要求：偶数长度的纯十六进制字符串，长度 <= 16（8 字节）
+	if len(sid) > 16 || len(sid)%2 != 0 {
 		return ""
 	}
 	for _, ch := range sid {

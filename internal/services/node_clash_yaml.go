@@ -2,6 +2,7 @@ package services
 
 import (
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/utils"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"os"
@@ -40,6 +41,9 @@ func GenerateClashYAMLWithDomain(nodes []models.Node, siteDomain string, subscri
 
 		m, err := NodeConfigToClashMap(n.Type, *n.Config, name)
 		if err != nil {
+			// 非法节点（例如 REALITY short-id 不合法）直接剔除：既不写进 proxies，
+			// 也不写进 proxyNames，proxy-groups 里自然不会再引用到它
+			utils.LogError("订阅生成剔除非法节点: name=%q type=%s err=%v", name, n.Type, err)
 			continue
 		}
 		proxies = append(proxies, m)
@@ -97,6 +101,9 @@ func GenerateStashYAMLWithDomain(nodes []models.Node, siteDomain string, subscri
 		usedNames[name] = true
 		m, err := NodeConfigToClashMap(n.Type, *n.Config, name)
 		if err != nil {
+			// 非法节点（例如 REALITY short-id 不合法）直接剔除：既不写进 proxies，
+			// 也不写进 proxyNames，proxy-groups 里自然不会再引用到它
+			utils.LogError("订阅生成剔除非法节点: name=%q type=%s err=%v", name, n.Type, err)
 			continue
 		}
 		proxies = append(proxies, m)

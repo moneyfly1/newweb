@@ -166,7 +166,9 @@ func TestWriteClashProxyDefaultsTLSToSkipCertVerify(t *testing.T) {
 	var sb strings.Builder
 	writeClashProxy(&sb, proxy)
 	out := sb.String()
-	wantPrefix := "  - {name: 日本01快橙, server: n1743918709.4u9ma.icu, port: 443, type: vless, uuid: 15884975-9b74-4502-b6a3-f69df7ec93d7, tls: true, tfo: false, skip-cert-verify: true, servername: n1743918709.4u9ma.icu, client-fingerprint: chrome, network: ws"
+	// uuid / servername 等字段按「强制字符串」输出（带引号）：避免 YAML 把十六进制串
+	// 或像数字的口令读成数值，客户端回写订阅时变形（见 forceQuoteYAMLKeys）
+	wantPrefix := "  - {name: 日本01快橙, server: n1743918709.4u9ma.icu, port: 443, type: vless, uuid: \"15884975-9b74-4502-b6a3-f69df7ec93d7\", tls: true, tfo: false, skip-cert-verify: true, servername: \"n1743918709.4u9ma.icu\", client-fingerprint: chrome, network: ws"
 	if !strings.HasPrefix(out, wantPrefix) {
 		t.Fatalf("expected Clash output to start like converter format:\nwant prefix: %s\ngot: %s", wantPrefix, out)
 	}
@@ -187,7 +189,8 @@ func TestGenerateClashYAMLKeepsConverterLikeVLESSOrder(t *testing.T) {
 	}}
 
 	out := GenerateClashYAML(nodes)
-	want := "- {name: 日本01快橙, server: n1743918709.4u9ma.icu, port: 443, type: vless, uuid: 15884975-9b74-4502-b6a3-f69df7ec93d7, tls: true, tfo: false, skip-cert-verify: true, servername: n1743918709.4u9ma.icu, client-fingerprint: chrome, network: ws"
+	// 同上：uuid 与 servername 现在是强制带引号的字符串
+	want := "- {name: 日本01快橙, server: n1743918709.4u9ma.icu, port: 443, type: vless, uuid: \"15884975-9b74-4502-b6a3-f69df7ec93d7\", tls: true, tfo: false, skip-cert-verify: true, servername: \"n1743918709.4u9ma.icu\", client-fingerprint: chrome, network: ws"
 	if !strings.Contains(out, want) {
 		t.Fatalf("expected final Clash YAML to contain converter-like VLESS line:\nwant: %s\noutput:\n%s", want, out)
 	}

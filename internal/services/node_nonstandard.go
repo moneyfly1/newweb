@@ -143,7 +143,13 @@ func convertNonStandardToClashMap(link string, name string, nodeType string) (ma
 		if pbk := query.Get("pbk"); pbk != "" {
 			m["tls"] = true
 			realityOpts := map[string]interface{}{"public-key": pbk}
-			if sid := sanitizeRealityShortID(query.Get("sid")); sid != "" {
+			rawSID := strings.TrimSpace(query.Get("sid"))
+			sid := sanitizeRealityShortID(rawSID)
+			// 非空但非法：直接报错让上层剔除该节点，避免下发非法 REALITY 配置
+			if rawSID != "" && sid == "" {
+				return nil, fmt.Errorf("invalid REALITY short-id %q", rawSID)
+			}
+			if sid != "" {
 				realityOpts["short-id"] = sid
 			}
 			m["reality-opts"] = realityOpts

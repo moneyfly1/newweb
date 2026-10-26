@@ -42,6 +42,7 @@ var proxyKeywords = []string{
 	"shadowsocksr", "ssr", "surfboard", "surge", "v2ray", "v2rayn",
 	"v2rayng", "v2rayu", "v2rayx", "stash", "anx", "anxray", "kitsunebi",
 	"pharos", "potatso", "karing", "neko", "nekoray", "nekobox", "sing-box",
+	"mbox",
 }
 
 var browserKeywords = []string{
@@ -85,6 +86,11 @@ func detectSoftware(lower, ua string, info *ClientInfo) {
 		// 网站就认不出这是哪个客户端了（实测库里确实出现了 Mihomo 行）。
 		{"mclash", "Mclash"},
 		{"moneyfly", "MoneyFly"},
+		// MBox（sing-box 内核的自有客户端）：UA 形如
+		// `MBox/0.0.1 (Macintosh; Mac OS X 26_6)`。必须排在内核标识之前 ——
+		// 它的 UA 里可能带 sing-box/mihomo 之类的内核串，排在后面就会被
+		// 识别成内核名（和当年 MoneyFly 被认成 Mihomo 是同一个坑）。
+		{"mbox", "MBox"},
 		{"clashmi", "ClashMi"},
 		{"shadowrocket", "Shadowrocket"},
 		{"quantumult%20x", "Quantumult X"},

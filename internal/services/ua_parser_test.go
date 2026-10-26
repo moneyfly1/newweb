@@ -94,6 +94,94 @@ func TestDeviceFingerprintStableAcrossVersions(t *testing.T) {
 	}
 }
 
+
+// MBox 是 sing-box 内核的自有客户端，四端 UA 形如
+// `MBox/<版本> (<系统特征串>)`。后端必须把它认成 MBox（而不是 Unknown，
+// 更不是内核名 sing-box / Mihomo），否则后台「软件」列全是 Unknown，
+// 设备指纹也会退化成整串 UA 的哈希（改版本号就多一台幽灵设备）。
+func TestParseUserAgentRecognizesMBox(t *testing.T) {
+	cases := []struct {
+		name     string
+		ua       string
+		wantSoft string
+		wantVer  string
+		wantOS   string
+		wantType string
+	}{
+		{
+			name:     "macOS 桌面端",
+			ua:       "MBox/0.0.1 (Macintosh; Mac OS X 26_6)",
+			wantSoft: "MBox",
+			wantVer:  "0.0.1",
+			wantOS:   "macOS",
+			wantType: "desktop",
+		},
+		{
+			name:     "Windows 桌面端",
+			ua:       "MBox/0.0.1 (Windows NT 10.0)",
+			wantSoft: "MBox",
+			wantVer:  "0.0.1",
+			wantOS:   "Windows",
+			wantType: "desktop",
+		},
+		{
+			name:     "Android 手机",
+			ua:       "MBox/0.0.1 (Linux; Android 14; sdk_gphone64_arm64 Build/UE1A.230829.036.A4)",
+			wantSoft: "MBox",
+			wantVer:  "0.0.1",
+			wantOS:   "Android",
+			wantType: "mobile",
+		},
+		{
+			name:     "iOS 手机",
+			ua:       "MBox/0.0.1 (iPhone14,3; iOS 16.6.1)",
+			wantSoft: "MBox",
+			wantVer:  "0.0.1",
+			wantOS:   "iOS",
+			wantType: "mobile",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			info := ParseUserAgent(c.ua)
+			if info.SoftwareName != c.wantSoft {
+				t.Fatalf("SoftwareName = %q, 期望 %q", info.SoftwareName, c.wantSoft)
+			}
+			if info.SoftwareVersion != c.wantVer {
+				t.Fatalf("SoftwareVersion = %q, 期望 %q", info.SoftwareVersion, c.wantVer)
+			}
+			if info.OSName != c.wantOS {
+				t.Fatalf("OSName = %q, 期望 %q", info.OSName, c.wantOS)
+			}
+			if info.DeviceType != c.wantType {
+				t.Fatalf("DeviceType = %q, 期望 %q", info.DeviceType, c.wantType)
+			}
+			if info.IsBrowser {
+				t.Fatal("MBox 是代理客户端，不应被判成浏览器请求")
+			}
+		})
+	}
+}
+
+// 版本升级/系统升级不能让同一台机器变成「新设备」：
+// 指纹只取软件名 + 系统 + 硬件型号（MBox 的 UA 里没有型号，故 mac 三端各一台）。
+func TestMBoxFingerprintStableAcrossVersionBump(t *testing.T) {
+	a := GenerateDeviceFingerprint("MBox/0.0.1 (Macintosh; Mac OS X 26_6)", "")
+	b := GenerateDeviceFingerprint("MBox/0.1.0 (Macintosh; Mac OS X 27_0)", "")
+	if a != b {
+		t.Fatal("同一台 mac：升级客户端/系统后指纹必须不变")
+	}
+	w := GenerateDeviceFingerprint("MBox/0.0.1 (Windows NT 10.0)", "")
+	if a == w {
+		t.Fatal("mac 与 Windows 不应算同一台设备")
+	}
+	// 关键回归：认不出软件名时指纹会退化成 UA 哈希，升级版本就换设备
+	info := ParseUserAgent("MBox/0.0.1 (Macintosh; Mac OS X 26_6)")
+	if info.SoftwareName == "Unknown" {
+		t.Fatal("MBox 必须被识别，否则指纹不稳定（会不断产生幽灵设备）")
+	}
+}
+
 // 客户端上报的设备 id（x-hwid / X-App-Device-Id）必须给出稳定指纹。
 func TestDeviceFingerprintByAppDeviceID(t *testing.T) {
 	a := GenerateDeviceFingerprint("MoneyFly-App-Device:abc-123", "")

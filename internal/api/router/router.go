@@ -69,6 +69,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	// 通用链接：GET /api/v1/client/subscribe?token=TOKEN&type=universal
 	subRL := middleware.RateLimit(20, time.Minute)
 	api.GET("/client/subscribe", subRL, handlers.GetSubscription)
+
+	// XBoard 兼容订阅入口（与主入口同逻辑）
+
+	api.GET("/client/subscribe/xboard", subRL, handlers.GetClientSubscribeXBoardCompat)
 	// 兼容旧订阅地址，旧 token 会映射到当前订阅记录，并继续受订阅状态、到期时间、设备数控制。
 	api.GET("/subscribe/:url", subRL, handlers.GetSubscription)
 	api.GET("/sub/*path", subRL, handlers.GetSubscription)
@@ -130,6 +134,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 			knowledgePublic.GET("/articles", handlers.GetKnowledgeArticles)
 			knowledgePublic.GET("/articles/:id", handlers.GetKnowledgeArticle)
 		}
+
+		// XBoard 兼容（第三方面板/客户端按固定路径读取）
+		authorized.GET("/user/info", handlers.GetCurrentUserXBoardCompat)
+		authorized.GET("/user/subscribe", handlers.GetUserSubscriptionXBoardCompat)
 
 		users := authorized.Group("/users")
 		{
@@ -269,6 +277,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/stats", handlers.AdminStats)
 
 		// 用户管理
+		// GeoIP 管理
+		admin.GET("/settings/geoip/status", handlers.GetGeoIPStatus)
+		admin.POST("/settings/geoip/reload", handlers.ReloadGeoIP)
+
 		// 促销活动（管理端）
 		adminPromos := admin.Group("/promotions")
 		adminPromos.Use(middleware.CSRFProtection())

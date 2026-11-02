@@ -240,7 +240,7 @@ const menuOptions = [
   ]},
   { label: '系统管理', key: 'group-system', icon: renderIcon(SettingsOutline), children: [
     menuItem('系统设置', 'AdminSettings'), menuItem('公告管理', 'AdminAnnouncements'),
-    menuItem('优惠券', 'AdminCoupons'), menuItem('邀请码管理', 'AdminInvites'), menuItem('卡密管理', 'AdminRedeem'), menuItem('盲盒管理', 'AdminMysteryBox'), menuItem('用户等级', 'AdminLevels'),
+    menuItem('优惠券', 'AdminCoupons'), menuItem('促销活动', 'AdminPromotions'), menuItem('知识库', 'AdminKnowledge'), menuItem('邀请码管理', 'AdminInvites'), menuItem('卡密管理', 'AdminRedeem'), menuItem('盲盒管理', 'AdminMysteryBox'), menuItem('用户等级', 'AdminLevels'),
   ]},
   { label: '日志与分析', key: 'group-logs', icon: renderIcon(StatsChartOutline), children: [
     menuItem('数据统计', 'AdminStats'), menuItem('系统日志', 'AdminLogs'), menuItem('邮件队列', 'AdminEmailQueue'),

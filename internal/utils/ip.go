@@ -60,7 +60,9 @@ var (
 	ipLocationMu    sync.RWMutex
 	ipLocationTTL   = 30 * time.Minute
 	mmdbReader      *maxminddb.Reader
-	mmdbOnce        sync.Once
+	mmdbMu          sync.Mutex
+	mmdbLoaded      bool
+	mmdbPath        string
 	// ip2region 的 v4/v6 是两个独立的库，必须分别加载并各自用对应 Version，
 	// 查询时再按 IP 类型选择（详见 loadIP2RegionSearchers）。
 	ip4Searcher   *xdb.Searcher
@@ -225,7 +227,13 @@ func isCountryCode(s string) bool {
 }
 
 func loadMMDBReader() *maxminddb.Reader {
-	mmdbOnce.Do(func() {
+	mmdbMu.Lock()
+	defer mmdbMu.Unlock()
+	if mmdbLoaded {
+		return mmdbReader
+	}
+	mmdbLoaded = true
+	{
 		candidates := []string{
 			filepath.Join("uploads", "config", "GeoLite2-City.mmdb"),
 			filepath.Join("uploads", "config", "geoip.metadb"),
@@ -240,13 +248,14 @@ func loadMMDBReader() *maxminddb.Reader {
 			reader, err := maxminddb.Open(candidate)
 			if err == nil {
 				mmdbReader = reader
+				mmdbPath = candidate
 				fmt.Printf("[MMDB] 成功加载: %s\n", candidate)
-				return
+				return reader
 			}
 			fmt.Printf("[MMDB] 加载失败: %v\n", err)
 		}
 		fmt.Printf("[MMDB] 所有数据库文件加载失败\n")
-	})
+	}
 	return mmdbReader
 }
 
@@ -381,7 +390,8 @@ func ReloadGeoIP() {
 		_ = mmdbReader.Close()
 	}
 	mmdbReader = nil
-	mmdbOnce = sync.Once{}
+	mmdbLoaded = false
+	mmdbPath = ""
 
 	// 清空 IP → 地区 缓存
 	ipLocationMu.Lock()
@@ -392,4 +402,57 @@ func ReloadGeoIP() {
 	v4, v6 := loadIP2RegionSearchers()
 	loadMMDBReader()
 	fmt.Printf("[GeoIP] 已重载地理位置库: ip2region_v4=%v ip2region_v6=%v\n", v4 != nil, v6 != nil)
+}
+
+// ReloadMMDB 重新加载 MMDB 并清空 IP 地区缓存。
+//
+// 用途：运维上传/替换 GeoLite2-City.mmdb 后，无需重启服务即可生效。
+// 旧实现用 sync.Once 加载一次就永久缓存，换库必须重启进程（线上重装常见痛点）。
+func ReloadMMDB() error {
+	mmdbMu.Lock()
+	if mmdbReader != nil {
+		_ = mmdbReader.Close()
+		mmdbReader = nil
+	}
+	mmdbLoaded = false
+	mmdbPath = ""
+	mmdbMu.Unlock()
+
+	// 清空 IP 地区缓存（旧库结果不能继续命中）
+	ipLocationMu.Lock()
+	for k := range ipLocationCache {
+		delete(ipLocationCache, k)
+	}
+	ipLocationMu.Unlock()
+
+	// 触发重新加载
+	_ = loadMMDBReader()
+	return nil
+}
+
+// MMDBStatus 返回当前 GeoIP 库的状态（管理端展示 + 排障用）。
+func MMDBStatus() map[string]interface{} {
+	mmdbMu.Lock()
+	defer mmdbMu.Unlock()
+
+	status := map[string]interface{}{
+		"loaded": mmdbLoaded,
+		"path":   mmdbPath,
+		"candidates": []string{
+			filepath.Join("uploads", "config", "GeoLite2-City.mmdb"),
+			filepath.Join("uploads", "config", "geoip.metadb"),
+			filepath.Join("uploads", "config", "Country.mmdb"),
+		},
+	}
+	if mmdbPath != "" {
+		if fi, err := os.Stat(mmdbPath); err == nil {
+			status["file_size"] = fi.Size()
+			status["modified_at"] = fi.ModTime().Format(time.RFC3339)
+		}
+	}
+	// 缓存条目数（便于判断是否需要 reload）
+	ipLocationMu.RLock()
+	status["cache_entries"] = len(ipLocationCache)
+	ipLocationMu.RUnlock()
+	return status
 }

@@ -636,13 +636,16 @@ select:-webkit-autofill {
 
 
 /* ------------------------------------------------------------
-   10. 复选框边框可见性
+   10. 列表/表格行前的选择框可见性
    ------------------------------------------------------------
-   问题：未选中时 Naive 的边框色与白色卡片几乎同色（尤其表格表头的全选框），
-   「勾选后才看得见」，用户根本找不到可点的方框。
-   处理：统一加深边框、给底色，并在各主题下保持对比度。 */
+   问题：未选中时 Naive 的边框色取 --n-border（主题里是 #e2e8f0 这类近白色），
+   在白卡片上几乎看不见，只有勾选后才看得到方框，用户根本不知道能点。
+   处理：改用「文字色 42% 混合」的深灰描边（各主题自动适配明暗），
+   行内选框放大到 18px，表头全选 20px 并加粗一档。 */
 .n-checkbox .n-checkbox-box {
-  border: 1.5px solid var(--border-color, #cbd5e1) !important;
+  /* 先用实色兜底（老 WebView 不支持 color-mix 时也能看见），再用混色适配主题 */
+  border: 2px solid #64748b !important;
+  border-color: color-mix(in srgb, var(--text-color, #0f172a) 55%, transparent) !important;
   background-color: var(--bg-color, #fff) !important;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
@@ -655,7 +658,21 @@ select:-webkit-autofill {
   border-color: var(--primary-color, #4f46e5) !important;
   background-color: var(--primary-color, #4f46e5) !important;
 }
-/* 表头的全选框再加重一档：它是批量操作入口，必须一眼可见 */
+/* 行选择框：放大并保证点得准 */
+.n-data-table .n-checkbox .n-checkbox-box,
+.mobile-card .n-checkbox .n-checkbox-box {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 4px !important;
+}
+/* 表头全选框：批量操作入口，再重一档 */
 .n-data-table-th .n-checkbox .n-checkbox-box {
+  width: 20px !important;
+  height: 20px !important;
   border-width: 2px !important;
+}
+/* 深色主题下用更亮的描边（文字色本身是浅色，混合后自动适配，这里兜底） */
+[data-theme='midnight'] .n-checkbox .n-checkbox-box {
+  border-color: #94a3b8 !important;
+  border-color: color-mix(in srgb, #e2e8f0 60%, transparent) !important;
 }

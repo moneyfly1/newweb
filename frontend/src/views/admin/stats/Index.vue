@@ -27,6 +27,9 @@
           </n-space>
         </n-card>
 
+        <n-tabs v-model:value="activeTab" type="line" animated class="stats-tabs">
+          <n-tab-pane name="overview" tab="概览">
+            <n-space vertical :size="16">
         <!-- Summary Cards -->
         <n-card title="财务概览" :bordered="false" class="summary-card">
           <n-grid :cols="appStore.isMobile ? 2 : 6" :x-gap="16" :y-gap="16" class="summary-grid">
@@ -94,7 +97,11 @@
           </div>
           <n-empty v-else description="暂无数据" />
         </n-card>
+            </n-space>
+          </n-tab-pane>
 
+          <n-tab-pane name="payment" tab="收入与支付">
+            <n-space vertical :size="16">
         <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="16" :y-gap="16">
           <!-- Payment Method Stats -->
           <n-gi>
@@ -143,107 +150,6 @@
             </n-card>
           </n-gi>
         </n-grid>
-
-        <!-- Top Users -->
-        <n-card title="消费排行 TOP 10" :bordered="false">
-          <div v-if="topUsers.length > 0 && appStore.isMobile" class="mobile-stat-list top-user-list">
-            <div v-for="(item, index) in topUsers" :key="index" class="mobile-stat-item top-user-item">
-              <div class="mobile-stat-main">#{{ index + 1 }} {{ item.username || '未知用户' }}</div>
-              <div class="mobile-stat-sub">用户ID：{{ item.user_id }}</div>
-              <div class="mobile-stat-meta">
-                <span>{{ item.order_count }} 单</span>
-                <strong>{{ formatCurrency(item.total_spent) }}</strong>
-              </div>
-            </div>
-          </div>
-          <n-data-table
-            v-else-if="topUsers.length > 0"
-            :columns="topUserColumns"
-            :data="topUsers"
-            :bordered="false"
-            size="small"
-            :pagination="false"
-          />
-          <n-empty v-else description="暂无数据" />
-        </n-card>
-
-        <!-- Region Stats -->
-        <n-card title="用户地区分布" :bordered="false">
-          <template #header-extra>
-            <n-button size="tiny" text @click="showAllRegions = !showAllRegions">
-              {{ showAllRegions ? '收起' : `查看全部 (${regionStats.length})` }}
-            </n-button>
-          </template>
-          <n-spin :show="regionLoading">
-            <div v-if="regionStats.length > 0" class="region-list-compact" :class="{ expanded: showAllRegions }">
-              <div v-for="(item, index) in displayRegions" :key="index" class="region-row-compact">
-                <span class="region-rank-sm">{{ index + 1 }}</span>
-                <span class="region-detail">{{ item.country || '-' }} · {{ item.province || '-' }} · {{ item.city || '-' }}</span>
-                <span class="region-bar-wrap">
-                  <span class="region-bar" :style="{ width: Math.round((item.count / maxRegionCount) * 100) + '%', background: getColor(index) }"></span>
-                </span>
-                <span class="region-count-sm">{{ item.count }}</span>
-              </div>
-            </div>
-            <n-empty v-else description="暂无地区数据" style="padding: 40px 0" />
-          </n-spin>
-        </n-card>
-
-        <!-- 设备分析（对齐 myweb：按客户端/系统分布 + 设备明细） -->
-        <n-card title="设备分析" :bordered="false">
-          <n-spin :show="deviceLoading">
-            <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="16" :y-gap="16">
-              <n-gi><n-statistic label="设备总数" :value="deviceStats.total" /></n-gi>
-              <n-gi><n-statistic label="在线" :value="deviceStats.online" /></n-gi>
-              <n-gi><n-statistic label="离线" :value="deviceStats.offline" /></n-gi>
-              <n-gi>
-                <n-statistic label="在线率" :value="devicePct(deviceStats.online, deviceStats.total)">
-                  <template #suffix>%</template>
-                </n-statistic>
-              </n-gi>
-            </n-grid>
-
-            <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="16" :y-gap="12" style="margin-top: 12px">
-              <n-gi>
-                <div class="device-dist-title">客户端分布</div>
-                <div v-for="it in deviceStats.by_software" :key="it.name" class="device-dist-row">
-                  <span class="device-dist-name">{{ it.name }}</span>
-                  <n-progress type="line" :percentage="devicePct(it.count, deviceStats.total)" :show-indicator="false" />
-                  <span class="device-dist-count">{{ it.count }}</span>
-                </div>
-                <p v-if="!deviceStats.by_software.length" class="device-empty">暂无数据</p>
-              </n-gi>
-              <n-gi>
-                <div class="device-dist-title">系统分布</div>
-                <div v-for="it in deviceStats.by_os" :key="it.name" class="device-dist-row">
-                  <span class="device-dist-name">{{ it.name }}</span>
-                  <n-progress type="line" :percentage="devicePct(it.count, deviceStats.total)" :show-indicator="false" />
-                  <span class="device-dist-count">{{ it.count }}</span>
-                </div>
-                <p v-if="!deviceStats.by_os.length" class="device-empty">暂无数据</p>
-              </n-gi>
-            </n-grid>
-
-            <div class="device-detail-head">
-              <strong>设备明细</strong>
-              <n-input
-                v-model:value="deviceKeyword"
-                placeholder="搜索 IP / 型号 / 用户名"
-                clearable
-                size="small"
-                style="width: 220px"
-                @keyup.enter="loadDeviceStats"
-              />
-            </div>
-            <n-data-table
-              :columns="deviceColumns"
-              :data="deviceItems"
-              :loading="deviceLoading"
-              size="small"
-              :pagination="devicePagination"
-            />
-          </n-spin>
-        </n-card>
 
         <!-- 支付分析（此前后端已实现、前端未接入） -->
         <n-card title="支付分析" :bordered="false">
@@ -317,10 +223,160 @@
           </div>
           <n-empty v-else-if="payAnalysisLoaded" description="该时段无订单" style="padding: 20px 0" />
         </n-card>
+            </n-space>
+          </n-tab-pane>
+
+          <n-tab-pane name="users" tab="用户与地区">
+            <n-space vertical :size="16">
+        <!-- Top Users -->
+        <n-card title="消费排行 TOP 10" :bordered="false">
+          <div v-if="topUsers.length > 0 && appStore.isMobile" class="mobile-stat-list top-user-list">
+            <div v-for="(item, index) in topUsers" :key="index" class="mobile-stat-item top-user-item" style="cursor: pointer" @click="userCurrent = item; userDrawer = true">
+              <div class="mobile-stat-main">#{{ index + 1 }} {{ item.username || '未知用户' }}</div>
+              <div class="mobile-stat-sub">用户ID：{{ item.user_id }}</div>
+              <div class="mobile-stat-meta">
+                <span>{{ item.order_count }} 单</span>
+                <strong>{{ formatCurrency(item.total_spent) }}</strong>
+              </div>
+            </div>
+          </div>
+          <n-data-table
+            v-else-if="topUsers.length > 0"
+            :columns="topUserColumns"
+            :data="topUsers"
+            :bordered="false"
+            size="small"
+            :pagination="false"
+            :row-props="userRowProps"
+          />
+          <n-empty v-else description="暂无数据" />
+        </n-card>
+
+        <!-- Region Stats -->
+        <n-card title="用户地区分布" :bordered="false">
+          <template #header-extra>
+            <n-button size="tiny" text @click="showAllRegions = !showAllRegions">
+              {{ showAllRegions ? '收起' : `查看全部 (${regionStats.length})` }}
+            </n-button>
+          </template>
+          <n-spin :show="regionLoading">
+            <div v-if="regionStats.length > 0" class="region-list-compact" :class="{ expanded: showAllRegions }">
+              <div v-for="(item, index) in displayRegions" :key="index" class="region-row-compact">
+                <span class="region-rank-sm">{{ index + 1 }}</span>
+                <span class="region-detail">{{ item.country || '-' }} · {{ item.province || '-' }} · {{ item.city || '-' }}</span>
+                <span class="region-bar-wrap">
+                  <span class="region-bar" :style="{ width: Math.round((item.count / maxRegionCount) * 100) + '%', background: getColor(index) }"></span>
+                </span>
+                <span class="region-count-sm">{{ item.count }}</span>
+              </div>
+            </div>
+            <n-empty v-else description="暂无地区数据" style="padding: 40px 0" />
+          </n-spin>
+        </n-card>
+            </n-space>
+          </n-tab-pane>
+
+          <n-tab-pane name="devices" tab="设备分析">
+          <!-- 设备分析（对齐 myweb：按客户端/系统分布 + 设备明细） -->
+          <n-card title="设备分析" :bordered="false">
+            <n-spin :show="deviceLoading">
+              <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="16" :y-gap="16">
+                <n-gi><n-statistic label="设备总数" :value="deviceStats.total" /></n-gi>
+                <n-gi><n-statistic label="在线" :value="deviceStats.online" /></n-gi>
+                <n-gi><n-statistic label="离线" :value="deviceStats.offline" /></n-gi>
+                <n-gi>
+                  <n-statistic label="在线率" :value="devicePct(deviceStats.online, deviceStats.total)">
+                    <template #suffix>%</template>
+                  </n-statistic>
+                </n-gi>
+              </n-grid>
+
+              <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="16" :y-gap="12" style="margin-top: 12px">
+                <n-gi>
+                  <div class="device-dist-title">客户端分布</div>
+                  <div v-for="it in deviceStats.by_software" :key="it.name" class="device-dist-row">
+                    <span class="device-dist-name">{{ it.name }}</span>
+                    <n-progress type="line" :percentage="devicePct(it.count, deviceStats.total)" :show-indicator="false" />
+                    <span class="device-dist-count">{{ it.count }}</span>
+                  </div>
+                  <p v-if="!deviceStats.by_software.length" class="device-empty">暂无数据</p>
+                </n-gi>
+                <n-gi>
+                  <div class="device-dist-title">系统分布</div>
+                  <div v-for="it in deviceStats.by_os" :key="it.name" class="device-dist-row">
+                    <span class="device-dist-name">{{ it.name }}</span>
+                    <n-progress type="line" :percentage="devicePct(it.count, deviceStats.total)" :show-indicator="false" />
+                    <span class="device-dist-count">{{ it.count }}</span>
+                  </div>
+                  <p v-if="!deviceStats.by_os.length" class="device-empty">暂无数据</p>
+                </n-gi>
+              </n-grid>
+
+              <div class="device-detail-head">
+                <strong>设备明细</strong>
+                <n-input
+                  v-model:value="deviceKeyword"
+                  placeholder="搜索 IP / 型号 / 用户名"
+                  clearable
+                  size="small"
+                  style="width: 220px"
+                  @keyup.enter="loadDeviceStats"
+                />
+              </div>
+              <n-data-table
+                :columns="deviceColumns"
+                :data="deviceItems"
+                :loading="deviceLoading"
+                size="small"
+                :pagination="devicePagination"
+                :row-props="deviceRowProps"
+              />
+            </n-spin>
+          </n-card>
+          </n-tab-pane>
+        </n-tabs>
       </n-space>
     </n-spin>
+
+    <!-- 设备详情：统一走抽屉，表格里只留摘要字段 -->
+    <n-drawer v-model:show="deviceDrawer" :width="appStore.isMobile ? '100%' : 440" placement="right">
+      <n-drawer-content title="设备详情" closable>
+        <n-descriptions v-if="deviceCurrent" :column="1" label-placement="left" bordered size="small">
+          <n-descriptions-item label="用户">{{ deviceCurrent.username || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="客户端">{{ deviceCurrent.software_name || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="客户端版本">{{ deviceCurrent.software_version || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="系统">{{ (deviceCurrent.os_name || '-') + ' ' + (deviceCurrent.os_version || '') }}</n-descriptions-item>
+          <n-descriptions-item label="机型">{{ deviceCurrent.device_model || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="品牌">{{ deviceCurrent.device_brand || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="设备类型">{{ deviceCurrent.device_type || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="IP">{{ deviceCurrent.ip_address || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="地区">{{ deviceCurrent.region || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="状态">
+            <n-tag :type="deviceCurrent.online ? 'success' : 'default'" size="small">
+              {{ deviceCurrent.online ? '在线' : '离线' }}
+            </n-tag>
+          </n-descriptions-item>
+          <n-descriptions-item label="最后活跃">{{ deviceCurrent.last_access ? new Date(deviceCurrent.last_access).toLocaleString() : '-' }}</n-descriptions-item>
+          <n-descriptions-item label="首次出现">{{ deviceCurrent.created_at ? new Date(deviceCurrent.created_at).toLocaleString() : '-' }}</n-descriptions-item>
+        </n-descriptions>
+      </n-drawer-content>
+    </n-drawer>
+
+    <!-- 用户消费详情抽屉 -->
+    <n-drawer v-model:show="userDrawer" :width="appStore.isMobile ? '100%' : 400" placement="right">
+      <n-drawer-content title="用户消费详情" closable>
+        <n-descriptions v-if="userCurrent" :column="1" label-placement="left" bordered size="small">
+          <n-descriptions-item label="用户名">{{ userCurrent.username || '-' }}</n-descriptions-item>
+          <n-descriptions-item label="用户 ID">{{ userCurrent.user_id }}</n-descriptions-item>
+          <n-descriptions-item label="消费总额">{{ formatCurrency(userCurrent.total_spent) }}</n-descriptions-item>
+          <n-descriptions-item label="订单数">{{ userCurrent.order_count }}</n-descriptions-item>
+          <n-descriptions-item label="客单价">{{ formatCurrency(userCurrent.order_count ? userCurrent.total_spent / userCurrent.order_count : 0) }}</n-descriptions-item>
+        </n-descriptions>
+      </n-drawer-content>
+    </n-drawer>
   </div>
 </template>
+
 
 <script setup lang="ts">
 import { ref, reactive, computed, h, onMounted } from 'vue'
@@ -334,6 +390,23 @@ import RevenueTrendChart from '../components/RevenueTrendChart.vue'
 
 const appStore = useAppStore()
 const message = useMessage()
+const activeTab = ref('overview')
+
+/* 详情统一用抽屉：表格只保留摘要列，点行看完整信息 */
+const deviceDrawer = ref(false)
+const deviceCurrent = ref<any>(null)
+const deviceRowProps = (row: any) => ({
+  style: 'cursor: pointer',
+  onClick: () => { deviceCurrent.value = row; deviceDrawer.value = true },
+})
+
+const userDrawer = ref(false)
+const userCurrent = ref<any>(null)
+const userRowProps = (row: any) => ({
+  style: 'cursor: pointer',
+  onClick: () => { userCurrent.value = row; userDrawer.value = true },
+})
+
 const loading = ref(false)
 const exporting = ref(false)
 /* ---------------- 设备分析 ---------------- */
@@ -706,3 +779,10 @@ onMounted(() => {
 .pay-stats-wrap { display: flex; flex-direction: column; gap: 8px; }
 .pay-stats-wrap .method-list { display: flex; flex-direction: column; gap: 10px; }
 </style>
+
+/* 数据分析页：标签化组织，避免所有区块堆在一屏 */
+.stats-tabs :deep(.n-tabs-nav) { margin-bottom: 4px; }
+.stats-tabs :deep(.n-tab-pane) { padding-top: 12px; }
+@media (max-width: 767px) {
+  .stats-tabs :deep(.n-tabs-tab) { font-size: 13px; padding: 0 10px; }
+}

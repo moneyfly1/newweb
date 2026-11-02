@@ -65,7 +65,8 @@
         <n-grid-item span="2">
           <n-card title="收入趋势（近30天）" :bordered="false" class="glass-card shadow-sm">
             <div class="chart-shell">
-              <revenue-bar-chart :data="revenueTrend" />
+              <simple-bars v-if="trendBars.length" :items="trendBars" :height="300" :step="5" />
+              <n-empty v-else description="暂无数据" size="small" />
             </div>
           </n-card>
         </n-grid-item>
@@ -228,7 +229,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent, ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useMessage, type TagProps } from 'naive-ui'
 import {
@@ -245,7 +246,7 @@ import { formatRelativeTime } from '@/utils/format'
 const router = useRouter()
 const appStore = useAppStore()
 const message = useMessage()
-const RevenueBarChart = defineAsyncComponent(() => import('./components/RevenueBarChart.vue'))
+import SimpleBars from './components/SimpleBars.vue'
 
 const stats = ref<any>({
   total_users: 0,
@@ -260,6 +261,11 @@ const stats = ref<any>({
 const recentUsers = ref<any[]>([])
 const recentOrders = ref<any[]>([])
 const revenueTrend = ref<{ date: string; value: number }[]>([])
+const trendBars = computed(() => revenueTrend.value.map((d: any) => ({
+  label: String(d.date || '').slice(5),
+  value: Number(d.value) || 0,
+  display: formatCurrency(d.value),
+})))
 
 const conversionRate = computed(() => {
   if (!stats.value.total_users) return 0

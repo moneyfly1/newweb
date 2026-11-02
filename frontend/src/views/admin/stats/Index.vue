@@ -30,7 +30,7 @@
           </n-space>
         </n-card>
 
-        <n-tabs v-model:value="activeTab" type="line" animated class="stats-tabs">
+        <n-tabs v-model:value="activeTab" type="line" animated display-directive="if" class="stats-tabs">
           <n-tab-pane name="overview" tab="概览">
             <n-space vertical :size="16">
               <n-card :bordered="false" class="stats-card">
@@ -97,8 +97,7 @@
                   </div>
                 </template>
                 <template v-if="revenueChart.length > 0">
-                  <revenue-trend-chart v-if="!appStore.isMobile" :data="revenueChart" />
-                  <div v-else class="mobile-chart">
+                  <div class="mobile-chart">
                     <div v-for="(item, index) in revenueChart" :key="index" class="chart-row">
                       <div class="chart-meta">
                         <div class="chart-label">{{ item.date }}</div>
@@ -391,14 +390,13 @@
 
 
 <script setup lang="ts">
-import { ref, reactive, computed, h, onMounted } from 'vue'
+import { ref, reactive, computed, h, onMounted, defineAsyncComponent } from 'vue'
 import { useMessage, NTag } from 'naive-ui'
 import request from '@/utils/request'
 import { getFinancialReport, exportFinancialReport, getRegionStats, getPaymentStats, getPaymentMethodComparison, getPaymentAnalysis, getAdminUserStats } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
-import PaymentPieChart from '../components/PaymentPieChart.vue'
-import RevenueTrendChart from '../components/RevenueTrendChart.vue'
+const PaymentPieChart = defineAsyncComponent(() => import('../components/PaymentPieChart.vue'))
 import { formatDateTime } from '@/utils/format'
 
 const appStore = useAppStore()

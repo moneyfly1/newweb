@@ -25,24 +25,23 @@ instance.interceptors.request.use((config: any) => {
 })
 
 const requestCache = new Map<string, { data: any; timestamp: number }>()
-const CACHE_DURATION = 10 * 1000 // 10秒：防重复请求尖峰，又保证列表操作后基本实时可见
+const CACHE_DURATION = 20 * 1000 // 10秒：防重复请求尖峰，又保证列表操作后基本实时可见
 
 // 只缓存这些列表接口（精确路径匹配，避免 /packages 误配 /admin/packages、/settings 误配 /notification-settings 等）
-const CACHEABLE_URLS = [
-  '/admin/packages',
-  '/admin/coupons',
-  '/admin/user-levels',
-  '/admin/announcements',
-  '/config',
-  '/packages',
-  '/announcements',
-  '/nodes',
-  '/settings',
+// 需要缓存的接口前缀（列表/配置类）。管理后台的列表页来回切换非常频繁，
+// 每次都重新走一趟「浏览器 → Cloudflare → 源站」（单程约 120ms）太浪费。
+const CACHEABLE_PREFIXES = [
+  '/admin/users', '/admin/orders', '/admin/subscriptions', '/admin/email-queue',
+  '/admin/logs', '/admin/knowledge', '/admin/packages', '/admin/coupons',
+  '/admin/user-levels', '/admin/announcements', '/admin/promotions', '/admin/redeem',
+  '/admin/mystery-box', '/admin/nodes', '/admin/custom-nodes', '/admin/invites',
+  '/admin/dashboard', '/admin/monitoring', '/admin/checkin', '/admin/stats',
+  '/config', '/packages', '/announcements', '/nodes', '/settings', '/users/me',
 ]
 
 function shouldCache(url: string): boolean {
   const path = url.split('?')[0]
-  return CACHEABLE_URLS.some(cacheable => path === cacheable)
+  return CACHEABLE_PREFIXES.some(p => path === p || path.startsWith(p + '/'))
 }
 
 function getCacheKey(url: string, params?: any): string {
@@ -308,22 +307,32 @@ instance.interceptors.response.use(
   }
 )
 
+// 同一 GET 在途请求去重：页面组件与布局常同时请求同一接口（如列表 + 计数），
+// 以前会并发发两次，每次都要一趟 CF→源站往返；这里复用同一个 Promise。
+const inflightGets = new Map<string, Promise<any>>()
+
 const request = {
   get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    // 只对特定列表接口使用缓存
+    const key = getCacheKey(url, config?.params)
+
+    // 1) 命中缓存直接返回（列表页来回切换不再走网络）
     if (shouldCache(url)) {
-      const cacheKey = getCacheKey(url, config?.params)
-      const cached = getCache(cacheKey)
-      if (cached) {
-        return Promise.resolve(cached)
-      }
-      return instance.get(url, config).then((res: any) => {
-        setCache(cacheKey, res)
-        return res
-      }) as any
+      const cached = getCache(key)
+      if (cached) return Promise.resolve(cached)
     }
-    // 其他接口不使用缓存
-    return instance.get(url, config) as any
+
+    // 2) 在途请求复用，避免同一接口被并发请求两次
+    const inflight = inflightGets.get(key)
+    if (inflight) return inflight as any
+
+    const p = instance.get(url, config).then((res: any) => {
+      if (shouldCache(url)) setCache(key, res)
+      return res
+    }).finally(() => {
+      inflightGets.delete(key)
+    })
+    inflightGets.set(key, p)
+    return p as any
   },
   post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
     return instance.post(url, data, config).then((res: any) => {

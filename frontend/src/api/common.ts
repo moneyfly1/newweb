@@ -1,6 +1,26 @@
 import request from '@/utils/request'
 
-export const getPublicConfig = () => request.get('/config')
+const PUBLIC_CONFIG_KEY = 'public_config_cache'
+const PUBLIC_CONFIG_TTL = 5 * 60 * 1000
+
+// 站点配置变更频率极低，落盘缓存 5 分钟：
+// 冷启动时省掉一次「浏览器 → CF → 源站」的往返（约 120ms），过期后后台静默刷新。
+export const getPublicConfig = async () => {
+  try {
+    const raw = localStorage.getItem(PUBLIC_CONFIG_KEY)
+    if (raw) {
+      const cached = JSON.parse(raw)
+      if (cached && Date.now() - cached.at < PUBLIC_CONFIG_TTL) {
+        return cached.res
+      }
+    }
+  } catch {}
+  const res = await request.get('/config')
+  try {
+    localStorage.setItem(PUBLIC_CONFIG_KEY, JSON.stringify({ at: Date.now(), res }))
+  } catch {}
+  return res
+}
 export const listPackages = (params?: any) => request.get('/packages', { params })
 export const listNotifications = (params?: any) => request.get('/notifications', { params })
 export const getUnreadCount = () => request.get('/notifications/unread-count')

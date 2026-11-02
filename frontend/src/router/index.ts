@@ -164,7 +164,6 @@ router.beforeEach(async (to, _from, next) => {
 
   if (userStore.token && !userStore.userInfo) {
     try {
-      prefetchCSRFToken()
       await userStore.fetchUser()
     } catch {
       userStore.logout(true)

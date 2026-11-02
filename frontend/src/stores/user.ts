@@ -19,7 +19,13 @@ interface UserInfo {
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
   const refreshTokenVal = ref(localStorage.getItem('refresh_token') || '')
-  const userInfo = ref<UserInfo | null>(null)
+  // 用户信息落盘：刷新/换页时直接命中本地，避免每次导航都等一次 /users/me（约 120ms）
+  const userInfo = ref<UserInfo | null>((() => {
+    try {
+      const raw = localStorage.getItem('user_info')
+      return raw ? JSON.parse(raw) : null
+    } catch { return null }
+  })())
 
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => userInfo.value?.is_admin ?? false)
@@ -35,6 +41,7 @@ export const useUserStore = defineStore('user', () => {
     // Login response includes user info, use it directly
     if (res.data.user) {
       userInfo.value = res.data.user
+      try { localStorage.setItem('user_info', JSON.stringify(res.data.user)) } catch {}
     } else {
       await fetchUser()
     }
@@ -48,6 +55,7 @@ export const useUserStore = defineStore('user', () => {
     fetchingUser = (async () => {
       const res: any = await getCurrentUser()
       userInfo.value = res.data
+      try { localStorage.setItem('user_info', JSON.stringify(res.data)) } catch {}
     })()
     try {
       await fetchingUser
@@ -83,6 +91,7 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('admin_token')
     localStorage.removeItem('admin_user')
     localStorage.removeItem('admin_session')
+    localStorage.removeItem('user_info')
     if (!skipApi && oldToken) {
       try {
         request.post('/auth/logout', { refresh_token: oldRefreshToken || undefined }, {

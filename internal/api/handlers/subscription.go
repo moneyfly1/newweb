@@ -265,6 +265,33 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		appDeviceID = strings.TrimSpace(c.GetHeader("x-hwid"))
 	}
 
+	// MoneyFly 系客户端使用 X-MF-* 头（Device-Id / OS / Model / Brand / Type），
+	// 与 x-hwid / x-device-* 并行支持：两套客户端都能拿到准确的设备身份与详情。
+	// mclash（sing-box 内核）走 x-hwid 系；MoneyFly 走 X-MF-* 系，这里两者都认。
+	if appDeviceID == "" {
+		appDeviceID = strings.TrimSpace(c.GetHeader("X-MF-Device-Id"))
+	}
+	if v := strings.TrimSpace(c.GetHeader("X-MF-OS")); v != "" {
+		parts := strings.SplitN(v, " ", 2)
+		// OSName 未识别时才覆盖；版本号即使 UA 已识别出系统也补上
+		// （UA 通常只有 "Windows NT 10.0"，而 X-MF-OS 给的是 "Windows 11"）
+		if clientInfo.OSName == "Unknown" {
+			clientInfo.OSName = parts[0]
+		}
+		if len(parts) > 1 && clientInfo.OSVersion == "" {
+			clientInfo.OSVersion = parts[1]
+		}
+	}
+	if v := strings.TrimSpace(c.GetHeader("X-MF-Device-Model")); v != "" && clientInfo.DeviceModel == "" {
+		clientInfo.DeviceModel = v
+	}
+	if v := strings.TrimSpace(c.GetHeader("X-MF-Device-Brand")); v != "" && clientInfo.DeviceBrand == "" {
+		clientInfo.DeviceBrand = v
+	}
+	if v := strings.TrimSpace(c.GetHeader("X-MF-Device-Type")); v != "" {
+		clientInfo.DeviceType = v
+	}
+
 	// 用客户端上报的设备详情补齐 UA 解析不到的信息（比 UA 更准，且与版本无关）
 	if v := strings.TrimSpace(c.GetHeader("x-device-os")); v != "" {
 		clientInfo.OSName = v

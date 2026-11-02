@@ -103,6 +103,25 @@ func detectSoftware(lower, ua string, info *ClientInfo) {
 		// （`Mclash/0.0.7 platform/macos mihomo/1.19.31`），必须排在
 		// mihomo/clash 之前，否则设备会被识别成 "Mihomo"（内核名）——
 		// 网站就认不出这是哪个客户端了（实测库里确实出现了 Mihomo 行）。
+		// 具体优先（对齐 myweb，减少 Unknown 与内核名误认）
+		{"clashx meta", "ClashX Meta"},
+		{"v2box", "V2Box"},
+		{"happ/", "Happ"},
+		{"nexvpn", "NexVPN"},
+		{"meta/nextin", "Nextin"},
+		{"tomoonclash", "ToMoon Clash"},
+		{"axxray", "ANXRay"},
+		{"cmfandroid", "Clash Meta"},
+		{"clash.meta", "Clash Meta"},
+		{"clash-meta", "Clash Meta"},
+		{"clashmetaforandroid", "Clash Meta"},
+		{"clash meta for android", "Clash Meta"},
+		{"clash meta", "Clash Meta"},
+		{"v2guard", "V2Guard"},
+		{"passwall", "PassWall"},
+		{"hiddifynext", "Hiddify"},
+		{"hiddify-next", "Hiddify"},
+		{"hiddify next", "Hiddify"},
 		{"mclash", "Mclash"},
 		{"moneyfly", "MoneyFly"},
 		// MBox（sing-box 内核的自有客户端）：UA 形如
@@ -139,6 +158,7 @@ func detectSoftware(lower, ua string, info *ClientInfo) {
 		{"v2rayu", "V2RayU"},
 		{"v2rayx", "V2RayX"},
 		{"v2ray", "V2Ray"},
+		{"xray", "Xray"},
 		{"sing-box", "sing-box"},
 		{"nekoray", "NekoRay"},
 		{"nekobox", "NekoBox"},

@@ -428,6 +428,22 @@ func AdminImportCustomNodes(c *gin.Context) {
 		return
 	}
 
+	// 导入校验：只保留渲染器支持的协议、且关键字段完整的节点。
+	// 坏节点（未知协议/缺 server/缺端口）进库后会让客户端整份配置解析失败。
+	validNodes := nodes[:0]
+	skipped := 0
+	for _, n := range nodes {
+		if !isSupportedNodeProtocol(n.Type) || strings.TrimSpace(n.Name) == "" || n.Config == nil || strings.TrimSpace(*n.Config) == "" {
+			skipped++
+			continue
+		}
+		validNodes = append(validNodes, n)
+	}
+	nodes = validNodes
+	if len(nodes) == 0 {
+		utils.BadRequest(c, "没有通过校验的节点（协议不支持或参数缺失）")
+		return
+	}
 	db := database.GetDB()
 
 	// 订阅模式：同步更新（保留分配关系）
@@ -825,4 +841,15 @@ func AdminDeleteCustomNodeSource(c *gin.Context) {
 		msg = fmt.Sprintf("已删除来源，%d 个节点已转为手工节点保留", deleted)
 	}
 	utils.Success(c, gin.H{"deleted_nodes": deleted, "message": msg})
+}
+
+// supportedNodeProtocols 渲染器支持的节点协议白名单（不在表内的协议客户端会拒绝）。
+var supportedNodeProtocols = map[string]bool{
+	"ss": true, "ssr": true, "vmess": true, "vless": true, "trojan": true,
+	"hysteria": true, "hysteria2": true, "tuic": true, "anytls": true,
+	"socks": true, "socks5": true, "http": true, "wireguard": true,
+}
+
+func isSupportedNodeProtocol(t string) bool {
+	return supportedNodeProtocols[strings.ToLower(strings.TrimSpace(t))]
 }

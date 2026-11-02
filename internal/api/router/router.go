@@ -120,6 +120,17 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		// CSRF token
 		authorized.GET("/csrf-token", middleware.GetCSRFToken)
 		// 用户
+		// 促销活动（用户端）
+		authorized.GET("/promotions", handlers.GetActivePromotions)
+		authorized.GET("/promotions/participations", handlers.GetMyPromotionParticipations)
+		// 知识库（用户端）
+		knowledgePublic := authorized.Group("/knowledge")
+		{
+			knowledgePublic.GET("/categories", handlers.GetKnowledgeCategories)
+			knowledgePublic.GET("/articles", handlers.GetKnowledgeArticles)
+			knowledgePublic.GET("/articles/:id", handlers.GetKnowledgeArticle)
+		}
+
 		users := authorized.Group("/users")
 		{
 			users.GET("/me", handlers.GetCurrentUser)
@@ -258,6 +269,29 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/stats", handlers.AdminStats)
 
 		// 用户管理
+		// 促销活动（管理端）
+		adminPromos := admin.Group("/promotions")
+		adminPromos.Use(middleware.CSRFProtection())
+		{
+			adminPromos.GET("", handlers.AdminListPromotions)
+			adminPromos.POST("", handlers.AdminCreatePromotion)
+			adminPromos.PUT("/:id", handlers.AdminUpdatePromotion)
+			adminPromos.DELETE("/:id", handlers.AdminDeletePromotion)
+		}
+		// 知识库（管理端）
+		adminKnowledge := admin.Group("/knowledge")
+		adminKnowledge.Use(middleware.CSRFProtection())
+		{
+			adminKnowledge.GET("/categories", handlers.AdminListKnowledgeCategories)
+			adminKnowledge.POST("/categories", handlers.AdminCreateKnowledgeCategory)
+			adminKnowledge.PUT("/categories/:id", handlers.AdminUpdateKnowledgeCategory)
+			adminKnowledge.DELETE("/categories/:id", handlers.AdminDeleteKnowledgeCategory)
+			adminKnowledge.GET("/articles", handlers.AdminListKnowledgeArticles)
+			adminKnowledge.POST("/articles", handlers.AdminCreateKnowledgeArticle)
+			adminKnowledge.PUT("/articles/:id", handlers.AdminUpdateKnowledgeArticle)
+			adminKnowledge.DELETE("/articles/:id", handlers.AdminDeleteKnowledgeArticle)
+		}
+
 		adminUsers := admin.Group("/users")
 		adminUsers.Use(middleware.CSRFProtection())
 		{

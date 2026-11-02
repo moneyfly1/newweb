@@ -227,6 +227,14 @@ func AutoMigrate() error {
 		&models.PaymentConfig{},
 		&models.PaymentNonce{},
 
+		// 促销活动
+		&models.Promotion{},
+		&models.PromotionParticipation{},
+
+		// 知识库
+		&models.KnowledgeCategory{},
+		&models.KnowledgeArticle{},
+
 		// 优惠券
 		&models.Coupon{},
 		&models.CouponUsage{},

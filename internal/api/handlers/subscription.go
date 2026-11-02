@@ -773,6 +773,13 @@ func generateSubscriptionName(ctx *subscriptionContext) string {
 // For explicit Clash format, use /sub/clash/:url
 // For explicit universal format, use /sub/:url
 func GetSubscription(c *gin.Context) {
+	// 脚本 / 抓取 / 链接预览爬虫不是客户端：返回空内容，
+	// 既不下发配置，也不进入设备登记流程（避免白占设备名额）。
+	if isScriptOrPreviewUA(c.GetHeader("User-Agent")) {
+		c.String(http.StatusOK, "")
+		return
+	}
+
 	ctx := buildSubscriptionContext(c)
 	excludedProtocols := parseExcludedProtocols(c.Query("exclude"))
 

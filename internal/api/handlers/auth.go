@@ -566,7 +566,17 @@ func RefreshToken(c *gin.Context) {
 
 	// 检查 refresh token 是否在黑名单中
 	tokenHash := utils.SHA256Hash(req.RefreshToken)
+
+	// 轮换宽限期：60 秒内重复提交同一旧 token（客户端丢了响应）→ 重放上次签发的一对令牌，
+	// 而不是 401。否则一次网络抖动就会让用户被迫重新登录。
+	if access, refresh, ok := lookupRotatedRefreshResult(tokenHash); ok {
+		logRefreshReplay(c, claims.UserID, refreshRotateGracePeriod)
+		utils.Success(c, gin.H{"access_token": access, "refresh_token": refresh})
+		return
+	}
+
 	if models.IsTokenBlacklisted(database.GetDB(), tokenHash) {
+		logRefreshReject(c, "blacklist", claims.UserID)
 		utils.Unauthorized(c, "Refresh Token 已失效")
 		return
 	}
@@ -609,6 +619,9 @@ func RefreshToken(c *gin.Context) {
 		utils.InternalError(c, "生成刷新令牌失败")
 		return
 	}
+
+	// 记录本次轮换结果：旧 token 在 60 秒内再次提交时重放这一对（幂等）
+	storeRotatedRefreshResult(tokenHash, accessToken, newRefreshToken)
 
 	utils.Success(c, gin.H{
 		"access_token":  accessToken,

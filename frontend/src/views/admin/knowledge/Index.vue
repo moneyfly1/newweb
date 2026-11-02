@@ -90,7 +90,7 @@ async function loadCategories() {
   loadingCategories.value = true
   try {
     const res: any = await request.get('/admin/knowledge/categories')
-    categories.value = res || []
+    categories.value = res?.data || []
   } finally {
     loadingCategories.value = false
   }
@@ -102,7 +102,7 @@ async function loadArticles() {
     const params: any = {}
     if (filterCategory.value) params.category_id = filterCategory.value
     const res: any = await request.get('/admin/knowledge/articles', { params })
-    articles.value = res || []
+    articles.value = res?.data || []
   } finally {
     loadingArticles.value = false
   }

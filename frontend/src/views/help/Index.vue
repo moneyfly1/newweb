@@ -265,8 +265,8 @@ async function loadKnowledge() {
       request.get('/knowledge/categories'),
       request.get('/knowledge/articles'),
     ])
-    kbCategories.value = (cats as any) || []
-    kbArticles.value = (arts as any) || []
+    kbCategories.value = (cats as any)?.data || []
+    kbArticles.value = (arts as any)?.data || []
   } catch {
     // 未登录或接口异常时静默降级：帮助页其余内容照常可用
   } finally {

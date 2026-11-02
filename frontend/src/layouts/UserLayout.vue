@@ -322,7 +322,7 @@ function returnToAdmin() {
 .mobile-theme-dot {
   width: 100%; aspect-ratio: 1; border-radius: 8px; cursor: pointer;
   display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px;
-  border: 2px solid transparent; transition: all 0.2s;
+  border: 2px solid transparent; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 .mobile-theme-dot.active { border-color: var(--primary-color, var(--primary-color)); box-shadow: 0 0 0 2px var(--primary-color, var(--primary-color))33; }
 .mobile-theme-dot-label { font-size: 10px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
@@ -332,7 +332,7 @@ function returnToAdmin() {
 .theme-picker-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 56px;
   border-radius: 8px; cursor: pointer; border: 2px solid transparent;
-  transition: all 0.2s; background: var(--primary-color-soft, rgba(102,126,234,0.08));
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; background: var(--primary-color-soft, rgba(102,126,234,0.08));
 }
 .theme-picker-item:hover { border-color: var(--primary-color, var(--primary-color))66; }
 .theme-picker-item.active { border-color: var(--primary-color, var(--primary-color)); background: var(--primary-color, var(--primary-color))11; }

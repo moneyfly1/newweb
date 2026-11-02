@@ -12,7 +12,10 @@
                 <n-radio-button value="month">月</n-radio-button>
               </n-radio-group>
             </div>
-            <div class="filter-range">
+            <n-button v-if="appStore.isMobile" size="small" secondary @click="showMoreFilters = !showMoreFilters">
+              {{ showMoreFilters ? '收起' : '筛选' }}
+            </n-button>
+            <div class="filter-range" v-show="!appStore.isMobile || showMoreFilters">
               <n-date-picker
                 v-model:value="dateRange"
                 type="daterange"
@@ -21,7 +24,7 @@
                 @update:value="onDateRangeChange"
               />
             </div>
-            <div class="filter-export">
+            <div class="filter-export" v-show="!appStore.isMobile || showMoreFilters">
               <n-button @click="handleExport" :loading="exporting">导出 CSV</n-button>
             </div>
           </n-space>
@@ -175,7 +178,7 @@
                         :show-indicator="false"
                         :height="6"
                         :border-radius="3"
-                        :color="getColor(index)"
+                        :color="'var(--primary-color)'"
                       />
                     </div>
                     <div class="pkg-meta">
@@ -365,8 +368,8 @@
               {{ deviceCurrent.online ? '在线' : '离线' }}
             </n-tag>
           </n-descriptions-item>
-          <n-descriptions-item label="最后活跃">{{ deviceCurrent.last_access ? new Date(deviceCurrent.last_access).toLocaleString() : '-' }}</n-descriptions-item>
-          <n-descriptions-item label="首次出现">{{ deviceCurrent.created_at ? new Date(deviceCurrent.created_at).toLocaleString() : '-' }}</n-descriptions-item>
+          <n-descriptions-item label="最后活跃">{{ deviceCurrent.last_access ? formatDateTime(deviceCurrent.last_access) : '-' }}</n-descriptions-item>
+          <n-descriptions-item label="首次出现">{{ deviceCurrent.created_at ? formatDateTime(deviceCurrent.created_at) : '-' }}</n-descriptions-item>
         </n-descriptions>
       </n-drawer-content>
     </n-drawer>
@@ -396,10 +399,12 @@ import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
 import PaymentPieChart from '../components/PaymentPieChart.vue'
 import RevenueTrendChart from '../components/RevenueTrendChart.vue'
+import { formatDateTime } from '@/utils/format'
 
 const appStore = useAppStore()
 const message = useMessage()
 const activeTab = ref('overview')
+const showMoreFilters = ref(false)
 
 /* 详情统一用抽屉：表格只保留摘要列，点行看完整信息 */
 const deviceDrawer = ref(false)
@@ -450,7 +455,7 @@ const deviceColumns = [
   },
   {
     title: '最后活跃', key: 'last_access', width: 165,
-    render: (r: any) => (r.last_access ? new Date(r.last_access).toLocaleString() : '-'),
+    render: (r: any) => (r.last_access ? formatDateTime(r.last_access) : '-'),
   },
 ]
 
@@ -793,8 +798,18 @@ onMounted(() => {
 .stats-tabs :deep(.n-tabs-nav) { margin-bottom: 4px; }
 .stats-tabs :deep(.n-tab-pane) { padding-top: 12px; }
 @media (max-width: 767px) {
-  .stats-tabs :deep(.n-tabs-tab) { font-size: 13px; padding: 0 10px; }
+  .stats-tabs :deep(.n-tabs-tab) { font-size: 13px; padding: 0 7px; }
+  /* 窄屏（iPhone 12~15 的 390px）再收一档，四个标签刚好铺满不裁切 */
+  .stats-tabs :deep(.n-tabs-tab-wrapper) { flex: 1 1 0; min-width: 0; }
+  .stats-tabs :deep(.n-tabs-tab) { justify-content: center; }
+  /* 4 个标签在 390px 宽屏放不下，允许横向滚动而不是把最后一个切成半个字 */
+  .stats-tabs :deep(.n-tabs-nav-scroll-content) { overflow-x: auto; scrollbar-width: none; }
+  .stats-tabs :deep(.n-tabs-nav-scroll-content)::-webkit-scrollbar { display: none; }
+  .stats-tabs :deep(.n-tabs-nav) { overflow: hidden; }
 }
+/* 空态收进卡片，不再占满整屏 */
+.stats-card :deep(.n-empty) { padding: 12px 0; }
+.stats-card :deep(.n-empty__icon) { width: 40px; height: 40px; font-size: 40px; }
 
 /* ===== 数据分析：统一卡片、指标块与支付/套餐列表 ===== */
 .stats-card :deep(.n-card__content) { padding: 16px; }

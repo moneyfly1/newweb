@@ -379,7 +379,7 @@ function handleUserMenu(key: string) {
 .theme-picker-item {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 56px;
   border-radius: 8px; cursor: pointer; border: 2px solid transparent;
-  transition: all 0.2s; background: var(--primary-color-soft, rgba(102,126,234,0.08));
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; background: var(--primary-color-soft, rgba(102,126,234,0.08));
 }
 .theme-picker-item:hover { border-color: var(--primary-color, var(--primary-color))66; }
 .theme-picker-item.active { border-color: var(--primary-color, var(--primary-color)); background: var(--primary-color, var(--primary-color))11; }

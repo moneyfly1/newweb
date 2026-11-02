@@ -514,6 +514,7 @@ import { useBatchSelection, type BatchSelection } from '@/composables/useBatchSe
 import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { translateLoginStatus, translateBalanceChangeType, translateCommissionType, parseDeviceInfo, formatLocation } from '@/utils/i18n'
+import { formatDateTime } from '@/utils/format'
 
 const appStore = useAppStore()
 
@@ -538,14 +539,14 @@ const globalOrderColumns = [
   { title: '订单号', key: 'order_no', width: 180 },
   { title: '金额', key: 'amount', width: 90 },
   { title: '状态', key: 'status', width: 90 },
-  { title: '创建时间', key: 'created_at', width: 165, render: (r: any) => (r.created_at ? new Date(r.created_at).toLocaleString() : '-') },
+  { title: '创建时间', key: 'created_at', width: 165, render: (r: any) => (r.created_at ? formatDateTime(r.created_at) : '-') },
 ]
 
 const globalLogColumns = [
   { title: '类型', key: '_type', width: 70 },
   { title: '内容', key: '_desc', ellipsis: { tooltip: true } },
   { title: 'IP', key: 'ip_address', width: 130, render: (r: any) => r.ip_address || '-' },
-  { title: '时间', key: 'created_at', width: 165, render: (r: any) => (r.created_at ? new Date(r.created_at).toLocaleString() : '-') },
+  { title: '时间', key: 'created_at', width: 165, render: (r: any) => (r.created_at ? formatDateTime(r.created_at) : '-') },
 ]
 
 async function doGlobalSearch() {

@@ -601,7 +601,7 @@
 
     <!-- 移动端悬浮保存按钮 -->
     <div class="mobile-fab" v-if="appStore.isMobile">
-      <n-button circle type="primary" size="large" :loading="saving" @click="handleSave">
+      <n-button circle type="primary" size="large" :loading="saving" aria-label="保存设置" @click="handleSave">
         <template #icon><n-icon><save-outline /></n-icon></template>
       </n-button>
     </div>
@@ -1440,7 +1440,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 12px 24px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
   color: #666;
 }
 
@@ -1513,7 +1513,7 @@ onBeforeUnmount(() => {
 
 /* 切换动画 */
 .fade-slide-enter-active, .fade-slide-leave-active {
-  transition: all 0.25s ease;
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
 .fade-slide-enter-from {
   opacity: 0;

@@ -893,7 +893,7 @@ onUnmounted(() => {
 
 /* Quick Subscription */
 .quick-sub-grid { display: flex; flex-direction: column; gap: 10px; }
-.quick-sub-item { border-radius: 10px; background: var(--primary-color-soft); border: 1px solid transparent; transition: all 0.2s; }
+.quick-sub-item { border-radius: 10px; background: var(--primary-color-soft); border: 1px solid transparent; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; }
 .quick-sub-item.is-open { background: var(--primary-color-soft); border-color: #d8e0ff; }
 .qs-main { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; background: transparent; cursor: pointer; text-align: left; }
 .qs-main:hover { background: rgba(102,126,234,0.04); }

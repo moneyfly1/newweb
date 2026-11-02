@@ -374,7 +374,7 @@ onMounted(() => {
 
 <style scoped>
 .mystery-box-page { padding: 24px; }
-.prize-animation { opacity: 0; transform: scale(0.5); transition: all 0.5s ease; }
+.prize-animation { opacity: 0; transform: scale(0.5); transition: opacity 0.5s ease, transform 0.5s ease; }
 .prize-animation.revealed { opacity: 1; transform: scale(1); }
 .prize-icon { font-size: 64px; line-height: 1; }
 .rules-content p { margin: 4px 0; font-size: 13px; line-height: 1.6; color: #555; }

@@ -664,7 +664,7 @@ onMounted(() => { loadData() })
   min-width: 80px; padding: 10px 20px;
   border: 2px solid #e8e8e8; border-radius: 10px;
   font-size: 16px; font-weight: 600; color: var(--text-color);
-  cursor: pointer; transition: all 0.2s;
+  cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
   background: var(--bg-color); user-select: none;
 }
 .amount-chip:hover { border-color: var(--primary-color); color: var(--primary-color); }

@@ -1,5 +1,12 @@
 <template>
   <div class="knowledge-container admin-page-shell">
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="page-title">知识库</h2>
+        <p class="page-subtitle">维护帮助中心的分类与文章，用户端「帮助中心」实时读取</p>
+      </div>
+    </div>
+
     <n-card :bordered="false">
       <n-tabs type="line" v-model:value="tab">
         <n-tab-pane name="articles" tab="知识库文章">

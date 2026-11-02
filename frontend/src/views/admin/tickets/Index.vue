@@ -187,7 +187,7 @@
             <n-input
               v-model:value="replyContent"
               type="textarea"
-              placeholder="输入回复内容..."
+              placeholder="输入回复内容…"
               :rows="4"
             />
             <TicketAttachmentUploader

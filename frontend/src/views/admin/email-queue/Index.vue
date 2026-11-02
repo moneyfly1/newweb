@@ -634,4 +634,9 @@ onActivated(() => {
   .queue-toolbar { flex-direction: column; align-items: stretch; }
   .queue-search { width: 100%; }
 }
+
+/* 统计卡统一为白底 + 彩色图标（原来 4 张卡片各用一条高饱和渐变，观感杂乱） */
+.stat-card { background: var(--bg-color, #fff) !important; }
+.stat-card::before { display: none !important; }
+.stat-icon { background: var(--bg-page-color, #f1f5f9); box-shadow: none; }
 </style>

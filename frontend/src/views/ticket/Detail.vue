@@ -103,7 +103,7 @@
         <n-input
           v-model:value="replyContent"
           type="textarea"
-          placeholder="输入您的回复内容..."
+          placeholder="输入您的回复内容…"
           :rows="3"
           maxlength="2000"
           show-count

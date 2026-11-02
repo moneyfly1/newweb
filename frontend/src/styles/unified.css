@@ -275,7 +275,7 @@ html {
 
 .stat-card {
   border-radius: 12px;
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
   cursor: pointer;
   overflow: hidden;
   position: relative;
@@ -515,4 +515,33 @@ html {
 .n-data-table .n-data-table-th::after,
 .n-data-table .n-data-table-td::after {
   display: none !important;
+}
+
+
+/* ============================================================
+   表格滚动条与行高
+   ============================================================
+   1) 横向滚动容器在 macOS / 移动端是 overlay 滚动条，默认看不见，
+      用户不知道右侧还有列（用户列表「最后登录」、邮件队列「发送时间」常被裁掉）。
+   2) 单元格上下 padding 偏大，单屏只能看 9 行。 */
+.n-data-table .n-scrollbar-container::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.n-data-table .n-scrollbar-container::-webkit-scrollbar-thumb {
+  background: var(--border-color, #cbd5e1);
+  border-radius: 4px;
+}
+.n-data-table .n-scrollbar-container::-webkit-scrollbar-thumb:hover {
+  background: var(--text-color-secondary, #94a3b8);
+}
+.n-data-table .n-scrollbar-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+@media (min-width: 768px) {
+  .n-data-table .n-data-table-td,
+  .n-data-table .n-data-table-th {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
 }

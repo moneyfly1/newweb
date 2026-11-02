@@ -180,15 +180,11 @@
               </div>
               <!-- 与电脑端操作列一一对应：编辑 / 禁用(启用) / 重置 / 代登 / 解封 / 删除，
                    3 列网格排成两行三列（详情入口是上面的用户名和邮箱） -->
-              <div class="card-actions card-actions-grid" @click.stop>
+              <div class="card-actions" @click.stop>
                 <n-button size="small" type="primary" @click="handleEdit(row)">编辑</n-button>
-                <n-button size="small" :type="row.is_active ? 'warning' : 'success'" @click="handleToggleActive(row)">
-                  {{ row.is_active ? '禁用' : '启用' }}
-                </n-button>
-                <n-button size="small" secondary type="warning" @click="openResetPwdModal(row)">重置</n-button>
-                <n-button size="small" type="success" @click="handleLoginAs(row)">代登</n-button>
-                <n-button size="small" secondary type="success" @click="handleUnlockLoginRow(row)">解封</n-button>
-                <n-button size="small" type="error" @click="handleDelete(row)">删除</n-button>
+                <n-dropdown trigger="click" :options="actionOptions(row)" @select="(key) => handleAction(key, row)">
+                  <n-button size="small" secondary>更多</n-button>
+                </n-dropdown>
               </div>
             </div>
           </div>
@@ -591,23 +587,17 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 216,
+    width: 132,
     fixed: 'right',
-    // 6 个按钮：3 列网格 → 两行三列。详情入口在邮箱列（点邮箱即可），这里不再重复放
-    render: (row) => h('div', { class: 'action-btn-grid' }, [
+    // 主操作只留「编辑」，其余收进「更多」下拉：
+    // 6 个彩色按钮排两行会把行高撑到 80px，且删除按钮紧挨编辑，误点风险高。
+    render: (row) => h('div', { class: 'action-compact', onClick: (e) => e.stopPropagation() }, [
       h(NButton, { size: 'small', type: 'primary', onClick: () => handleAction('edit', row) }, { default: () => '编辑' }),
-      h(NButton, { size: 'small', type: row.is_active ? 'warning' : 'success', onClick: () => handleAction('toggle', row) }, { default: () => row.is_active ? '禁用' : '启用' }),
-      h(NButton, { size: 'small', secondary: true, type: 'warning', onClick: () => handleAction('resetPwd', row) }, { default: () => '重置' }),
-      h(NButton, { size: 'small', type: 'success', onClick: () => handleAction('loginAs', row) }, { default: () => '代登' }),
-      // 客户连续输错密码被锁定 / 被 IP 限流时用这个（客户打电话说"登不上"最常见的原因）
-      h(NButton, {
-        size: 'small',
-        secondary: true,
-        type: 'success',
-        title: '解除该账号的登录限制（连续输错密码被锁定，或来源 IP 被限流）',
-        onClick: () => handleAction('unlockLogin', row),
-      }, { default: () => '解封' }),
-      h(NButton, { size: 'small', type: 'error', onClick: () => handleAction('delete', row) }, { default: () => '删除' }),
+      h(NDropdown, {
+        trigger: 'click',
+        options: actionOptions(row),
+        onSelect: (key) => handleAction(key, row),
+      }, { default: () => h(NButton, { size: 'small', secondary: true }, { default: () => '更多' }) }),
     ])
   }
 ]
@@ -1008,6 +998,8 @@ onActivated(() => {
 </script>
 
 <style scoped>
+.action-compact { display: flex; align-items: center; gap: 6px; }
+.card-actions { display: flex; gap: 8px; align-items: center; }
 /* 邮箱即详情入口：视觉上做成可点链接，替代被移除的「详情」按钮 */
 .email-link {
   color: var(--primary-color, #4f46e5);

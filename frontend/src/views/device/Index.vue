@@ -85,7 +85,7 @@
                 <n-input
                   :value="device.remark || ''"
                   size="small"
-                  placeholder="添加备注..."
+                  placeholder="添加备注…"
                   style="max-width: 160px; text-align: right"
                   @update:value="(val: string) => device.remark = val"
                   @blur="saveRemark(device)"

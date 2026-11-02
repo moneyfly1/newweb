@@ -1399,7 +1399,7 @@ onUnmounted(() => { stopPayPolling() })
 
 /* Format Grid */
 .format-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.format-card { padding: 10px 8px; border-radius: 8px; border: 1.5px solid #e8e8e8; cursor: pointer; text-align: center; transition: all 0.2s; }
+.format-card { padding: 10px 8px; border-radius: 8px; border: 1.5px solid #e8e8e8; cursor: pointer; text-align: center; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; }
 .format-card:hover { border-color: #667eea; }
 .format-card.active { border-color: #667eea; background: #667eea08; }
 .format-icon { font-size: 20px; display: flex; justify-content: center; align-items: center; height: 24px; }
@@ -1407,7 +1407,7 @@ onUnmounted(() => { stopPayPolling() })
 .format-name { font-size: 12px; font-weight: 600; margin-top: 2px; }
 
 /* Format Item */
-.format-item { padding: 14px 12px; border-radius: 10px; border: 2px solid #e8e8e8; cursor: pointer; transition: all 0.2s; background: white; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.format-item { padding: 14px 12px; border-radius: 10px; border: 2px solid #e8e8e8; cursor: pointer; transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease; background: white; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .format-item:hover { border-color: #667eea; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.15); }
 .format-item.active { border-color: #667eea; background: rgba(102, 126, 234, 0.06); }
 .format-item-icon { display: flex; justify-content: center; align-items: center; width: 48px; height: 48px; }

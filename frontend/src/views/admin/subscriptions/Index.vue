@@ -153,7 +153,7 @@
                 <div class="sub-section-row">
                   <span class="sub-section-label">备注</span>
                 </div>
-                <n-input v-model:value="row.user_notes" type="text" size="small" placeholder="输入备注..." @click.stop @blur="saveNotes(row)" @keyup.enter="saveNotes(row)" />
+                <n-input v-model:value="row.user_notes" type="text" size="small" placeholder="输入备注…" @click.stop @blur="saveNotes(row)" @keyup.enter="saveNotes(row)" />
               </div>
               <div class="sub-section">
                 <div class="sub-section-row">

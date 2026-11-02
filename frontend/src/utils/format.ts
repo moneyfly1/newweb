@@ -112,3 +112,17 @@ export function formatSize(size?: number | null, empty = '-'): string {
   if (size < 1024 ** 4) return `${(size / 1024 ** 3).toFixed(2)} GB`
   return `${(size / 1024 ** 4).toFixed(2)} TB`
 }
+
+
+/** 统一日期时间格式化（Intl.DateTimeFormat，避免各页面手写 toLocaleString 格式不一致） */
+const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+})
+
+export function formatDateTime(value: string | number | Date | null | undefined): string {
+  if (!value) return '-'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '-'
+  return dateTimeFormatter.format(d)
+}

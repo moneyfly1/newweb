@@ -460,3 +460,59 @@ html {
 
 /* 注：容器按压缩放已移除——scale 容器会导致点击时整卡晃动，
    干扰 checkbox/按钮点击（如全选误触）。按钮按压反馈由 Naive 组件自带。 */
+
+
+/* ============================================================
+   布局底色与卡片层次
+   ============================================================
+   n-layout 默认是纯白，把 body 的 --bg-page-color 完全盖住，
+   结果就是「白卡片贴在白底上」，整页没有任何层次（也是用户多次反馈
+   「页面太白」的真正原因）。这里让布局容器透出页面底色，
+   并给卡片统一的描边/圆角/微阴影。 */
+.n-layout {
+  background-color: var(--bg-page-color, #f2f3f5);
+}
+.n-layout-sider,
+.n-layout-header {
+  background-color: var(--bg-color, #fff);
+}
+.n-card {
+  background-color: var(--bg-color, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+/* 卡片内嵌套卡片（如支付分析里的两块）不再重复描边，避免层层叠框 */
+.n-card .n-card {
+  border: 0;
+  box-shadow: none;
+  background-color: transparent;
+}
+
+
+/* ============================================================
+   表格横向滚动与分隔线
+   ============================================================
+   1) 全站 60 个 data-table 里只有 10 个显式设置 scroll-x，列多的表
+      （用户列表、邮件队列、日志）在桌面端也会把右侧列裁掉，且没有滚动条。
+   2) 表头每列之间的竖分隔线颜色偏重，表格看起来像 Excel 网格。 */
+.n-data-table .n-data-table__wrapper,
+.n-data-table .n-scrollbar-container {
+  overflow-x: auto;
+}
+.n-data-table .n-data-table-th,
+.n-data-table .n-data-table-td {
+  border-right: none !important;
+}
+
+
+/* ============================================================
+   列分隔伪元素
+   ============================================================
+   Naive 的列分隔线不是 border，而是 th/td 的 ::after 伪元素
+   （1px 竖条），所以只改 border 看不到效果。这里一并隐藏，
+   让表格呈现为「行分隔」而不是「Excel 网格」。 */
+.n-data-table .n-data-table-th::after,
+.n-data-table .n-data-table-td::after {
+  display: none !important;
+}

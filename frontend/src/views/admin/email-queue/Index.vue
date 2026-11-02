@@ -81,7 +81,7 @@
           <n-input
             v-model:value="searchKeyword"
             class="queue-search"
-            placeholder="搜索用户名 / 用户ID / 邮箱 / 主题 / 正文"
+            placeholder="搜索邮箱 / 用户名 / 用户ID / 主题"
             clearable
             @keyup.enter="handleSearch"
             @clear="handleSearch"
@@ -628,7 +628,8 @@ onActivated(() => {
 <style scoped>
 .queue-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .queue-toolbar :deep(.n-tabs) { flex: 1; min-width: 220px; }
-.queue-search { width: 300px; max-width: 100%; }
+.queue-search { width: 300px; min-width: 240px; max-width: 100%; flex: 0 0 auto; }
+.queue-toolbar :deep(.n-tabs) { min-width: 0; }
 @media (max-width: 767px) {
   .queue-toolbar { flex-direction: column; align-items: stretch; }
   .queue-search { width: 100%; }

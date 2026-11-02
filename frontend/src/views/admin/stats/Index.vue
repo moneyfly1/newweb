@@ -788,7 +788,6 @@ onMounted(() => {
 
 .pay-stats-wrap { display: flex; flex-direction: column; gap: 8px; }
 .pay-stats-wrap .method-list { display: flex; flex-direction: column; gap: 10px; }
-</style>
 
 /* 数据分析页：标签化组织，避免所有区块堆在一屏 */
 .stats-tabs :deep(.n-tabs-nav) { margin-bottom: 4px; }
@@ -852,3 +851,4 @@ onMounted(() => {
   .pkg-row { grid-template-columns: 24px 1fr; }
   .pkg-meta { grid-column: 2; flex-direction: row; justify-content: space-between; align-items: center; }
 }
+</style>

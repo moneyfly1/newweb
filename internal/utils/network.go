@@ -87,3 +87,24 @@ func firstValidIP(raw string) string {
 	}
 	return ip
 }
+
+// IsInternalIP 判断地址是否属于回环 / 私有网段 / 链路本地（即「服务器内部」来源）。
+//
+// 用途：拦截内部请求（运维脚本、批量巡检、健康检查、本机 curl 127.0.0.1）
+// 被登记成「用户设备」。真实用户经 nginx 或 Cloudflare 访问时，
+// GetRealClientIP 会从 X-Forwarded-For / CF-Connecting-IP 取到公网 IP，
+// 因此这里返回 true 的只可能是内部来源。
+func IsInternalIP(ip string) bool {
+	ip = strings.TrimSpace(ip)
+	if ip == "" {
+		return false
+	}
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		ip = host
+	}
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	return parsed.IsLoopback() || parsed.IsPrivate() || parsed.IsLinkLocalUnicast()
+}

@@ -48,6 +48,14 @@ type Device struct {
 	CreatedAt     time.Time  `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 
+	// KickedAt 设备被移除（踢下线）的时间。
+	//
+	// 删除设备 = is_active=false + KickedAt=now，**保留指纹行**而不是物理删除：
+	// 物理删除后该设备下次拉订阅会因「指纹查不到」被当成新设备重新登记，
+	// 管理员后台删了、用户过几分钟又冒出一条同名设备，等于没删（2026-10-30 线上排查）。
+	// 保留指纹行后，订阅侧可识别「这台设备被明确移除」并拒绝，直到用户重新绑定。
+	KickedAt *time.Time `gorm:"index" json:"kicked_at,omitempty"`
+
 	// IsOnline 是否在线（非持久化，查询后由 AfterFind 自动计算）：
 	// 1) 自有客户端：3 分钟内有心跳；
 	// 2) 其他客户端：24 小时内拉取过订阅。

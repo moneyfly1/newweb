@@ -575,7 +575,15 @@ func AdminClearSubscriptionDevices(c *gin.Context) {
 		return
 	}
 	if count > 0 {
-		if err := db.Where("subscription_id = ?", sub.ID).Delete(&models.Device{}).Error; err != nil {
+		// 软删 + kicked_at（保留指纹行），与单个删除一致：
+		// 物理删除会让被清掉的设备下次拉订阅时重新登记成「新设备」，等于没清。
+		now := time.Now()
+		if err := db.Model(&models.Device{}).
+			Where("subscription_id = ? AND is_active = ?", sub.ID, true).
+			Updates(map[string]interface{}{
+				"is_active": false,
+				"kicked_at": now,
+			}).Error; err != nil {
 			utils.InternalError(c, "清除设备失败")
 			return
 		}

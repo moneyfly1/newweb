@@ -699,16 +699,29 @@ func AdminDeleteUserDevice(c *gin.Context) {
 		utils.Forbidden(c, "设备不属于该用户")
 		return
 	}
-	if err := db.Delete(&device).Error; err != nil {
+	// 删除设备 = 软删 + kicked_at，**保留指纹行**。
+	//
+	// 旧实现是物理删除：行一消失，该设备下次拉订阅就匹配不到指纹，
+	// 被当成新设备重新登记 —— 管理员刚删掉，用户过几分钟又冒出一条同名设备，
+	// 等于没删（2026-10-30 线上排查）。软删后订阅侧会识别「已被移除」并拒绝，
+	// 直到用户重新登录/重新绑定。
+	now := time.Now()
+	if err := db.Model(&device).Updates(map[string]interface{}{
+		"is_active": false,
+		"kicked_at": now,
+	}).Error; err != nil {
 		utils.InternalError(c, "删除设备失败")
 		return
 	}
-	// Decrement current_devices
-	if sub.CurrentDevices > 0 {
-		if err := db.Model(&sub).UpdateColumn("current_devices", gorm.Expr("CASE WHEN current_devices > 0 THEN current_devices - 1 ELSE 0 END")).Error; err != nil {
-			utils.InternalError(c, "更新设备计数失败")
-			return
-		}
+	// 重算该订阅的设备数（软删后不再活跃；用 COUNT 而不是 -1，避免历史计数漂移）
+	var cnt int64
+	if err := db.Model(&models.Device{}).Where("subscription_id = ? AND is_active = ?", sub.ID, true).Count(&cnt).Error; err != nil {
+		utils.InternalError(c, "更新设备计数失败")
+		return
+	}
+	if err := db.Model(&sub).Update("current_devices", cnt).Error; err != nil {
+		utils.InternalError(c, "更新设备计数失败")
+		return
 	}
 	utils.CreateAuditLog(c, "delete_device", "device", uint(deviceID), fmt.Sprintf("删除用户%d的设备%d", userID, deviceID))
 	utils.SuccessMessage(c, "设备已删除")

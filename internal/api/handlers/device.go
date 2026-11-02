@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"time"
 
 	"cboard/v2/internal/database"
 	"cboard/v2/internal/models"
@@ -56,8 +57,16 @@ func DeleteDevice(c *gin.Context) {
 	}
 
 	// 使用事务确保设备停用和计数更新的原子性
+	//
+	// 删除设备 = 软删 + kicked_at（保留指纹行）：物理删除会让该设备下次拉订阅
+	// 时因指纹查不到被当成新设备重新登记，用户会看到「删了又回来」。
+	// 保留指纹行后，订阅侧识别到 kicked_at 会明确拒绝（设备已被移除）。
+	now := time.Now()
 	if err := db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&device).Update("is_active", false).Error; err != nil {
+		if err := tx.Model(&device).Updates(map[string]interface{}{
+			"is_active": false,
+			"kicked_at": now,
+		}).Error; err != nil {
 			return err
 		}
 		// Decrement current devices count (atomic, floor at 0)

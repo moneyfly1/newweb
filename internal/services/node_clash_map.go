@@ -71,7 +71,7 @@ func VmessLinkToClashMap(link string, name string) (map[string]interface{}, erro
 			if net == "ws" {
 				wsOpts := map[string]interface{}{}
 				if path, ok := cfg["path"].(string); ok && path != "" {
-					wsOpts["path"] = path
+					wsOpts["path"] = stripCFEarlyDataParam(path)
 				}
 				if host, ok := cfg["host"].(string); ok && host != "" {
 					wsOpts["headers"] = map[string]interface{}{"Host": host}
@@ -148,7 +148,7 @@ func VlessLinkToClashMap(link string, name string) (map[string]interface{}, erro
 		if t == "ws" {
 			wsOpts := map[string]interface{}{}
 			if p := q.Get("path"); p != "" {
-				wsOpts["path"] = p
+				wsOpts["path"] = stripCFEarlyDataParam(p)
 			}
 			if h := q.Get("host"); h != "" {
 				wsOpts["headers"] = map[string]interface{}{"Host": h}
@@ -257,7 +257,7 @@ func TrojanLinkToClashMap(link string, name string) (map[string]interface{}, err
 		if t == "ws" {
 			wsOpts := map[string]interface{}{}
 			if p := q.Get("path"); p != "" {
-				wsOpts["path"] = p
+				wsOpts["path"] = stripCFEarlyDataParam(p)
 			}
 			if h := q.Get("host"); h != "" {
 				wsOpts["headers"] = map[string]interface{}{"Host": h}
@@ -746,7 +746,7 @@ func SOCKSLinkToClashMap(link string, name string) (map[string]interface{}, erro
 					m["network"] = "ws"
 					wsOpts := map[string]interface{}{}
 					if p, ok := gostCfg["path"].(string); ok && p != "" {
-						wsOpts["path"] = p
+						wsOpts["path"] = stripCFEarlyDataParam(p)
 					}
 					if h, ok := gostCfg["host"].(string); ok && h != "" {
 						wsOpts["headers"] = map[string]interface{}{"Host": h}
@@ -763,7 +763,7 @@ func SOCKSLinkToClashMap(link string, name string) (map[string]interface{}, erro
 				m["network"] = "ws"
 				wsOpts := map[string]interface{}{}
 				if p := gostParams.Get("path"); p != "" {
-					wsOpts["path"] = p
+					wsOpts["path"] = stripCFEarlyDataParam(p)
 				}
 				if h := gostParams.Get("host"); h != "" {
 					wsOpts["headers"] = map[string]interface{}{"Host": h}
@@ -1000,4 +1000,38 @@ func sanitizeRealityShortID(sid string) string {
 		}
 	}
 	return sid
+}
+
+// stripCFEarlyDataParam 去掉 ws path 里的 Cloudflare early-data 参数（ed=…）。
+//
+// 为什么必须去掉：客户端（MoneyFly / Mclash 桌面端）拿到订阅后会**重新序列化**
+// YAML 并丢掉引号。服务端输出 `path: "/?ed=2048"` 本来合法，但客户端可能写成
+// `path: /?ed=2048` —— flow mapping 里 `?` 是 key indicator，mihomo 直接报
+// `Parse config error: yaml: line N: did not find expected ',' or '}'`，
+// 整份配置解析失败、内核退出 code 1（2026-11-02 线上事故：mux 订阅导入的
+// 210 个 CDN 节点全带 ?ed=2048）。
+//
+// `ed` 只是早期数据优化参数，去掉不影响连通性；保留 path 主体与其余 query，
+// 避免误伤依赖 query 自定义路由的节点。
+func stripCFEarlyDataParam(path string) string {
+	if !strings.Contains(path, "?") {
+		return path
+	}
+	u, err := url.Parse(path)
+	if err != nil || u.RawQuery == "" {
+		return path
+	}
+	q := u.Query()
+	if _, ok := q["ed"]; !ok {
+		return path
+	}
+	q.Del("ed")
+	u.RawQuery = q.Encode()
+	if u.RawQuery == "" {
+		if u.Path == "" {
+			return "/"
+		}
+		return u.Path
+	}
+	return u.Path + "?" + u.RawQuery
 }

@@ -31,6 +31,11 @@ const (
 	subStatusExpired
 	subStatusInactive
 	subStatusDeviceOverLimit
+	// subStatusDeviceKicked 该设备已被明确移除（踢下线）。
+	//
+	// 与「设备数量超限」区分开：超限是名额问题（删一台闲置设备即可），
+	// 这里是这台机器被管理员或用户自己移除了，必须重新登录/重新绑定才能继续用。
+	subStatusDeviceKicked
 	// 服务端暂时不可用（设备登记失败等内部错误）。
 	//
 	// 必须与 subStatusInactive 区分开：以前这里一律返回「订阅已失效」，
@@ -276,6 +281,16 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 		clientInfo.DeviceBrand = v
 	}
 
+	// 内部来源（回环 / 私网）不是真实用户设备：只下发配置，不登记、不占名额。
+	//
+	// 事故背景（2026-11-02）：一次全站订阅巡检从 127.0.0.1 用真实客户端 UA
+	// 批量拉取 1654 个订阅，服务端把每一条都当成新设备写库，一次性产生 2452 条
+	// ip=127.0.0.1 的幽灵设备，大量用户的设备名额被白占。真实用户经 nginx /
+	// Cloudflare 进来时 GetRealClientIP 一定拿到公网 IP，不受影响。
+	if utils.IsInternalIP(ip) {
+		return ctx
+	}
+
 	fingerprint := services.GenerateDeviceFingerprint(ua, ip)
 	if appDeviceID != "" {
 		fingerprint = services.GenerateDeviceFingerprint("MoneyFly-App-Device:"+appDeviceID, "")
@@ -284,6 +299,20 @@ func buildSubscriptionContext(c *gin.Context) *subscriptionContext {
 	var device models.Device
 	err = db.Where("subscription_id = ? AND device_fingerprint = ? AND is_active = ?", sub.ID, fingerprint, true).First(&device).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// 指纹命中「被移除」的软删行 → 这台设备被明确踢下线，拒绝本次拉取。
+		//
+		// 删除设备是软删（is_active=false + kicked_at），行仍保留指纹；
+		// 如果不在这里拦，下面会把它当成一台新设备重新登记 —— 管理员刚删掉的
+		// 设备几分钟后又出现在列表里，等于没删（2026-10-30 线上排查）。
+		var kicked models.Device
+		if e2 := db.Where("subscription_id = ? AND device_fingerprint = ? AND kicked_at IS NOT NULL",
+			sub.ID, fingerprint).First(&kicked).Error; e2 == nil {
+			ctx.Status = subStatusDeviceKicked
+			ctx.CurrentDevices = sub.CurrentDevices
+			ctx.DeviceLimit = sub.DeviceLimit
+			return ctx
+		}
+
 		// 指纹未命中时先尝试复用「同一台设备」的既有记录，避免同机被算成多台。
 		// 原因见 findReusableDevice 的注释：指纹会随客户端上报字段变化 / Did 变化而改变。
 		if reused, ok := findReusableDevice(db, sub.ID, ip, clientInfo); ok {
@@ -687,6 +716,9 @@ func getErrorNodes(ctx *subscriptionContext) []models.Node {
 	case subStatusDeviceOverLimit:
 		reason = "设备数量超限"
 		solution = fmt.Sprintf("当前设备 %d/%d，请在官网删除不使用的设备", ctx.CurrentDevices, ctx.DeviceLimit)
+	case subStatusDeviceKicked:
+		reason = "设备已被移除"
+		solution = "此设备已被管理员移除，如需继续使用请重新登录或联系客服"
 	case subStatusServerError:
 		reason = "服务暂时不可用"
 		solution = "请稍后重试；若持续出现请截图联系客服"
@@ -713,6 +745,8 @@ func generateSubscriptionName(ctx *subscriptionContext) string {
 			return "订阅已失效"
 		case subStatusDeviceOverLimit:
 			return "设备超限"
+		case subStatusDeviceKicked:
+			return "设备已移除"
 		case subStatusNotFound:
 			return "订阅不存在"
 		case subStatusServerError:

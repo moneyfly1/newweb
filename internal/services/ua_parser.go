@@ -19,6 +19,7 @@ var (
 	reIPhoneMini    = regexp.MustCompile(`iPhone\s+(\d+)\s+mini`)
 	reIPhoneNum     = regexp.MustCompile(`iPhone\s+(\d+)`)
 	reAndroidBuild  = regexp.MustCompile(`;\s*([^;]+)\s*[Bb]uild`)
+	reDarwin        = regexp.MustCompile(`(?i)darwin/(\d+)\.(\d+)`)
 	reVersionPrefix = regexp.MustCompile(`^([\d.]+)`)
 )
 
@@ -63,6 +64,24 @@ func ParseUserAgent(ua string) *ClientInfo {
 	}
 
 	lower := strings.ToLower(ua)
+
+	// Dalvik = Android 的运行时。原生 App 用 HttpClient 发请求时默认就带
+	// "Dalvik/2.1.0 (Linux; U; Android 14; …)"，里面没有任何客户端名。
+	// 这是**真实设备**，只是软件名未知：平台能确定 → 识别成 Android，
+	// 而不是丢进 Unknown（线上大量"未知设备"就是这种 UA）。
+	// 注意：Dalvik/x.y.z 的数字是 Android 运行时版本，不是客户端版本，
+	// 不能写进 SoftwareVersion（否则「客户端版本」维度凭空多出 2.1.0）。
+	trimmed := strings.TrimSpace(lower)
+	if strings.HasPrefix(trimmed, "dalvik/") || trimmed == "android" {
+		info.OSName = "Android"
+		if m := reAndroidVer.FindStringSubmatch(ua); len(m) > 1 {
+			info.OSVersion = m[1]
+		}
+		info.DeviceType = "mobile"
+		info.SubscriptionType = determineSubscriptionType(info)
+		return info
+	}
+
 	detectSoftware(lower, ua, info)
 	detectOS(lower, ua, info)
 	if info.OSName == "Unknown" {
@@ -195,6 +214,15 @@ func detectOS(lower, ua string, info *ClientInfo) {
 		info.OSName = "iOS"
 		if m := reIPhoneOS.FindStringSubmatch(ua); len(m) > 1 {
 			info.OSVersion = strings.ReplaceAll(m[1], "_", ".")
+		}
+		// iOS 客户端 UA 常只带 "CFNetwork/… Darwin/27.0.0"（没有 iPhone OS 段），
+		// 于是「系统版本」列长期空白。Darwin 与 iOS 版本号并不一一对应
+		// （Darwin 24 = iOS 18、Darwin 25 = iOS 26），如实标注成 "Darwin 27.0"，
+		// 让这一列不再是空的，也不误导。
+		if info.OSVersion == "" {
+			if m := reDarwin.FindStringSubmatch(ua); len(m) > 2 {
+				info.OSVersion = "Darwin " + m[1] + "." + m[2]
+			}
 		}
 	case strings.Contains(lower, "android"):
 		info.OSName = "Android"
@@ -394,6 +422,18 @@ func isBrowserRequest(lower string) bool {
 		(strings.Contains(lower, "iphone") || strings.Contains(lower, "ipad")) &&
 		!strings.Contains(lower, "mozilla") {
 		return false
+	}
+	// 社交/IM 的链接预览爬虫：用户把订阅链接发进聊天窗口，由服务端来抓一次。
+	// 它们不是设备（没有 OS、没有硬件指纹），若登记会白占名额，
+	// 所以归入「浏览器访问」——v2 的订阅入口对 IsBrowser 不登记设备。
+	previewKeywords := []string{
+		"telegrambot", "whatsapp/", "链接预览", "facebookexternalhit",
+		"slackbot", "discordbot", "preview",
+	}
+	for _, kw := range previewKeywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
 	}
 	// Check browser keywords
 	for _, kw := range browserKeywords {

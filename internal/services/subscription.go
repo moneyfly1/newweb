@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"cboard/v2/internal/models"
+	"cboard/v2/internal/services/userlevel"
 	"cboard/v2/internal/utils"
 
 	"gorm.io/gorm"
@@ -79,6 +80,15 @@ func AddSubscriptionDevices(tx *gorm.DB, subID uint, add int) error {
 // ActivateSubscription creates or extends a subscription after successful payment.
 func ActivateSubscription(db *gorm.DB, order *models.Order, paymentMethod string) error {
 	utils.SysInfo("subscription", fmt.Sprintf("开始激活订阅: order_id=%d, order_no=%s, user_id=%d, package_id=%d", order.ID, order.OrderNo, order.UserID, order.PackageID))
+
+	// 订单完成即累计消费并同步会员等级（defer 保证升级/自定义/普通三种分支都执行）。
+	// 旧实现 total_consumption 字段**从未被更新**，用户累计消费永远是 0，
+	// 等级也就永远升不上去（前台显示的消费额/等级全是错的）。
+	defer func() {
+		if err := applyConsumptionAndSyncLevel(db, order); err != nil {
+			utils.SysError("subscription", fmt.Sprintf("累计消费/同步等级失败: order=%d user=%d err=%v", order.ID, order.UserID, err))
+		}
+	}()
 
 	var deviceLimit int
 	var durationDays int
@@ -1038,4 +1048,32 @@ func parseSSConfig(config string) (method, password, host, port string) {
 		port = hostPort[1]
 	}
 	return
+}
+
+// applyConsumptionAndSyncLevel 订单完成后累计用户消费额并同步会员等级。
+//
+// 幂等性由调用方保证：支付回调只在订单从 pending → paid 时调用一次
+// ActivateSubscription（handler 里用 status = pending 作为并发闸门）。
+func applyConsumptionAndSyncLevel(db *gorm.DB, order *models.Order) error {
+	amount := order.Amount
+	if order.FinalAmount != nil && *order.FinalAmount > 0 {
+		amount = *order.FinalAmount
+	}
+	if amount <= 0 {
+		return nil
+	}
+	var user models.User
+	if err := db.First(&user, order.UserID).Error; err != nil {
+		return err
+	}
+	if err := db.Model(&models.User{}).Where("id = ?", user.ID).
+		Update("total_consumption", gorm.Expr("total_consumption + ?", amount)).Error; err != nil {
+		return err
+	}
+	user.TotalConsumption += amount
+	// 只升不降：命中的最高达标等级已高于当前等级时不动
+	if _, _, err := userlevel.Sync(db, &user); err != nil {
+		return err
+	}
+	return nil
 }

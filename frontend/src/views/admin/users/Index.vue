@@ -561,6 +561,14 @@ const columns = [
     render: (row) => formatCurrency(row.balance)
   },
   {
+    // 累计消费额（后端已按订单实付累计，旧版从未展示过）
+    title: '消费金额',
+    key: 'total_consumption',
+    width: 110, resizable: true,
+    sorter: 'default',
+    render: (row) => formatCurrency(row.total_consumption ?? 0)
+  },
+  {
     title: '状态',
     key: 'is_active',
     width: 80, resizable: true,

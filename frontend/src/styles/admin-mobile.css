@@ -131,6 +131,17 @@
   .n-data-table {
     font-size: 13px;
   }
+  /* 横向滚动兜底：全站 60 个表格里只有 10 个显式设置了 scroll-x，
+     其余在手机上会把列压到文字折行/撑破卡片。这里强制滚动容器可横向滑动，
+     配合单元格 ellipsis，长内容不再挤爆布局。 */
+  .n-data-table .n-data-table__wrapper,
+  .n-data-table .n-scrollbar-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .n-data-table .n-data-table-base-table {
+    min-width: max-content;
+  }
   .n-data-table-th,
   .n-data-table-td {
     padding: 8px 6px !important;

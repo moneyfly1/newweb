@@ -189,6 +189,62 @@
           </n-spin>
         </n-card>
 
+        <!-- 设备分析（对齐 myweb：按客户端/系统分布 + 设备明细） -->
+        <n-card title="设备分析" :bordered="false">
+          <n-spin :show="deviceLoading">
+            <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="16" :y-gap="16">
+              <n-gi><n-statistic label="设备总数" :value="deviceStats.total" /></n-gi>
+              <n-gi><n-statistic label="在线" :value="deviceStats.online" /></n-gi>
+              <n-gi><n-statistic label="离线" :value="deviceStats.offline" /></n-gi>
+              <n-gi>
+                <n-statistic label="在线率" :value="devicePct(deviceStats.online, deviceStats.total)">
+                  <template #suffix>%</template>
+                </n-statistic>
+              </n-gi>
+            </n-grid>
+
+            <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="16" :y-gap="12" style="margin-top: 12px">
+              <n-gi>
+                <div class="device-dist-title">客户端分布</div>
+                <div v-for="it in deviceStats.by_software" :key="it.name" class="device-dist-row">
+                  <span class="device-dist-name">{{ it.name }}</span>
+                  <n-progress type="line" :percentage="devicePct(it.count, deviceStats.total)" :show-indicator="false" />
+                  <span class="device-dist-count">{{ it.count }}</span>
+                </div>
+                <p v-if="!deviceStats.by_software.length" class="device-empty">暂无数据</p>
+              </n-gi>
+              <n-gi>
+                <div class="device-dist-title">系统分布</div>
+                <div v-for="it in deviceStats.by_os" :key="it.name" class="device-dist-row">
+                  <span class="device-dist-name">{{ it.name }}</span>
+                  <n-progress type="line" :percentage="devicePct(it.count, deviceStats.total)" :show-indicator="false" />
+                  <span class="device-dist-count">{{ it.count }}</span>
+                </div>
+                <p v-if="!deviceStats.by_os.length" class="device-empty">暂无数据</p>
+              </n-gi>
+            </n-grid>
+
+            <div class="device-detail-head">
+              <strong>设备明细</strong>
+              <n-input
+                v-model:value="deviceKeyword"
+                placeholder="搜索 IP / 型号 / 用户名"
+                clearable
+                size="small"
+                style="width: 220px"
+                @keyup.enter="loadDeviceStats"
+              />
+            </div>
+            <n-data-table
+              :columns="deviceColumns"
+              :data="deviceItems"
+              :loading="deviceLoading"
+              size="small"
+              :pagination="devicePagination"
+            />
+          </n-spin>
+        </n-card>
+
         <!-- 支付分析（此前后端已实现、前端未接入） -->
         <n-card title="支付分析" :bordered="false">
           <template #header-extra>
@@ -267,8 +323,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted } from 'vue'
-import { useMessage } from 'naive-ui'
+import { ref, reactive, computed, h, onMounted } from 'vue'
+import { useMessage, NTag } from 'naive-ui'
+import request from '@/utils/request'
 import { getFinancialReport, exportFinancialReport, getRegionStats, getPaymentStats, getPaymentMethodComparison, getPaymentAnalysis, getAdminUserStats } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
@@ -279,6 +336,69 @@ const appStore = useAppStore()
 const message = useMessage()
 const loading = ref(false)
 const exporting = ref(false)
+/* ---------------- 设备分析 ---------------- */
+const deviceLoading = ref(false)
+const deviceKeyword = ref('')
+const deviceStats = ref<any>({ total: 0, online: 0, offline: 0, by_software: [], by_os: [] })
+const deviceItems = ref<any[]>([])
+const devicePagination = reactive({
+  page: 1,
+  pageSize: 10,
+  itemCount: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50],
+  onChange: (page: number) => { devicePagination.page = page; loadDeviceStats() },
+  onUpdatePageSize: (size: number) => { devicePagination.pageSize = size; devicePagination.page = 1; loadDeviceStats() },
+})
+
+function devicePct(count: number, total: number) {
+  return total > 0 ? Math.round((count / total) * 100) : 0
+}
+
+const deviceColumns = [
+  { title: '用户', key: 'username', width: 110, render: (r: any) => r.username || '-' },
+  { title: '客户端', key: 'software_name', width: 130, render: (r: any) => r.software_name || '-' },
+  { title: '系统', key: 'os_name', width: 100, render: (r: any) => r.os_name || '-' },
+  { title: '型号', key: 'device_model', ellipsis: { tooltip: true }, render: (r: any) => r.device_model || '-' },
+  { title: 'IP', key: 'ip_address', width: 140, render: (r: any) => r.ip_address || '-' },
+  { title: '地区', key: 'region', width: 130, render: (r: any) => r.region || '-' },
+  {
+    title: '状态', key: 'online', width: 72,
+    render: (r: any) => h(NTag, { type: r.online ? 'success' : 'default', size: 'small' }, { default: () => (r.online ? '在线' : '离线') }),
+  },
+  {
+    title: '最后活跃', key: 'last_access', width: 165,
+    render: (r: any) => (r.last_access ? new Date(r.last_access).toLocaleString() : '-'),
+  },
+]
+
+async function loadDeviceStats() {
+  deviceLoading.value = true
+  try {
+    const res: any = await request.get('/admin/stats/devices', {
+      params: {
+        keyword: deviceKeyword.value,
+        page: devicePagination.page,
+        page_size: devicePagination.pageSize,
+      },
+    })
+    const d = res?.data || {}
+    deviceStats.value = {
+      total: d.total || 0,
+      online: d.online || 0,
+      offline: d.offline || 0,
+      by_software: d.by_software || [],
+      by_os: d.by_os || [],
+    }
+    deviceItems.value = d.items || []
+    devicePagination.itemCount = d.total_filter || 0
+  } catch {
+    // 静默：统计页其他区块仍可用
+  } finally {
+    deviceLoading.value = false
+  }
+}
+
 const regionLoading = ref(false)
 const showAllRegions = ref(false)
 const period = ref('month')
@@ -481,6 +601,7 @@ const loadPaymentAnalysis = async () => {
 }
 
 onMounted(() => {
+  loadDeviceStats()
   loadFinancialReport()
   loadPaymentAnalysis()
   loadUserStats()
@@ -514,6 +635,13 @@ onMounted(() => {
 .method-info { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 14px; }
 .method-name { font-weight: 500; }
 .method-detail { color: var(--text-color-secondary); font-size: 13px; }
+.device-dist-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.device-dist-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.device-dist-name { width: 110px; font-size: 12px; color: var(--text-color-secondary); flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-dist-row :deep(.n-progress) { flex: 1; }
+.device-dist-count { width: 44px; text-align: right; font-size: 12px; flex-shrink: 0; }
+.device-empty { font-size: 12px; color: var(--text-color-disabled); margin: 0; }
+.device-detail-head { display: flex; align-items: center; justify-content: space-between; margin: 16px 0 8px; gap: 8px; flex-wrap: wrap; }
 .region-list-compact { max-height: 320px; overflow-y: auto; }
 .region-list-compact.expanded { max-height: none; }
 .region-row-compact {

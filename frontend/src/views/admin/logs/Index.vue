@@ -12,6 +12,37 @@
           确定清空「{{ currentTabText }}」的全部记录吗？此操作不可恢复！
         </n-popconfirm>
       </template>
+      <!-- 全局搜索：跨表按关键字命中（用户名 / 邮箱 / 订单号 / IP / 订阅 token） -->
+      <div class="log-global-search">
+        <n-input
+          v-model:value="globalKeyword"
+          placeholder="全局搜索：用户名 / 邮箱 / 订单号 / IP / 订阅 token（回车搜索）"
+          clearable
+          @keyup.enter="doGlobalSearch"
+        >
+          <template #suffix>
+            <n-button size="tiny" type="primary" :loading="globalSearching" :disabled="globalKeyword.trim().length < 2" @click="doGlobalSearch">搜索</n-button>
+          </template>
+        </n-input>
+      </div>
+
+      <n-modal v-model:show="globalModal" preset="card" :title="`全局搜索结果：${globalKeyword}`" style="width: 900px; max-width: 95vw">
+        <n-spin :show="globalSearching">
+          <div v-if="globalTotal === 0" class="log-search-empty">没有匹配的记录</div>
+          <n-collapse v-else :default-expanded-names="['users', 'orders', 'logs']">
+            <n-collapse-item v-if="globalUsers.length" name="users" :title="`用户 (${globalUsers.length})`">
+              <n-data-table :columns="globalUserColumns" :data="globalUsers" size="small" :pagination="false" />
+            </n-collapse-item>
+            <n-collapse-item v-if="globalOrders.length" name="orders" :title="`订单 (${globalOrders.length})`">
+              <n-data-table :columns="globalOrderColumns" :data="globalOrders" size="small" :pagination="false" />
+            </n-collapse-item>
+            <n-collapse-item v-if="globalLogs.length" name="logs" :title="`日志 (${globalLogs.length})`">
+              <n-data-table :columns="globalLogColumns" :data="globalLogs" size="small" :pagination="{ pageSize: 20 }" />
+            </n-collapse-item>
+          </n-collapse>
+        </n-spin>
+      </n-modal>
+
       <n-tabs type="line" animated display-directive="show" @update:value="handleTabChange">
         <n-tab-pane name="audit" tab="审计日志">
           <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方）。
@@ -474,6 +505,7 @@
 <script setup lang="tsx">
 import { ref, reactive, h, computed, onMounted } from 'vue'
 import { TrashOutline } from '@vicons/ionicons5'
+import request from '@/utils/request'
 import { clearLogs } from '@/api/admin'
 import { NCard, NTabs, NTabPane, NDataTable, NTag, NPagination, NSpace, NSelect, useMessage, type DataTableColumns } from 'naive-ui'
 import { getAuditLogs, getLoginLogs, getRegistrationLogs, getSubscriptionLogs, getBalanceLogs, getCommissionLogs, getSystemLogs } from '@/api/admin'
@@ -486,6 +518,62 @@ import { translateLoginStatus, translateBalanceChangeType, translateCommissionTy
 const appStore = useAppStore()
 
 const message = useMessage()
+/* ---------------- 全局搜索 ---------------- */
+const globalKeyword = ref('')
+const globalSearching = ref(false)
+const globalModal = ref(false)
+const globalTotal = ref(0)
+const globalUsers = ref<any[]>([])
+const globalOrders = ref<any[]>([])
+const globalLogs = ref<any[]>([])
+
+const globalUserColumns = [
+  { title: 'ID', key: 'id', width: 60 },
+  { title: '用户名', key: 'username', width: 140 },
+  { title: '邮箱', key: 'email', ellipsis: { tooltip: true } },
+  { title: '状态', key: 'is_active', width: 70, render: (r: any) => (r.is_active ? '正常' : '禁用') },
+]
+
+const globalOrderColumns = [
+  { title: '订单号', key: 'order_no', width: 180 },
+  { title: '金额', key: 'amount', width: 90 },
+  { title: '状态', key: 'status', width: 90 },
+  { title: '创建时间', key: 'created_at', width: 165, render: (r: any) => (r.created_at ? new Date(r.created_at).toLocaleString() : '-') },
+]
+
+const globalLogColumns = [
+  { title: '类型', key: '_type', width: 70 },
+  { title: '内容', key: '_desc', ellipsis: { tooltip: true } },
+  { title: 'IP', key: 'ip_address', width: 130, render: (r: any) => r.ip_address || '-' },
+  { title: '时间', key: 'created_at', width: 165, render: (r: any) => (r.created_at ? new Date(r.created_at).toLocaleString() : '-') },
+]
+
+async function doGlobalSearch() {
+  const kw = globalKeyword.value.trim()
+  if (kw.length < 2) {
+    message.warning('请输入至少 2 个字符')
+    return
+  }
+  globalSearching.value = true
+  globalModal.value = true
+  try {
+    const res: any = await request.get('/admin/logs/global-search', { params: { q: kw } })
+    const d = res?.data || {}
+    globalTotal.value = d.total || 0
+    globalUsers.value = d.users || []
+    globalOrders.value = d.orders || []
+    globalLogs.value = [
+      ...(d.audit_logs || []).map((x: any) => ({ ...x, _type: '审计', _desc: x.action_description })),
+      ...(d.login_logs || []).map((x: any) => ({ ...x, _type: '登录', _desc: x.user_agent })),
+      ...(d.sub_logs || []).map((x: any) => ({ ...x, _type: '订阅', _desc: x.description })),
+    ]
+  } catch (e: any) {
+    message.error(e?.message || '搜索失败')
+  } finally {
+    globalSearching.value = false
+  }
+}
+
 const currentTab = ref('audit')
 
 // Sort states for each tab
@@ -1100,4 +1188,9 @@ onMounted(() => {
   /* 左右留白由全局统一给（mobile-app-ui.css + admin-mobile.css），页面不再自带内边距 */
   .list-pagination { justify-content: center; }
 }
+</style>
+
+<style scoped>
+.log-global-search { margin-bottom: 12px; }
+.log-search-empty { padding: 24px; text-align: center; color: var(--text-color-disabled); font-size: 13px; }
 </style>

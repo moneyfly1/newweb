@@ -275,6 +275,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		// 仪表盘
 		admin.GET("/dashboard", handlers.AdminDashboard)
 		admin.GET("/stats", handlers.AdminStats)
+		admin.GET("/stats/devices", handlers.AdminDeviceStats)
 
 		// 用户管理
 		// GeoIP 管理
@@ -538,6 +539,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// 日志
 		admin.DELETE("/logs/:type", middleware.CSRFProtection(), handlers.AdminClearLogs)
+		admin.GET("/logs/global-search", handlers.AdminGlobalLogSearch)
 		admin.GET("/logs/audit", handlers.AdminAuditLogs)
 		admin.GET("/logs/login", handlers.AdminLoginLogs)
 		admin.GET("/logs/registration", handlers.AdminRegistrationLogs)

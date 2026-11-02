@@ -30,199 +30,208 @@
         <n-tabs v-model:value="activeTab" type="line" animated class="stats-tabs">
           <n-tab-pane name="overview" tab="概览">
             <n-space vertical :size="16">
-        <!-- Summary Cards -->
-        <n-card title="财务概览" :bordered="false" class="summary-card">
-          <n-grid :cols="appStore.isMobile ? 2 : 6" :x-gap="16" :y-gap="16" class="summary-grid">
-            <n-gi>
-              <n-statistic label="总收入" :value="summary.total_revenue">
-                <template #prefix>¥</template>
-              </n-statistic>
-            </n-gi>
-            <n-gi>
-              <n-statistic label="总订单" :value="summary.total_orders" />
-            </n-gi>
-            <n-gi>
-              <n-statistic label="已支付" :value="summary.paid_orders" />
-            </n-gi>
-            <n-gi>
-              <n-statistic label="平均客单价" :value="summary.average_order_amount">
-                <template #prefix>¥</template>
-              </n-statistic>
-            </n-gi>
-            <n-gi>
-              <n-statistic label="充值总额" :value="summary.total_recharge">
-                <template #prefix>¥</template>
-              </n-statistic>
-            </n-gi>
-            <n-gi>
-              <n-statistic label="新用户" :value="summary.new_users" />
-            </n-gi>
-          </n-grid>
-        </n-card>
-        <!-- 用户概览 -->
-        <n-card title="用户概览" :bordered="false" class="summary-card">
-          <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="16" :y-gap="16" class="summary-grid">
-            <n-gi><n-statistic label="总用户" :value="userStats.total_users || 0" /></n-gi>
-            <n-gi><n-statistic label="活跃用户" :value="userStats.active_users || 0" /></n-gi>
-            <n-gi><n-statistic label="今日新增" :value="userStats.today_new_users || 0" /></n-gi>
-            <n-gi><n-statistic label="付费用户" :value="userStats.paid_users || 0" /></n-gi>
-          </n-grid>
-        </n-card>
-        <!-- Revenue Chart (bar visualization) -->
-        <n-card title="收入趋势" :bordered="false">
-          <revenue-trend-chart v-if="revenueChart.length > 0 && !appStore.isMobile" :data="revenueChart" />
-          <div v-if="revenueChart.length > 0 && appStore.isMobile">
-            <div v-for="(item, index) in revenueChart" :key="index" class="chart-row">
-              <div class="chart-meta">
-                <div class="chart-label">{{ item.date }}</div>
-                <div class="chart-orders">{{ item.orders }} 单</div>
-              </div>
-              <div class="chart-bars">
-                <div class="bar-group">
-                  <div class="bar revenue-bar" :style="{ width: barWidth(item.revenue, maxRevenue) + '%' }">
-                    <span v-if="item.revenue > 0" class="bar-text">{{ formatCurrency(item.revenue) }}</span>
+              <n-card :bordered="false" class="stats-card">
+                <div class="metric-section">
+                  <div class="metric-section-title">财务</div>
+                  <div class="kpi-grid">
+                    <div class="kpi-tile">
+                      <span class="kpi-label">总收入</span>
+                      <span class="kpi-value">{{ formatCurrency(summary.total_revenue) }}</span>
+                    </div>
+                    <div class="kpi-tile">
+                      <span class="kpi-label">总订单</span>
+                      <span class="kpi-value">{{ summary.total_orders }}</span>
+                    </div>
+                    <div class="kpi-tile">
+                      <span class="kpi-label">已支付</span>
+                      <span class="kpi-value">{{ summary.paid_orders }}</span>
+                    </div>
+                    <div class="kpi-tile">
+                      <span class="kpi-label">平均客单价</span>
+                      <span class="kpi-value">{{ formatCurrency(summary.average_order_amount) }}</span>
+                    </div>
+                    <div class="kpi-tile">
+                      <span class="kpi-label">充值总额</span>
+                      <span class="kpi-value">{{ formatCurrency(summary.total_recharge) }}</span>
+                    </div>
+                    <div class="kpi-tile">
+                      <span class="kpi-label">新用户</span>
+                      <span class="kpi-value">{{ summary.new_users }}</span>
+                    </div>
                   </div>
                 </div>
-                <div class="bar-group">
-                  <div class="bar recharge-bar" :style="{ width: barWidth(item.recharge, maxRevenue) + '%' }">
-                    <span v-if="item.recharge > 0" class="bar-text">{{ formatCurrency(item.recharge) }}</span>
+
+                <div class="metric-divider"></div>
+
+                <div class="metric-section">
+                  <div class="metric-section-title">用户</div>
+                  <div class="kpi-grid kpi-grid--compact">
+                    <div class="kpi-tile">
+                      <span class="kpi-label">总用户</span>
+                      <span class="kpi-value">{{ userStats.total_users || 0 }}</span>
+                    </div>
+                    <div class="kpi-tile">
+                      <span class="kpi-label">活跃用户</span>
+                      <span class="kpi-value">{{ userStats.active_users || 0 }}</span>
+                    </div>
+                    <div class="kpi-tile">
+                      <span class="kpi-label">今日新增</span>
+                      <span class="kpi-value">{{ userStats.today_new_users || 0 }}</span>
+                    </div>
+                    <div class="kpi-tile">
+                      <span class="kpi-label">付费用户</span>
+                      <span class="kpi-value">{{ userStats.paid_users || 0 }}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-            <n-space class="chart-legend" style="margin-top: 12px" :size="16">
-              <span class="legend"><span class="legend-dot" style="background: var(--success-color)"></span>收入</span>
-              <span class="legend"><span class="legend-dot" style="background: #2080f0"></span>充值</span>
-            </n-space>
-          </div>
-          <n-empty v-else description="暂无数据" />
-        </n-card>
+              </n-card>
+
+              <n-card :bordered="false" class="stats-card">
+                <template #header>
+                  <div class="card-title-row">
+                    <span class="card-title">收入趋势</span>
+                    <span class="card-hint">单位：元</span>
+                  </div>
+                </template>
+                <template v-if="revenueChart.length > 0">
+                  <revenue-trend-chart v-if="!appStore.isMobile" :data="revenueChart" />
+                  <div v-else class="mobile-chart">
+                    <div v-for="(item, index) in revenueChart" :key="index" class="chart-row">
+                      <div class="chart-meta">
+                        <div class="chart-label">{{ item.date }}</div>
+                        <div class="chart-orders">{{ item.orders }} 单</div>
+                      </div>
+                      <div class="chart-bars">
+                        <div class="bar-group">
+                          <div class="bar revenue-bar" :style="{ width: barWidth(item.revenue, maxRevenue) + '%' }">
+                            <span v-if="item.revenue > 0" class="bar-text">{{ formatCurrency(item.revenue) }}</span>
+                          </div>
+                        </div>
+                        <div class="bar-group">
+                          <div class="bar recharge-bar" :style="{ width: barWidth(item.recharge, maxRevenue) + '%' }">
+                            <span v-if="item.recharge > 0" class="bar-text">{{ formatCurrency(item.recharge) }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <n-space class="chart-legend" style="margin-top: 12px" :size="16">
+                      <span class="legend"><span class="legend-dot" style="background: var(--success-color)"></span>收入</span>
+                      <span class="legend"><span class="legend-dot" style="background: #2080f0"></span>充值</span>
+                    </n-space>
+                  </div>
+                </template>
+                <n-empty v-else description="暂无数据" />
+              </n-card>
             </n-space>
           </n-tab-pane>
 
           <n-tab-pane name="payment" tab="收入与支付">
             <n-space vertical :size="16">
-        <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="16" :y-gap="16">
-          <!-- Payment Method Stats -->
-          <n-gi>
-            <n-card title="支付方式分布" :bordered="false">
-              <div v-if="paymentMethodStats.length > 0">
-                <div v-for="(item, index) in paymentMethodStats" :key="index" class="method-item">
-                  <div class="method-info">
-                    <span class="method-name">{{ item.method || '未知' }}</span>
-                    <span class="method-detail">{{ item.count }} 笔 / {{ formatCurrency(item.amount) }}</span>
+              <n-card :bordered="false" class="stats-card">
+                <template #header>
+                  <div class="card-title-row">
+                    <span class="card-title">支付方式分布</span>
+                    <span class="card-hint">近 {{ payDays }} 天</span>
                   </div>
-                  <n-progress
-                    type="line"
-                    :percentage="Math.round((item.amount / maxPaymentAmount) * 100)"
-                    :show-indicator="false"
-                    :height="8"
-                    :border-radius="4"
-                    :color="getColor(index)"
-                  />
-                </div>
-              </div>
-              <n-empty v-else description="暂无数据" />
-            </n-card>
-          </n-gi>
-          <!-- Package Stats -->
-          <n-gi>
-            <n-card title="套餐销售排行" :bordered="false">
-              <payment-pie-chart v-if="packageStats.length > 0 && !appStore.isMobile" :data="packagePieData" />
-              <div v-if="packageStats.length > 0 && appStore.isMobile" class="mobile-stat-list">
-                <div v-for="(item, index) in packageStats" :key="index" class="mobile-stat-item">
-                  <div class="mobile-stat-main">{{ item.package_name }}</div>
-                  <div class="mobile-stat-meta">
-                    <span>销量 {{ item.count }}</span>
-                    <strong>{{ formatCurrency(item.amount) }}</strong>
-                  </div>
-                </div>
-              </div>
-              <n-data-table
-                v-else-if="packageStats.length > 0"
-                :columns="packageColumns"
-                :data="packageStats"
-                :bordered="false"
-                size="small"
-                :pagination="false"
-              />
-              <n-empty v-else description="暂无数据" />
-            </n-card>
-          </n-gi>
-        </n-grid>
-
-        <!-- 支付分析（此前后端已实现、前端未接入） -->
-        <n-card title="支付分析" :bordered="false">
-          <template #header-extra>
-            <n-radio-group v-model:value="payDays" size="small" @update:value="loadPaymentAnalysis">
-              <n-radio-button value="7">7天</n-radio-button>
-              <n-radio-button value="30">30天</n-radio-button>
-              <n-radio-button value="90">90天</n-radio-button>
-            </n-radio-group>
-          </template>
-          <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="16" :y-gap="16">
-            <n-gi>
-              <n-card title="支付方式统计" size="small" :bordered="false">
-                <div v-if="payMethodStats.length > 0" class="pay-stats-wrap">
-                  <!-- 桌面端：饼图占比 -->
-                  <payment-pie-chart v-if="!appStore.isMobile" :data="payPieData" />
-                  <div class="method-list">
-                    <div v-for="(item, index) in payMethodStats" :key="index" class="method-item">
-                      <div class="method-info">
-                        <span class="method-name">{{ paymentMethodText(item.payment_method) }}</span>
-                        <span class="method-detail">{{ item.order_count }} 笔 / {{ formatCurrency(item.total_amount) }} · 成功率 {{ item.success_rate ? item.success_rate.toFixed(1) : '0' }}%</span>
+                </template>
+                <div v-if="payMethodStats.length > 0" class="pay-dist">
+                  <payment-pie-chart v-if="!appStore.isMobile" :data="payPieData" class="pay-dist-chart" />
+                  <div class="pay-dist-list">
+                    <div v-for="(item, index) in payMethodStats" :key="index" class="pay-dist-row">
+                      <div class="pay-dist-head">
+                        <span class="pay-dist-name">{{ paymentMethodText(item.payment_method) }}</span>
+                        <span class="pay-dist-amount">{{ formatCurrency(item.total_amount) }}</span>
                       </div>
                       <n-progress
                         type="line"
                         :percentage="Math.round(((item.total_amount || 0) / payMaxAmount) * 100)"
                         :show-indicator="false"
-                        :height="8"
-                        :border-radius="4"
+                        :height="6"
+                        :border-radius="3"
                         :color="getColor(index)"
                       />
+                      <div class="pay-dist-meta">{{ item.order_count }} 笔 · 成功率 {{ item.success_rate ? item.success_rate.toFixed(1) : '0' }}%</div>
                     </div>
                   </div>
                 </div>
                 <n-empty v-else description="暂无支付数据" />
               </n-card>
-            </n-gi>
-            <n-gi>
-              <n-card title="支付方式对比" size="small" :bordered="false">
-                <div v-if="payComparisons.length > 0">
-                  <n-data-table
-                    :columns="payCompareColumns"
-                    :data="payComparisons"
-                    :bordered="false"
-                    size="small"
-                    :pagination="false"
-                    :max-height="260"
-                  />
+
+              <n-card :bordered="false" class="stats-card">
+                <template #header>
+                  <div class="card-title-row">
+                    <span class="card-title">套餐销售排行</span>
+                    <span class="card-hint">按销售额排序</span>
+                  </div>
+                </template>
+                <div v-if="packageStats.length > 0" class="pkg-list">
+                  <div v-for="(item, index) in packageStats" :key="index" class="pkg-row">
+                    <span class="pkg-rank" :class="{ 'is-top': index < 3 }">{{ index + 1 }}</span>
+                    <div class="pkg-main">
+                      <div class="pkg-name">{{ item.package_name || '未知套餐' }}</div>
+                      <n-progress
+                        type="line"
+                        :percentage="Math.round(((item.count || 0) / maxPackageCount) * 100)"
+                        :show-indicator="false"
+                        :height="6"
+                        :border-radius="3"
+                        :color="getColor(index)"
+                      />
+                    </div>
+                    <div class="pkg-meta">
+                      <span class="pkg-count">{{ item.count }} 单</span>
+                      <span class="pkg-amount">{{ formatCurrency(item.amount) }}</span>
+                    </div>
+                  </div>
                 </div>
+                <n-empty v-else description="暂无数据" />
+              </n-card>
+
+              <n-card :bordered="false" class="stats-card">
+                <template #header>
+                  <div class="card-title-row">
+                    <span class="card-title">支付方式对比</span>
+                    <n-radio-group v-model:value="payDays" size="small" @update:value="loadPaymentAnalysis">
+                      <n-radio-button value="7">7天</n-radio-button>
+                      <n-radio-button value="30">30天</n-radio-button>
+                      <n-radio-button value="90">90天</n-radio-button>
+                    </n-radio-group>
+                  </div>
+                </template>
+                <n-data-table
+                  v-if="payComparisons.length > 0"
+                  :columns="payCompareColumns"
+                  :data="payComparisons"
+                  :bordered="false"
+                  size="small"
+                  :pagination="false"
+                />
                 <n-empty v-else description="暂无对比数据" />
               </n-card>
-            </n-gi>
-          </n-grid>
-          <n-divider style="margin: 12px 0" />
-          <div class="hourly-header">
-            <span class="hourly-title">订单高峰时段</span>
-            <n-select
-              v-model:value="payAnalysisMethod"
-              :options="payAnalysisOptions"
-              size="small"
-              clearable
-              placeholder="选择支付方式"
-              style="width: 160px"
-              @update:value="loadPayAnalysis"
-            />
-          </div>
-          <div v-if="payHourly.length > 0" class="hourly-grid">
-            <div v-for="h in payHourly" :key="h.hour" class="hourly-item" :title="`${h.hour}时：${h.order_count} 单 · 成功率 ${h.success_rate ? h.success_rate.toFixed(1) : '0'}%`">
-              <div class="hourly-bar" :style="{ height: hourlyHeight(h.order_count) }"></div>
-              <span class="hourly-label">{{ h.hour }}时</span>
-            </div>
-          </div>
-          <n-empty v-else-if="payAnalysisLoaded" description="该时段无订单" style="padding: 20px 0" />
-        </n-card>
+
+              <n-card :bordered="false" class="stats-card">
+                <template #header>
+                  <div class="card-title-row">
+                    <span class="card-title">订单高峰时段</span>
+                    <n-select
+                      v-model:value="payAnalysisMethod"
+                      :options="payAnalysisOptions"
+                      size="small"
+                      clearable
+                      placeholder="全部支付方式"
+                      style="width: 170px"
+                      @update:value="loadPayAnalysis"
+                    />
+                  </div>
+                </template>
+                <div v-if="payHourly.length > 0" class="hourly-grid">
+                  <div v-for="h in payHourly" :key="h.hour" class="hourly-item" :title="`${h.hour}时：${h.order_count} 单 · 成功率 ${h.success_rate ? h.success_rate.toFixed(1) : '0'}%`">
+                    <div class="hourly-bar" :style="{ height: hourlyHeight(h.order_count) }"></div>
+                    <span class="hourly-label">{{ h.hour }}时</span>
+                  </div>
+                </div>
+                <n-empty v-else description="请选择支付方式查看时段分布" style="padding: 20px 0" />
+              </n-card>
             </n-space>
           </n-tab-pane>
 
@@ -638,6 +647,7 @@ const packagePieData = computed(() =>
     .filter((s: any) => Number(s.amount) > 0)
     .map((s: any) => ({ name: s.package_name || '未知', value: Number(s.amount) || 0 }))
 )
+const maxPackageCount = computed(() => Math.max(1, ...packageStats.value.map((s: any) => Number(s.count) || 0)))
 const payMaxAmount = computed(() => Math.max(1, ...payMethodStats.value.map((s: any) => Number(s.total_amount) || 0)))
 const payPieData = computed(() =>
   payMethodStats.value
@@ -785,4 +795,60 @@ onMounted(() => {
 .stats-tabs :deep(.n-tab-pane) { padding-top: 12px; }
 @media (max-width: 767px) {
   .stats-tabs :deep(.n-tabs-tab) { font-size: 13px; padding: 0 10px; }
+}
+
+/* ===== 数据分析：统一卡片、指标块与支付/套餐列表 ===== */
+.stats-card :deep(.n-card__content) { padding: 16px; }
+.card-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.card-title { font-size: 15px; font-weight: 600; }
+.card-hint { font-size: 12px; color: var(--text-color-secondary); }
+
+.metric-section-title { font-size: 12px; font-weight: 600; letter-spacing: .5px; color: var(--text-color-secondary); margin-bottom: 10px; }
+.metric-divider { height: 1px; background: var(--border-color, #e5e7eb); margin: 16px 0; }
+
+.kpi-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.kpi-grid--compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 768px) {
+  .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpi-grid--compact { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1200px) {
+  .kpi-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+.kpi-tile {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 14px 14px 12px; border-radius: 10px;
+  background: var(--n-color, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  min-width: 0;
+}
+.kpi-label { font-size: 12px; color: var(--text-color-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi-value { font-size: 20px; font-weight: 600; line-height: 1.25; word-break: break-all; }
+@media (max-width: 767px) { .kpi-value { font-size: 17px; } }
+
+.pay-dist { display: grid; gap: 20px; grid-template-columns: 240px 1fr; align-items: center; }
+.pay-dist-chart { width: 240px; }
+.pay-dist-list { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pay-dist-row { display: flex; flex-direction: column; gap: 4px; }
+.pay-dist-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.pay-dist-name { font-size: 13px; font-weight: 500; }
+.pay-dist-amount { font-size: 13px; font-weight: 600; }
+.pay-dist-meta { font-size: 12px; color: var(--text-color-secondary); }
+@media (max-width: 767px) {
+  .pay-dist { grid-template-columns: 1fr; gap: 16px; }
+  .pay-dist-chart { width: 100%; }
+}
+
+.pkg-list { display: flex; flex-direction: column; gap: 12px; }
+.pkg-row { display: grid; grid-template-columns: 24px 1fr auto; gap: 12px; align-items: center; }
+.pkg-rank { width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-color-secondary); background: var(--bg-page-color, #f1f5f9); }
+.pkg-rank.is-top { color: #fff; background: var(--primary-color, #4f46e5); }
+.pkg-main { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pkg-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pkg-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.pkg-count { font-size: 12px; color: var(--text-color-secondary); }
+.pkg-amount { font-size: 13px; font-weight: 600; }
+@media (max-width: 767px) {
+  .pkg-row { grid-template-columns: 24px 1fr; }
+  .pkg-meta { grid-column: 2; flex-direction: row; justify-content: space-between; align-items: center; }
 }

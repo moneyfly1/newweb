@@ -294,6 +294,12 @@ func distributeInviteCommission(db *gorm.DB, order *models.Order) {
 		// 另一个并发请求已经设置了，跳过
 		return
 	}
+
+	// 被邀请人首单达成 → 发放邀请/受邀奖励（注册时未发，见 auth.go）。
+	// 幂等由 inviter_reward_given / invitee_reward_given 条件更新保证。
+	if err := grantInviteRewards(db, &relation, order); err != nil {
+		utils.SysError("subscription", fmt.Sprintf("发放邀请奖励失败: relation=%d order=%d err=%v", relation.ID, order.ID, err))
+	}
 	rateStr := utils.GetSetting("invite_commission_rate")
 	if rateStr == "" {
 		return
@@ -1074,6 +1080,77 @@ func applyConsumptionAndSyncLevel(db *gorm.DB, order *models.Order) error {
 	// 只升不降：命中的最高达标等级已高于当前等级时不动
 	if _, _, err := userlevel.Sync(db, &user); err != nil {
 		return err
+	}
+	return nil
+}
+
+// grantInviteRewards 被邀请人首次消费后发放邀请/受邀奖励。
+//
+// 时序：注册时只创建 InviteRelation（Given=false），首单回调时执行本函数。
+// 幂等：先用条件更新把 Given 置 true（只有一次能成功），成功后再加余额并记流水；
+// 并发重复回调不会重复发放。
+func grantInviteRewards(db *gorm.DB, relation *models.InviteRelation, order *models.Order) error {
+	var inviteCode models.InviteCode
+	if err := db.First(&inviteCode, relation.InviteCodeID).Error; err != nil {
+		return nil // 邀请码已删除：不发
+	}
+
+	// 邀请人奖励
+	if inviteCode.InviterReward > 0 && !relation.InviterRewardGiven {
+		res := db.Model(&models.InviteRelation{}).
+			Where("id = ? AND inviter_reward_given = ?", relation.ID, false).
+			Update("inviter_reward_given", true)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected > 0 {
+			var inviter models.User
+			if err := db.First(&inviter, relation.InviterID).Error; err == nil {
+				if err := db.Model(&inviter).UpdateColumn("balance", gorm.Expr("balance + ?", inviteCode.InviterReward)).Error; err != nil {
+					return err
+				}
+				db.Model(&models.InviteRelation{}).Where("id = ?", relation.ID).
+					Update("inviter_reward_amount", inviteCode.InviterReward)
+				desc := fmt.Sprintf("邀请用户首单奖励 (订单: %s)", order.OrderNo)
+				_ = db.Create(&models.BalanceLog{
+					UserID:        inviter.ID,
+					ChangeType:    "invite_reward",
+					Amount:        inviteCode.InviterReward,
+					BalanceBefore: inviter.Balance,
+					BalanceAfter:  inviter.Balance + inviteCode.InviterReward,
+					Description:   &desc,
+				}).Error
+			}
+		}
+	}
+
+	// 受邀人奖励
+	if inviteCode.InviteeReward > 0 && !relation.InviteeRewardGiven {
+		res := db.Model(&models.InviteRelation{}).
+			Where("id = ? AND invitee_reward_given = ?", relation.ID, false).
+			Update("invitee_reward_given", true)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected > 0 {
+			var invitee models.User
+			if err := db.First(&invitee, relation.InviteeID).Error; err == nil {
+				if err := db.Model(&invitee).UpdateColumn("balance", gorm.Expr("balance + ?", inviteCode.InviteeReward)).Error; err != nil {
+					return err
+				}
+				db.Model(&models.InviteRelation{}).Where("id = ?", relation.ID).
+					Update("invitee_reward_amount", inviteCode.InviteeReward)
+				desc := fmt.Sprintf("受邀首单奖励 (邀请码: %s)", inviteCode.Code)
+				_ = db.Create(&models.BalanceLog{
+					UserID:        invitee.ID,
+					ChangeType:    "invite_reward",
+					Amount:        inviteCode.InviteeReward,
+					BalanceBefore: invitee.Balance,
+					BalanceAfter:  invitee.Balance + inviteCode.InviteeReward,
+					Description:   &desc,
+				}).Error
+			}
+		}
 	}
 	return nil
 }

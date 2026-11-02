@@ -20,7 +20,29 @@
     </div>
 
     <n-space vertical :size="24">
-      <n-card id="sec-faq" title="常见问题" :bordered="false">
+      <n-card id="sec-knowledge" title="知识库" :bordered="false">
+      <n-spin :show="kbLoading">
+        <div v-for="cat in kbCategories" :key="cat.id" class="kb-cat">
+          <h4 class="kb-cat-title">{{ cat.icon }} {{ cat.name }}</h4>
+          <n-space vertical :size="6">
+            <a
+              v-for="art in kbArticles.filter(a => a.category_id === cat.id)"
+              :key="art.id"
+              href="javascript:;"
+              class="kb-link"
+              @click.prevent="openArticle(art)"
+            >{{ art.title }}</a>
+          </n-space>
+        </div>
+        <p v-if="!kbLoading && kbCategories.length === 0" class="kb-empty">暂无教程，请稍后再来</p>
+      </n-spin>
+    </n-card>
+
+    <n-modal v-model:show="kbModal" preset="card" :title="kbCurrent?.title" style="width: 720px">
+      <div class="kb-article" v-html="kbHtml"></div>
+    </n-modal>
+
+    <n-card id="sec-faq" title="常见问题" :bordered="false">
         <n-collapse>
           <n-collapse-item title="如何购买套餐" name="buy">
             <p>登录后前往「购买套餐」页面，选择适合您的套餐并完成支付即可。支持余额支付和在线支付方式。</p>
@@ -198,11 +220,60 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onActivated, onUnmounted, onDeactivated } from 'vue'
 import { DownloadOutline, ChevronDownOutline, ChevronUpOutline, MailOutline, ChatbubblesOutline, SendOutline } from '@vicons/ionicons5'
+import request from '@/utils/request'
 import { getPublicConfig } from '@/api/common'
 import { resolvePanDownloadUrl } from '@/utils/githubDownload'
 import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
+/* ---------------- 知识库（后端可编辑的教程）---------------- */
+const kbLoading = ref(false)
+const kbCategories = ref<any[]>([])
+const kbArticles = ref<any[]>([])
+const kbModal = ref(false)
+const kbCurrent = ref<any>(null)
+
+// 轻量 Markdown 渲染：标题 / 粗体 / 行内代码 / 代码块 / 列表。
+// 不引入额外依赖，先转义 HTML 再逐条替换，避免 XSS。
+function renderMarkdown(md: string): string {
+  let html = md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  html = html.replace(/```[\s\S]*?```/g, (m) => '<pre>' + m.replace(/```/g, '') + '</pre>')
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+  html = html.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
+  html = html.replace(/\n{2,}/g, '</p><p>')
+  return '<p>' + html + '</p>'
+}
+const kbHtml = computed(() => renderMarkdown(kbCurrent.value?.content || ''))
+
+function openArticle(art: any) {
+  kbCurrent.value = art
+  kbModal.value = true
+}
+
+async function loadKnowledge() {
+  kbLoading.value = true
+  try {
+    const [cats, arts] = await Promise.all([
+      request.get('/knowledge/categories'),
+      request.get('/knowledge/articles'),
+    ])
+    kbCategories.value = (cats as any) || []
+    kbArticles.value = (arts as any) || []
+  } catch {
+    // 未登录或接口异常时静默降级：帮助页其余内容照常可用
+  } finally {
+    kbLoading.value = false
+  }
+}
+
 const loadingConfig = ref(false)
 const config = ref<Record<string, string>>({})
 const expandedTut = ref('')
@@ -544,6 +615,7 @@ onMounted(async () => {
   finally { loadingConfig.value = false }
 })
 
+onMounted(loadKnowledge)
 onMounted(bindScroll)
 onActivated(bindScroll)
 onDeactivated(unbindScroll)
@@ -857,6 +929,17 @@ onUnmounted(unbindScroll)
   .help-page :deep(.n-card) {
     scroll-margin-top: calc(var(--mobile-header-h, 52px) + 66px);
   }
+
+  /* 知识库 */
+  .kb-cat { margin-bottom: 16px; }
+  .kb-cat-title { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+  .kb-link { color: #2563eb; font-size: 14px; line-height: 1.8; }
+  .kb-link:hover { text-decoration: underline; }
+  .kb-empty { color: #94a3b8; font-size: 13px; }
+  .kb-article { line-height: 1.8; font-size: 14px; }
+  .kb-article h1, .kb-article h2, .kb-article h3 { margin: 18px 0 8px; }
+  .kb-article pre { background: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; }
+  .kb-article code { background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-size: 13px; }
 
   /* 手机端：卡片内容贴齐卡片（去掉 .client-grid 的纵向大间距） */
   .client-grid { padding: 4px 0 0; }

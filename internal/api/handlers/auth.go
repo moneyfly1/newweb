@@ -224,55 +224,9 @@ func Register(c *gin.Context) {
 				InviterID:    inviteCode.UserID,
 				InviteeID:    user.ID,
 			}
-			// 发放邀请人奖励
-			if inviteCode.InviterReward > 0 {
-				relation.InviterRewardAmount = inviteCode.InviterReward
-				relation.InviterRewardGiven = true
-				var inviter models.User
-				if tx.First(&inviter, inviteCode.UserID).Error == nil {
-					if err := tx.Model(&inviter).UpdateColumn("balance", gorm.Expr("balance + ?", inviteCode.InviterReward)).Error; err != nil {
-						tx.Rollback()
-						utils.InternalError(c, "发放邀请奖励失败")
-						return
-					}
-					desc := fmt.Sprintf("邀请用户 %s 注册奖励", user.Username)
-					if err := tx.Create(&models.BalanceLog{
-						UserID:        inviter.ID,
-						ChangeType:    "invite_reward",
-						Amount:        inviteCode.InviterReward,
-						BalanceBefore: inviter.Balance,
-						BalanceAfter:  inviter.Balance + inviteCode.InviterReward,
-						Description:   &desc,
-					}).Error; err != nil {
-						tx.Rollback()
-						utils.InternalError(c, "记录邀请奖励失败")
-						return
-					}
-				}
-			}
-			// 发放被邀请人奖励
-			if inviteCode.InviteeReward > 0 {
-				relation.InviteeRewardAmount = inviteCode.InviteeReward
-				relation.InviteeRewardGiven = true
-				if err := tx.Model(&user).UpdateColumn("balance", gorm.Expr("balance + ?", inviteCode.InviteeReward)).Error; err != nil {
-					tx.Rollback()
-					utils.InternalError(c, "发放受邀奖励失败")
-					return
-				}
-				desc := fmt.Sprintf("受邀注册奖励 (邀请码: %s)", req.InviteCode)
-				if err := tx.Create(&models.BalanceLog{
-					UserID:        user.ID,
-					ChangeType:    "invite_reward",
-					Amount:        inviteCode.InviteeReward,
-					BalanceBefore: 0,
-					BalanceAfter:  inviteCode.InviteeReward,
-					Description:   &desc,
-				}).Error; err != nil {
-					tx.Rollback()
-					utils.InternalError(c, "记录受邀奖励失败")
-					return
-				}
-			}
+			// 邀请奖励**不在注册时发放**：必须等被邀请人首次消费后才发，
+			// 否则批量注册即可薅羊毛（myweb 2026-10 已修复此漏洞）。
+			// 发放逻辑见 subscription.go 的 grantInviteRewards（首单回调时执行）。
 			if err := tx.Create(&relation).Error; err != nil {
 				tx.Rollback()
 				utils.InternalError(c, "创建邀请关系失败")

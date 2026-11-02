@@ -633,3 +633,29 @@ select:-webkit-autofill {
     overflow-wrap: anywhere;
   }
 }
+
+
+/* ------------------------------------------------------------
+   10. 复选框边框可见性
+   ------------------------------------------------------------
+   问题：未选中时 Naive 的边框色与白色卡片几乎同色（尤其表格表头的全选框），
+   「勾选后才看得见」，用户根本找不到可点的方框。
+   处理：统一加深边框、给底色，并在各主题下保持对比度。 */
+.n-checkbox .n-checkbox-box {
+  border: 1.5px solid var(--border-color, #cbd5e1) !important;
+  background-color: var(--bg-color, #fff) !important;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.n-checkbox .n-checkbox-box:hover {
+  border-color: var(--primary-color, #4f46e5) !important;
+}
+.n-checkbox.n-checkbox--checked .n-checkbox-box,
+.n-checkbox .n-checkbox-box--checked,
+.n-checkbox .n-checkbox-box.n-checkbox-box--checked {
+  border-color: var(--primary-color, #4f46e5) !important;
+  background-color: var(--primary-color, #4f46e5) !important;
+}
+/* 表头的全选框再加重一档：它是批量操作入口，必须一眼可见 */
+.n-data-table-th .n-checkbox .n-checkbox-box {
+  border-width: 2px !important;
+}

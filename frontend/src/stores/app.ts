@@ -28,37 +28,37 @@ interface ThemeOption {
 const themeConfigs: Record<string, ThemeConfig> = {
   indigo: {
     primary: '#4f46e5', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#6b7280',
-    bg: '#ffffff', bgPage: '#f8fafc', text: '#0f172a', textSecondary: '#64748b', border: '#e2e8f0',
+    bg: '#ffffff', bgPage: '#eef2f7', text: '#0f172a', textSecondary: '#64748b', border: '#e2e8f0',
     sidebarBg: '#f1f5f9', sidebarText: '#334155', sidebarHover: '#e2e8f0', sidebarActive: '#4f46e5',
   },
   sky: {
     primary: '#0284c7', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#64748b',
-    bg: '#ffffff', bgPage: '#f8fafc', text: '#0f172a', textSecondary: '#475569', border: '#e0f2fe',
+    bg: '#ffffff', bgPage: '#eef5fb', text: '#0f172a', textSecondary: '#475569', border: '#e0f2fe',
     sidebarBg: '#f0f9ff', sidebarText: '#0c4a6e', sidebarHover: '#e0f2fe', sidebarActive: '#0284c7',
   },
   teal: {
     primary: '#0f766e', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#64748b',
-    bg: '#ffffff', bgPage: '#f8fdfb', text: '#0f172a', textSecondary: '#475569', border: '#ccfbf1',
+    bg: '#ffffff', bgPage: '#edf7f4', text: '#0f172a', textSecondary: '#475569', border: '#ccfbf1',
     sidebarBg: '#f0fdfa', sidebarText: '#134e4a', sidebarHover: '#ccfbf1', sidebarActive: '#0f766e',
   },
   mint: {
     primary: '#0d948d', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#64748b',
-    bg: '#ffffff', bgPage: '#fafdfa', text: '#0f172a', textSecondary: '#475569', border: '#d1fae5',
+    bg: '#ffffff', bgPage: '#eef8f1', text: '#0f172a', textSecondary: '#475569', border: '#d1fae5',
     sidebarBg: '#f5fdf8', sidebarText: '#14532d', sidebarHover: '#d1fae5', sidebarActive: '#0d948d',
   },
   amber: {
     primary: '#b45309', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#78716c',
-    bg: '#ffffff', bgPage: '#fefefe', text: '#1c1917', textSecondary: '#625D56', border: '#fef3c7',
+    bg: '#ffffff', bgPage: '#faf5ea', text: '#1c1917', textSecondary: '#625D56', border: '#fef3c7',
     sidebarBg: '#fffbeb', sidebarText: '#78350f', sidebarHover: '#fef3c7', sidebarActive: '#b45309',
   },
   rose: {
     primary: '#be185d', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#6b7280',
-    bg: '#ffffff', bgPage: '#fdf8fa', text: '#1a0f14', textSecondary: '#574750', border: '#fce7f3',
+    bg: '#ffffff', bgPage: '#faf0f4', text: '#1a0f14', textSecondary: '#574750', border: '#fce7f3',
     sidebarBg: '#fdf2f8', sidebarText: '#831843', sidebarHover: '#fce7f3', sidebarActive: '#be185d',
   },
   slate: {
     primary: '#374151', success: '#059669', warning: '#d97706', danger: '#dc2626', info: '#6b7280',
-    bg: '#ffffff', bgPage: '#f9fafb', text: '#111827', textSecondary: '#6b7280', border: '#e5e7eb',
+    bg: '#ffffff', bgPage: '#f0f2f5', text: '#111827', textSecondary: '#6b7280', border: '#e5e7eb',
     sidebarBg: '#f3f4f6', sidebarText: '#374151', sidebarHover: '#e5e7eb', sidebarActive: '#374151',
   },
   midnight: {

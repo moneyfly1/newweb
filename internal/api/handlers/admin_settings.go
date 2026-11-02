@@ -109,6 +109,28 @@ func AdminListEmailQueue(c *gin.Context) {
 	if status != "" {
 		db = db.Where("status = ?", status)
 	}
+	// 关键字搜索：收件邮箱 / 主题 / 正文 / 用户名 / 用户ID。
+	// 邮件队列没有 user_id，用户名与用户ID先经 users 表解析成邮箱集合再匹配。
+	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
+		like := "%" + kw + "%"
+		var emails []string
+		if uid, err := strconv.ParseUint(kw, 10, 64); err == nil {
+			database.GetDB().Model(&models.User{}).Where("id = ?", uid).Pluck("email", &emails)
+		}
+		var userEmails []string
+		database.GetDB().Model(&models.User{}).
+			Where("username LIKE ? OR email LIKE ?", like, like).
+			Pluck("email", &userEmails)
+		emails = append(emails, userEmails...)
+
+		cond := "to_email LIKE ? OR subject LIKE ? OR content LIKE ?"
+		args := []interface{}{like, like, like}
+		if len(emails) > 0 {
+			cond += " OR to_email IN ?"
+			args = append(args, emails)
+		}
+		db = db.Where(cond, args...)
+	}
 	db.Count(&total)
 	db.Order(p.OrderClause()).Offset(p.Offset()).Limit(p.PageSize).Find(&items)
 	// 附带全队列分状态统计（供前端统计卡展示，避免用当前页数据误算）

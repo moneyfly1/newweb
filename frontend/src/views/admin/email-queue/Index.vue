@@ -78,6 +78,18 @@
             <n-tab-pane name="sent" tab="已发送" />
             <n-tab-pane name="failed" tab="发送失败" />
           </n-tabs>
+          <n-input
+            v-model:value="searchKeyword"
+            class="queue-search"
+            placeholder="搜索用户名 / 用户ID / 邮箱 / 主题 / 正文"
+            clearable
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+          >
+            <template #suffix>
+              <n-button size="tiny" type="primary" :loading="loading" @click="handleSearch">搜索</n-button>
+            </template>
+          </n-input>
         </div>
 
         <!-- 全选 / 批量操作：公共组件（桌面在表格上方，手机固定在底部标签栏上方） -->
@@ -231,12 +243,16 @@ const dialog = useDialog()
 
 // State
 const statusFilter = ref('all')
+const searchKeyword = ref('')
 const showDetail = ref(false)
 const detailItem = ref(null)
 
 // 统一表格状态（含状态筛选）
 const { loading, tableData: emails, pagination, loadData, reload } = useTable(listEmailQueue, {
-  getParams: () => ({ status: statusFilter.value === 'all' ? undefined : statusFilter.value }),
+  getParams: () => ({
+    status: statusFilter.value === 'all' ? undefined : statusFilter.value,
+    keyword: searchKeyword.value.trim() || undefined,
+  }),
 })
 const fetchEmails = loadData
 // 全选 / 多选：全站统一实现（桌面表格与手机卡片共用同一份选择状态）
@@ -411,6 +427,11 @@ const columns = [
 ]
 
 // Handlers
+const handleSearch = () => {
+  pagination.page = 1
+  loadData()
+}
+
 const handleStatusChange = () => {
   reload()
 }
@@ -601,5 +622,15 @@ onActivated(() => {
   border-radius: 6px;
   padding: 16px;
   background: var(--bg-color);
+}
+</style>
+
+<style scoped>
+.queue-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.queue-toolbar :deep(.n-tabs) { flex: 1; min-width: 220px; }
+.queue-search { width: 300px; max-width: 100%; }
+@media (max-width: 767px) {
+  .queue-toolbar { flex-direction: column; align-items: stretch; }
+  .queue-search { width: 100%; }
 }
 </style>

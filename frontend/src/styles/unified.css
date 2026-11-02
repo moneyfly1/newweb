@@ -469,24 +469,46 @@ html {
    结果就是「白卡片贴在白底上」，整页没有任何层次（也是用户多次反馈
    「页面太白」的真正原因）。这里让布局容器透出页面底色，
    并给卡片统一的描边/圆角/微阴影。 */
-.n-layout {
-  background-color: var(--bg-page-color, #f2f3f5);
+.n-layout,
+.n-layout-content,
+.mobile-admin-content,
+.user-mobile-content {
+  background-color: var(--bg-page-color, #eef2f7) !important;
 }
 .n-layout-sider,
 .n-layout-header {
-  background-color: var(--bg-color, #fff);
+  background-color: var(--bg-color, #fff) !important;
 }
+/* 卡片必须是「白纸贴在灰底上」：底色、描边、阴影三者都要能看见 */
 .n-card {
-  background-color: var(--bg-color, #fff);
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  background-color: var(--bg-color, #fff) !important;
+  border: 1px solid var(--card-border-color, #cfd9e6) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 2px 6px rgba(15, 23, 42, 0.06) !important;
 }
 /* 卡片内嵌套卡片（如支付分析里的两块）不再重复描边，避免层层叠框 */
 .n-card .n-card {
-  border: 0;
-  box-shadow: none;
-  background-color: transparent;
+  border: 1px solid var(--border-color, #e5e7eb) !important;
+  box-shadow: none !important;
+  background-color: var(--bg-color, #fff) !important;
+}
+/* 卡片里的表格：表头用页面底色，和数据区拉开层次（原来整片纯白） */
+.n-card .n-data-table-th {
+  background-color: var(--bg-page-color, #f4f6f9) !important;
+}
+.n-card .n-data-table-th:first-child {
+  border-top-left-radius: 8px;
+}
+.n-card .n-data-table-th:last-child {
+  border-top-right-radius: 8px;
+}
+/* 数据行 hover 有反馈 */
+.n-card .n-data-table-tr:hover .n-data-table-td {
+  background-color: var(--primary-color-soft, rgba(79, 70, 229, 0.05)) !important;
+}
+/* 卡片之间留出可辨识的间距 */
+.n-space.n-space--vertical > .n-space-item > .n-card + .n-card {
+  margin-top: 2px;
 }
 
 
@@ -544,4 +566,23 @@ html {
     padding-top: 9px;
     padding-bottom: 9px;
   }
+}
+
+
+/* ============================================================
+   用户端自定义卡片（.card 系列，非 Naive 组件）
+   ============================================================
+   仪表盘/订阅/订单等页面用的是自研 .card 类，只有少数页面自己写了描边，
+   其余在白底上完全看不出卡片边界。这里统一补上描边 + 轻阴影。 */
+.card {
+  background-color: var(--bg-color, #fff);
+  border: 1px solid var(--card-border-color, #cfd9e6);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+/* 欢迎横幅等自带背景的容器不覆盖 */
+.card.welcome-card,
+.card.no-border {
+  border: 0;
+  box-shadow: none;
 }

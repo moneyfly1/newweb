@@ -99,7 +99,9 @@ const routes: RouteRecordRaw[] = [
       { path: 'shop', name: 'Shop', component: viewLoaders.Shop },
       { path: 'tickets', name: 'Tickets', component: viewLoaders.Tickets },
       { path: 'tickets/:id', name: 'TicketDetail', component: viewLoaders.TicketDetail },
-      { path: 'nodes', name: 'Nodes', component: viewLoaders.Nodes },
+      // 注意：不能用 /nodes —— nginx 把 /nodes/ 代理给了后端节点文件目录，会 301→404
+      { path: 'node-status', name: 'Nodes', component: viewLoaders.Nodes },
+      { path: 'nodes', redirect: '/node-status' },
       { path: 'devices', name: 'Devices', component: viewLoaders.Devices },
       { path: 'invite', name: 'Invite', component: viewLoaders.Invite },
       { path: 'settings', name: 'Settings', component: viewLoaders.Settings },

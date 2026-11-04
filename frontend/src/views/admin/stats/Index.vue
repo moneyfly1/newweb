@@ -274,7 +274,7 @@
             <div v-if="regionStats.length > 0" class="region-list-compact" :class="{ expanded: showAllRegions }">
               <div v-for="(item, index) in displayRegions" :key="index" class="region-row-compact">
                 <span class="region-rank-sm">{{ index + 1 }}</span>
-                <span class="region-detail">{{ item.country || '-' }} · {{ item.province || '-' }} · {{ item.city || '-' }}</span>
+                <span class="region-detail">{{ formatRegionDetail(item) }}</span>
                 <span class="region-bar-wrap">
                   <span class="region-bar" :style="{ width: Math.round((item.count / maxRegionCount) * 100) + '%', background: getColor(index) }"></span>
                 </span>
@@ -394,6 +394,7 @@ import { ref, reactive, computed, h, onMounted, defineAsyncComponent } from 'vue
 import { useMessage, NTag } from 'naive-ui'
 import request from '@/utils/request'
 import { getFinancialReport, exportFinancialReport, getRegionStats, getPaymentStats, getPaymentMethodComparison, getPaymentAnalysis, getAdminUserStats } from '@/api/admin'
+import { formatCountryOnly } from '@/utils/format'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
 const PaymentPieChart = defineAsyncComponent(() => import('../components/PaymentPieChart.vue'))
@@ -504,6 +505,18 @@ const paymentMethodStats = ref<any[]>([])
 const packageStats = ref<any[]>([])
 const topUsers = ref<any[]>([])
 const regionStats = ref<Array<{ country: string; province: string; city: string; count: number }>>([])
+// 地区展示统一走 formatCountryOnly：国家/地区显示中文（含港澳台口径），
+// 省市有值且不是 '-' 时追加显示，避免出现「United States · - · -」这类英文口径。
+const formatRegionDetail = (item: { country?: string; province?: string; city?: string }) => {
+  const parts: string[] = []
+  const country = formatCountryOnly(item.country, '')
+  if (country) parts.push(country)
+  for (const v of [item.province, item.city]) {
+    const text = (v || '').trim()
+    if (text && text !== '-' && !parts.includes(text)) parts.push(text)
+  }
+  return parts.length ? parts.join(' · ') : '-'
+}
 
 const dateShortcuts = {
   '最近7天': () => {

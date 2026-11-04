@@ -303,7 +303,7 @@
             <div v-if="devices.length === 0" class="empty-device-list">暂无设备记录</div>
             <div v-for="dev in devices" :key="dev.id" class="mobile-device-item">
               <div class="device-name">
-                {{ dev.device_name || dev.software_name || '未知设备' }}
+                {{ formatDeviceText(dev.device_name || dev.software_name, '未知设备') }}
                 <n-tag :type="dev.is_online ? 'success' : 'default'" size="tiny" :bordered="false">
                   {{ dev.is_online ? '在线' : '离线' }}
                 </n-tag>
@@ -601,7 +601,7 @@ import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
 import { formatDate, formatDateTime } from '@/utils/date'
-import { formatCountryOnly, formatRelativeTime } from '@/utils/format'
+import { formatCountryOnly, formatRelativeTime, formatDeviceText } from '@/utils/format'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 
 const appStore = useAppStore()
@@ -625,10 +625,10 @@ const deviceColumns = [
       bordered: false
     }, { default: () => row.is_online ? '在线' : '离线' })
   },
-  { title: '客户端', key: 'software_name', width: 120, render: (row: any) => row.software_name || '未知' },
+  { title: '客户端', key: 'software_name', width: 120, render: (row: any) => formatDeviceText(row.software_name) },
   { title: '版本', key: 'software_version', width: 80 },
-  { title: '系统', key: 'os_name', width: 80, render: (row: any) => row.os_name || '未知' },
-  { title: '设备型号', key: 'device_model', width: 150 },
+  { title: '系统', key: 'os_name', width: 80, render: (row: any) => formatDeviceText(row.os_name) },
+  { title: '设备型号', key: 'device_model', width: 150, render: (row: any) => formatDeviceText(row.device_model, '-') },
   { title: '订阅类型', key: 'subscription_type', width: 100 },
   { title: '地区', key: 'region', width: 120, render: (row: any) => formatCountryOnly(row.location || row.region) },
   { title: '最后访问', key: 'last_access', width: 150, render: (row: any) => formatRelativeTime(row.last_access) }

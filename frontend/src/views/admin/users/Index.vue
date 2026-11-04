@@ -177,6 +177,17 @@
                   <span class="card-label">注册时间</span>
                   <span class="card-value">{{ formatFullDateTime(row.created_at) }}</span>
                 </div>
+                <div class="card-row">
+                  <span class="card-label">设备 / 客户端</span>
+                  <span class="card-value">
+                    <template v-if="row.device_count">
+                      设备 {{ row.online_count || 0 }}/{{ row.device_count }}
+                      <n-tag v-for="c in (row.clients || []).slice(0, 2)" :key="c" size="small" :bordered="false" type="info" class="uc-client-tag">{{ c }}</n-tag>
+                      <n-tag v-if="(row.clients || []).length > 2" size="small" :bordered="false">+{{ row.clients.length - 2 }}</n-tag>
+                    </template>
+                    <span v-else class="uc-muted">无设备</span>
+                  </span>
+                </div>
               </div>
               <!-- 与电脑端操作列一一对应：编辑 / 禁用(启用) / 重置 / 代登 / 解封 / 删除，
                    3 列网格排成两行三列（详情入口是上面的用户名和邮箱） -->
@@ -583,6 +594,26 @@ const columns = [
     width: 170, resizable: true,
     sorter: 'default',
     render: (row) => formatFullDateTime(row.last_login)
+  },
+  {
+    // 同一个客户可能同时用多台设备、多个客户端：这里直接列出设备数与客户端标签，
+    // 不用逐个点开详情排查。
+    title: '设备 / 客户端',
+    key: 'clients',
+    width: 240,
+    render: (row) => {
+      const clients = Array.isArray(row.clients) ? row.clients : []
+      const head = h('div', { class: 'uc-device-head' },
+        row.device_count
+          ? `设备 ${row.online_count || 0}/${row.device_count}${row.device_limit ? ` · 上限 ${row.device_limit}` : ''}`
+          : '无设备')
+      if (!clients.length) return h('div', { class: 'uc-device-cell' }, [head])
+      const tags = clients.slice(0, 2).map((c) => h(NTag, { size: 'small', bordered: false, type: 'info' }, { default: () => c }))
+      if (clients.length > 2) {
+        tags.push(h(NTag, { size: 'small', bordered: false }, { default: () => `+${clients.length - 2}` }))
+      }
+      return h('div', { class: 'uc-device-cell' }, [head, h('div', { class: 'uc-client-tags' }, tags)])
+    }
   },
   {
     title: '操作',
@@ -1000,6 +1031,11 @@ onActivated(() => {
 <style scoped>
 .action-compact { display: flex; align-items: center; gap: 6px; }
 .card-actions { display: flex; gap: 8px; align-items: center; }
+.uc-device-cell { display: flex; flex-direction: column; gap: 2px; line-height: 1.4; min-width: 0; }
+.uc-device-head { font-size: 12px; color: var(--text-color-3, #909399); }
+.uc-client-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.uc-muted { color: var(--text-color-3, #909399); }
+.uc-client-tag { margin-left: 4px; }
 /* 邮箱即详情入口：视觉上做成可点链接，替代被移除的「详情」按钮 */
 .email-link {
   color: var(--primary-color, #4f46e5);

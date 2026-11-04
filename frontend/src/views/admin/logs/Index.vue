@@ -157,7 +157,7 @@
                 <div class="card-body">
                   <div class="card-row"><span class="card-label">用户ID:</span><span>{{ item.user_id }}</span></div>
                   <div class="card-row"><span class="card-label">IP地址:</span><span>{{ item.ip_address }}</span></div>
-                  <div class="card-row"><span class="card-label">位置:</span><span>{{ formatLocation(item.location) }}</span></div>
+                  <div class="card-row"><span class="card-label">位置:</span><span>{{ formatCountryOnly(item.location) }}</span></div>
                   <div class="card-row"><span class="card-label">设备:</span><span>{{ parseDeviceInfo(item.user_agent) }}</span></div>
                   <div class="card-row"><span class="card-label">登录时间:</span><span>{{ item.login_time }}</span></div>
                 </div>
@@ -513,8 +513,8 @@ import { useAppStore } from '@/stores/app'
 import { useBatchSelection, type BatchSelection } from '@/composables/useBatchSelection'
 import BatchSelectBar from '@/components/BatchSelectBar.vue'
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
-import { translateLoginStatus, translateBalanceChangeType, translateCommissionType, parseDeviceInfo, formatLocation } from '@/utils/i18n'
-import { formatDateTime } from '@/utils/format'
+import { translateLoginStatus, translateBalanceChangeType, translateCommissionType, parseDeviceInfo } from '@/utils/i18n'
+import { formatCountryOnly, formatDateTime } from '@/utils/format'
 
 const appStore = useAppStore()
 
@@ -649,7 +649,7 @@ const loginColumns: DataTableColumns = [
     width: 180,
     resizable: true,
     ellipsis: { tooltip: true },
-    render: (row: any) => formatLocation(row.location)
+    render: (row: any) => formatCountryOnly(row.location)
   },
   {
     title: '设备',
@@ -999,7 +999,7 @@ const systemCheckedKeys = makeCheckedBridge(selections.system)
 // 每个 tab 一行一条的文本格式（复制所选时用）
 const lineFormatters: Record<string, (row: any) => string> = {
   audit: (r) => `[${r.id}] 管理员#${r.user_id} ${r.action_type || '-'} ${r.resource_type || '-'}#${r.resource_id ?? '-'} IP:${r.ip_address || '-'} ${r.created_at || '-'} ${r.action_description || ''}`.trim(),
-  login: (r) => `[${r.id}] 用户#${r.user_id} ${translateLoginStatus(r.login_status)} IP:${r.ip_address || '-'} 位置:${formatLocation(r.location) || '-'} 设备:${parseDeviceInfo(r.user_agent) || '-'} ${r.login_time || '-'}`,
+  login: (r) => `[${r.id}] 用户#${r.user_id} ${translateLoginStatus(r.login_status)} IP:${r.ip_address || '-'} 位置:${formatCountryOnly(r.location) || '-'} 设备:${parseDeviceInfo(r.user_agent) || '-'} ${r.login_time || '-'}`,
   registration: (r) => `[${r.id}] 用户#${r.user_id} IP:${r.ip_address || '-'} 邀请码:${r.invite_code || '-'} ${r.created_at || '-'}`,
   subscription: (r) => `[${r.id}] 用户#${r.user_id} ${r.action_type || '-'} ${r.description || ''} ${r.created_at || '-'}`.trim(),
   balance: (r) => `[${r.id}] 用户#${r.user_id} ${translateBalanceChangeType(r.change_type)} 金额:${r.amount ?? '-'} 余额:${r.balance_after ?? '-'} ${r.description || ''} ${r.created_at || '-'}`.trim(),

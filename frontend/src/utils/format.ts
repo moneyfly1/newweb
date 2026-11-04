@@ -79,6 +79,19 @@ export function formatCountryOnly(location: unknown, empty = '-'): string {
 }
 
 /**
+ * 设备/系统/型号等字段的统一展示。
+ * 后端 UA 解析不出来时会存 "Unknown"（英文），直接渲染就会出现大把 unknown；
+ * 这里统一映射成「未知」，与地区/时间等展示口径保持一致。
+ */
+export function formatDeviceText(value: unknown, empty = '未知'): string {
+  if (value === null || value === undefined) return empty
+  const text = String(value).trim()
+  if (!text) return empty
+  if (/^(unknown|unknown device|未知|n\/a|null|undefined|-$)/i.test(text)) return empty
+  return text
+}
+
+/**
  * 相对时间：刚刚 / N分钟前 / N小时前 / N天前，超过 7 天显示日期。
  * 统一不带空格（此前管理端多一个空格，与用户端不一致）。
  */

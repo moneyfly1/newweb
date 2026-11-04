@@ -77,7 +77,7 @@
                 </div>
                 <div class="card-row">
                   <span class="label">位置</span>
-                  <span class="value">{{ formatLocation(record.location) }}</span>
+                  <span class="value">{{ formatCountryOnly(record.location) }}</span>
                 </div>
                 <div class="card-row">
                   <span class="label">状态</span>
@@ -110,7 +110,7 @@ import { NTag, useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { getLoginHistory } from '@/api/user'
 import { useAppStore } from '@/stores/app'
-import { formatLocation } from '@/utils/i18n'
+import { formatCountryOnly } from '@/utils/format'
 import { formatDateTime } from '@/utils/date'
 import { copyToClipboard } from '@/utils/clipboard'
 import BatchSelectBar from '@/components/BatchSelectBar.vue'
@@ -167,7 +167,7 @@ const columns: DataTableColumns<any> = [
     render: (row: any) => formatDateTime(row.login_time),
   },
   { title: 'IP 地址', key: 'ip_address', width: 150, resizable: true },
-  { title: '位置', key: 'location', width: 150, resizable: true, render: (row: any) => formatLocation(row.location) },
+  { title: '位置', key: 'location', width: 150, resizable: true, render: (row: any) => formatCountryOnly(row.location) },
   {
     title: '设备信息',
     key: 'user_agent',
@@ -205,7 +205,7 @@ const handleCopySelected = async () => {
   const rows = selection.selectedRows.value
   if (!rows.length) return
   const text = rows
-    .map(r => [formatDateTime(r.login_time), r.ip_address || '-', r.user_agent || '-', formatLocation(r.location)].join(' '))
+    .map(r => [formatDateTime(r.login_time), r.ip_address || '-', r.user_agent || '-', formatCountryOnly(r.location)].join(' '))
     .join('\n')
   const ok = await copyToClipboard(text)
   if (ok) {

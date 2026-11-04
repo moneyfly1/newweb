@@ -77,6 +77,12 @@ func AdminListUsers(c *gin.Context) {
 		CustomNodeCount int        `json:"custom_node_count"`
 		DedicatedOnly   bool       `json:"dedicated_only"`
 		LineType        string     `json:"line_type"`
+		// 设备与客户端：同一个客户可能同时用多台设备、多个客户端（手机 Clash、
+		// 电脑 Mihomo、路由器 Shadowrocket…），列表上要能一眼看出来。
+		DeviceCount  int      `json:"device_count"`
+		OnlineCount  int      `json:"online_count"`
+		Clients      []string `json:"clients"`
+		LastActiveAt *string  `json:"last_active_at"`
 	}
 	items := make([]UserItem, 0, len(users))
 	// Pre-load all levels
@@ -101,6 +107,10 @@ func AdminListUsers(c *gin.Context) {
 	}
 	customNodeSummaries := loadUserCustomNodeSummaries(db, userIDs)
 
+	// 聚合当前页用户的设备：活跃设备数 / 在线数 / 客户端名去重 / 最后活跃时间。
+	// 在线口径与设备页一致：自有客户端心跳 15 分钟内，或订阅拉取 15 分钟内。
+	deviceAggMap := loadUserDeviceAggregates(db, userIDs)
+
 	for _, u := range users {
 		item := UserItem{User: u}
 		if u.UserLevelID != nil {
@@ -114,6 +124,15 @@ func AdminListUsers(c *gin.Context) {
 			item.HasCustomNodes = summary.Count > 0
 			item.CustomNodeCount = summary.Count
 			item.DedicatedOnly = summary.DedicatedOnly
+		}
+		if agg, ok := deviceAggMap[u.ID]; ok {
+			item.DeviceCount = agg.count
+			item.OnlineCount = agg.online
+			item.Clients = agg.clients
+			if agg.lastActive != nil {
+				t := agg.lastActive.Format(utils.LayoutDateTime)
+				item.LastActiveAt = &t
+			}
 		}
 		item.LineType = effectiveUserLineType(u.SpecialNodeSubscriptionType, item.CustomNodeCount, item.DedicatedOnly)
 		items = append(items, item)
@@ -1909,4 +1928,70 @@ func AdminImportUsersCSV(c *gin.Context) {
 		"skipped":  skipped,
 		"errors":   errors,
 	})
+}
+
+// userDeviceAgg 单个用户的设备聚合结果（用户列表展示用）。
+type userDeviceAgg struct {
+	count      int      // 活跃设备数
+	online     int      // 15 分钟内有心跳/拉取的设备数
+	clients    []string // 去重后的客户端名（最多 5 个，按最近活跃排序）
+	lastActive *time.Time
+}
+
+// loadUserDeviceAggregates 批量聚合当前页用户的设备信息。
+//
+// 背景：此前用户列表只显示「设备上限」，看不到账号实际在用几台设备、
+// 用的什么客户端（同一客户可能手机 Clash + 电脑 Mihomo + 路由器），
+// 排障时要逐个点开详情。这里一次查完当前页所有设备并在内存聚合。
+func loadUserDeviceAggregates(db *gorm.DB, userIDs []uint) map[uint]*userDeviceAgg {
+	out := make(map[uint]*userDeviceAgg)
+	if len(userIDs) == 0 {
+		return out
+	}
+	ids := make([]int64, 0, len(userIDs))
+	for _, id := range userIDs {
+		ids = append(ids, int64(id))
+	}
+	var devices []models.Device
+	db.Where("user_id IN ? AND is_active = ?", ids, true).
+		Order("last_access DESC").Find(&devices)
+
+	onlineSince := time.Now().Add(-15 * time.Minute)
+	for i := range devices {
+		d := &devices[i]
+		if d.UserID == nil {
+			continue
+		}
+		uid := uint(*d.UserID)
+		agg, ok := out[uid]
+		if !ok {
+			agg = &userDeviceAgg{clients: make([]string, 0, 4)}
+			out[uid] = agg
+		}
+		agg.count++
+		if (d.LastHeartbeat != nil && d.LastHeartbeat.After(onlineSince)) || d.LastAccess.After(onlineSince) {
+			agg.online++
+		}
+		if !d.LastAccess.IsZero() && (agg.lastActive == nil || d.LastAccess.After(*agg.lastActive)) {
+			t := d.LastAccess
+			agg.lastActive = &t
+		}
+		if d.SoftwareName != nil && len(agg.clients) < 5 {
+			name := strings.TrimSpace(*d.SoftwareName)
+			if name == "" || strings.EqualFold(name, "unknown") {
+				continue
+			}
+			dup := false
+			for _, c := range agg.clients {
+				if c == name {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				agg.clients = append(agg.clients, name)
+			}
+		}
+	}
+	return out
 }

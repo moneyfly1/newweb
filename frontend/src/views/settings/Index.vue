@@ -141,7 +141,7 @@
                 </div>
                 <div class="card-row">
                   <span class="label">地区</span>
-                  <span class="value">{{ formatLocation(record.location) }}</span>
+                  <span class="value">{{ formatCountryOnly(record.location) }}</span>
                 </div>
                 <div class="card-row">
                   <span class="label">设备</span>
@@ -182,7 +182,8 @@ import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import { updateProfile, changePassword, getNotificationSettings, updateNotificationSettings, getPrivacySettings, updatePrivacySettings, getLoginHistory, bindTelegram, unbindTelegram } from '@/api/user'
 import { getPublicConfig } from '@/api/common'
-import { translateLoginStatus, parseDeviceInfo, formatLocation } from '@/utils/i18n'
+import { translateLoginStatus, parseDeviceInfo } from '@/utils/i18n'
+import { formatCountryOnly } from '@/utils/format'
 import { getErrorMessage } from '@/utils/error'
 import { formatFullDateTime } from '@/utils/date'
 
@@ -241,7 +242,7 @@ const tzOptions = [
 const historyColumns = [
   { title: '登录时间', key: 'login_time', render: (row: any) => formatFullDateTime(row.login_time) },
   { title: 'IP 地址', key: 'ip_address', render: (row: any) => row.ip_address || '-' },
-  { title: '位置', key: 'location', render: (row: any) => formatLocation(row.location) },
+  { title: '位置', key: 'location', render: (row: any) => formatCountryOnly(row.location) },
   { title: '设备', key: 'user_agent', ellipsis: { tooltip: true }, render: (row: any) => parseDeviceInfo(row.user_agent) },
   { title: '状态', key: 'login_status', render: (row: any) => h(NTag, { type: row.login_status === 'success' ? 'success' : 'error', size: 'small', bordered: false }, () => translateLoginStatus(row.login_status)) },
 ]

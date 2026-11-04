@@ -175,7 +175,7 @@ import { parseDeviceInfo, translateBalanceChangeType, translateLoginStatus } fro
 import { copyToClipboard as clipboardCopy } from '@/utils/clipboard'
 import { formatFullDateTime } from '@/utils/date'
 import { getUserLoginLimit, unlockLoginLimit } from '@/api/admin'
-import { formatCountryOnly } from '@/utils/format'
+import { formatCountryOnly, formatDeviceText } from '@/utils/format'
 
 const appStore = useAppStore()
 const message = useMessage()
@@ -441,7 +441,7 @@ const handleUnlockLogin = async () => {
 const handleDeleteDevice = (device) => {
   dialog.warning({
     title: '确认删除设备',
-    content: `确定要删除设备 ${device.device_name || device.software_name || '未知设备'} 吗？`,
+    content: `确定要删除设备 ${formatDeviceText(device.device_name || device.software_name, '未知设备')} 吗？`,
     positiveText: '删除',
     negativeText: '取消',
     onPositiveClick: async () => {
@@ -473,7 +473,7 @@ const orderCols = [
   { title: '时间', key: 'created_at', width: 160, render: (r) => formatFullDateTime(r.created_at) }
 ]
 const deviceCols = [
-  { title: '设备名', key: 'device_name', width: 120, ellipsis: { tooltip: true }, render: (r) => r.device_name || '未知设备' },
+  { title: '设备名', key: 'device_name', width: 120, ellipsis: { tooltip: true }, render: (r) => formatDeviceText(r.device_name, '未知设备') },
   {
     title: '状态', key: 'is_online', width: 80,
     render: (r) => h(NTag, {
@@ -482,10 +482,10 @@ const deviceCols = [
       bordered: false
     }, { default: () => r.is_online ? '在线' : '离线' })
   },
-  { title: '客户端', key: 'software_name', width: 120, render: (r) => r.software_name || '未知' },
+  { title: '客户端', key: 'software_name', width: 120, render: (r) => formatDeviceText(r.software_name) },
   { title: '版本', key: 'software_version', width: 80, render: (r) => r.software_version || '-' },
-  { title: '系统', key: 'os_name', width: 80, render: (r) => r.os_name || '-' },
-  { title: '设备型号', key: 'device_model', width: 130, ellipsis: { tooltip: true }, render: (r) => r.device_model || '-' },
+  { title: '系统', key: 'os_name', width: 80, render: (r) => formatDeviceText(r.os_name, '-') },
+  { title: '设备型号', key: 'device_model', width: 130, ellipsis: { tooltip: true }, render: (r) => formatDeviceText(r.device_model, '-') },
   { title: '订阅类型', key: 'subscription_type', width: 90, render: (r) => r.subscription_type || '-' },
   { title: 'IP', key: 'ip_address', width: 130, render: (r) => r.ip_address || '-' },
   { title: '地区', key: 'region', width: 100, render: (r) => formatCountryOnly(r.location || r.region) },

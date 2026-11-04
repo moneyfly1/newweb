@@ -58,7 +58,7 @@
               <div class="card-row">
                 <span class="label">设备名称</span>
                 <span class="value">
-                  {{ device.device_name || device.software_name || '未知设备' }}
+                  {{ formatDeviceText(device.device_name || device.software_name, '未知设备') }}
                   <n-tag :type="device.is_online ? 'success' : 'default'" size="tiny" :bordered="false">
                     {{ device.is_online ? '在线' : '离线' }}
                   </n-tag>
@@ -66,11 +66,11 @@
               </div>
               <div class="card-row">
                 <span class="label">客户端</span>
-                <span class="value">{{ device.software_name || '未知' }}</span>
+                <span class="value">{{ formatDeviceText(device.software_name) }}</span>
               </div>
               <div class="card-row">
                 <span class="label">系统</span>
-                <span class="value">{{ device.os_name || '-' }}</span>
+                <span class="value">{{ formatDeviceText(device.os_name, '-') }}</span>
               </div>
               <div class="card-row">
                 <span class="label">IP 地址</span>
@@ -78,7 +78,7 @@
               </div>
               <div class="card-row">
                 <span class="label">地区</span>
-                <span class="value">{{ formatLocation(device.region) }}</span>
+                <span class="value">{{ formatCountryOnly(device.region) }}</span>
               </div>
               <div class="card-row" @click.stop>
                 <span class="label">备注</span>
@@ -135,7 +135,7 @@ import { NButton, NTime, NInput, NTag, useMessage, useDialog } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { getSubscriptionDevices, deleteDevice, updateDeviceRemark } from '@/api/subscription'
 import { useAppStore } from '@/stores/app'
-import { formatLocation } from '@/utils/i18n'
+import { formatCountryOnly, formatDeviceText } from '@/utils/format'
 import { formatFullDateTime } from '@/utils/date'
 import CommonDrawer from '@/components/CommonDrawer.vue'
 import BatchSelectBar from '@/components/BatchSelectBar.vue'
@@ -191,7 +191,7 @@ const columns: DataTableColumns<Device> = [
     key: 'device_name',
     minWidth: 150,
     render: (row: Device) => {
-      return h('span', row.device_name || row.software_name || '未知设备')
+      return h('span', formatDeviceText(row.device_name || row.software_name, '未知设备'))
     }
   },
   {
@@ -223,7 +223,7 @@ const columns: DataTableColumns<Device> = [
     title: '客户端',
     key: 'software_name',
     width: 120,
-    render: (row: Device) => row.software_name || '未知'
+    render: (row: Device) => formatDeviceText(row.software_name)
   },
   {
     title: '版本',
@@ -235,13 +235,13 @@ const columns: DataTableColumns<Device> = [
     title: '系统',
     key: 'os_name',
     width: 80,
-    render: (row: Device) => row.os_name || '-'
+    render: (row: Device) => formatDeviceText(row.os_name, '-')
   },
   {
     title: '设备型号',
     key: 'device_model',
     width: 130,
-    render: (row: Device) => row.device_model || '-'
+    render: (row: Device) => formatDeviceText(row.device_model, '-')
   },
   {
     title: 'IP 地址',
@@ -255,7 +255,7 @@ const columns: DataTableColumns<Device> = [
     key: 'region',
     width: 120,
     resizable: true,
-    render: (row: Device) => formatLocation(row.region)
+    render: (row: Device) => formatCountryOnly(row.region)
   },
   {
     title: '最后访问',

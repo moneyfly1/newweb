@@ -24,8 +24,10 @@ import (
 // 这个视图：clients 返回**全部**客户端（含版本），并支持按客户端/机型/系统/
 // 用户名/邮箱搜索。
 
-// officialClientNames 官方自研客户端（与订阅访问白名单保持一致）
-var officialClientNames = []string{"moneyfly", "mbox"}
+// officialClientNames 官方自研客户端：站点自己的客户端是 Mclash。
+// 用前缀匹配（Mclash / mclash / Mclash Pro … 都算官方），避免版本或后缀导致漏判，
+// 把官方用户错算进「第三方（待升级）」。
+var officialClientNames = []string{"mclash"}
 
 func isOfficialClientName(name string) bool {
 	key := strings.ToLower(strings.TrimSpace(name))
@@ -33,20 +35,13 @@ func isOfficialClientName(name string) bool {
 		return false
 	}
 	for _, n := range officialClientNames {
-		if key == n {
+		if strings.HasPrefix(key, n) {
 			return true
 		}
 	}
 	return false
 }
 
-func lowerOfficialClientNames() []string {
-	out := make([]string, 0, len(officialClientNames))
-	for _, n := range officialClientNames {
-		out = append(out, strings.ToLower(n))
-	}
-	return out
-}
 
 func deviceStr(v *string) string {
 	if v == nil {
@@ -91,11 +86,12 @@ func deviceUsageDeviceQuery(db *gorm.DB, q, official string, days int) *gorm.DB 
 	if days > 0 {
 		tx = tx.Where("last_access >= ?", time.Now().AddDate(0, 0, -days))
 	}
+	// 官方 = Mclash（前缀匹配，兼容后缀/大小写）；第三方 = 其余（含空客户端）
 	switch strings.ToLower(strings.TrimSpace(official)) {
 	case "official":
-		tx = tx.Where("LOWER(TRIM(software_name)) IN ?", lowerOfficialClientNames())
+		tx = tx.Where("LOWER(TRIM(COALESCE(software_name, ''))) LIKE ?", "mclash%")
 	case "third_party", "unofficial":
-		tx = tx.Where("LOWER(TRIM(software_name)) NOT IN ?", lowerOfficialClientNames())
+		tx = tx.Where("LOWER(TRIM(COALESCE(software_name, ''))) NOT LIKE ?", "mclash%")
 	}
 	return tx
 }

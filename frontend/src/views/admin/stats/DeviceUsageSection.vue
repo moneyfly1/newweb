@@ -1,14 +1,5 @@
 <template>
-  <div class="device-usage-page admin-page-shell">
-    <div class="page-header">
-      <div class="header-left">
-        <h2 class="page-title">设备分析</h2>
-        <p class="page-subtitle">按用户查看「一个人用了哪些设备/客户端」，或按客户端、平台、机型统计分布</p>
-      </div>
-      <div class="header-right">
-        <n-button secondary @click="reloadAll">刷新</n-button>
-      </div>
-    </div>
+  <div class="device-usage-section">
 
     <!-- 概览统计（对齐 myweb：设备 / 用户 / 官方 / 第三方） -->
     <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="12" :y-gap="12" class="summary-grid">
@@ -189,10 +180,8 @@ const dimOptions = [
 const summary = ref({})
 const checkedKeys = ref([])
 
-const isOfficialClient = (name) => {
-  const n = String(name || '').toLowerCase()
-  return n === 'moneyfly' || n === 'mbox'
-}
+// 官方客户端是 Mclash（大小写/版本后缀都算）
+const isOfficialClient = (name) => String(name || '').trim().toLowerCase().startsWith('mclash')
 
 // 官方客户端绿色、第三方客户端黄色（对齐 myweb 的彩色标签）
 const clientTagType = (label) => (isOfficialClient(String(label).split(' ')[0]) ? 'success' : 'warning')
@@ -391,7 +380,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.device-usage-page { padding: 16px; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
 .page-title { margin: 0; font-size: 20px; }
 .page-subtitle { margin: 4px 0 0; color: var(--text-color-3); font-size: 13px; }

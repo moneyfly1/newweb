@@ -33,7 +33,6 @@ const viewLoaders = {
   AdminLayout: () => import('@/layouts/AdminLayout.vue'),
   AdminDashboard: () => import('@/views/admin/Dashboard.vue'),
   AdminUsers: () => import('@/views/admin/users/Index.vue'),
-  AdminDeviceUsage: () => import('@/views/admin/device-usage/Index.vue'),
   AdminAbnormalUsers: () => import('@/views/admin/abnormal-users/Index.vue'),
   AdminOrders: () => import('@/views/admin/orders/Index.vue'),
   AdminPackages: () => import('@/views/admin/packages/Index.vue'),
@@ -125,7 +124,6 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', name: 'AdminDashboard', component: viewLoaders.AdminDashboard },
       { path: 'users', name: 'AdminUsers', component: viewLoaders.AdminUsers },
-      { path: 'device-usage', name: 'AdminDeviceUsage', component: viewLoaders.AdminDeviceUsage },
       { path: 'abnormal-users', name: 'AdminAbnormalUsers', component: viewLoaders.AdminAbnormalUsers },
       { path: 'orders', name: 'AdminOrders', component: viewLoaders.AdminOrders },
       { path: 'packages', name: 'AdminPackages', component: viewLoaders.AdminPackages },

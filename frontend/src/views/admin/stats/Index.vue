@@ -344,6 +344,11 @@
               />
             </n-spin>
           </n-card>
+
+          <!-- 按用户 / 按分组（对齐 myweb：一个客户多设备多客户端、客户端搜索、升级提醒） -->
+          <n-card title="按用户 / 按分组" :bordered="false" style="margin-top: 16px">
+            <device-usage-section />
+          </n-card>
           </n-tab-pane>
         </n-tabs>
       </n-space>
@@ -395,6 +400,7 @@ import { useMessage, NTag } from 'naive-ui'
 import request from '@/utils/request'
 import { getFinancialReport, exportFinancialReport, getRegionStats, getPaymentStats, getPaymentMethodComparison, getPaymentAnalysis, getAdminUserStats } from '@/api/admin'
 import { formatCountryOnly } from '@/utils/format'
+import DeviceUsageSection from './DeviceUsageSection.vue'
 import { useAppStore } from '@/stores/app'
 import { formatCurrency } from '@/utils/amount'
 const PaymentPieChart = defineAsyncComponent(() => import('../components/PaymentPieChart.vue'))

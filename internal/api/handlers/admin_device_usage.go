@@ -429,7 +429,7 @@ func AdminDeviceUsageGroups(c *gin.Context) {
 
 const maxNotifyBatchUsers = 1000
 
-const defaultUpgradeSubject = "建议升级到官方客户端 MoneyFly / MBox"
+const defaultUpgradeSubject = "建议升级到官方客户端 Mclash"
 
 type notifyUpgradeRequest struct {
 	Dim      string   `json:"dim"`
@@ -620,25 +620,104 @@ func displayName(u models.User) string {
 	return u.Email
 }
 
-// buildUpgradeNoticeHTML 默认升级提醒正文（纯 HTML，邮件客户端兼容）
+// mclashUpgradeLinks 官方客户端 Mclash 的下载入口（全部走本站加速镜像解析）。
+// 与 myweb 的做法一致：/api/v1/download/gh?key=… 由服务器代查 GitHub 最新 Release，
+// 再 302 到当前可用的国内加速镜像，邮件里的链接永远是最新版。
+func mclashUpgradeLinks(siteBase string) map[string]string {
+	base := strings.TrimRight(siteBase, "/")
+	gh := func(key string) string {
+		return fmt.Sprintf("%s/api/v1/download/gh?key=%s", base, key)
+	}
+	return map[string]string{
+		"windows":     gh("client_mclash_windows_url"),
+		"macos_arm":   gh("client_mclash_macos_arm_url"),
+		"macos_intel": gh("client_mclash_macos_url"),
+		"android":     gh("client_mclash_android_url"),
+		// 帮助/下载页（含各平台安装说明）
+		"page": base + "/help",
+	}
+}
+
+// escapeHTMLText 邮件正文里的用户输入（用户名可能含特殊字符）
+func escapeHTMLText(v string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;").Replace(v)
+}
+
+// buildUpgradeNoticeHTML 升级提醒正文：统一邮件外壳 + 亮点 + 平台下载表格。
+// 客户端名称固定为官方客户端 Mclash；下载地址逐平台列出（含国内加速镜像）。
 func buildUpgradeNoticeHTML(name, client, baseURL, note string) string {
-	if client == "" {
+	if strings.TrimSpace(name) == "" {
+		name = "你好"
+	}
+	if strings.TrimSpace(client) == "" {
 		client = "第三方客户端"
 	}
+	links := mclashUpgradeLinks(baseURL)
+
+	btn := func(label, url string) string {
+		if strings.TrimSpace(url) == "" {
+			return ""
+		}
+		return fmt.Sprintf(
+			`<a href="%s" style="display:inline-block;padding:11px 22px;margin:6px 10px 6px 0;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">%s</a>`,
+			url, label)
+	}
+	row := func(label, url, hint string) string {
+		if strings.TrimSpace(url) == "" {
+			return ""
+		}
+		return fmt.Sprintf(
+			`<tr><td style="padding:10px 12px;border-bottom:1px solid #eef2f7;font-size:14px;color:#111827;font-weight:600;">%s</td>`+
+				`<td style="padding:10px 12px;border-bottom:1px solid #eef2f7;font-size:13px;"><a href="%s" style="color:#2563eb;text-decoration:none;">%s</a></td>`+
+				`<td style="padding:10px 12px;border-bottom:1px solid #eef2f7;font-size:12px;color:#6b7280;">%s</td></tr>`,
+			label, url, url, hint)
+	}
+
+	var rows strings.Builder
+	rows.WriteString(row("Windows", links["windows"], "安装包 · 国内加速镜像"))
+	rows.WriteString(row("macOS（Apple 芯片）", links["macos_arm"], "M 系列芯片 · 国内加速镜像"))
+	rows.WriteString(row("macOS（Intel）", links["macos_intel"], "Intel 芯片 · 国内加速镜像"))
+	rows.WriteString(row("Android", links["android"], "APK 直装 · 国内加速镜像"))
+
 	extra := ""
 	if strings.TrimSpace(note) != "" {
-		extra = "<p style=\"color:#666\">" + strings.TrimSpace(note) + "</p>"
+		extra = fmt.Sprintf(
+			`<div style="margin-top:16px;padding:12px 14px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:6px;font-size:13px;color:#7c5200;line-height:1.7;">%s</div>`,
+			escapeHTMLText(strings.TrimSpace(note)))
 	}
-	return fmt.Sprintf(`<h2>建议升级到官方客户端 MoneyFly / MBox</h2>
-<p>%s，你好：</p>
-<p>系统检测到你正在使用 <b>%s</b>。官方客户端在稳定性、线路质量与设备管理上都更好，建议升级：</p>
-<ul>
-  <li>更稳定的线路与自动故障切换</li>
-  <li>多设备统一管理，订阅地址自动同步</li>
-  <li>Windows / macOS / Android / iOS 全平台支持</li>
-</ul>
-%s
-<p>下载与使用说明：<a href="%s/">%s</a></p>
-<p style="color:#999;font-size:12px">如果这不是你本人操作，请忽略本邮件或联系客服。</p>`,
-		name, client, extra, baseURL, baseURL)
+
+	content := fmt.Sprintf(`
+		<p style="font-size:15px;color:#111827;line-height:1.8;margin:0 0 12px;">%s，你好：</p>
+		<p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 14px;">
+			我们检测到你目前在使用 <b>%s</b> 连接我们的服务。为了让你用得更稳、更省心，
+			建议换成我们的官方客户端 <b>Mclash</b>：
+		</p>
+		<ul style="font-size:14px;color:#374151;line-height:1.9;margin:0 0 18px;padding-left:20px;">
+			<li>节点自动选择与一键测速，线路切换更快更稳</li>
+			<li>内置分流规则，国内网站不受影响，无需手工配置</li>
+			<li>订阅到期、设备数量等状态一目了然，支持自动更新</li>
+			<li>遇到问题可以直接在客户端里看日志、找客服，排查更快</li>
+		</ul>
+		<div style="margin:0 0 20px;">%s%s%s%s</div>
+		<table style="width:100%%;border-collapse:collapse;margin:0 0 12px;border:1px solid #eef2f7;border-radius:8px;overflow:hidden;">
+			<thead><tr style="background:#f8fafc;">
+				<th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">平台</th>
+				<th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">下载地址（已附国内加速镜像）</th>
+				<th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">说明</th>
+			</tr></thead>
+			<tbody>%s</tbody>
+		</table>
+		<p style="font-size:13px;color:#6b7280;line-height:1.8;margin:8px 0 0;">
+			提示：安装 Mclash 后，用同一个账号登录即可继续使用现有订阅，无需重新购买。
+			若同时保留旧客户端，请确认新版能正常连接后再卸载。
+		</p>%s`,
+		escapeHTMLText(name), escapeHTMLText(client),
+		btn("立即下载 Mclash", links["page"]),
+		btn("Windows 下载", links["windows"]),
+		btn("Android 下载", links["android"]),
+		btn("macOS 下载", links["macos_arm"]),
+		rows.String(), extra)
+
+	return services.NewEmailTemplateBuilder().GetBaseTemplate("建议升级到官方客户端 Mclash", content,
+		"本邮件由系统自动发送。如果你已在使用官方客户端 Mclash，请忽略本邮件。")
 }

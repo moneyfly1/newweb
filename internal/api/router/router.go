@@ -522,6 +522,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		admin.GET("/stats/revenue", handlers.AdminRevenueStats)
 		admin.GET("/stats/users", handlers.AdminUserStats)
 		admin.GET("/stats/regions", handlers.AdminRegionStats)
+		// 设备与客户端使用分析（对齐 myweb：分组分布 + 按用户聚合全部客户端）
+		admin.GET("/analytics/device-usage", handlers.AdminDeviceUsageGroups)
+		admin.GET("/analytics/device-usage/users", handlers.AdminDeviceUsageUsers)
+		admin.POST("/analytics/device-usage/notify-upgrade", handlers.AdminNotifyClientUpgrade)
 		admin.GET("/stats/financial", handlers.AdminFinancialReport)
 		admin.GET("/stats/financial/export", handlers.AdminExportFinancialReport)
 		admin.GET("/stats/payment", handlers.AdminPaymentStats)

@@ -182,8 +182,7 @@
                   <span class="card-value">
                     <template v-if="row.device_count">
                       设备 {{ row.online_count || 0 }}/{{ row.device_count }}
-                      <n-tag v-for="c in (row.clients || []).slice(0, 2)" :key="c" size="small" :bordered="false" type="info" class="uc-client-tag">{{ c }}</n-tag>
-                      <n-tag v-if="(row.clients || []).length > 2" size="small" :bordered="false">+{{ row.clients.length - 2 }}</n-tag>
+                      <n-tag v-for="c in (row.clients || [])" :key="c" size="small" :bordered="false" type="info" class="uc-client-tag">{{ c }}</n-tag>
                     </template>
                     <span v-else class="uc-muted">无设备</span>
                   </span>
@@ -600,7 +599,7 @@ const columns = [
     // 不用逐个点开详情排查。
     title: '设备 / 客户端',
     key: 'clients',
-    width: 240,
+    width: 300,
     render: (row) => {
       const clients = Array.isArray(row.clients) ? row.clients : []
       const head = h('div', { class: 'uc-device-head' },
@@ -608,10 +607,8 @@ const columns = [
           ? `设备 ${row.online_count || 0}/${row.device_count}${row.device_limit ? ` · 上限 ${row.device_limit}` : ''}`
           : '无设备')
       if (!clients.length) return h('div', { class: 'uc-device-cell' }, [head])
-      const tags = clients.slice(0, 2).map((c) => h(NTag, { size: 'small', bordered: false, type: 'info' }, { default: () => c }))
-      if (clients.length > 2) {
-        tags.push(h(NTag, { size: 'small', bordered: false }, { default: () => `+${clients.length - 2}` }))
-      }
+      // 一个客户多设备多客户端：全部列出（含版本），不折叠成 +N
+      const tags = clients.map((c) => h(NTag, { size: 'small', bordered: false, type: 'info' }, { default: () => c }))
       return h('div', { class: 'uc-device-cell' }, [head, h('div', { class: 'uc-client-tags' }, tags)])
     }
   },

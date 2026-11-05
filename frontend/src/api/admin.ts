@@ -97,6 +97,10 @@ export const deleteAnnouncement = (id: number) => request.delete(`/admin/announc
 
 // Stats
 export const getRegionStats = () => request.get('/admin/stats/regions')
+// 设备与客户端使用分析（对齐 myweb）
+export const getDeviceUsageGroups = (params?: any) => request.get('/admin/analytics/device-usage', { params })
+export const getDeviceUsageUsers = (params?: any) => request.get('/admin/analytics/device-usage/users', { params })
+export const notifyClientUpgrade = (data: any) => request.post('/admin/analytics/device-usage/notify-upgrade', data)
 export const getFinancialReport = (params?: any) => request.get('/admin/stats/financial', { params })
 export const exportFinancialReport = (params?: any) => request.get('/admin/stats/financial/export', { params, responseType: 'blob' })
 

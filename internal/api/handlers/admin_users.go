@@ -30,6 +30,11 @@ func AdminListUsers(c *gin.Context) {
 	query := db.Model(&models.User{})
 	if search := c.Query("search"); search != "" {
 		like := "%" + search + "%"
+		// 设备/客户端子查询：客服常见问题是「用 Clash Verge 的那个客户是谁」，
+		// 所以搜索必须覆盖客户端名、版本、系统、机型（不只是用户名/邮箱）。
+		deviceUserSub := db.Model(&models.Device{}).Select("user_id").
+			Where("is_active = ? AND (software_name LIKE ? OR software_version LIKE ? OR os_name LIKE ? OR device_model LIKE ? OR device_brand LIKE ?)",
+				true, like, like, like, like, like)
 		// 只在搜索词较长时才查 subscription 相关表（短词不可能是 subscription URL）
 		if len(search) >= 8 {
 			var resetUserIDs, subUserIDs []uint
@@ -46,12 +51,15 @@ func AdminListUsers(c *gin.Context) {
 			swg.Wait()
 			allIDs := append(resetUserIDs, subUserIDs...)
 			if len(allIDs) > 0 {
-				query = query.Where("username LIKE ? OR email LIKE ? OR notes LIKE ? OR id IN ?", like, like, like, allIDs)
+				query = query.Where("username LIKE ? OR email LIKE ? OR notes LIKE ? OR id IN ? OR id IN (?)",
+					like, like, like, allIDs, deviceUserSub)
 			} else {
-				query = query.Where("username LIKE ? OR email LIKE ? OR notes LIKE ?", like, like, like)
+				query = query.Where("username LIKE ? OR email LIKE ? OR notes LIKE ? OR id IN (?)",
+					like, like, like, deviceUserSub)
 			}
 		} else {
-			query = query.Where("username LIKE ? OR email LIKE ? OR notes LIKE ?", like, like, like)
+			query = query.Where("username LIKE ? OR email LIKE ? OR notes LIKE ? OR id IN (?)",
+				like, like, like, deviceUserSub)
 		}
 	}
 	if status := c.Query("is_active"); status != "" {
@@ -1956,7 +1964,6 @@ func loadUserDeviceAggregates(db *gorm.DB, userIDs []uint) map[uint]*userDeviceA
 	db.Where("user_id IN ? AND is_active = ?", ids, true).
 		Order("last_access DESC").Find(&devices)
 
-	onlineSince := time.Now().Add(-15 * time.Minute)
 	for i := range devices {
 		d := &devices[i]
 		if d.UserID == nil {
@@ -1969,27 +1976,35 @@ func loadUserDeviceAggregates(db *gorm.DB, userIDs []uint) map[uint]*userDeviceA
 			out[uid] = agg
 		}
 		agg.count++
-		if (d.LastHeartbeat != nil && d.LastHeartbeat.After(onlineSince)) || d.LastAccess.After(onlineSince) {
+		if d.ComputeOnline() {
 			agg.online++
 		}
 		if !d.LastAccess.IsZero() && (agg.lastActive == nil || d.LastAccess.After(*agg.lastActive)) {
 			t := d.LastAccess
 			agg.lastActive = &t
 		}
-		if d.SoftwareName != nil && len(agg.clients) < 5 {
+		if d.SoftwareName != nil {
 			name := strings.TrimSpace(*d.SoftwareName)
 			if name == "" || strings.EqualFold(name, "unknown") {
 				continue
 			}
+			// 客户端名带上版本（myweb 口径），且**不截断**：一个客户多设备多客户端
+			// 时要能看到全部，而不是只显示前几个。
+			label := name
+			if d.SoftwareVersion != nil {
+				if ver := strings.TrimSpace(*d.SoftwareVersion); ver != "" {
+					label = name + " " + ver
+				}
+			}
 			dup := false
 			for _, c := range agg.clients {
-				if c == name {
+				if c == label {
 					dup = true
 					break
 				}
 			}
 			if !dup {
-				agg.clients = append(agg.clients, name)
+				agg.clients = append(agg.clients, label)
 			}
 		}
 	}

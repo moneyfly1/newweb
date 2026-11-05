@@ -230,7 +230,7 @@ function menuItem(label: string, key: string) {
 const menuOptions = [
   { label: '概览', key: 'group-overview', icon: renderIcon(GridOutline), children: [menuItem('仪表盘', 'AdminDashboard')] },
   { label: '用户管理', key: 'group-users', icon: renderIcon(PeopleOutline), children: [
-    menuItem('用户列表', 'AdminUsers'), menuItem('异常用户', 'AdminAbnormalUsers'), menuItem('订阅管理', 'AdminSubscriptions'),
+    menuItem('用户列表', 'AdminUsers'), menuItem('设备分析', 'AdminDeviceUsage'), menuItem('异常用户', 'AdminAbnormalUsers'), menuItem('订阅管理', 'AdminSubscriptions'),
   ]},
   { label: '节点管理', key: 'group-nodes', icon: renderIcon(ServerOutline), children: [
     menuItem('节点管理', 'AdminNodes'), menuItem('专线节点', 'AdminCustomNodes'), menuItem('节点更新', 'AdminConfigUpdate'),
@@ -255,6 +255,7 @@ const activeKey = computed(() => route.name as string)
 const pageTitles: Record<string, string> = {
   AdminDashboard: '仪表盘',
   AdminUsers: '用户列表',
+  AdminDeviceUsage: '设备分析',
   AdminAbnormalUsers: '异常用户',
   AdminSubscriptions: '订阅管理',
   AdminNodes: '节点管理',

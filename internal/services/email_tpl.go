@@ -62,6 +62,8 @@ func (b *EmailTemplateBuilder) GetBaseTemplate(title, content, footerText string
         .info-table th {background-color: #f8f9fa; font-weight: 600; color: #495057; width: 30%;}
         .btn {display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 25px; font-weight: 500; margin: 20px 0; transition: all 0.3s ease;}
         .btn:hover {transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);}
+        .btn-danger {background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);}
+        .btn-secondary {background: #ffffff; color: #4f46e5; border: 1px solid #c7d2fe; box-shadow: none;}
         .warning-box {background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 15px; margin: 20px 0; color: #856404;}
         .success-box {background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 15px; margin: 20px 0; color: #155724;}
         .footer {background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e9ecef;}
@@ -88,7 +90,7 @@ func (b *EmailTemplateBuilder) GetBaseTemplate(title, content, footerText string
         <div class="footer">
             <p><strong>{{.SiteName}}</strong></p>
             <p>{{.FooterText}}</p>
-            <p style="font-size: 12px; color: #999;">此邮件由系统自动发送，请勿直接回复</p>
+            {{if .ShowAutoFooter}}<p style="font-size: 12px; color: #999;">此邮件由系统自动发送，请勿直接回复</p>{{end}}
             <p style="font-size: 12px; color: #999;">© {{.CurrentYear}} {{.SiteName}}. All rights reserved.</p>
         </div>
     </div>
@@ -108,6 +110,7 @@ func (b *EmailTemplateBuilder) GetBaseTemplate(title, content, footerText string
 		"FooterText":  footerText,
 		"SiteName":    siteName,
 		"CurrentYear": currentYear,
+		"ShowAutoFooter": !strings.Contains(footerText, "系统自动发送"),
 	}
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return fmt.Sprintf(`<html><body><h2>%s</h2>%s</body></html>`, title, content)
@@ -253,7 +256,7 @@ func (b *EmailTemplateBuilder) GetOrderConfirmationTemplate(username, orderNo, p
                 </ul>
             </div>
             <div style="text-align: center; margin: 30px 0;">
-                <a href="%s" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; text-decoration: none; padding: 12px 30px; border-radius: 25px; font-weight: 500;">立即支付</a>
+                <a href="%s" class="btn">立即支付</a>
             </div>
             <p style="text-align: center; color: #666; font-size: 14px;">感谢您选择我们的服务！</p>`, username, orderNo, packageName, amount, paymentMethod, orderTime, ordersURL)
 
@@ -290,7 +293,7 @@ func (b *EmailTemplateBuilder) GetPaymentSuccessTemplate(username, orderNo, pack
                 </ul>
             </div>
             <div style="text-align: center; margin: 30px 0;">
-                <a href="%s" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; text-decoration: none; padding: 12px 30px; border-radius: 25px; font-weight: 500;">查看我的订阅</a>
+                <a href="%s" class="btn">查看我的订阅</a>
             </div>
             <p style="text-align: center; color: #666; font-size: 14px;">如有任何问题，请随时联系我们的客服团队</p>`, username, orderNo, packageName, amount, paymentMethod, paymentTime, subscriptionURL, subscriptionURL)
 
@@ -340,9 +343,9 @@ func (b *EmailTemplateBuilder) GetAbnormalLoginAlertTemplate(username, loginTime
                 </ul>
             </div>
             <div style="text-align: center; margin: 30px 0;">
-                <a href="%s" style="display: inline-block; background: linear-gradient(135deg, #e74c3c 0%%, #c0392b 100%%); color: white; text-decoration: none; padding: 12px 30px; border-radius: 25px; font-weight: 500;">立即修改密码</a>
+                <a href="%s" class="btn btn-danger">立即修改密码</a>
             </div>
-            <p style="text-align: center; color: #666; font-size: 14px;">此邮件由系统自动发送，请勿直接回复。</p>`, username, loginTime, ipAddress, locationStr, reasonText, settingsURL)
+            `, username, loginTime, ipAddress, locationStr, reasonText, settingsURL)
 	return b.GetBaseTemplate(title, content, "请妥善保管账户信息")
 }
 
@@ -465,7 +468,18 @@ func (b *EmailTemplateBuilder) GetAccountDeletionTemplate(username, deletionDate
                     <li>如有疑问，请在保留期内联系客服</li>
                 </ul>
             </div>
-            <p>感谢您曾经选择我们的服务！</p>`, username, reason, deletionDate, dataRetentionPeriod)
+            <div class="info-box">
+                <p><strong>💡 温馨提示：</strong></p>
+                <ul>
+                    <li>在数据保留期内，您可以随时联系客服撤销注销</li>
+                    <li>保留期结束后，账号与数据将无法恢复</li>
+                    <li>如有未到期的订阅或余额，请在注销前处理</li>
+                </ul>
+            </div>
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="%s" class="btn">联系客服</a>
+            </div>
+            <p>感谢您曾经选择我们的服务！</p>`, username, reason, deletionDate, dataRetentionPeriod, b.getBaseURL()+"/help")
 
 	return b.GetBaseTemplate(title, content, "感谢您曾经选择我们的服务")
 }
@@ -557,10 +571,10 @@ func (b *EmailTemplateBuilder) GetExpirationReminderTemplate(username, packageNa
 }
 
 func (b *EmailTemplateBuilder) GetBroadcastNotificationTemplate(title, content string) string {
-	emailContent := fmt.Sprintf(`<div class="content">
-                <h2>%s</h2>
-                <div style="line-height: 1.8; color: #555;">%s</div>
-            </div>`, title, strings.ReplaceAll(content, "\n", "<br>"))
+	// 基础模板已经提供了 .content 容器与 h2 间距，这里不要再套一层，
+	// 否则标题上下会多出两倍 padding，手机端尤其明显。
+	emailContent := fmt.Sprintf(`<h2>%s</h2>
+                <div style="line-height: 1.8; color: #555;">%s</div>`, title, strings.ReplaceAll(content, "\n", "<br>"))
 
 	return b.GetBaseTemplate(title, emailContent, "此邮件由系统自动发送，请勿回复。")
 }

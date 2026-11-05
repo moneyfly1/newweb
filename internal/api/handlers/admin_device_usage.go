@@ -659,7 +659,7 @@ func buildUpgradeNoticeHTML(name, client, baseURL, note string) string {
 			return ""
 		}
 		return fmt.Sprintf(
-			`<a href="%s" style="display:inline-block;padding:11px 22px;margin:6px 10px 6px 0;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">%s</a>`,
+			`<a href="%s" style="display:inline-block;padding:12px 26px;margin:6px 10px 6px 0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#ffffff;text-decoration:none;border-radius:25px;font-size:14px;font-weight:600;">%s</a>`,
 			url, label)
 	}
 	row := func(label, url, hint string) string {
@@ -668,7 +668,7 @@ func buildUpgradeNoticeHTML(name, client, baseURL, note string) string {
 		}
 		return fmt.Sprintf(
 			`<tr><td style="padding:10px 12px;border-bottom:1px solid #eef2f7;font-size:14px;color:#111827;font-weight:600;">%s</td>`+
-				`<td style="padding:10px 12px;border-bottom:1px solid #eef2f7;font-size:13px;"><a href="%s" style="color:#2563eb;text-decoration:none;">%s</a></td>`+
+				`<td style="padding:10px 12px;border-bottom:1px solid #eef2f7;font-size:13px;"><a href="%s" style="color:#4f46e5;text-decoration:none;">%s</a></td>`+
 				`<td style="padding:10px 12px;border-bottom:1px solid #eef2f7;font-size:12px;color:#6b7280;">%s</td></tr>`,
 			label, url, url, hint)
 	}

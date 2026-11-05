@@ -289,62 +289,6 @@
 
           <n-tab-pane name="devices" tab="设备分析">
           <!-- 设备分析（对齐 myweb：按客户端/系统分布 + 设备明细） -->
-          <n-card title="设备分析" :bordered="false">
-            <n-spin :show="deviceLoading">
-              <n-grid :cols="appStore.isMobile ? 2 : 4" :x-gap="16" :y-gap="16">
-                <n-gi><n-statistic label="设备总数" :value="deviceStats.total" /></n-gi>
-                <n-gi><n-statistic label="在线" :value="deviceStats.online" /></n-gi>
-                <n-gi><n-statistic label="离线" :value="deviceStats.offline" /></n-gi>
-                <n-gi>
-                  <n-statistic label="在线率" :value="devicePct(deviceStats.online, deviceStats.total)">
-                    <template #suffix>%</template>
-                  </n-statistic>
-                </n-gi>
-              </n-grid>
-
-              <n-grid :cols="appStore.isMobile ? 1 : 2" :x-gap="16" :y-gap="12" style="margin-top: 12px">
-                <n-gi>
-                  <div class="device-dist-title">客户端分布</div>
-                  <div v-for="it in deviceStats.by_software" :key="it.name" class="device-dist-row">
-                    <span class="device-dist-name">{{ it.name }}</span>
-                    <n-progress type="line" :percentage="devicePct(it.count, deviceStats.total)" :show-indicator="false" />
-                    <span class="device-dist-count">{{ it.count }}</span>
-                  </div>
-                  <p v-if="!deviceStats.by_software.length" class="device-empty">暂无数据</p>
-                </n-gi>
-                <n-gi>
-                  <div class="device-dist-title">系统分布</div>
-                  <div v-for="it in deviceStats.by_os" :key="it.name" class="device-dist-row">
-                    <span class="device-dist-name">{{ it.name }}</span>
-                    <n-progress type="line" :percentage="devicePct(it.count, deviceStats.total)" :show-indicator="false" />
-                    <span class="device-dist-count">{{ it.count }}</span>
-                  </div>
-                  <p v-if="!deviceStats.by_os.length" class="device-empty">暂无数据</p>
-                </n-gi>
-              </n-grid>
-
-              <div class="device-detail-head">
-                <strong>设备明细</strong>
-                <n-input
-                  v-model:value="deviceKeyword"
-                  placeholder="搜索 IP / 型号 / 用户名"
-                  clearable
-                  size="small"
-                  style="width: 220px"
-                  @keyup.enter="loadDeviceStats"
-                />
-              </div>
-              <n-data-table
-                :columns="deviceColumns"
-                :data="deviceItems"
-                :loading="deviceLoading"
-                size="small"
-                :pagination="devicePagination"
-                :row-props="deviceRowProps"
-              />
-            </n-spin>
-          </n-card>
-
           <!-- 按用户 / 按分组（对齐 myweb：一个客户多设备多客户端、客户端搜索、升级提醒） -->
           <n-card title="按用户 / 按分组" :bordered="false" style="margin-top: 16px">
             <device-usage-section />
@@ -355,29 +299,6 @@
     </n-spin>
 
     <!-- 设备详情：统一走抽屉，表格里只留摘要字段 -->
-    <n-drawer v-model:show="deviceDrawer" :width="appStore.isMobile ? '100%' : 440" placement="right">
-      <n-drawer-content title="设备详情" closable>
-        <n-descriptions v-if="deviceCurrent" :column="1" label-placement="left" bordered size="small">
-          <n-descriptions-item label="用户">{{ deviceCurrent.username || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="客户端">{{ deviceCurrent.software_name || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="客户端版本">{{ deviceCurrent.software_version || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="系统">{{ (deviceCurrent.os_name || '-') + ' ' + (deviceCurrent.os_version || '') }}</n-descriptions-item>
-          <n-descriptions-item label="机型">{{ deviceCurrent.device_model || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="品牌">{{ deviceCurrent.device_brand || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="设备类型">{{ deviceCurrent.device_type || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="IP">{{ deviceCurrent.ip_address || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="地区">{{ deviceCurrent.region || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="状态">
-            <n-tag :type="deviceCurrent.online ? 'success' : 'default'" size="small">
-              {{ deviceCurrent.online ? '在线' : '离线' }}
-            </n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item label="最后活跃">{{ deviceCurrent.last_access ? formatDateTime(deviceCurrent.last_access) : '-' }}</n-descriptions-item>
-          <n-descriptions-item label="首次出现">{{ deviceCurrent.created_at ? formatDateTime(deviceCurrent.created_at) : '-' }}</n-descriptions-item>
-        </n-descriptions>
-      </n-drawer-content>
-    </n-drawer>
-
     <!-- 用户消费详情抽屉 -->
     <n-drawer v-model:show="userDrawer" :width="appStore.isMobile ? '100%' : 400" placement="right">
       <n-drawer-content title="用户消费详情" closable>
@@ -411,14 +332,6 @@ const message = useMessage()
 const activeTab = ref('overview')
 const showMoreFilters = ref(false)
 
-/* 详情统一用抽屉：表格只保留摘要列，点行看完整信息 */
-const deviceDrawer = ref(false)
-const deviceCurrent = ref<any>(null)
-const deviceRowProps = (row: any) => ({
-  style: 'cursor: pointer',
-  onClick: () => { deviceCurrent.value = row; deviceDrawer.value = true },
-})
-
 const userDrawer = ref(false)
 const userCurrent = ref<any>(null)
 const userRowProps = (row: any) => ({
@@ -428,69 +341,6 @@ const userRowProps = (row: any) => ({
 
 const loading = ref(false)
 const exporting = ref(false)
-/* ---------------- 设备分析 ---------------- */
-const deviceLoading = ref(false)
-const deviceKeyword = ref('')
-const deviceStats = ref<any>({ total: 0, online: 0, offline: 0, by_software: [], by_os: [] })
-const deviceItems = ref<any[]>([])
-const devicePagination = reactive({
-  page: 1,
-  pageSize: 10,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50],
-  onChange: (page: number) => { devicePagination.page = page; loadDeviceStats() },
-  onUpdatePageSize: (size: number) => { devicePagination.pageSize = size; devicePagination.page = 1; loadDeviceStats() },
-})
-
-function devicePct(count: number, total: number) {
-  return total > 0 ? Math.round((count / total) * 100) : 0
-}
-
-const deviceColumns = [
-  { title: '用户', key: 'username', width: 110, render: (r: any) => r.username || '-' },
-  { title: '客户端', key: 'software_name', width: 130, render: (r: any) => r.software_name || '-' },
-  { title: '系统', key: 'os_name', width: 100, render: (r: any) => r.os_name || '-' },
-  { title: '型号', key: 'device_model', ellipsis: { tooltip: true }, render: (r: any) => r.device_model || '-' },
-  { title: 'IP', key: 'ip_address', width: 140, render: (r: any) => r.ip_address || '-' },
-  { title: '地区', key: 'region', width: 130, render: (r: any) => r.region || '-' },
-  {
-    title: '状态', key: 'online', width: 72,
-    render: (r: any) => h(NTag, { type: r.online ? 'success' : 'default', size: 'small' }, { default: () => (r.online ? '在线' : '离线') }),
-  },
-  {
-    title: '最后活跃', key: 'last_access', width: 165,
-    render: (r: any) => (r.last_access ? formatDateTime(r.last_access) : '-'),
-  },
-]
-
-async function loadDeviceStats() {
-  deviceLoading.value = true
-  try {
-    const res: any = await request.get('/admin/stats/devices', {
-      params: {
-        keyword: deviceKeyword.value,
-        page: devicePagination.page,
-        page_size: devicePagination.pageSize,
-      },
-    })
-    const d = res?.data || {}
-    deviceStats.value = {
-      total: d.total || 0,
-      online: d.online || 0,
-      offline: d.offline || 0,
-      by_software: d.by_software || [],
-      by_os: d.by_os || [],
-    }
-    deviceItems.value = d.items || []
-    devicePagination.itemCount = d.total_filter || 0
-  } catch {
-    // 静默：统计页其他区块仍可用
-  } finally {
-    deviceLoading.value = false
-  }
-}
-
 const regionLoading = ref(false)
 const showAllRegions = ref(false)
 const period = ref('month')
@@ -706,7 +556,6 @@ const loadPaymentAnalysis = async () => {
 }
 
 onMounted(() => {
-  loadDeviceStats()
   loadFinancialReport()
   loadPaymentAnalysis()
   loadUserStats()

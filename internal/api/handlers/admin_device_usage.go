@@ -620,24 +620,6 @@ func displayName(u models.User) string {
 	return u.Email
 }
 
-// mclashUpgradeLinks 官方客户端 Mclash 的下载入口（全部走本站加速镜像解析）。
-// 与 myweb 的做法一致：/api/v1/download/gh?key=… 由服务器代查 GitHub 最新 Release，
-// 再 302 到当前可用的国内加速镜像，邮件里的链接永远是最新版。
-func mclashUpgradeLinks(siteBase string) map[string]string {
-	base := strings.TrimRight(siteBase, "/")
-	gh := func(key string) string {
-		return fmt.Sprintf("%s/api/v1/download/gh?key=%s", base, key)
-	}
-	return map[string]string{
-		"windows":     gh("client_mclash_windows_url"),
-		"macos_arm":   gh("client_mclash_macos_arm_url"),
-		"macos_intel": gh("client_mclash_macos_url"),
-		"android":     gh("client_mclash_android_url"),
-		// 帮助/下载页（含各平台安装说明）
-		"page": base + "/help",
-	}
-}
-
 // escapeHTMLText 邮件正文里的用户输入（用户名可能含特殊字符）
 func escapeHTMLText(v string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;").Replace(v)
@@ -652,7 +634,7 @@ func buildUpgradeNoticeHTML(name, client, baseURL, note string) string {
 	if strings.TrimSpace(client) == "" {
 		client = "第三方客户端"
 	}
-	links := mclashUpgradeLinks(baseURL)
+	links := services.MclashDownloadLinks(baseURL)
 
 	btn := func(label, url string) string {
 		if strings.TrimSpace(url) == "" {

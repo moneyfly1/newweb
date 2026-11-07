@@ -119,9 +119,59 @@ func (b *EmailTemplateBuilder) GetBaseTemplate(title, content, footerText string
 	return buf.String()
 }
 
+// MclashDownloadLinks 官方客户端 Mclash 各平台下载入口（统一走本站加速镜像解析）。
+// 订阅/到期/升级等邮件共用这一份，避免每个模板各写一套链接。
+func MclashDownloadLinks(siteBase string) map[string]string {
+	base := strings.TrimRight(siteBase, "/")
+	gh := func(key string) string {
+		return fmt.Sprintf("%s/api/v1/download/gh?key=%s", base, key)
+	}
+	return map[string]string{
+		"windows":     gh("client_mclash_windows_url"),
+		"macos_arm":   gh("client_mclash_macos_arm_url"),
+		"macos_intel": gh("client_mclash_macos_url"),
+		"android":     gh("client_mclash_android_url"),
+		"page":        base + "/help",
+	}
+}
+
+// buildMclashDownloadBlock 邮件中的「官方客户端 Mclash 下载」区块：
+// 一句说明 + 四平台下载表格 + 主按钮。订阅信息、到期提醒等邮件复用。
+func buildMclashDownloadBlock(siteBase string) string {
+	links := MclashDownloadLinks(siteBase)
+	row := func(label, url, hint string) string {
+		if strings.TrimSpace(url) == "" {
+			return ""
+		}
+		return fmt.Sprintf(
+			`<tr><th>%s</th><td><a href="%s" style="color:#4f46e5;text-decoration:none;">%s</a></td><td style="font-size:12px;color:#6b7280;">%s</td></tr>`,
+			label, url, url, hint)
+	}
+	var rows strings.Builder
+	rows.WriteString(row("Windows", links["windows"], "安装包 · 国内加速镜像"))
+	rows.WriteString(row("macOS（Apple 芯片）", links["macos_arm"], "M 系列芯片 · 国内加速镜像"))
+	rows.WriteString(row("macOS（Intel）", links["macos_intel"], "Intel 芯片 · 国内加速镜像"))
+	rows.WriteString(row("Android", links["android"], "APK 直装 · 国内加速镜像"))
+
+	return fmt.Sprintf(`<div class="info-box">
+                <h3>官方客户端 Mclash 下载</h3>
+                <p style="font-size:13px;color:#6b7280;margin:0 0 10px;">
+                    推荐使用官方客户端 Mclash：节点自动选择、内置分流规则、订阅自动更新。
+                    下载地址均带国内加速镜像，点击即可下载。
+                </p>
+                <table class="info-table">
+                    <tr><th>平台</th><th>下载地址</th><th>说明</th></tr>
+                    %s
+                </table>
+                <p style="text-align:center;margin:14px 0 0;">
+                    <a href="%s" class="btn">立即下载 Mclash</a>
+                </p>
+            </div>`, rows.String(), links["page"])
+}
+
 func (b *EmailTemplateBuilder) GetVerificationCodeTemplate(username, verificationCode string) string {
 	title := "注册验证码"
-	content := fmt.Sprintf(`<h2>📧 您的注册验证码</h2>
+	content := fmt.Sprintf(`<h2>您的注册验证码</h2>
             <p>亲爱的用户 <strong>%s</strong>，</p>
             <p>感谢您注册我们的服务！请使用以下验证码完成注册：</p>
             <div style="text-align: center; margin: 30px 0;">
@@ -148,7 +198,7 @@ func (b *EmailTemplateBuilder) GetVerificationCodeTemplate(username, verificatio
 
 func (b *EmailTemplateBuilder) GetPasswordResetVerificationCodeTemplate(username, verificationCode string) string {
 	title := "密码重置验证码"
-	content := fmt.Sprintf(`<h2>🔐 您的密码重置验证码</h2>
+	content := fmt.Sprintf(`<h2>您的密码重置验证码</h2>
             <p>亲爱的用户 <strong>%s</strong>，</p>
             <p>您正在重置账户密码，请使用以下验证码完成重置：</p>
             <div style="text-align: center; margin: 30px 0;">
@@ -221,7 +271,8 @@ func (b *EmailTemplateBuilder) GetSubscriptionTemplate(username, universalURL, c
                     <li>建议定期更换配置地址以确保安全</li>
                     <li>服务到期前会收到续费提醒邮件</li>
                 </ul>
-            </div>`, username, remainingColor, expireTime, remainingColor, remainingDays, deviceLimit, currentDevices, deviceLimit, urlList)
+            </div>
+            %s`, username, remainingColor, expireTime, remainingColor, remainingDays, deviceLimit, currentDevices, deviceLimit, urlList, buildMclashDownloadBlock(b.GetBaseURL()))
 
 	return b.GetBaseTemplate(title, content, "享受高速稳定的网络服务")
 }
@@ -565,7 +616,8 @@ func (b *EmailTemplateBuilder) GetExpirationReminderTemplate(username, packageNa
                     <li>支持多种支付方式，支付成功后自动激活</li>
                 </ul>
             </div>
-            <p style="text-align: center; color: #666; font-size: 14px;">如有任何问题，请随时联系我们的客服团队</p>`, headerContent, username, packageName, expireDate, remainingDaysRow, deviceLimit, currentDevices, deviceLimit, warningBox, baseURL, buttonText)
+            <p style="text-align: center; color: #666; font-size: 14px;">如有任何问题，请随时联系我们的客服团队</p>
+            %s`, headerContent, username, packageName, expireDate, remainingDaysRow, deviceLimit, currentDevices, deviceLimit, warningBox, baseURL, buttonText, buildMclashDownloadBlock(baseURL))
 
 	return b.GetBaseTemplate(title, content, "我们期待继续为您服务")
 }
@@ -573,8 +625,18 @@ func (b *EmailTemplateBuilder) GetExpirationReminderTemplate(username, packageNa
 func (b *EmailTemplateBuilder) GetBroadcastNotificationTemplate(title, content string) string {
 	// 基础模板已经提供了 .content 容器与 h2 间距，这里不要再套一层，
 	// 否则标题上下会多出两倍 padding，手机端尤其明显。
+	//
+	// 富文本支持：管理员在后台写公告时可能带 <p>/<ul>/<a> 等标签 —— 含标签就
+	// 原样渲染；纯文本才做 HTML 转义并保留换行。两者都不再二次嵌套容器。
+	body := content
+	if !strings.Contains(content, "<") {
+		body = template.HTMLEscapeString(content)
+		body = strings.ReplaceAll(body, "\r\n", "\n")
+		body = strings.ReplaceAll(body, "\r", "\n")
+		body = strings.ReplaceAll(body, "\n", "<br>")
+	}
 	emailContent := fmt.Sprintf(`<h2>%s</h2>
-                <div style="line-height: 1.8; color: #555;">%s</div>`, title, strings.ReplaceAll(content, "\n", "<br>"))
+                <div style="line-height: 1.8; color: #555;">%s</div>`, title, body)
 
 	return b.GetBaseTemplate(title, emailContent, "此邮件由系统自动发送，请勿回复。")
 }
